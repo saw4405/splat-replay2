@@ -1,0 +1,49 @@
+"""バトル進行を管理する簡易ステートマシン。"""
+
+from __future__ import annotations
+
+import logging
+from enum import Enum, auto
+
+logger = logging.getLogger(__name__)
+
+
+class State(Enum):
+    """バトルの状態。"""
+
+    STANDBY = auto()
+    RECORDING = auto()
+    PAUSED = auto()
+
+
+class Event(Enum):
+    """状態変化イベント。"""
+
+    BATTLE_STARTED = auto()
+    LOADING_DETECTED = auto()
+    LOADING_FINISHED = auto()
+    POSTGAME_DETECTED = auto()
+    EARLY_ABORT = auto()
+
+
+TRANSITIONS: dict[tuple[State, Event], State] = {
+    (State.STANDBY, Event.BATTLE_STARTED): State.RECORDING,
+    (State.RECORDING, Event.LOADING_DETECTED): State.PAUSED,
+    (State.PAUSED, Event.LOADING_FINISHED): State.RECORDING,
+    (State.RECORDING, Event.POSTGAME_DETECTED): State.STANDBY,
+    (State.RECORDING, Event.EARLY_ABORT): State.STANDBY,
+}
+
+
+class StateMachine:
+    """状態を遷移させつつログ出力する。"""
+
+    def __init__(self) -> None:
+        self.state = State.STANDBY
+        logger.info("state=%s", self.state.name)
+
+    def handle(self, event: Event) -> None:
+        before = self.state
+        self.state = TRANSITIONS.get((self.state, event), self.state)
+        if self.state != before:
+            logger.info("event=%s state=%s", event.name, self.state.name)
