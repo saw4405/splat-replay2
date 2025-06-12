@@ -4,4 +4,16 @@ version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.13"
-dependencies = []
+dependencies = [
+    "typer>=0.9",
+]
+
+[dependency-groups]
+dev = [
+    "flake8>=7.2.0",
+    "mypy>=1.16.0",
+    "pytest>=8.4.0",
+]
+
+[project.scripts]
+splat-replay = "splat_replay.cli:app"
