@@ -6,7 +6,6 @@ from pathlib import Path
 from splat_replay.domain.models.match import Match
 from splat_replay.domain.models.rule import Rule
 from splat_replay.domain.models.stage import Stage
-from splat_replay.domain.models.result import Result
 from splat_replay.domain.models.video_clip import VideoClip
 
 

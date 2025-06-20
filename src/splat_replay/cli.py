@@ -10,7 +10,6 @@ from splat_replay.application import (
     PauseRecordingUseCase,
     ResumeRecordingUseCase,
     StopRecordingUseCase,
-    ShutdownPCUseCase,
     UploadVideoUseCase,
     DaemonUseCase,
 )
