@@ -100,7 +100,9 @@ def configure_container() -> punq.Container:
     container.register(ProcessPostGameUseCase, ProcessPostGameUseCase)
     container.register(UploadVideoUseCase, UploadVideoUseCase)
     container.register(ShutdownPCUseCase, ShutdownPCUseCase)
-    container.register(InitializeEnvironmentUseCase, InitializeEnvironmentUseCase)
+    container.register(
+        InitializeEnvironmentUseCase, InitializeEnvironmentUseCase
+    )
     container.register(DaemonUseCase, DaemonUseCase)
 
     return container

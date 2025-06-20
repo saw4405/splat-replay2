@@ -472,7 +472,9 @@ websocket_port = 4455
 
 ## 10. ロギング & エラー処理
 
-ロギングは `shared/logger.py` で `configure_logging()` を呼び出して初期化し、
+ロギングは `shared/logger.py` で `initialize_logger()` を呼び出して設定し、
+各モジュールでは `get_logger()` を利用してログ出力を行います。
+アプリケーション層だけでなくドメイン層やインフラ層も同じロガーを取得します。
 `structlog` を用いた JSON 形式の出力に統一します。GUI ではログ内容を専用パネル
 へ転送して表示できるようにします。
 

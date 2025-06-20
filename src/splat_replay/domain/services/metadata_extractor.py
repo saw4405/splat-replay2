@@ -5,6 +5,9 @@ from __future__ import annotations
 from pathlib import Path
 
 from splat_replay.domain.models.match import Match
+from splat_replay.shared.logger import get_logger
+
+logger = get_logger()
 
 
 class MetadataExtractor:
@@ -12,5 +15,6 @@ class MetadataExtractor:
 
     def extract_from_video(self, path: Path) -> Match:
         """動画ファイルからメタデータを抽出する。"""
+        logger.info("メタデータ抽出", path=str(path))
         # 実装は後で追加
         raise NotImplementedError
