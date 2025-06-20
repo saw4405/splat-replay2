@@ -9,7 +9,7 @@
 | カテゴリ                    | 要点                                                                                                                                                                                                           |
 | --------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **アーキテクチャ遵守**      | Clean Architecture (Domain → Application → Interface → Infrastructure) を厳守。ポート: `application.interfaces.*` / アダプタ: `infrastructure.adapters.*`。ドメイン層は外部依存を直接呼び出さない純粋 Python。 |
-| **コーディング規約**        | フォーマッタ: **Black** (行長 79) / 型ヒント 100 % 必須。リンター: `flake8` + `mypy --strict`。ロギング: `structlog` (JSON)。一時デバッグコード・ファイルはコミット禁止。                                      |
+| **コーディング規約**        | フォーマッタ: **Ruff** (行長 79) / 型ヒント 100 % 必須。リンター: `ruff` + `mypy --strict`。ロギング: `structlog` (JSON)。一時デバッグコード・ファイルはコミット禁止。                                      |
 | **依存管理**                | Python 3.13 / **uv** を使用 (`pip install` 禁止)。**uv** 実行前に仮想環境 `./.venv/Scripts/Activate.ps1` を必ず有効化し、`uv sync` で依存をインストール・同期すること。                                        |
 | **設定管理**                | すべて `config/*.yaml` or `*.toml`。読み込みは Pydantic v2 `BaseSettings` + `shared/di.py` DI。                                                                                                                |
 | **テスト & CI**             | `pytest` / CI Green かつ Review ≥ 2 でマージ。                                                                                                                                                                 |
@@ -52,8 +52,8 @@ uv remove <package>
 
 ## 3. 作業後確認
 
-1. **フォーマッター実行**: `black --line-length 79 .` を実行し、差分がないことを確認。
-2. **静的解析**: `flake8` と `mypy --strict` がエラーゼロ。
+1. **フォーマッター実行**: `ruff format .` を実行し、差分がないことを確認。
+2. **静的解析**: `ruff check .` と `mypy --strict` がエラーゼロ。
 3. **ドキュメント更新**:
 
    - 重大変更 → `docs/adr/ADR-YYYYMMDD-NNN.md`
