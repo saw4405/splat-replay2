@@ -10,6 +10,7 @@ __all__ = [
     "ShutdownPCUseCase",
     "UpdateMetadataUseCase",
     "SaveSettingsUseCase",
+    "InitializeEnvironmentUseCase",
     "DaemonUseCase",
 ]
 
@@ -22,4 +23,5 @@ from .use_cases.upload_video import UploadVideoUseCase
 from .use_cases.shutdown_pc import ShutdownPCUseCase
 from .use_cases.update_metadata import UpdateMetadataUseCase
 from .use_cases.save_settings import SaveSettingsUseCase
+from .use_cases.initialize_environment import InitializeEnvironmentUseCase
 from .use_cases.daemon import DaemonUseCase

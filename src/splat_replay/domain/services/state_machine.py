@@ -9,8 +9,9 @@ logger = logging.getLogger(__name__)
 
 
 class State(Enum):
-    """バトルの状態。"""
+    """バトルの状態および起動直後の状態。"""
 
+    READINESS_CHECK = auto()
     STANDBY = auto()
     RECORDING = auto()
     PAUSED = auto()
@@ -19,6 +20,7 @@ class State(Enum):
 class Event(Enum):
     """状態変化イベント。"""
 
+    INITIALIZED = auto()
     BATTLE_STARTED = auto()
     LOADING_DETECTED = auto()
     LOADING_FINISHED = auto()
@@ -29,6 +31,7 @@ class Event(Enum):
 
 
 TRANSITIONS: dict[tuple[State, Event], State] = {
+    (State.READINESS_CHECK, Event.INITIALIZED): State.STANDBY,
     (State.STANDBY, Event.BATTLE_STARTED): State.RECORDING,
     (State.RECORDING, Event.LOADING_DETECTED): State.PAUSED,
     (State.PAUSED, Event.LOADING_FINISHED): State.RECORDING,
@@ -43,7 +46,7 @@ class StateMachine:
     """状態を遷移させつつログ出力する。"""
 
     def __init__(self) -> None:
-        self.state = State.STANDBY
+        self.state = State.READINESS_CHECK
         logger.info("state=%s", self.state.name)
 
     def handle(self, event: Event) -> None:
