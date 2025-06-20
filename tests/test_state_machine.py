@@ -22,3 +22,16 @@ def test_state_transitions() -> None:
 
     sm.handle(Event.POSTGAME_DETECTED)
     assert sm.state is State.STANDBY
+
+
+def test_manual_pause_resume() -> None:
+    sm = StateMachine()
+
+    sm.handle(Event.BATTLE_STARTED)
+    assert sm.state is State.RECORDING
+
+    sm.handle(Event.MANUAL_PAUSE)
+    assert sm.state is State.PAUSED
+
+    sm.handle(Event.MANUAL_RESUME)
+    assert sm.state is State.RECORDING

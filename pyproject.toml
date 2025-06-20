@@ -6,6 +6,10 @@ readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
     "typer>=0.9",
+    "click>=8.1,<8.2",
+    "pydantic>=1.10,<2",
+    "punq>=0.7",
+    "structlog>=24.1",
 ]
 
 [dependency-groups]

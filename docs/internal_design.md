@@ -49,7 +49,9 @@ src/
 │  │  ├─ match.py
 │  │  ├─ rule.py
 │  │  ├─ stage.py
-│  │  ├─ metadata.py
+│  │  ├─ result.py
+│  │  ├─ edit_config.py
+│  │  ├─ upload_config.py
 │  │  └─ video_clip.py
 │  ├─ services/
 │  │  └─ state_machine.py
@@ -91,9 +93,8 @@ src/
 │        ├─ recording_table.py
 │        └─ settings_dialog.py
 ├─ config/
-│  ├─ settings.toml
-│  ├─ image_matching.yaml
-│  └─ logging.yaml
+│  ├─ settings.example.toml
+│  └─ image_matching.yaml
 └─ shared/
    ├─ config.py
    ├─ di.py
@@ -104,9 +105,8 @@ src/
 
 | Entity        | 属性                                                                 | 説明               |
 | ------------- | -------------------------------------------------------------------- | ------------------ |
-| **Battle**    | id, rate, start_at, match, rule, stage, result, kill, death, special | バトル単位の主キー |
-| **VideoClip** | path, battle_id                                                      | 録画ファイル       |
-| **Schedule**  | from, to                                                             | スケジュール範囲   |
+| **Match**     | id, rate, start_at, rule, stage, result, kill, death, special | 1 試合分のメタデータ |
+| **VideoClip** | path, match_id | 録画ファイル |
 
 ### 3.1 外部設計書ステート対応
 
@@ -333,16 +333,13 @@ matchers:
 ```python
 # 設定クラス例
 class AppSettings(BaseSettings):
-    model_config = SettingsConfigDict(
-        env_file=".env",
-        toml_file="config/settings.toml",
-        case_sensitive=False,
-    )
+    youtube: YouTubeSettings = YouTubeSettings()
+    video_edit: VideoEditSettings = VideoEditSettings()
+    obs: OBSSettings = OBSSettings()
+    image_matching: ImageMatchingSettings = ImageMatchingSettings()
 
-    youtube: YouTubeSettings
-    video_edit: VideoEditSettings
-    obs: OBSSettings
-    image_matching: ImageMatchingSettings
+    class Config:
+        env_file = ".env"
 ```
 
 #### 8.1.2 設定注入パターン
@@ -353,7 +350,7 @@ class AppSettings(BaseSettings):
 # ❌ 直接読み込み（アンチパターン）
 class YouTubeClient:
     def __init__(self):
-        self.config = load_config("config/youtube.toml")
+        self.config = load_config("config/settings.example.toml")
 
 # ✅ DI による注入（推奨パターン）
 class YouTubeClient:
@@ -437,12 +434,12 @@ class ImageMatchingSettings(BaseSettings):
 #### 8.3.3 設定ファイル優先順位
 
 1. **環境変数** (`YOUTUBE_VISIBILITY=public`)
-2. **設定ファイル** (`config/settings.toml`)
+2. **設定ファイル** (`config/settings.example.toml`)
 3. **デフォルト値** (コード内定義)
 
 #### 8.3.4 設定ファイル形式
 
-`config/settings.toml`:
+`config/settings.example.toml`:
 
 ```toml
 [youtube]
@@ -475,7 +472,9 @@ websocket_port = 4455
 
 ## 10. ロギング & エラー処理
 
-structlog による JSON ログ + GUI への通知。
+ロギングは `shared/logger.py` で `configure_logging()` を呼び出して初期化し、
+`structlog` を用いた JSON 形式の出力に統一します。GUI ではログ内容を専用パネル
+へ転送して表示できるようにします。
 
 ## 11. 拡張ポイント
 

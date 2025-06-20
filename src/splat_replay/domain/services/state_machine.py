@@ -24,12 +24,16 @@ class Event(Enum):
     LOADING_FINISHED = auto()
     POSTGAME_DETECTED = auto()
     EARLY_ABORT = auto()
+    MANUAL_PAUSE = auto()
+    MANUAL_RESUME = auto()
 
 
 TRANSITIONS: dict[tuple[State, Event], State] = {
     (State.STANDBY, Event.BATTLE_STARTED): State.RECORDING,
     (State.RECORDING, Event.LOADING_DETECTED): State.PAUSED,
     (State.PAUSED, Event.LOADING_FINISHED): State.RECORDING,
+    (State.RECORDING, Event.MANUAL_PAUSE): State.PAUSED,
+    (State.PAUSED, Event.MANUAL_RESUME): State.RECORDING,
     (State.RECORDING, Event.POSTGAME_DETECTED): State.STANDBY,
     (State.RECORDING, Event.EARLY_ABORT): State.STANDBY,
 }

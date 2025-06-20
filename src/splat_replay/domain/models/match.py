@@ -20,6 +20,10 @@ class Match:
     start_at: datetime
     end_at: datetime | None = None
     result: Result | None = None
+    kill: int | None = None
+    death: int | None = None
+    special: int | None = None
+    rate: int | None = None
     id: str = field(init=False, repr=False)
 
     def __post_init__(self) -> None:
