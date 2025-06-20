@@ -21,6 +21,7 @@ from splat_replay.domain.services.state_machine import (
     State,
     StateMachine,
 )
+from splat_replay.shared.logger import get_logger
 
 
 class DaemonUseCase:
@@ -48,6 +49,7 @@ class DaemonUseCase:
         self.repo = repo
         self.sm = state_machine
         self.pending: List[Path] = []
+        self.logger = get_logger()
 
     def _process_pending(self) -> None:
         """溜まっている録画を編集しアップロードする。"""
@@ -62,6 +64,7 @@ class DaemonUseCase:
 
     def execute(self) -> None:
         """電源 OFF を監視しつつ自動録画を繰り返す。"""
+        self.logger.info("デーモン開始")
         while True:
             frame = Path()
 

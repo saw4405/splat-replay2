@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
-import logging
 from enum import Enum, auto
 
-logger = logging.getLogger(__name__)
+from splat_replay.shared.logger import get_logger
+
+logger = get_logger()
 
 
 class State(Enum):

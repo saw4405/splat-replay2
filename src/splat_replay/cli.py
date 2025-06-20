@@ -5,6 +5,8 @@ from __future__ import annotations
 import typer
 from pathlib import Path
 
+from splat_replay.shared.logger import initialize_logger, get_logger
+
 from splat_replay.domain.services.state_machine import State, StateMachine
 
 from splat_replay.application import (
@@ -25,8 +27,11 @@ app = typer.Typer(help="Splat Replay ツール群")
 
 
 container = configure_container()
+initialize_logger()
+logger = get_logger()
 
 T = TypeVar("T")
+
 
 def resolve(cls: Type[T]) -> T:
     """DI コンテナから型指定付きで依存を取得する。"""
@@ -47,11 +52,13 @@ def _require_initialized() -> None:
 @app.callback()
 def main() -> None:
     """Splat Replay CLI のエントリーポイント。"""
+    logger.info("CLI 起動")
 
 
 @app.command()
 def init() -> None:
     """起動準備を行う。"""
+    logger.info("init コマンド開始")
     uc = resolve(InitializeEnvironmentUseCase)
     uc.execute()
 
@@ -59,6 +66,7 @@ def init() -> None:
 @app.command()
 def record() -> None:
     """録画を開始する。"""
+    logger.info("record コマンド開始")
     _require_initialized()
     uc = resolve(RecordBattleUseCase)
     uc.execute()
@@ -67,6 +75,7 @@ def record() -> None:
 @app.command()
 def pause() -> None:
     """録画を一時停止する。"""
+    logger.info("pause コマンド開始")
     _require_initialized()
     uc = resolve(PauseRecordingUseCase)
     uc.execute()
@@ -75,6 +84,7 @@ def pause() -> None:
 @app.command()
 def resume() -> None:
     """録画を再開する。"""
+    logger.info("resume コマンド開始")
     _require_initialized()
     uc = resolve(ResumeRecordingUseCase)
     uc.execute()
@@ -83,6 +93,7 @@ def resume() -> None:
 @app.command()
 def stop() -> None:
     """録画を停止する。"""
+    logger.info("stop コマンド開始")
     _require_initialized()
     uc = resolve(StopRecordingUseCase)
     uc.execute()
@@ -91,6 +102,7 @@ def stop() -> None:
 @app.command()
 def edit() -> None:
     """録画停止後の動画を編集する。"""
+    logger.info("edit コマンド開始")
     _require_initialized()
     uc = resolve(ProcessPostGameUseCase)
     uc.execute()
@@ -99,6 +111,7 @@ def edit() -> None:
 @app.command()
 def upload(file_path: Path) -> None:
     """指定した動画を YouTube へアップロードする。"""
+    logger.info("upload コマンド開始", file_path=str(file_path))
     _require_initialized()
     uc = resolve(UploadVideoUseCase)
     result = uc.execute(file_path)
@@ -108,6 +121,7 @@ def upload(file_path: Path) -> None:
 @app.command()
 def daemon() -> None:
     """録画からアップロードまで自動実行する。"""
+    logger.info("daemon コマンド開始")
     _require_initialized()
     uc = resolve(DaemonUseCase)
     uc.execute()
