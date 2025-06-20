@@ -14,4 +14,9 @@ def test_cli_help() -> None:
     runner = CliRunner()
     result = runner.invoke(app, ["--help"])
     assert result.exit_code == 0
-    assert "Splat Replay" in result.output
+    output = result.output
+    assert "Splat Replay" in output
+    assert "daemon" in output
+    assert "pause" in output
+    assert "resume" in output
+    assert "stop" in output

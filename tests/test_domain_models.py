@@ -18,6 +18,10 @@ def test_match_dataclass() -> None:
     assert match.start_at == start
     assert match.result is None
     assert match.end_at is None
+    assert match.kill is None
+    assert match.death is None
+    assert match.special is None
+    assert match.rate is None
     assert isinstance(match.id, str)
 
 
