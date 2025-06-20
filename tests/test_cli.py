@@ -16,7 +16,15 @@ def test_cli_help() -> None:
     assert result.exit_code == 0
     output = result.output
     assert "Splat Replay" in output
+    assert "init" in output
     assert "daemon" in output
     assert "pause" in output
     assert "resume" in output
     assert "stop" in output
+
+
+def test_record_without_init() -> None:
+    runner = CliRunner()
+    result = runner.invoke(app, ["record"])
+    assert result.exit_code == 1
+    assert "init" in result.output

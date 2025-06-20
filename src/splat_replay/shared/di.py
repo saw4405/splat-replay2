@@ -14,9 +14,11 @@ from splat_replay.application import (
     StopRecordingUseCase,
     ShutdownPCUseCase,
     UploadVideoUseCase,
+    InitializeEnvironmentUseCase,
     DaemonUseCase,
 )
 from splat_replay.infrastructure import (
+    CaptureDeviceChecker,
     FFmpegProcessor,
     FileMetadataRepository,
     GroqClient,
@@ -40,6 +42,8 @@ from splat_replay.application.interfaces import (
     ScreenAnalyzerPort,
     SpeechTranscriberPort,
     MetadataExtractorPort,
+    CaptureDevicePort,
+    OBSControlPort,
 )
 from splat_replay.shared.config import (
     AppSettings,
@@ -65,6 +69,8 @@ def configure_container() -> punq.Container:
 
     # アダプタ登録
     container.register(VideoRecorder, OBSController)
+    container.register(CaptureDevicePort, CaptureDeviceChecker)
+    container.register(OBSControlPort, OBSController)
     container.register(VideoEditorPort, VideoEditor)
     container.register(UploadPort, YouTubeClient)
     container.register(PowerPort, SystemPower)
@@ -94,6 +100,7 @@ def configure_container() -> punq.Container:
     container.register(ProcessPostGameUseCase, ProcessPostGameUseCase)
     container.register(UploadVideoUseCase, UploadVideoUseCase)
     container.register(ShutdownPCUseCase, ShutdownPCUseCase)
+    container.register(InitializeEnvironmentUseCase, InitializeEnvironmentUseCase)
     container.register(DaemonUseCase, DaemonUseCase)
 
     return container

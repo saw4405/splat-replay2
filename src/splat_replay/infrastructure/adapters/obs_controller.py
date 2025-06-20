@@ -4,8 +4,10 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from splat_replay.application.interfaces import OBSControlPort
 
-class OBSController:
+
+class OBSController(OBSControlPort):
     """OBS Studio と連携する。"""
 
     def start(self) -> None:
@@ -22,4 +24,16 @@ class OBSController:
 
     def resume(self) -> None:
         """録画を再開する。"""
+        raise NotImplementedError
+
+    def is_running(self) -> bool:
+        """OBS が起動しているか確認する。"""
+        raise NotImplementedError
+
+    def launch(self) -> None:
+        """OBS を起動する。"""
+        raise NotImplementedError
+
+    def start_virtual_camera(self) -> None:
+        """OBS の仮想カメラを開始する。"""
         raise NotImplementedError

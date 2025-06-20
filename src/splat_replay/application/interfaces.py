@@ -66,3 +66,19 @@ class MetadataExtractorPort(Protocol):
     """動画からメタデータを抽出するポート。"""
 
     def extract_from_video(self, path: Path) -> "Match": ...
+
+
+class CaptureDevicePort(Protocol):
+    """キャプチャデバイスの接続確認を行うポート。"""
+
+    def is_connected(self) -> bool: ...
+
+
+class OBSControlPort(VideoRecorder, Protocol):
+    """OBS Studio の状態を制御するポート。"""
+
+    def is_running(self) -> bool: ...
+
+    def launch(self) -> None: ...
+
+    def start_virtual_camera(self) -> None: ...

@@ -9,6 +9,9 @@ from splat_replay.domain.services.state_machine import (
 
 def test_state_transitions() -> None:
     sm = StateMachine()
+    assert sm.state is State.READINESS_CHECK
+
+    sm.handle(Event.INITIALIZED)
     assert sm.state is State.STANDBY
 
     sm.handle(Event.BATTLE_STARTED)
@@ -26,6 +29,8 @@ def test_state_transitions() -> None:
 
 def test_manual_pause_resume() -> None:
     sm = StateMachine()
+
+    sm.handle(Event.INITIALIZED)
 
     sm.handle(Event.BATTLE_STARTED)
     assert sm.state is State.RECORDING
