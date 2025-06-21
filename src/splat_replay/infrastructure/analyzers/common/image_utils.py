@@ -10,7 +10,7 @@ import hashlib
 import cv2
 import numpy as np
 
-from splat_replay.shared.config import ImageMatchingSettings
+from splat_replay.shared.config import ImageMatchingSettings, MatcherConfig, CompositeMatcherConfig
 
 
 def load_image(path: str, *, grayscale: bool = False) -> Optional[np.ndarray]:
@@ -76,7 +76,7 @@ class BaseMatcher(ABC):
         if self._roi is None:
             return image
         x, y, w, h = self._roi
-        return image[y : y + h, x : x + w]
+        return image[y: y + h, x: x + w]
 
     @abstractmethod
     def match(self, image: np.ndarray) -> bool:
@@ -218,9 +218,11 @@ class TemplateMatcher(BaseMatcher):
         img = self._apply_roi(image)
         gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
         if self._mask is not None:
-            result = cv2.matchTemplate(gray, self._template, cv2.TM_CCOEFF_NORMED, mask=self._mask)
+            result = cv2.matchTemplate(
+                gray, self._template, cv2.TM_CCOEFF_NORMED, mask=self._mask)
         else:
-            result = cv2.matchTemplate(gray, self._template, cv2.TM_CCOEFF_NORMED)
+            result = cv2.matchTemplate(
+                gray, self._template, cv2.TM_CCOEFF_NORMED)
         _, max_val, _, _ = cv2.minMaxLoc(result)
         return max_val >= self._threshold
 
@@ -264,17 +266,26 @@ class CompositeMatcher:
 
     def match(self, image: np.ndarray) -> bool:
         """設定されたポリシーに基づき判定する。"""
-        results = [m.match(image) for m in self.matchers]
         if self.policy == "all_must_pass":
-            return all(results)
+            for m in self.matchers:
+                if not m.match(image):
+                    return False
+            return True
         if self.policy == "majority_pass":
             required = max(self.min_required, 1)
-            return sum(results) >= required
+            count = 0
+            for m in self.matchers:
+                if m.match(image):
+                    count += 1
+            return count >= required
         # any_can_pass がデフォルト
-        return any(results)
+        for m in self.matchers:
+            if m.match(image):
+                return True
+        return False
 
 
-def build_matcher(config: "MatcherConfig") -> Optional[BaseMatcher]:
+def build_matcher(config: MatcherConfig) -> Optional[BaseMatcher]:
     """設定からマッチャーインスタンスを生成する。"""
 
     if not config:
@@ -297,14 +308,14 @@ def build_matcher(config: "MatcherConfig") -> Optional[BaseMatcher]:
             return None
     if config.type == "hsv" and config.lower_bound and config.upper_bound:
         return HSVMatcher(
-            tuple(config.lower_bound),
-            tuple(config.upper_bound),
+            config.lower_bound,
+            config.upper_bound,
             mask_path,
             config.threshold,
             roi,
         )
     if config.type == "rgb" and config.rgb:
-        return RGBMatcher(tuple(config.rgb), mask_path, config.threshold, roi)
+        return RGBMatcher(config.rgb, mask_path, config.threshold, roi)
     if config.type == "uniform":
         return UniformColorMatcher(mask_path, config.hue_threshold or 10.0, roi)
     if config.type == "brightness" and (
@@ -330,7 +341,7 @@ def build_matcher(config: "MatcherConfig") -> Optional[BaseMatcher]:
 
 
 def build_composite_matcher(
-    config: "CompositeMatcherConfig", lookup: dict[str, BaseMatcher]
+    config: CompositeMatcherConfig, lookup: dict[str, BaseMatcher]
 ) -> Optional[CompositeMatcher]:
     """設定から複合マッチャーを生成する。"""
 
