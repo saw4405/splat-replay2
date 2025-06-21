@@ -1,6 +1,5 @@
 # 単一手法検出器（シンプルな検出用）
 simple_matchers:
-  
   virtual_camera_off:
     type: "hash"
     hash_path: "hashes/virtual_camera_off.png"
@@ -96,10 +95,113 @@ simple_matchers:
     description: "バトル中止テンプレート"
     enabled: true
 
-# ゲームモード検出（ルール別）
-game_modes:
-  # シーン検出と同じ構造で各ゲームモードを定義
-  # 例: turf_war, splat_zones, tower_control, rainmaker, clam_blitz
+  finish_text_hsv:
+    type: "hsv"
+    mask_path: "templates/finish_text_mask.png"
+    lower_bound: [0, 0, 0]
+    upper_bound: [179, 255, 50]
+    threshold: 0.9
+    description: "FINISH文字の色域"
+    enabled: true
+
+  finish_band_hsv:
+    type: "hsv"
+    mask_path: "templates/finish_band_mask.png"
+    lower_bound: [0, 0, 50]
+    upper_bound: [179, 255, 255]
+    threshold: 0.9
+    description: "FINISH帯の色域"
+    enabled: true
+
+  finish_uniform:
+    type: "uniform"
+    hue_threshold: 10.0
+    roi:
+      x: 810
+      y: 400
+      width: 30
+      height: 40
+    description: "FINISH判定領域の色揃い"
+    enabled: true
+
+  finish_dark:
+    type: "brightness"
+    max_value: 20
+    roi:
+      x: 810
+      y: 400
+      width: 30
+      height: 40
+    description: "FINISH領域の暗さ"
+    enabled: true
+
+  finish_bright:
+    type: "brightness"
+    min_value: 21
+    roi:
+      x: 810
+      y: 400
+      width: 30
+      height: 40
+    description: "FINISH領域の明るさ"
+    enabled: true
+
+  stop_template:
+    type: "template"
+    template_path: "templates/stop.png"
+    threshold: 0.95
+    description: "リザルトストップテンプレ"
+    enabled: true
+
+  stop_message_hsv:
+    type: "hsv"
+    mask_path: "templates/stop_mask.png"
+    lower_bound: [0, 0, 200]
+    upper_bound: [179, 20, 255]
+    threshold: 0.9
+    description: "ストップメッセージの色域"
+    enabled: true
+
+  stop_icon_hsv:
+    type: "hsv"
+    mask_path: "templates/stop_icon_mask.png"
+    lower_bound: [0, 0, 200]
+    upper_bound: [179, 20, 255]
+    threshold: 0.9
+    description: "ストップアイコンの色域"
+    enabled: true
+
+  stop_gear_hsv:
+    type: "hsv"
+    mask_path: "templates/stop_gear_mask.png"
+    lower_bound: [0, 0, 0]
+    upper_bound: [179, 255, 50]
+    threshold: 0.9
+    description: "ストップギアの色域"
+    enabled: true
+
+  stop_icon_absent:
+    type: "brightness"
+    max_value: 50
+    mask_path: "templates/stop_icon_mask.png"
+    description: "ストップアイコン未表示"
+    enabled: true
+
+  stop_gear_absent:
+    type: "brightness"
+    max_value: 50
+    mask_path: "templates/stop_gear_mask.png"
+    description: "ストップギア未表示"
+    enabled: true
+
+  stop_background_hsv:
+    type: "hsv"
+    mask_path: "templates/stop_background_mask.png"
+    lower_bound: [0, 0, 25]
+    upper_bound: [179, 30, 40]
+    threshold: 0.9
+    description: "ストップ背景の色域"
+    enabled: true
 
 # 複合条件検出（より複雑な条件組み合わせ）
 composite_detection:
@@ -108,15 +210,31 @@ composite_detection:
     matchers:
       - black_screen
       - power_off_template
-  
+
   battle_start:
     success_condition: "all_must_pass"
     matchers:
       - battle_start_brightness
       - battle_start_template
-      - 
+
   matching_start_hsv:
     success_condition: "all_must_pass"
     matchers:
       - matching_start_hsv
       - matching_start_template
+
+  finish_display:
+    success_condition: "all_must_pass"
+    matchers:
+      - finish_uniform
+      - finish_bright
+      - finish_text_hsv
+      - finish_band_hsv
+
+  battle_finish:
+    success_condition: "all_must_pass"
+    matchers:
+      - stop_message_hsv
+      - stop_background_hsv
+      - stop_icon_absent
+      - stop_gear_absent

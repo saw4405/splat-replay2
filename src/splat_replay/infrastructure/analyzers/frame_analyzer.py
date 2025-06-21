@@ -19,7 +19,9 @@ logger = get_logger()
 class FrameAnalyzer:
     """OpenCV を用いた画面解析処理を提供する。"""
 
-    def __init__(self, plugin: AnalyzerPlugin, settings: "ImageMatchingSettings") -> None:
+    def __init__(
+        self, plugin: AnalyzerPlugin, settings: "ImageMatchingSettings"
+    ) -> None:
         """プラグインと設定を受け取って初期化する。"""
         self.plugin = plugin
         self.registry = MatcherRegistry(settings)
@@ -43,3 +45,11 @@ class FrameAnalyzer:
     def detect_power_off(self, frame: np.ndarray) -> bool:
         """Switch の電源 OFF を検出する。"""
         return self.registry.match("power_off", frame)
+
+    def detect_battle_finish(self, frame: np.ndarray) -> bool:
+        """FINISH 表示を検出する。"""
+        return self.registry.match("finish_display", frame)
+
+    def detect_battle_stop(self, frame: np.ndarray) -> bool:
+        """バトル終了画面を検出する。"""
+        return self.registry.match("battle_finish", frame)
