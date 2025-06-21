@@ -51,19 +51,51 @@ class OBSSettings(BaseModel):
 class MatcherConfig(BaseModel):
     """画像マッチング1件分の設定。"""
 
-    type: Literal["template", "hsv", "rgb", "hash", "uniform"]
+    type: Literal["template", "hsv", "rgb", "hash", "uniform", "brightness"]
     threshold: float = 0.8
     template_path: Optional[str] = None
     lower_bound: Optional[List[int]] = None
     upper_bound: Optional[List[int]] = None
     rgb: Optional[List[int]] = None
     hue_threshold: Optional[float] = None
+    mask_path: Optional[str] = None
+    max_value: Optional[float] = None
+
+
+class CompositeMatcherConfig(BaseModel):
+    """複数マッチャーを組み合わせる設定。"""
+
+    matchers: List[str]
+    success_condition: Literal["all_must_pass", "any_can_pass"] = "any_can_pass"
+    min_required_steps: int = 1
 
 
 class ImageMatchingSettings(BaseModel):
     """画像解析用のマッチャー設定。"""
 
     matchers: Dict[str, MatcherConfig] = {}
+    composites: Dict[str, CompositeMatcherConfig] = {}
+
+    @classmethod
+    def load_from_yaml(cls, path: Path) -> "ImageMatchingSettings":
+        """YAML ファイルから設定を読み込む。"""
+        import yaml
+
+        with path.open("rb") as f:
+            raw = yaml.safe_load(f) or {}
+
+        matchers: Dict[str, MatcherConfig] = {}
+        for name, cfg in raw.get("simple_matchers", {}).items():
+            matchers[name] = MatcherConfig(**cfg)
+
+        composites: Dict[str, CompositeMatcherConfig] = {}
+        for name, cfg in raw.get("composite_detection", {}).items():
+            composites[name] = CompositeMatcherConfig(**cfg)
+
+        return cls(
+            matchers=matchers,
+            composites=composites,
+        )
 
     class Config:
         pass
