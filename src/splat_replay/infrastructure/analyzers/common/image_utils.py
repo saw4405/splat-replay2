@@ -60,12 +60,23 @@ def calculate_brightness(image: np.ndarray, mask: Optional[np.ndarray] = None) -
 class BaseMatcher(ABC):
     """画像マッチングの基底クラス。"""
 
-    def __init__(self, mask_path: Optional[str] = None) -> None:
+    def __init__(
+        self,
+        mask_path: Optional[str] = None,
+        roi: Optional[Tuple[int, int, int, int]] = None,
+    ) -> None:
         self._mask = (
             cv2.imread(mask_path, cv2.IMREAD_GRAYSCALE) if mask_path else None
         )
         if mask_path and self._mask is None:
             raise ValueError(f"マスク画像の読み込みに失敗しました: {mask_path}")
+        self._roi = roi
+
+    def _apply_roi(self, image: np.ndarray) -> np.ndarray:
+        if self._roi is None:
+            return image
+        x, y, w, h = self._roi
+        return image[y : y + h, x : x + w]
 
     @abstractmethod
     def match(self, image: np.ndarray) -> bool:
@@ -75,15 +86,16 @@ class BaseMatcher(ABC):
 class HashMatcher(BaseMatcher):
     """ハッシュ値による完全一致判定用マッチャー。"""
 
-    def __init__(self, image_path: str) -> None:
-        super().__init__(None)
+    def __init__(self, image_path: str, roi: Optional[Tuple[int, int, int, int]] = None) -> None:
+        super().__init__(None, roi)
         self._hash_value = self._compute_hash(cv2.imread(image_path))
 
     def _compute_hash(self, image: np.ndarray) -> str:
         return hashlib.sha1(image).hexdigest()
 
     def match(self, image: np.ndarray) -> bool:
-        image_hash = self._compute_hash(image)
+        img = self._apply_roi(image)
+        image_hash = self._compute_hash(img)
         return image_hash == self._hash_value
 
 
@@ -96,17 +108,19 @@ class HSVMatcher(BaseMatcher):
         upper_bound: Tuple[int, int, int],
         mask_path: Optional[str] = None,
         threshold: float = 0.9,
+        roi: Optional[Tuple[int, int, int, int]] = None,
     ) -> None:
-        super().__init__(mask_path)
+        super().__init__(mask_path, roi)
         self._lower_bound = np.array(lower_bound, dtype=np.uint8)
         self._upper_bound = np.array(upper_bound, dtype=np.uint8)
         self._threshold = threshold
 
     def match(self, image: np.ndarray) -> bool:
+        img = self._apply_roi(image)
         if self._mask is not None:
-            masked = cv2.bitwise_and(image, image, mask=self._mask)
+            masked = cv2.bitwise_and(img, img, mask=self._mask)
         else:
-            masked = image
+            masked = img
 
         hsv = cv2.cvtColor(masked, cv2.COLOR_BGR2HSV)
         color_mask = cv2.inRange(hsv, self._lower_bound, self._upper_bound)
@@ -116,7 +130,7 @@ class HSVMatcher(BaseMatcher):
             total = cv2.countNonZero(self._mask)
             count = cv2.countNonZero(combined)
         else:
-            total = image.shape[0] * image.shape[1]
+            total = img.shape[0] * img.shape[1]
             count = cv2.countNonZero(color_mask)
 
         ratio = count / total if total > 0 else 0
@@ -126,12 +140,18 @@ class HSVMatcher(BaseMatcher):
 class UniformColorMatcher(BaseMatcher):
     """画像全体が同系色かを判定するマッチャー。"""
 
-    def __init__(self, mask_path: Optional[str] = None, hue_threshold: float = 10.0) -> None:
-        super().__init__(mask_path)
+    def __init__(
+        self,
+        mask_path: Optional[str] = None,
+        hue_threshold: float = 10.0,
+        roi: Optional[Tuple[int, int, int, int]] = None,
+    ) -> None:
+        super().__init__(mask_path, roi)
         self._hue_threshold = hue_threshold
 
     def match(self, image: np.ndarray) -> bool:
-        hsv = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
+        img = self._apply_roi(image)
+        hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
         hue = hsv[:, :, 0]
         if self._mask is not None:
             values = hue[self._mask == 255]
@@ -148,19 +168,26 @@ class UniformColorMatcher(BaseMatcher):
 class RGBMatcher(BaseMatcher):
     """RGB 値の一致を判定するマッチャー。"""
 
-    def __init__(self, rgb: Tuple[int, int, int], mask_path: Optional[str] = None, threshold: float = 0.9) -> None:
-        super().__init__(mask_path)
+    def __init__(
+        self,
+        rgb: Tuple[int, int, int],
+        mask_path: Optional[str] = None,
+        threshold: float = 0.9,
+        roi: Optional[Tuple[int, int, int, int]] = None,
+    ) -> None:
+        super().__init__(mask_path, roi)
         self._rgb = rgb
         self._threshold = threshold
 
     def match(self, image: np.ndarray) -> bool:
+        img = self._apply_roi(image)
         if self._mask is not None:
             mask = self._mask == 255
-            masked = image[mask]
+            masked = img[mask]
             total = int(np.sum(mask))
         else:
-            masked = image.reshape(-1, 3)
-            total = image.shape[0] * image.shape[1]
+            masked = img.reshape(-1, 3)
+            total = img.shape[0] * img.shape[1]
 
         match_pixels = np.all(masked == self._rgb, axis=-1)
         match_count = int(np.sum(match_pixels))
@@ -173,8 +200,14 @@ class RGBMatcher(BaseMatcher):
 class TemplateMatcher(BaseMatcher):
     """テンプレートマッチングを行うマッチャー。"""
 
-    def __init__(self, template_path: str, mask_path: Optional[str] = None, threshold: float = 0.9) -> None:
-        super().__init__(mask_path)
+    def __init__(
+        self,
+        template_path: str,
+        mask_path: Optional[str] = None,
+        threshold: float = 0.9,
+        roi: Optional[Tuple[int, int, int, int]] = None,
+    ) -> None:
+        super().__init__(mask_path, roi)
         template = cv2.imread(template_path)
         if template is None:
             raise ValueError(f"テンプレート画像の読み込みに失敗しました: {template_path}")
@@ -182,7 +215,8 @@ class TemplateMatcher(BaseMatcher):
         self._threshold = threshold
 
     def match(self, image: np.ndarray) -> bool:
-        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+        img = self._apply_roi(image)
+        gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
         if self._mask is not None:
             result = cv2.matchTemplate(gray, self._template, cv2.TM_CCOEFF_NORMED, mask=self._mask)
         else:
@@ -192,15 +226,27 @@ class TemplateMatcher(BaseMatcher):
 
 
 class BrightnessMatcher(BaseMatcher):
-    """平均明度が指定値以下か判定するマッチャー。"""
+    """平均明度が閾値内か判定するマッチャー。"""
 
-    def __init__(self, max_value: float, mask_path: Optional[str] = None) -> None:
-        super().__init__(mask_path)
+    def __init__(
+        self,
+        max_value: Optional[float] = None,
+        min_value: Optional[float] = None,
+        mask_path: Optional[str] = None,
+        roi: Optional[Tuple[int, int, int, int]] = None,
+    ) -> None:
+        super().__init__(mask_path, roi)
         self._max_value = max_value
+        self._min_value = min_value
 
     def match(self, image: np.ndarray) -> bool:
-        level = calculate_brightness(image, self._mask)
-        return level <= self._max_value
+        img = self._apply_roi(image)
+        level = calculate_brightness(img, self._mask)
+        if self._max_value is not None and level > self._max_value:
+            return False
+        if self._min_value is not None and level < self._min_value:
+            return False
+        return True
 
 
 class CompositeMatcher:
@@ -235,23 +281,48 @@ def build_matcher(config: "MatcherConfig") -> Optional[BaseMatcher]:
         return None
 
     mask_path = getattr(config, "mask_path", None)
+    roi_cfg = getattr(config, "roi", None)
+    roi = None
+    if roi_cfg:
+        roi = (
+            int(roi_cfg.get("x", 0)),
+            int(roi_cfg.get("y", 0)),
+            int(roi_cfg.get("width", 0)),
+            int(roi_cfg.get("height", 0)),
+        )
     if config.type == "hash" and config.template_path:
         try:
-            return HashMatcher(config.template_path)
+            return HashMatcher(config.template_path, roi)
         except Exception:
             return None
     if config.type == "hsv" and config.lower_bound and config.upper_bound:
-        return HSVMatcher(tuple(config.lower_bound), tuple(config.upper_bound), mask_path, config.threshold)
+        return HSVMatcher(
+            tuple(config.lower_bound),
+            tuple(config.upper_bound),
+            mask_path,
+            config.threshold,
+            roi,
+        )
     if config.type == "rgb" and config.rgb:
-        return RGBMatcher(tuple(config.rgb), mask_path, config.threshold)
+        return RGBMatcher(tuple(config.rgb), mask_path, config.threshold, roi)
     if config.type == "uniform":
-        return UniformColorMatcher(mask_path, config.hue_threshold or 10.0)
-    if config.type == "brightness" and config.max_value is not None:
-        return BrightnessMatcher(config.max_value, mask_path)
+        return UniformColorMatcher(mask_path, config.hue_threshold or 10.0, roi)
+    if config.type == "brightness" and (
+        config.max_value is not None or config.min_value is not None
+    ):
+        return BrightnessMatcher(
+            config.max_value,
+            config.min_value,
+            mask_path,
+            roi,
+        )
     if config.type == "template" and config.template_path:
         try:
             return TemplateMatcher(
-                config.template_path, mask_path, config.threshold
+                config.template_path,
+                mask_path,
+                config.threshold,
+                roi,
             )
         except Exception:
             return None
