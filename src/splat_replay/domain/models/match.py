@@ -6,7 +6,6 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from uuid import uuid4
 
-from .result import Result
 from .rule import Rule
 from .stage import Stage
 
@@ -19,7 +18,8 @@ class Match:
     stage: Stage
     start_at: datetime
     end_at: datetime | None = None
-    result: Result | None = None
+    result: str | None = None
+    """"win" または "lose" を設定する。"""
     kill: int | None = None
     death: int | None = None
     special: int | None = None
