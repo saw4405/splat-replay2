@@ -40,8 +40,8 @@ class OBSController(OBSControlPort):
         """OBS が起動しているかどうかを返す。"""
 
         def exists_process(file_name: str) -> bool:
-            for proc in psutil.process_iter(['name']):
-                if proc.info['name'] == file_name:
+            for proc in psutil.process_iter(["name"]):
+                if proc.info["name"] == file_name:
                     return True
             return False
 
@@ -58,11 +58,14 @@ class OBSController(OBSControlPort):
                     window_title = win32gui.GetWindowText(hwnd)
                     if title in window_title:
                         result.append(hwnd)
+
             windows = []
             win32gui.EnumWindows(enum_window, windows)
             return bool(windows)
 
-        return exists_process(self._settings.executable_path.name) and exists_window("OBS")
+        return exists_process(
+            self._settings.executable_path.name
+        ) and exists_window("OBS")
 
     def launch(self) -> None:
         """OBS を起動する。"""
@@ -75,7 +78,8 @@ class OBSController(OBSControlPort):
             file_name = self._settings.executable_path.name
             directory = self._settings.executable_path.parent
             self.process = subprocess.Popen(
-                file_name, cwd=directory, shell=True)
+                file_name, cwd=directory, shell=True
+            )
         except Exception as e:  # pragma: no cover - 実機依存
             logger.error("OBS 起動失敗", error=str(e))
             raise RuntimeError("OBS 起動に失敗しました") from e
@@ -124,6 +128,21 @@ class OBSController(OBSControlPort):
         status = self._ws.call(requests.GetVirtualCamStatus())
         if not status.datain.get("outputActive", False):
             self._ws.call(requests.StartVirtualCam())
+
+    def is_virtual_camera_active(self) -> bool:
+        """仮想カメラが有効かどうかを返す。"""
+
+        if not self.is_running():
+            return False
+
+        try:
+            if not self.is_connected():
+                self.connect()
+            status = self._ws.call(requests.GetVirtualCamStatus())
+            return status.datain.get("outputActive", False)
+        except Exception as e:  # pragma: no cover - 実機依存
+            logger.warning("仮想カメラ状態取得失敗", error=str(e))
+            return False
 
     def _get_record_status(self) -> tuple[bool, bool]:
         """録画状態を取得する。"""

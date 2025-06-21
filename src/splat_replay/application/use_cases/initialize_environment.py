@@ -25,8 +25,7 @@ class InitializeEnvironmentUseCase:
         self.logger = get_logger()
 
     def wait_for_device(self, timeout: float | None = None) -> bool:
-        """キャプチャデバイスの接続を待機し、接続結果を返す。アニメーション表示は行わない。
-        """
+        """キャプチャデバイスの接続を待機し、接続結果を返す。アニメーション表示は行わない。"""
         import time
 
         start_time = time.time()

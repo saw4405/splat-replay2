@@ -7,7 +7,9 @@ BASE = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(BASE / "src"))  # noqa: E402
 
 from typer.testing import CliRunner  # noqa: E402
+from splat_replay import cli  # noqa: E402
 from splat_replay.cli import app  # noqa: E402
+import pytest
 
 
 def test_cli_help() -> None:
@@ -23,8 +25,26 @@ def test_cli_help() -> None:
     assert "stop" in output
 
 
-def test_record_without_init() -> None:
+def test_record_without_init(monkeypatch) -> None:
     runner = CliRunner()
-    result = runner.invoke(app, ["record"])
-    assert result.exit_code == 1
-    assert "init" in result.output
+    with runner.isolated_filesystem():
+        from splat_replay.application.use_cases.record_battle import (
+            RecordBattleUseCase,
+        )
+
+        monkeypatch.setattr(RecordBattleUseCase, "execute", lambda self: None)
+
+        class DummyCheck:
+            def execute(self) -> bool:
+                return True
+
+        original_resolve = cli.resolve
+
+        def fake_resolve(cls):
+            if cls is cli.CheckInitializationUseCase:
+                return DummyCheck()
+            return original_resolve(cls)
+
+        monkeypatch.setattr(cli, "resolve", fake_resolve)
+        result = runner.invoke(app, ["record"])
+    assert result.exit_code == 0

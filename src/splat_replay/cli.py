@@ -7,9 +7,17 @@ import threading
 import typer
 from pathlib import Path
 
-from splat_replay.shared.logger import initialize_logger, get_logger, buffer_console_logs
 
-from splat_replay.domain.services.state_machine import State, StateMachine
+from splat_replay.shared.logger import (
+    initialize_logger,
+    get_logger,
+    buffer_console_logs,
+)
+
+from splat_replay.domain.services.state_machine import (
+    Event,
+    StateMachine,
+)
 
 from splat_replay.application import (
     ProcessPostGameUseCase,
@@ -20,6 +28,9 @@ from splat_replay.application import (
     UploadVideoUseCase,
     InitializeEnvironmentUseCase,
     DaemonUseCase,
+)
+from splat_replay.application.use_cases.check_initialization import (
+    CheckInitializationUseCase,
 )
 from typing import Type, TypeVar, cast
 
@@ -42,13 +53,16 @@ def resolve(cls: Type[T]) -> T:
 
 def _require_initialized() -> None:
     """他のコマンド実行前に初期化済みか確認する。"""
-    sm = resolve(StateMachine)
-    if sm.state is State.READINESS_CHECK:
-        typer.echo(
-            "初期化が完了していません。先に `init` コマンドを実行してください。",
-            err=True,
-        )
-        raise typer.Exit(code=1)
+
+    uc = resolve(CheckInitializationUseCase)
+    if uc.execute():
+        return
+
+    typer.echo(
+        "初期化が完了していません。先に `init` コマンドを実行してください。",
+        err=True,
+    )
+    raise typer.Exit(code=1)
 
 
 @app.callback()
@@ -58,12 +72,18 @@ def main() -> None:
 
 
 @app.command()
-def init(timeout: float = typer.Option(None, help="デバイス接続待ちタイムアウト（秒、未指定で無限）")) -> None:
+def init(
+    timeout: float = typer.Option(
+        None, help="デバイス接続待ちタイムアウト（秒、未指定で無限）"
+    ),
+) -> None:
     """起動準備を行う。"""
     logger.info("init コマンド開始", timeout=timeout)
     uc = resolve(InitializeEnvironmentUseCase)
     if not uc.device.is_connected():
-        typer.echo("\033[1;33mキャプチャボードをPCに接続してください。\033[0m\n")
+        typer.echo(
+            "\033[1;33mキャプチャボードをPCに接続してください。\033[0m\n"
+        )
     stop_event = threading.Event()
 
     def animate():
@@ -78,15 +98,12 @@ def init(timeout: float = typer.Option(None, help="デバイス接続待ちタ�
         idx = 0
         try:
             while not stop_event.is_set():
-                message = (
-                    f"\r初期化中... "
-                    f"{animation[idx % len(animation)]}"
-                )
+                message = f"\r初期化中... {animation[idx % len(animation)]}"
                 print(message, end="", flush=True)
                 idx += 1
                 time.sleep(0.5)
         finally:
-            print('\033[?25h', end="")  # カーソル表示
+            print("\033[?25h", end="")  # カーソル表示
 
     with buffer_console_logs():
         anim_thread = threading.Thread(target=animate)

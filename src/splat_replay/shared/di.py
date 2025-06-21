@@ -15,6 +15,7 @@ from splat_replay.application import (
     ShutdownPCUseCase,
     UploadVideoUseCase,
     InitializeEnvironmentUseCase,
+    CheckInitializationUseCase,
     DaemonUseCase,
 )
 from splat_replay.infrastructure import (
@@ -108,6 +109,7 @@ def configure_container() -> punq.Container:
     container.register(
         InitializeEnvironmentUseCase, InitializeEnvironmentUseCase
     )
+    container.register(CheckInitializationUseCase, CheckInitializationUseCase)
     container.register(DaemonUseCase, DaemonUseCase)
 
     return container
