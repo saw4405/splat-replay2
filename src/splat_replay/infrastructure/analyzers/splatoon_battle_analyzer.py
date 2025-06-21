@@ -1,4 +1,4 @@
-"""スプラトゥーン対戦モード用解析プラグイン。"""
+"""スプラトゥーン対戦モード用フレームアナライザー。"""
 
 from __future__ import annotations
 
@@ -9,8 +9,8 @@ from splat_replay.shared.config import ImageMatchingSettings
 from .plugin import AnalyzerPlugin
 
 
-class SplatoonBattleAnalyzer(AnalyzerPlugin):
-    """ナワバリ/ランクマッチ向け解析ロジック。"""
+class BattleFrameAnalyzer(AnalyzerPlugin):
+    """ナワバリ/ランクマッチ向けフレーム解析ロジック。"""
 
     def __init__(self, settings: ImageMatchingSettings) -> None:
         self.registry = MatcherRegistry(settings)

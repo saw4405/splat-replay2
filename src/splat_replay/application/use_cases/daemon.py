@@ -6,9 +6,11 @@ import time
 from pathlib import Path
 from typing import List
 
+import cv2
+
 from splat_replay.application.interfaces import (
     VideoRecorder,
-    ScreenAnalyzerPort,
+    FrameAnalyzerPort,
     SpeechTranscriberPort,
     VideoEditorPort,
     UploadPort,
@@ -31,15 +33,15 @@ class DaemonUseCase:
     def __init__(
         self,
         recorder: VideoRecorder,
-        analyzer: ScreenAnalyzerPort,
+        analyzer: FrameAnalyzerPort,
         transcriber: SpeechTranscriberPort,
         editor: VideoEditorPort,
         uploader: UploadPort,
         extractor: MetadataExtractorPort,
         power: PowerPort,
-        repo: MetadataRepository,
+        metadata_repo: MetadataRepository,
         state_machine: StateMachine,
-        settings: OBSSettings,
+        obs_settings: OBSSettings,
     ) -> None:
         self.recorder = recorder
         self.analyzer = analyzer
@@ -48,9 +50,9 @@ class DaemonUseCase:
         self.uploader = uploader
         self.extractor = extractor
         self.power = power
-        self.repo = repo
+        self.repo = metadata_repo
         self.sm = state_machine
-        self.settings = settings
+        self.settings = obs_settings
         self.pending: List[Path] = []
         self.logger = get_logger()
 
@@ -65,10 +67,29 @@ class DaemonUseCase:
             self.pending.remove(clip)
         self.power.sleep()
 
+    def _update_power_off_count(
+        self, frame, off_count: int, last_check: float
+    ) -> tuple[int, float, bool]:
+        """フレームから電源OFF判定を行い、カウント・時刻・確定判定を返す。"""
+        now = time.time()
+        detected = False
+        if now - last_check >= 10:
+            last_check = now
+            if self.analyzer.detect_power_off(frame):
+                off_count += 1
+                self.logger.info(
+                    "電源 OFF を検出",
+                    count=off_count
+                )
+            else:
+                off_count = 0
+            if off_count >= 6:
+                detected = True
+        return off_count, last_check, detected
+
     def execute(self) -> None:
         """電源 OFF を監視しつつ自動録画を繰り返す。"""
         self.logger.info("デーモン開始")
-        import cv2
 
         cap = cv2.VideoCapture(self.settings.capture_device_index)
         if not cap.isOpened():
@@ -78,11 +99,9 @@ class DaemonUseCase:
             )
             raise RuntimeError("キャプチャデバイスの取得に失敗しました")
 
+        off_count = 0
+        last_check = 0.0
         try:
-            # 電源OFF検出の連続回数
-            off_count = 0
-            # 最後に電源OFFを確認した時刻
-            last_check = 0.0
             while True:
                 success, frame = cap.read()
                 if not success:
@@ -90,25 +109,18 @@ class DaemonUseCase:
                     time.sleep(1)
                     continue
 
-                now = time.time()
-                # 約10秒に1回だけ電源OFFを確認する
-                if now - last_check >= 10:
-                    last_check = now
-                    if self.analyzer.detect_power_off(frame):
-                        off_count += 1
-                    else:
-                        off_count = 0
-
-                    # 6回連続でOFFを検出したら確定とみなす
-                    if off_count >= 6:
-                        if self.sm.state in {State.RECORDING, State.PAUSED}:
-                            video = self.recorder.stop()
-                            audio = self.transcriber.stop_capture()
-                            _ = self.transcriber.transcribe(audio)
-                            self.pending.append(video)
-                            self.sm.handle(Event.POSTGAME_DETECTED)
-                        self._process_pending()
-                        break
+                off_count, last_check, power_off_detected = self._update_power_off_count(
+                    frame, off_count, last_check
+                )
+                if power_off_detected:
+                    if self.sm.state in {State.RECORDING, State.PAUSED}:
+                        video = self.recorder.stop()
+                        audio = self.transcriber.stop_capture()
+                        _ = self.transcriber.transcribe(audio)
+                        self.pending.append(video)
+                        self.sm.handle(Event.POSTGAME_DETECTED)
+                    self._process_pending()
+                    break
 
                 if (
                     self.sm.state is State.STANDBY
@@ -143,7 +155,5 @@ class DaemonUseCase:
                     _ = self.transcriber.transcribe(audio)
                     self.pending.append(video)
                     self.sm.handle(Event.POSTGAME_DETECTED)
-
-                time.sleep(1)
         finally:
             cap.release()

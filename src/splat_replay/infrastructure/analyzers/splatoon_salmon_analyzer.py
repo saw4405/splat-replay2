@@ -1,4 +1,4 @@
-"""サーモンラン用解析プラグイン。"""
+"""サーモンラン用フレームアナライザー。"""
 
 from __future__ import annotations
 
@@ -9,8 +9,8 @@ from splat_replay.shared.config import ImageMatchingSettings
 from .plugin import AnalyzerPlugin
 
 
-class SplatoonSalmonAnalyzer(AnalyzerPlugin):
-    """サーモンラン向けの解析ロジック。"""
+class SalmonFrameAnalyzer(AnalyzerPlugin):
+    """サーモンラン向けのフレーム解析ロジック。"""
 
     def __init__(self, settings: ImageMatchingSettings) -> None:
         self.registry = MatcherRegistry(settings)

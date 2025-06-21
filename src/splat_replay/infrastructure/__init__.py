@@ -9,8 +9,8 @@ __all__ = [
     "CaptureDeviceChecker",
     "FrameAnalyzer",
     "AnalyzerPlugin",
-    "SplatoonBattleAnalyzer",
-    "SplatoonSalmonAnalyzer",
+    "BattleFrameAnalyzer",
+    "SalmonFrameAnalyzer",
     "FileMetadataRepository",
 ]
 
@@ -22,6 +22,6 @@ from .adapters.system_power import SystemPower
 from .adapters.capture_device_checker import CaptureDeviceChecker
 from .analyzers.plugin import AnalyzerPlugin
 from .analyzers.frame_analyzer import FrameAnalyzer
-from .analyzers.splatoon_battle_analyzer import SplatoonBattleAnalyzer
-from .analyzers.splatoon_salmon_analyzer import SplatoonSalmonAnalyzer
+from .analyzers.splatoon_battle_analyzer import BattleFrameAnalyzer
+from .analyzers.splatoon_salmon_analyzer import SalmonFrameAnalyzer
 from .repositories.file_metadata_repo import FileMetadataRepository

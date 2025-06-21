@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import os
+
 from splat_replay.shared.logger import get_logger
 
 logger = get_logger()
@@ -13,4 +15,4 @@ class SystemPower:
     def sleep(self) -> None:
         """PC をスリープさせる。"""
         logger.info("PC スリープ指示")
-        raise NotImplementedError
+        os.system("rundll32.exe powrprof.dll,SetSuspendState 0,1,0")
