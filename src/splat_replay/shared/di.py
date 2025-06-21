@@ -26,10 +26,13 @@ from splat_replay.infrastructure import (
     OBSController,
     SystemPower,
     YouTubeClient,
+    FrameAnalyzer,
+    AnalyzerPlugin,
+    SplatoonBattleAnalyzer,
+    SplatoonSalmonAnalyzer,
 )
 from splat_replay.domain.services import (
     VideoEditor,
-    ScreenAnalyzer,
     SpeechTranscriber,
     MetadataExtractor,
     StateMachine,
@@ -88,7 +91,11 @@ def configure_container() -> punq.Container:
     container.register(VideoEditorPort, VideoEditor)
     container.register(UploadPort, YouTubeClient)
     container.register(PowerPort, SystemPower)
-    container.register(ScreenAnalyzerPort, ScreenAnalyzer)
+    if settings.game_mode == "salmon":
+        container.register(AnalyzerPlugin, SplatoonSalmonAnalyzer)
+    else:
+        container.register(AnalyzerPlugin, SplatoonBattleAnalyzer)
+    container.register(ScreenAnalyzerPort, FrameAnalyzer)
     container.register(SpeechTranscriberPort, SpeechTranscriber)
     container.register(MetadataExtractorPort, MetadataExtractor)
     container.register(GroqClient, GroqClient)

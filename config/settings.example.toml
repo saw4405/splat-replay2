@@ -1,3 +1,5 @@
+game_mode = "battle"
+
 [recording]
 # Recording settings
 output_dir = "recordings"
