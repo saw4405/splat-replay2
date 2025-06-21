@@ -6,10 +6,10 @@ from pathlib import Path
 from typing import Dict, List, Optional, Literal
 import tomllib
 
-from pydantic import BaseModel, BaseSettings
+from pydantic import BaseModel
 
 
-class YouTubeSettings(BaseSettings):
+class YouTubeSettings(BaseModel):
     """YouTube アップロード関連の設定。"""
 
     enabled: bool = False
@@ -21,22 +21,20 @@ class YouTubeSettings(BaseSettings):
     tags: Optional[List[str]] = None
     playlist_id: Optional[str] = None
 
-    class Config(BaseSettings.Config):
-        env_prefix = "YOUTUBE_"
-        env_file = ".env"
+    class Config:
+        pass
 
 
-class VideoEditSettings(BaseSettings):
+class VideoEditSettings(BaseModel):
     """動画編集処理の設定。"""
 
     volume_multiplier: float = 1.0
 
-    class Config(BaseSettings.Config):
-        env_prefix = "VIDEO_EDIT_"
-        env_file = ".env"
+    class Config:
+        pass
 
 
-class OBSSettings(BaseSettings):
+class OBSSettings(BaseModel):
     """OBS 接続設定。"""
 
     websocket_host: str = "localhost"
@@ -46,9 +44,8 @@ class OBSSettings(BaseSettings):
     capture_device_name: Optional[str] = None
     capture_device_index: int = 0
 
-    class Config(BaseSettings.Config):
-        env_prefix = "OBS_"
-        env_file = ".env"
+    class Config:
+        pass
 
 
 class MatcherConfig(BaseModel):
@@ -63,17 +60,16 @@ class MatcherConfig(BaseModel):
     hue_threshold: Optional[float] = None
 
 
-class ImageMatchingSettings(BaseSettings):
+class ImageMatchingSettings(BaseModel):
     """画像解析用のマッチャー設定。"""
 
     matchers: Dict[str, MatcherConfig] = {}
 
-    class Config(BaseSettings.Config):
-        env_prefix = "MATCHING_"
-        env_file = ".env"
+    class Config:
+        pass
 
 
-class AppSettings(BaseSettings):
+class AppSettings(BaseModel):
     """アプリケーション全体の設定。"""
 
     youtube: YouTubeSettings = YouTubeSettings()
@@ -81,8 +77,8 @@ class AppSettings(BaseSettings):
     obs: OBSSettings = OBSSettings()
     image_matching: ImageMatchingSettings = ImageMatchingSettings()
 
-    class Config(BaseSettings.Config):
-        env_file = ".env"
+    class Config:
+        pass
 
     @classmethod
     def load_from_toml(cls, path: Path) -> "AppSettings":
