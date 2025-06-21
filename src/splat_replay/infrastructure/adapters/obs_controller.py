@@ -125,7 +125,7 @@ class OBSController(OBSControlPort):
     def is_running(self) -> bool:
         """OBS が起動しているかどうかを返す。"""
 
-        exe_name = Path(self._settings.executable_path).name
+        exe_name = self._settings.executable_path.name
 
         def exists_process() -> bool:
             for proc in psutil.process_iter(["name"]):
@@ -157,7 +157,9 @@ class OBSController(OBSControlPort):
             return
 
         try:
-            self._process = subprocess.Popen([self._settings.executable_path])
+            self._process = subprocess.Popen(
+                [str(self._settings.executable_path)]
+            )
         except Exception as e:  # pragma: no cover - 実機依存
             logger.error("OBS 起動失敗", error=str(e))
             raise RuntimeError("OBS 起動に失敗しました") from e
