@@ -20,7 +20,7 @@ class YouTubeSettings(BaseSettings):
     tags: List[str] = ["スプラトゥーン3"]
     playlist_id: Optional[str] = None
 
-    class Config:
+    class Config(BaseSettings.Config):
         env_prefix = "YOUTUBE_"
         env_file = ".env"
 
@@ -30,7 +30,7 @@ class VideoEditSettings(BaseSettings):
 
     volume_multiplier: float = 1.0
 
-    class Config:
+    class Config(BaseSettings.Config):
         env_prefix = "VIDEO_EDIT_"
         env_file = ".env"
 
@@ -41,10 +41,10 @@ class OBSSettings(BaseSettings):
     websocket_host: str = "localhost"
     websocket_port: int = 4455
     websocket_password: str = ""
-    executable_path: str = "obs"
+    executable_path: Path = Path("obs")
     capture_device_name: str = "USB Video"
 
-    class Config:
+    class Config(BaseSettings.Config):
         env_prefix = "OBS_"
         env_file = ".env"
 
@@ -66,7 +66,7 @@ class ImageMatchingSettings(BaseSettings):
 
     matchers: Dict[str, MatcherConfig] = {}
 
-    class Config:
+    class Config(BaseSettings.Config):
         env_prefix = "MATCHING_"
         env_file = ".env"
 
@@ -79,7 +79,7 @@ class AppSettings(BaseSettings):
     obs: OBSSettings = OBSSettings()
     image_matching: ImageMatchingSettings = ImageMatchingSettings()
 
-    class Config:
+    class Config(BaseSettings.Config):
         env_file = ".env"
 
     @classmethod
