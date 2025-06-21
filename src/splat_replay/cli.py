@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import time
+import threading
 import typer
 from pathlib import Path
 
-from splat_replay.shared.logger import initialize_logger, get_logger
+from splat_replay.shared.logger import initialize_logger, get_logger, buffer_console_logs
 
 from splat_replay.domain.services.state_machine import State, StateMachine
 
@@ -56,11 +58,54 @@ def main() -> None:
 
 
 @app.command()
-def init() -> None:
+def init(timeout: float = typer.Option(None, help="デバイス接続待ちタイムアウト（秒、未指定で無限）")) -> None:
     """起動準備を行う。"""
-    logger.info("init コマンド開始")
+    logger.info("init コマンド開始", timeout=timeout)
     uc = resolve(InitializeEnvironmentUseCase)
-    uc.execute()
+    if not uc.device.is_connected():
+        typer.echo("\033[1;33mキャプチャボードをPCに接続してください。\033[0m\n")
+    stop_event = threading.Event()
+
+    def animate():
+        animation = [
+            "(●´・ω・)    ",
+            "(●´・ω・)σ   ",
+            "(●´・ω・)σσ  ",
+            "(●´・ω・)σσσ ",
+            "(●´・ω・)σσσσ",
+        ]
+        print("\033[?25l", end="")  # カーソル非表示
+        idx = 0
+        try:
+            while not stop_event.is_set():
+                message = (
+                    f"\r初期化中... "
+                    f"{animation[idx % len(animation)]}"
+                )
+                print(message, end="", flush=True)
+                idx += 1
+                time.sleep(0.5)
+        finally:
+            print('\033[?25h', end="")  # カーソル表示
+
+    with buffer_console_logs():
+        anim_thread = threading.Thread(target=animate)
+        anim_thread.start()
+        try:
+            uc.execute(timeout=timeout)
+            stop_event.set()
+            anim_thread.join()
+            print("\r初期化が完了しました。           ")
+        except KeyboardInterrupt:
+            stop_event.set()
+            anim_thread.join()
+            print("\r初期化を中断しました。           ")
+            raise typer.Exit(1)
+        except Exception as e:
+            stop_event.set()
+            anim_thread.join()
+            print(f"\r初期化に失敗しました: {e}")
+            raise typer.Exit(code=1)
 
 
 @app.command()

@@ -36,24 +36,70 @@ class OBSController(OBSControlPort):
         )
         self._process: subprocess.Popen[str] | None = None
 
-        # インスタンス生成時に接続を試みる
+    def is_running(self) -> bool:
+        """OBS が起動しているかどうかを返す。"""
+
+        def exists_process(file_name: str) -> bool:
+            for proc in psutil.process_iter(['name']):
+                if proc.info['name'] == file_name:
+                    return True
+            return False
+
+        def exists_window(title: str) -> bool:
+            if win32gui is None:  # pragma: no cover - OS 依存
+                logger.warning("win32gui が利用できません")
+                return False
+
+            def enum_window(hwnd, result):
+                if win32gui is None:  # pragma: no cover - OS 依存
+                    logger.warning("win32gui が利用できません")
+                    return False
+                if win32gui.IsWindowVisible(hwnd):
+                    window_title = win32gui.GetWindowText(hwnd)
+                    if title in window_title:
+                        result.append(hwnd)
+            windows = []
+            win32gui.EnumWindows(enum_window, windows)
+            return bool(windows)
+
+        return exists_process(self._settings.executable_path.name) and exists_window("OBS")
+
+    def launch(self) -> None:
+        """OBS を起動する。"""
+
+        logger.info("OBS 起動指示")
+        if self.is_running():
+            return
+
         try:
-            self.connect()
+            file_name = self._settings.executable_path.name
+            directory = self._settings.executable_path.parent
+            self.process = subprocess.Popen(
+                file_name, cwd=directory, shell=True)
         except Exception as e:  # pragma: no cover - 実機依存
-            logger.warning("OBS への接続に失敗しました", error=str(e))
+            logger.error("OBS 起動失敗", error=str(e))
+            raise RuntimeError("OBS 起動に失敗しました") from e
+
+        # 起動直後はWebSocket接続に失敗するので起動待ちする
+        while not self.is_running():
+            time.sleep(1)
+
+    def is_connected(self) -> bool:
+        """WebSocket が接続済みか確認する。"""
+
+        return self._ws.ws is not None and self._ws.ws.connected
 
     def connect(self) -> None:
         """OBS WebSocket に接続する。"""
 
-        if self.is_connected():
-            return
+        logger.info("OBS WebSocket 接続試行")
 
         if not self.is_running():
-            try:
-                self.launch()
-            except Exception as e:
-                logger.warning("OBS 起動失敗", error=str(e))
-                return
+            logger.error("OBS が起動していません")
+            raise RuntimeError("OBS が起動していません")
+
+        if self.is_connected():
+            return
 
         for _ in range(5):
             try:
@@ -71,10 +117,13 @@ class OBSController(OBSControlPort):
         logger.warning("OBS から切断されました")
         self.connect()
 
-    def is_connected(self) -> bool:
-        """WebSocket が接続済みか確認する。"""
+    def start_virtual_camera(self) -> None:
+        """OBS の仮想カメラを開始する。"""
 
-        return self._ws.ws is not None and self._ws.ws.connected
+        logger.info("OBS 仮想カメラ開始指示")
+        status = self._ws.call(requests.GetVirtualCamStatus())
+        if not status.datain.get("outputActive", False):
+            self._ws.call(requests.StartVirtualCam())
 
     def _get_record_status(self) -> tuple[bool, bool]:
         """録画状態を取得する。"""
@@ -121,53 +170,3 @@ class OBSController(OBSControlPort):
         _, paused = self._get_record_status()
         if paused:
             self._ws.call(requests.ResumeRecord())
-
-    def is_running(self) -> bool:
-        """OBS が起動しているかどうかを返す。"""
-
-        exe_name = self._settings.executable_path.name
-
-        def exists_process() -> bool:
-            for proc in psutil.process_iter(["name"]):
-                if proc.info.get("name") == exe_name:
-                    return True
-            return False
-
-        if win32gui is None:
-            return exists_process()
-
-        def exists_window() -> bool:
-            def enum_window(hwnd, result):
-                if win32gui.IsWindowVisible(hwnd):
-                    title = win32gui.GetWindowText(hwnd)
-                    if "OBS" in title:
-                        result.append(hwnd)
-
-            windows: list[int] = []
-            win32gui.EnumWindows(enum_window, windows)
-            return bool(windows)
-
-        return exists_process() and exists_window()
-
-    def launch(self) -> None:
-        """OBS を起動する。"""
-
-        logger.info("OBS 起動指示")
-        if self.is_running():
-            return
-
-        try:
-            self._process = subprocess.Popen(
-                [str(self._settings.executable_path)]
-            )
-        except Exception as e:  # pragma: no cover - 実機依存
-            logger.error("OBS 起動失敗", error=str(e))
-            raise RuntimeError("OBS 起動に失敗しました") from e
-
-    def start_virtual_camera(self) -> None:
-        """OBS の仮想カメラを開始する。"""
-
-        logger.info("OBS 仮想カメラ開始指示")
-        status = self._ws.call(requests.GetVirtualCamStatus())
-        if not status.datain.get("outputActive", False):
-            self._ws.call(requests.StartVirtualCam())

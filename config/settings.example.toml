@@ -10,10 +10,8 @@ websocket_host = "localhost"
 websocket_port = 4455
 websocket_password = ""
 executable_path = "obs"
-scene_name = "Splatoon3"
-source_name = "Game Capture"
 capture_device_index = 0
-capture_device_name = "USB Video"
+capture_device_name = "MiraBox Capture"
 
 [video]
 # Video processing settings
@@ -42,8 +40,8 @@ backup_count = 5
 enabled = false
 client_secrets_file = "config/youtube_client_secrets.json"
 upload_privacy = "private"
-default_title = "{BATTLE}({RATE}) {RULE} {WIN}勝{LOSE}敗 {DAY} {SCHEDULE}時～"
-default_description = "{CHAPTERS}"
-default_chapter = "{RESULT} {KILL}k {DEATH}d {SPECIAL}s  {STAGE}"
-default_tags = ["Splatoon3"]
+title_template = "{BATTLE}({RATE}) {RULE} {WIN}勝{LOSE}敗 {DAY} {SCHEDULE}時～"
+description_template = "{CHAPTERS}"
+chapter_template = "{RESULT} {KILL}k {DEATH}d {SPECIAL}s  {STAGE}"
+tags = ["Splatoon3"]
 playlist_id = ""

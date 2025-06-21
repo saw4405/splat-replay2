@@ -21,7 +21,6 @@ class CaptureDeviceChecker(CaptureDevicePort):
 
     def is_connected(self) -> bool:
         """デバイスが接続済みかを返す。"""
-        logger.info("キャプチャデバイス接続確認")
 
         # Windows 以外では実機での確認ができないため常に接続済みとみなす
         if sys.platform != "win32":

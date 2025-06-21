@@ -12,13 +12,13 @@ from pydantic import BaseModel, BaseSettings
 class YouTubeSettings(BaseSettings):
     """YouTube アップロード関連の設定。"""
 
-    visibility: Literal["public", "unlisted", "private"] = "private"
-    title_template: str = (
-        "{MATCH}({RATE}) {RULE} {WIN}勝{LOSE}敗 {DAY} {SCHEDULE}時～"
-    )
-    description_template: str = "{CHAPTERS}"
-    chapter_template: str = "{RESULT} {KILL}k {DEATH}d {SPECIAL}s  {STAGE}"
-    tags: List[str] = ["スプラトゥーン3"]
+    enabled: bool = False
+    client_secrets_file: str = "config/youtube_client_secrets.json"
+    upload_privacy: Literal["public", "unlisted", "private"] = "private"
+    title_template: Optional[str] = None
+    description_template: Optional[str] = None
+    chapter_template: Optional[str] = None
+    tags: Optional[List[str]] = None
     playlist_id: Optional[str] = None
 
     class Config(BaseSettings.Config):
@@ -43,7 +43,8 @@ class OBSSettings(BaseSettings):
     websocket_port: int = 4455
     websocket_password: str = ""
     executable_path: Path = Path("obs")
-    capture_device_name: str = "USB Video"
+    capture_device_name: Optional[str] = None
+    capture_device_index: int = 0
 
     class Config(BaseSettings.Config):
         env_prefix = "OBS_"
@@ -87,15 +88,19 @@ class AppSettings(BaseSettings):
     def load_from_toml(cls, path: Path) -> "AppSettings":
         """TOML ファイルから設定を読み込む。"""
 
-        data: Dict[str, Dict[str, object]] = {}
         with path.open("rb") as f:
             raw = tomllib.load(f)
 
-        # `AppSettings` で扱うキーのみ抽出する
-        for key in ("youtube", "video_edit", "obs", "image_matching"):
-            if key in raw:
-                section = raw[key]
-                if isinstance(section, dict):
-                    data[key] = section
+        # セクション名とSettingsクラスの対応をまとめてループで処理
+        section_classes = {
+            "youtube": YouTubeSettings,
+            "video_edit": VideoEditSettings,
+            "obs": OBSSettings,
+            "image_matching": ImageMatchingSettings,
+        }
+        kwargs = {}
+        for section, cls_ in section_classes.items():
+            if section in raw:
+                kwargs[section] = cls_(**raw[section])
 
-        return cls(**data)
+        return cls(**kwargs)

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import contextlib
+import io
 import logging
 from logging.handlers import TimedRotatingFileHandler
 from pathlib import Path
@@ -111,3 +113,33 @@ def get_logger() -> structlog.stdlib.BoundLogger:
     if not _initialized:
         initialize_logger()
     return structlog.get_logger()
+
+
+@contextlib.contextmanager
+def buffer_console_logs():
+    """コンソールログ出力を一時的にバッファし、終了時にまとめて出力する。"""
+    import logging
+
+    root_logger = logging.getLogger()
+    orig_handlers = list(root_logger.handlers)
+    stream_handlers = [
+        h for h in orig_handlers if isinstance(h, logging.StreamHandler)
+    ]
+    log_buffer = io.StringIO()
+    buffer_handlers = []
+    for h in stream_handlers:
+        buffer_handler = logging.StreamHandler(log_buffer)
+        buffer_handler.setLevel(h.level)
+        buffer_handler.setFormatter(h.formatter)
+        root_logger.removeHandler(h)
+        root_logger.addHandler(buffer_handler)
+        buffer_handlers.append(buffer_handler)
+    try:
+        yield log_buffer
+    finally:
+        for bh in buffer_handlers:
+            root_logger.removeHandler(bh)
+        for h in stream_handlers:
+            root_logger.addHandler(h)
+        print(log_buffer.getvalue(), end="")
+        log_buffer.close()
