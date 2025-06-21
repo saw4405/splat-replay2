@@ -9,6 +9,7 @@ auto_cleanup_days = 30
 websocket_host = "localhost"
 websocket_port = 4455
 websocket_password = ""
+executable_path = "obs"
 scene_name = "Splatoon3"
 source_name = "Game Capture"
 capture_device_index = 0
