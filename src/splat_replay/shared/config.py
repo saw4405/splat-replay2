@@ -42,6 +42,7 @@ class OBSSettings(BaseSettings):
     websocket_port: int = 4455
     websocket_password: str = ""
     executable_path: str = "obs"
+    capture_device_name: str = "USB Video"
 
     class Config:
         env_prefix = "OBS_"
