@@ -40,6 +40,8 @@ class OBSSettings(BaseSettings):
 
     websocket_host: str = "localhost"
     websocket_port: int = 4455
+    websocket_password: str = ""
+    executable_path: str = "obs"
 
     class Config:
         env_prefix = "OBS_"
