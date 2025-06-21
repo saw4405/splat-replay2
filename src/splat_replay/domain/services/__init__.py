@@ -7,7 +7,6 @@ __all__ = [
     "VideoEditor",
     "YouTubeUploader",
     "SpeechTranscriber",
-    "ScreenAnalyzer",
     "PowerManager",
 ]
 
@@ -17,5 +16,4 @@ from .metadata_extractor import MetadataExtractor
 from .editor import VideoEditor
 from .uploader import YouTubeUploader
 from .speech import SpeechTranscriber
-from .screen_analyzer import ScreenAnalyzer
 from .power_manager import PowerManager

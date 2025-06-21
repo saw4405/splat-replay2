@@ -108,6 +108,7 @@ class AppSettings(BaseModel):
     video_edit: VideoEditSettings = VideoEditSettings()
     obs: OBSSettings = OBSSettings()
     image_matching: ImageMatchingSettings = ImageMatchingSettings()
+    game_mode: Literal["battle", "salmon"] = "battle"
 
     class Config:
         pass
@@ -130,5 +131,6 @@ class AppSettings(BaseModel):
         for section, cls_ in section_classes.items():
             if section in raw:
                 kwargs[section] = cls_(**raw[section])
+        kwargs["game_mode"] = raw.get("game_mode", "battle")
 
         return cls(**kwargs)
