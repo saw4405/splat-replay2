@@ -55,6 +55,17 @@ class DaemonUseCase:
         self.settings = obs_settings
         self.pending: List[Path] = []
         self.logger = get_logger()
+        self.rate: int | None = None
+        self.result: str | None = None
+        self._matching = False
+        self._battle_started_at = 0.0
+
+    def _reset(self) -> None:
+        """保持している一時情報をリセットする。"""
+        self.rate = None
+        self.result = None
+        self._matching = False
+        self._battle_started_at = 0.0
 
     def _process_pending(self) -> None:
         """溜まっている録画を編集しアップロードする。"""
@@ -77,10 +88,7 @@ class DaemonUseCase:
             last_check = now
             if self.analyzer.detect_power_off(frame):
                 off_count += 1
-                self.logger.info(
-                    "電源 OFF を検出",
-                    count=off_count
-                )
+                self.logger.info("電源 OFF を検出", count=off_count)
             else:
                 off_count = 0
             if off_count >= 6:
@@ -109,8 +117,8 @@ class DaemonUseCase:
                     time.sleep(1)
                     continue
 
-                off_count, last_check, power_off_detected = self._update_power_off_count(
-                    frame, off_count, last_check
+                off_count, last_check, power_off_detected = (
+                    self._update_power_off_count(frame, off_count, last_check)
                 )
                 if power_off_detected:
                     if self.sm.state in {State.RECORDING, State.PAUSED}:
@@ -122,38 +130,77 @@ class DaemonUseCase:
                     self._process_pending()
                     break
 
-                if (
-                    self.sm.state is State.STANDBY
-                    and self.analyzer.detect_battle_start(frame)
-                ):
-                    self.recorder.start()
-                    self.transcriber.start_capture()
-                    self.sm.handle(Event.BATTLE_STARTED)
+                if self.sm.state is State.STANDBY:
+                    if self.analyzer.detect_match_select(frame):
+                        rate = self.analyzer.extract_rate(frame)
+                        if rate is not None:
+                            self.rate = rate
+                            self.logger.info("レート取得", rate=rate)
+                    if self.analyzer.detect_schedule_change(frame):
+                        self.logger.info(
+                            "スケジュール変更を検出、情報をリセット"
+                        )
+                        self._reset()
+                        continue
+                    if (
+                        not self._matching
+                        and self.analyzer.detect_matching_start(frame)
+                    ):
+                        self._matching = True
+                        continue
+                    if self._matching and self.analyzer.detect_battle_start(
+                        frame
+                    ):
+                        self.recorder.start()
+                        self.transcriber.start_capture()
+                        self._battle_started_at = time.time()
+                        self.sm.handle(Event.BATTLE_STARTED)
+                        self._matching = False
 
-                elif (
-                    self.sm.state is State.RECORDING
-                    and self.analyzer.detect_loading(frame)
-                ):
-                    self.recorder.pause()
-                    self.transcriber.stop_capture()
-                    self.sm.handle(Event.LOADING_DETECTED)
+                elif self.sm.state is State.RECORDING:
+                    now = time.time()
+                    if (
+                        now - self._battle_started_at <= 60
+                        and self.analyzer.detect_battle_abort(frame)
+                    ):
+                        self.logger.info("バトル中断を検出")
+                        self.recorder.stop()
+                        self.transcriber.stop_capture()
+                        self.sm.handle(Event.EARLY_ABORT)
+                        self._reset()
+                        continue
+                    if now - self._battle_started_at >= 600:
+                        video = self.recorder.stop()
+                        audio = self.transcriber.stop_capture()
+                        _ = self.transcriber.transcribe(audio)
+                        self.pending.append(video)
+                        self.sm.handle(Event.POSTGAME_DETECTED)
+                        self._reset()
+                        continue
+                    if self.analyzer.detect_loading(
+                        frame
+                    ) or self.analyzer.detect_finish(frame):
+                        self.recorder.pause()
+                        self.transcriber.stop_capture()
+                        self.sm.handle(Event.LOADING_DETECTED)
+                        continue
+                    jud = self.analyzer.detect_judgement(frame)
+                    if jud is not None:
+                        self.result = jud
+                    if self.analyzer.detect_result(frame):
+                        video = self.recorder.stop()
+                        audio = self.transcriber.stop_capture()
+                        _ = self.transcriber.transcribe(audio)
+                        self.pending.append(video)
+                        self.sm.handle(Event.POSTGAME_DETECTED)
+                        self._reset()
 
-                elif (
-                    self.sm.state is State.PAUSED
-                    and self.analyzer.detect_loading_end(frame)
-                ):
-                    self.recorder.resume()
-                    self.transcriber.start_capture()
-                    self.sm.handle(Event.LOADING_FINISHED)
-
-                elif (
-                    self.sm.state is State.RECORDING
-                    and self.analyzer.detect_result(frame)
-                ):
-                    video = self.recorder.stop()
-                    audio = self.transcriber.stop_capture()
-                    _ = self.transcriber.transcribe(audio)
-                    self.pending.append(video)
-                    self.sm.handle(Event.POSTGAME_DETECTED)
+                elif self.sm.state is State.PAUSED:
+                    if self.analyzer.detect_loading_end(
+                        frame
+                    ) or self.analyzer.detect_finish_end(frame):
+                        self.recorder.resume()
+                        self.transcriber.start_capture()
+                        self.sm.handle(Event.LOADING_FINISHED)
         finally:
             cap.release()

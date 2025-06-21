@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 from pathlib import Path
+from pydantic import ValidationError
+
+from splat_replay.shared.logger import get_logger
 
 import punq
 
@@ -61,6 +64,8 @@ from splat_replay.shared.config import (
 def configure_container() -> punq.Container:
     """アプリで利用する依存関係を登録する。"""
 
+    logger = get_logger()
+
     container = punq.Container()
 
     settings_path = Path("config/settings.toml")
@@ -77,8 +82,14 @@ def configure_container() -> punq.Container:
 
     image_match_path = Path("config/image_matching.yaml")
     if image_match_path.exists():
-        image_settings = ImageMatchingSettings.load_from_yaml(image_match_path)
-        settings.image_matching = image_settings
+        try:
+            image_settings = ImageMatchingSettings.load_from_yaml(
+                image_match_path
+            )
+            settings.image_matching = image_settings
+        except ValidationError as e:
+            logger.warning("画像マッチング設定の読み込みに失敗", exc_info=e)
+            image_settings = settings.image_matching
     else:
         image_settings = settings.image_matching
 

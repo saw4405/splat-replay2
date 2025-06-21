@@ -55,9 +55,24 @@ class DummyPlugin:
     def __init__(self) -> None:
         self.called = []
 
+    def detect_match_select(self, frame: np.ndarray) -> bool:
+        return False
+
+    def extract_rate(self, frame: np.ndarray) -> int | None:
+        return None
+
+    def detect_matching_start(self, frame: np.ndarray) -> bool:
+        return False
+
+    def detect_schedule_change(self, frame: np.ndarray) -> bool:
+        return False
+
     def detect_battle_start(self, frame: np.ndarray) -> bool:
         self.called.append("start")
         return True
+
+    def detect_battle_abort(self, frame: np.ndarray) -> bool:
+        return False
 
     def detect_loading(self, frame: np.ndarray) -> bool:
         self.called.append("load")
@@ -66,6 +81,15 @@ class DummyPlugin:
     def detect_loading_end(self, frame: np.ndarray) -> bool:
         self.called.append("end")
         return False
+
+    def detect_finish(self, frame: np.ndarray) -> bool:
+        return False
+
+    def detect_finish_end(self, frame: np.ndarray) -> bool:
+        return False
+
+    def detect_judgement(self, frame: np.ndarray) -> str | None:
+        return None
 
     def detect_result(self, frame: np.ndarray) -> bool:
         self.called.append("result")

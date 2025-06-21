@@ -129,8 +129,8 @@ src/
 | ステート  | 検知内容                                                 | ドメインイベント                                                      |
 | --------- | -------------------------------------------------------- | --------------------------------------------------------------------- |
 | Standby   | スケジュール変更・レート取得・マッチング開始・バトル開始 | `ScheduleChanged`, `RateDetected`, `MatchingStarted`, `BattleStarted` |
-| Recording | 早期中断・ローディング・勝敗・結果表示                   | `EarlyAbort`, `LoadingDetected`, `ResultDetected`, `PostGameDetected` |
-| Paused    | ローディング終了                                         | `LoadingFinished`                                                     |
+| Recording | 早期中断・ローディング・Finish・勝敗・結果表示           | `EarlyAbort`, `LoadingDetected`, `FinishDetected`, `ResultDetected`, `PostGameDetected` |
+| Paused    | ローディング終了・Finish終了                             | `LoadingFinished`, `FinishFinished`                                   |
 
 ## 4. ポート設計
 
