@@ -9,6 +9,9 @@ Splat Replay はスプラトゥーン 3 のプレイ動画を自動で録画・�
 4. `uv sync` で依存関係をインストールする。
 5. `python -m splat_replay --help` を実行して CLI が表示されれば準備完了。
 
+設定を変更したい場合は `config/settings.example.toml` を `config/settings.toml` として
+コピーし、必要に応じて編集してください。アプリ起動時に自動で読み込まれます。
+
 ## コントリビュート方法
 1. 新しいブランチを作成し変更をコミットする。
 2. `ruff format .` でコードを整形する。

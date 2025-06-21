@@ -94,6 +94,7 @@ src/
 │        └─ settings_dialog.py
 ├─ config/
 │  ├─ settings.example.toml
+│  ├─ settings.toml
 │  └─ image_matching.yaml
 └─ shared/
    ├─ config.py
@@ -350,7 +351,7 @@ class AppSettings(BaseSettings):
 # ❌ 直接読み込み（アンチパターン）
 class YouTubeClient:
     def __init__(self):
-        self.config = load_config("config/settings.example.toml")
+        self.config = load_config("config/settings.toml")
 
 # ✅ DI による注入（推奨パターン）
 class YouTubeClient:
@@ -434,12 +435,12 @@ class ImageMatchingSettings(BaseSettings):
 #### 8.3.3 設定ファイル優先順位
 
 1. **環境変数** (`YOUTUBE_VISIBILITY=public`)
-2. **設定ファイル** (`config/settings.example.toml`)
+2. **設定ファイル** (`config/settings.toml`)
 3. **デフォルト値** (コード内定義)
 
 #### 8.3.4 設定ファイル形式
 
-`config/settings.example.toml`:
+`config/settings.example.toml` を `config/settings.toml` としてコピーして利用する:
 
 ```toml
 [youtube]

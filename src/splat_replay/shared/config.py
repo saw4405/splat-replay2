@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 from typing import Dict, List, Optional, Literal
+import tomllib
 
 from pydantic import BaseModel, BaseSettings
 
@@ -84,6 +85,17 @@ class AppSettings(BaseSettings):
 
     @classmethod
     def load_from_toml(cls, path: Path) -> "AppSettings":
-        """TOML ファイルから設定を読み込む (簡易実装)。"""
-        _ = path  # 実装は後で追加
-        return cls()
+        """TOML ファイルから設定を読み込む。"""
+
+        data: Dict[str, Dict[str, object]] = {}
+        with path.open("rb") as f:
+            raw = tomllib.load(f)
+
+        # `AppSettings` で扱うキーのみ抽出する
+        for key in ("youtube", "video_edit", "obs", "image_matching"):
+            if key in raw:
+                section = raw[key]
+                if isinstance(section, dict):
+                    data[key] = section
+
+        return cls(**data)
