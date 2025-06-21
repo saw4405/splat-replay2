@@ -59,7 +59,12 @@ def configure_container() -> punq.Container:
 
     container = punq.Container()
 
-    settings = AppSettings()
+    settings_path = Path("config/settings.toml")
+    # settings.toml が存在する場合はそこから設定を読み込む
+    if settings_path.exists():
+        settings = AppSettings.load_from_toml(settings_path)
+    else:
+        settings = AppSettings()
     # 設定オブジェクトを登録
     container.register(AppSettings, instance=settings)
     container.register(YouTubeSettings, instance=settings.youtube)
