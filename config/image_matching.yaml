@@ -59,6 +59,12 @@ simple_matchers:
   power_off_dark:
     type: "brightness"
     max_value: 20
+    min_value: null
+    roi:
+      x: 0
+      y: 0
+      width: 1920
+      height: 1080
     description: "電源OFF時の暗さ判定"
     enabled: true
 

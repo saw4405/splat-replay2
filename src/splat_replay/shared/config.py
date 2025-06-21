@@ -60,6 +60,8 @@ class MatcherConfig(BaseModel):
     hue_threshold: Optional[float] = None
     mask_path: Optional[str] = None
     max_value: Optional[float] = None
+    min_value: Optional[float] = None
+    roi: Optional[Dict[str, int]] = None
 
 
 class CompositeMatcherConfig(BaseModel):

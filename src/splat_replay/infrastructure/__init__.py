@@ -11,6 +11,7 @@ __all__ = [
     "AnalyzerPlugin",
     "BattleFrameAnalyzer",
     "SalmonFrameAnalyzer",
+    "SplatoonSalmonAnalyzer",
     "FileMetadataRepository",
 ]
 
@@ -24,4 +25,5 @@ from .analyzers.plugin import AnalyzerPlugin
 from .analyzers.frame_analyzer import FrameAnalyzer
 from .analyzers.splatoon_battle_analyzer import BattleFrameAnalyzer
 from .analyzers.splatoon_salmon_analyzer import SalmonFrameAnalyzer
+SplatoonSalmonAnalyzer = SalmonFrameAnalyzer
 from .repositories.file_metadata_repo import FileMetadataRepository
