@@ -56,6 +56,19 @@ simple_matchers:
   # templateタイプの場合:
   #   template_path: "テンプレート画像のパス"
 
+  power_off_dark:
+    type: "brightness"
+    max_value: 20
+    description: "電源OFF時の暗さ判定"
+    enabled: true
+
+  power_off_template:
+    type: "template"
+    template_path: "templates/power_off.png"
+    threshold: 0.9
+    description: "電源OFFテンプレート"
+    enabled: true
+
 # ゲームモード検出（ルール別）
 game_modes:
   # シーン検出と同じ構造で各ゲームモードを定義
@@ -65,6 +78,11 @@ game_modes:
 composite_detection:
   # シーン検出と同じ構造で複合的な検出条件を定義
   # majority_passなどの高度な成功条件を使用可能
+  power_off:
+    success_condition: "any_can_pass"
+    matchers:
+      - power_off_dark
+      - power_off_template
 
 # ==========================================
 # グローバル設定
@@ -77,6 +95,7 @@ global:
     y: 0  # 左上Y座標
     width: 1920   # 幅（通常は画面解像度）
     height: 1080  # 高さ（通常は画面解像度）
+
 
   # パフォーマンス設定
   performance:

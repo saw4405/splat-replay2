@@ -71,7 +71,15 @@ def configure_container() -> punq.Container:
     container.register(YouTubeSettings, instance=settings.youtube)
     container.register(VideoEditSettings, instance=settings.video_edit)
     container.register(OBSSettings, instance=settings.obs)
-    container.register(ImageMatchingSettings, instance=settings.image_matching)
+
+    image_match_path = Path("config/image_matching.yaml")
+    if image_match_path.exists():
+        image_settings = ImageMatchingSettings.load_from_yaml(image_match_path)
+        settings.image_matching = image_settings
+    else:
+        image_settings = settings.image_matching
+
+    container.register(ImageMatchingSettings, instance=image_settings)
 
     # アダプタ登録
     container.register(VideoRecorder, OBSController)

@@ -13,6 +13,7 @@ dependencies = [
     "obs-websocket-py>=1.0",
     "psutil>=5.9",
     "pywin32>=306; platform_system == 'Windows'",
+    "pyyaml>=6.0",
 ]
 
 [dependency-groups]
