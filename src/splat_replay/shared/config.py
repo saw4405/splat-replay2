@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Dict, List, Optional, Literal
+from typing import Dict, List, Optional, Literal, Tuple
 import tomllib
 
 from pydantic import BaseModel
@@ -54,9 +54,9 @@ class MatcherConfig(BaseModel):
     type: Literal["template", "hsv", "rgb", "hash", "uniform", "brightness"]
     threshold: float = 0.8
     template_path: Optional[str] = None
-    lower_bound: Optional[List[int]] = None
-    upper_bound: Optional[List[int]] = None
-    rgb: Optional[List[int]] = None
+    lower_bound: Optional[Tuple[int, int, int]] = None
+    upper_bound: Optional[Tuple[int, int, int]] = None
+    rgb: Optional[Tuple[int, int, int]] = None
     hue_threshold: Optional[float] = None
     mask_path: Optional[str] = None
     max_value: Optional[float] = None
