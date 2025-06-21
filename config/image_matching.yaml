@@ -47,11 +47,11 @@ simple_matchers:
   #   enabled: true/false
 
   # HSVタイプの場合:
-  #   lower_bound: [H, S, V]の下限値
-  #   upper_bound: [H, S, V]の上限値
+  #   lower_bound: (H, S, V)の下限値
+  #   upper_bound: (H, S, V)の上限値
   
   # RGBタイプの場合:
-  #   rgb: [R, G, B]の値
+  #   rgb: (R, G, B)の値
   
   # templateタイプの場合:
   #   template_path: "テンプレート画像のパス"
@@ -183,12 +183,12 @@ validation:
 # 検出タイプの説明:
 # 
 # 1. "hsv": HSV色空間での色範囲検出
-#    - lower_bound: [H, S, V] 下限値
-#    - upper_bound: [H, S, V] 上限値
+#    - lower_bound: (H, S, V) 下限値
+#    - upper_bound: (H, S, V) 上限値
 #    - threshold: マッチした画素の割合の閾値
 #
 # 2. "rgb": RGB色での特定色検出
-#    - rgb: [R, G, B] 対象色
+#    - rgb: (R, G, B) 対象色
 #    - threshold: 色の近似度の閾値
 #
 # 3. "template": テンプレートマッチング

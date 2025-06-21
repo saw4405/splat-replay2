@@ -224,7 +224,7 @@ Splatoon の画面解析において、バトル開始・終了・ステージ�
 
 **パラメータ**：
 
-- `lower_bound`, `upper_bound`（HSV 各チャネルの範囲）
+ - `lower_bound`, `upper_bound`（HSV 各チャネルの範囲を表す3要素タプル）
 - `threshold`（色域画素比率の閾値）
 
 #### 7.2.3 UniformColorMatcher（均一色判定）
@@ -260,7 +260,7 @@ Splatoon の画面解析において、バトル開始・終了・ステージ�
 
 **パラメータ**：
 
-- `rgb`（比較する RGB 値）
+ - `rgb`（比較する RGB 値を表す3要素タプル）
 - `threshold`（マッチ比率の閾値）
 
 #### 7.2.5 TemplateMatcher（テンプレートマッチング）
@@ -313,8 +313,8 @@ matchers:
 
   ink_color_detection:
     type: "hsv"
-    lower_bound: [100, 150, 150]
-    upper_bound: [120, 255, 255]
+    lower_bound: (100, 150, 150)
+    upper_bound: (120, 255, 255)
     threshold: 0.7
 ```
 
@@ -426,9 +426,9 @@ class ImageMatchingSettings(BaseSettings):
         type: Literal["template", "hsv", "rgb", "hash", "uniform"]
         threshold: float = Field(ge=0.0, le=1.0)
         template_path: Optional[str] = None
-        lower_bound: Optional[List[int]] = None
-        upper_bound: Optional[List[int]] = None
-        rgb: Optional[List[int]] = None
+        lower_bound: Optional[Tuple[int, int, int]] = None
+        upper_bound: Optional[Tuple[int, int, int]] = None
+        rgb: Optional[Tuple[int, int, int]] = None
         hue_threshold: Optional[float] = None
 ```
 
