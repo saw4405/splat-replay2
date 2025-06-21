@@ -54,6 +54,7 @@ class MatcherConfig(BaseModel):
     type: Literal["template", "hsv", "rgb", "hash", "uniform", "brightness"]
     threshold: float = 0.8
     template_path: Optional[str] = None
+    hash_path: Optional[str] = None
     lower_bound: Optional[Tuple[int, int, int]] = None
     upper_bound: Optional[Tuple[int, int, int]] = None
     rgb: Optional[Tuple[int, int, int]] = None
@@ -68,7 +69,9 @@ class CompositeMatcherConfig(BaseModel):
     """複数マッチャーを組み合わせる設定。"""
 
     matchers: List[str]
-    success_condition: Literal["all_must_pass", "any_can_pass"] = "any_can_pass"
+    success_condition: Literal["all_must_pass", "any_can_pass"] = (
+        "any_can_pass"
+    )
     min_required_steps: int = 1
 
 

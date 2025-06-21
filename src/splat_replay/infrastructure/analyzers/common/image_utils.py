@@ -10,7 +10,11 @@ import hashlib
 import cv2
 import numpy as np
 
-from splat_replay.shared.config import ImageMatchingSettings, MatcherConfig, CompositeMatcherConfig
+from splat_replay.shared.config import (
+    ImageMatchingSettings,
+    MatcherConfig,
+    CompositeMatcherConfig,
+)
 
 
 def load_image(path: str, *, grayscale: bool = False) -> Optional[np.ndarray]:
@@ -44,7 +48,9 @@ def match_template(
     return float(max_val)
 
 
-def calculate_brightness(image: np.ndarray, mask: Optional[np.ndarray] = None) -> float:
+def calculate_brightness(
+    image: np.ndarray, mask: Optional[np.ndarray] = None
+) -> float:
     """画像の平均明度を計算するユーティリティ。"""
 
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
@@ -68,15 +74,14 @@ class BaseMatcher(ABC):
         self._mask = (
             cv2.imread(mask_path, cv2.IMREAD_GRAYSCALE) if mask_path else None
         )
-        if mask_path and self._mask is None:
-            raise ValueError(f"マスク画像の読み込みに失敗しました: {mask_path}")
+        # マスクが読み込めなくても None として続行する
         self._roi = roi
 
     def _apply_roi(self, image: np.ndarray) -> np.ndarray:
         if self._roi is None:
             return image
         x, y, w, h = self._roi
-        return image[y: y + h, x: x + w]
+        return image[y : y + h, x : x + w]
 
     @abstractmethod
     def match(self, image: np.ndarray) -> bool:
@@ -86,7 +91,9 @@ class BaseMatcher(ABC):
 class HashMatcher(BaseMatcher):
     """ハッシュ値による完全一致判定用マッチャー。"""
 
-    def __init__(self, image_path: str, roi: Optional[Tuple[int, int, int, int]] = None) -> None:
+    def __init__(
+        self, image_path: str, roi: Optional[Tuple[int, int, int, int]] = None
+    ) -> None:
         super().__init__(None, roi)
         self._hash_value = self._compute_hash(cv2.imread(image_path))
 
@@ -210,7 +217,9 @@ class TemplateMatcher(BaseMatcher):
         super().__init__(mask_path, roi)
         template = cv2.imread(template_path)
         if template is None:
-            raise ValueError(f"テンプレート画像の読み込みに失敗しました: {template_path}")
+            raise ValueError(
+                f"テンプレート画像の読み込みに失敗しました: {template_path}"
+            )
         self._template = cv2.cvtColor(template, cv2.COLOR_BGR2GRAY)
         self._threshold = threshold
 
@@ -219,10 +228,12 @@ class TemplateMatcher(BaseMatcher):
         gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
         if self._mask is not None:
             result = cv2.matchTemplate(
-                gray, self._template, cv2.TM_CCOEFF_NORMED, mask=self._mask)
+                gray, self._template, cv2.TM_CCOEFF_NORMED, mask=self._mask
+            )
         else:
             result = cv2.matchTemplate(
-                gray, self._template, cv2.TM_CCOEFF_NORMED)
+                gray, self._template, cv2.TM_CCOEFF_NORMED
+            )
         _, max_val, _, _ = cv2.minMaxLoc(result)
         return max_val >= self._threshold
 
@@ -301,9 +312,10 @@ def build_matcher(config: MatcherConfig) -> Optional[BaseMatcher]:
             int(roi_cfg.get("width", 0)),
             int(roi_cfg.get("height", 0)),
         )
-    if config.type == "hash" and config.template_path:
+    if config.type == "hash" and (config.hash_path or config.template_path):
+        path = config.hash_path or config.template_path
         try:
-            return HashMatcher(config.template_path, roi)
+            return HashMatcher(path, roi)
         except Exception:
             return None
     if config.type == "hsv" and config.lower_bound and config.upper_bound:
@@ -317,7 +329,9 @@ def build_matcher(config: MatcherConfig) -> Optional[BaseMatcher]:
     if config.type == "rgb" and config.rgb:
         return RGBMatcher(config.rgb, mask_path, config.threshold, roi)
     if config.type == "uniform":
-        return UniformColorMatcher(mask_path, config.hue_threshold or 10.0, roi)
+        return UniformColorMatcher(
+            mask_path, config.hue_threshold or 10.0, roi
+        )
     if config.type == "brightness" and (
         config.max_value is not None or config.min_value is not None
     ):
@@ -354,7 +368,9 @@ def build_composite_matcher(
     if not matchers:
         return None
 
-    return CompositeMatcher(matchers, config.success_condition, config.min_required_steps)
+    return CompositeMatcher(
+        matchers, config.success_condition, config.min_required_steps
+    )
 
 
 class MatcherRegistry:
