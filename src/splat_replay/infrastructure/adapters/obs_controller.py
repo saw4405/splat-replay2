@@ -156,7 +156,7 @@ class OBSController(OBSControlPort):
         """録画開始指示を送る。"""
 
         logger.info("OBS 録画開始指示")
-
+        self.connect()
         active, _ = self._get_record_status()
         if not active:
             self._ws.call(requests.StartRecord())
@@ -165,6 +165,7 @@ class OBSController(OBSControlPort):
         """録画停止指示を送る。"""
 
         logger.info("OBS 録画停止指示")
+        self.connect()
         active, _ = self._get_record_status()
         if not active:
             raise RuntimeError("録画は開始されていません")
@@ -178,6 +179,7 @@ class OBSController(OBSControlPort):
         """録画を一時停止する。"""
 
         logger.info("OBS 録画一時停止指示")
+        self.connect()
         active, paused = self._get_record_status()
         if active and not paused:
             self._ws.call(requests.PauseRecord())
@@ -186,6 +188,7 @@ class OBSController(OBSControlPort):
         """録画を再開する。"""
 
         logger.info("OBS 録画再開指示")
+        self.connect()
         _, paused = self._get_record_status()
         if paused:
             self._ws.call(requests.ResumeRecord())

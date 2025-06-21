@@ -158,7 +158,8 @@ def stop() -> None:
     logger.info("stop コマンド開始")
     _require_initialized()
     uc = resolve(StopRecordingUseCase)
-    uc.execute()
+    video_path = uc.execute()
+    typer.echo(f"録画ファイル: {video_path}")
 
 
 @app.command()
