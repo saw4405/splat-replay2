@@ -206,35 +206,34 @@ simple_matchers:
 # 複合条件検出（より複雑な条件組み合わせ）
 composite_detection:
   power_off:
-    success_condition: "any_can_pass"
-    matchers:
-      - black_screen
-      - power_off_template
+    or:
+      - matcher: black_screen
+      - matcher: power_off_template
 
   battle_start:
-    success_condition: "all_must_pass"
-    matchers:
-      - battle_start_brightness
-      - battle_start_template
+    and:
+      - matcher: battle_start_brightness
+      - matcher: battle_start_template
 
   matching_start_hsv:
-    success_condition: "all_must_pass"
-    matchers:
-      - matching_start_hsv
-      - matching_start_template
+    and:
+      - matcher: matching_start_hsv
+      - matcher: matching_start_template
 
   finish_display:
-    success_condition: "all_must_pass"
-    matchers:
-      - finish_uniform
-      - finish_bright
-      - finish_text_hsv
-      - finish_band_hsv
+    and:
+      - matcher: finish_uniform
+      - matcher: finish_bright
+      - matcher: finish_text_hsv
+      - matcher: finish_band_hsv
 
   battle_finish:
-    success_condition: "all_must_pass"
-    matchers:
-      - stop_message_hsv
-      - stop_background_hsv
-      - stop_icon_absent
-      - stop_gear_absent
+    and:
+      - matcher: stop_message_hsv
+      - matcher: stop_background_hsv
+      - matcher: stop_icon_absent
+      - matcher: stop_gear_absent
+      - not:
+          matcher: stop_icon_hsv
+      - not:
+          matcher: stop_gear_hsv

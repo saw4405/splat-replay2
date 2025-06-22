@@ -303,19 +303,26 @@ Splatoon の画面解析において、バトル開始・終了・ステージ�
 
 各マッチャーのパラメータは外部設定ファイルで管理し、ゲームアップデートによる画面変更に対応：
 
-```python
+```yaml
 # config/image_matching.yaml
-matchers:
-  battle_start:
+simple_matchers:
+  battle_start_template:
     type: "template"
     template_path: "templates/battle_start.png"
     threshold: 0.85
 
   ink_color_detection:
     type: "hsv"
-    lower_bound: (100, 150, 150)
-    upper_bound: (120, 255, 255)
+    lower_bound: [100, 150, 150]
+    upper_bound: [120, 255, 255]
     threshold: 0.7
+
+composite_detection:
+  battle_start:
+    and:
+      - matcher: battle_start_template
+      - not:
+          matcher: ink_color_detection
 ```
 
 ## 8. 設定管理・DI
