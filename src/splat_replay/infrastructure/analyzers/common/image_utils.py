@@ -74,7 +74,11 @@ class BaseMatcher(ABC):
         self,
         mask_path: Optional[str] = None,
         roi: Optional[Tuple[int, int, int, int]] = None,
+        name: str | None = None,
     ) -> None:
+        """マッチャーを初期化する。"""
+
+        self.name = name
         self._mask = (
             cv2.imread(mask_path, cv2.IMREAD_GRAYSCALE) if mask_path else None
         )
@@ -96,9 +100,13 @@ class HashMatcher(BaseMatcher):
     """ハッシュ値による完全一致判定用マッチャー。"""
 
     def __init__(
-        self, image_path: str, roi: Optional[Tuple[int, int, int, int]] = None
+        self,
+        image_path: str,
+        roi: Optional[Tuple[int, int, int, int]] = None,
+        *,
+        name: str | None = None,
     ) -> None:
-        super().__init__(None, roi)
+        super().__init__(None, roi, name)
         self._hash_value = self._compute_hash(cv2.imread(image_path))
 
     def _compute_hash(self, image: np.ndarray) -> str:
@@ -127,8 +135,10 @@ class HSVMatcher(BaseMatcher):
         mask_path: Optional[str] = None,
         threshold: float = 0.9,
         roi: Optional[Tuple[int, int, int, int]] = None,
+        *,
+        name: str | None = None,
     ) -> None:
-        super().__init__(mask_path, roi)
+        super().__init__(mask_path, roi, name)
         self._lower_bound = np.array(lower_bound, dtype=np.uint8)
         self._upper_bound = np.array(upper_bound, dtype=np.uint8)
         self._threshold = threshold
@@ -170,8 +180,10 @@ class UniformColorMatcher(BaseMatcher):
         mask_path: Optional[str] = None,
         hue_threshold: float = 10.0,
         roi: Optional[Tuple[int, int, int, int]] = None,
+        *,
+        name: str | None = None,
     ) -> None:
-        super().__init__(mask_path, roi)
+        super().__init__(mask_path, roi, name)
         self._hue_threshold = hue_threshold
 
     def match(self, image: np.ndarray) -> bool:
@@ -204,8 +216,10 @@ class RGBMatcher(BaseMatcher):
         mask_path: Optional[str] = None,
         threshold: float = 0.9,
         roi: Optional[Tuple[int, int, int, int]] = None,
+        *,
+        name: str | None = None,
     ) -> None:
-        super().__init__(mask_path, roi)
+        super().__init__(mask_path, roi, name)
         self._rgb = rgb
         self._threshold = threshold
 
@@ -241,8 +255,10 @@ class TemplateMatcher(BaseMatcher):
         mask_path: Optional[str] = None,
         threshold: float = 0.9,
         roi: Optional[Tuple[int, int, int, int]] = None,
+        *,
+        name: str | None = None,
     ) -> None:
-        super().__init__(mask_path, roi)
+        super().__init__(mask_path, roi, name)
         template = cv2.imread(template_path)
         if template is None:
             raise ValueError(
@@ -266,7 +282,9 @@ class TemplateMatcher(BaseMatcher):
         result_flag = max_val >= self._threshold
         if not result_flag:
             logger.debug(
-                "テンプレート不一致", score=float(max_val), threshold=self._threshold
+                "テンプレート不一致",
+                score=float(max_val),
+                threshold=self._threshold,
             )
         return result_flag
 
@@ -280,8 +298,10 @@ class BrightnessMatcher(BaseMatcher):
         min_value: Optional[float] = None,
         mask_path: Optional[str] = None,
         roi: Optional[Tuple[int, int, int, int]] = None,
+        *,
+        name: str | None = None,
     ) -> None:
-        super().__init__(mask_path, roi)
+        super().__init__(mask_path, roi, name)
         self._max_value = max_value
         self._min_value = min_value
 
@@ -305,8 +325,13 @@ class CompositeMatcher:
     """複数条件を評価するマッチャー。"""
 
     def __init__(
-        self, expr: MatchExpression, lookup: Dict[str, BaseMatcher]
+        self,
+        expr: MatchExpression,
+        lookup: Dict[str, BaseMatcher],
+        *,
+        name: str | None = None,
     ) -> None:
+        self.name = name
         self.expr = expr
         self.lookup = lookup
 
@@ -329,7 +354,7 @@ class CompositeMatcher:
         return result
 
 
-def build_matcher(config: MatcherConfig) -> Optional[BaseMatcher]:
+def build_matcher(name: str, config: MatcherConfig) -> Optional[BaseMatcher]:
     """設定からマッチャーインスタンスを生成する。"""
 
     if not config:
@@ -345,10 +370,10 @@ def build_matcher(config: MatcherConfig) -> Optional[BaseMatcher]:
             int(roi_cfg.get("width", 0)),
             int(roi_cfg.get("height", 0)),
         )
-    if config.type == "hash" and config.template_path:
-        path = config.template_path
+    if config.type == "hash" and config.hash_path:
+        path = config.hash_path
         try:
-            return HashMatcher(path, roi)
+            return HashMatcher(path, roi, name=name)
         except Exception:
             return None
     if config.type == "hsv" and config.lower_bound and config.upper_bound:
@@ -358,12 +383,22 @@ def build_matcher(config: MatcherConfig) -> Optional[BaseMatcher]:
             mask_path,
             config.threshold,
             roi,
+            name=name,
         )
     if config.type == "rgb" and config.rgb:
-        return RGBMatcher(config.rgb, mask_path, config.threshold, roi)
+        return RGBMatcher(
+            config.rgb,
+            mask_path,
+            config.threshold,
+            roi,
+            name=name,
+        )
     if config.type == "uniform":
         return UniformColorMatcher(
-            mask_path, config.hue_threshold or 10.0, roi
+            mask_path,
+            config.hue_threshold or 10.0,
+            roi,
+            name=name,
         )
     if config.type == "brightness" and (
         config.max_value is not None or config.min_value is not None
@@ -373,6 +408,7 @@ def build_matcher(config: MatcherConfig) -> Optional[BaseMatcher]:
             config.min_value,
             mask_path,
             roi,
+            name=name,
         )
     if config.type == "template" and config.template_path:
         try:
@@ -381,6 +417,7 @@ def build_matcher(config: MatcherConfig) -> Optional[BaseMatcher]:
                 mask_path,
                 config.threshold,
                 roi,
+                name=name,
             )
         except Exception:
             return None
@@ -388,14 +425,14 @@ def build_matcher(config: MatcherConfig) -> Optional[BaseMatcher]:
 
 
 def build_composite_matcher(
-    config: CompositeMatcherConfig, lookup: dict[str, BaseMatcher]
+    name: str, config: CompositeMatcherConfig, lookup: dict[str, BaseMatcher]
 ) -> Optional[CompositeMatcher]:
     """設定から複合マッチャーを生成する。"""
 
     if not config or not config.rule:
         return None
 
-    return CompositeMatcher(config.rule, lookup)
+    return CompositeMatcher(config.rule, lookup, name=name)
 
 
 class MatcherRegistry:
@@ -405,14 +442,14 @@ class MatcherRegistry:
         # 単体マッチャーの登録
         self.matchers: Dict[str, BaseMatcher] = {}
         for name, cfg in settings.matchers.items():
-            matcher = build_matcher(cfg)
+            matcher = build_matcher(name, cfg)
             if matcher:
                 self.matchers[name] = matcher
 
         # 複合マッチャーの登録
         self.composites: Dict[str, CompositeMatcher] = {}
         for name, comp in settings.composites.items():
-            composite = build_composite_matcher(comp, self.matchers)
+            composite = build_composite_matcher(name, comp, self.matchers)
             if composite:
                 self.composites[name] = composite
 
@@ -423,3 +460,14 @@ class MatcherRegistry:
         if matcher is None:
             matcher = self.matchers.get(key)
         return matcher.match(image) if matcher else False
+
+    def match_first(self, keys: list[str], image: np.ndarray) -> str | None:
+        """複数キーの中から最初に一致したマッチャー名を返す。"""
+
+        for key in keys:
+            matcher = self.composites.get(key)
+            if matcher is None:
+                matcher = self.matchers.get(key)
+            if matcher and matcher.match(image):
+                return matcher.name or key
+        return None
