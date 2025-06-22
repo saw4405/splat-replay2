@@ -215,3 +215,4 @@ $RECYCLE.BIN/
 
 
 config/settings.toml
+logs/

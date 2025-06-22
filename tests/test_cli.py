@@ -9,7 +9,6 @@ sys.path.insert(0, str(BASE / "src"))  # noqa: E402
 from typer.testing import CliRunner  # noqa: E402
 from splat_replay import cli  # noqa: E402
 from splat_replay.cli import app  # noqa: E402
-import pytest
 
 
 def test_cli_help() -> None:

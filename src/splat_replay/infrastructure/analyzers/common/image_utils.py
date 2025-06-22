@@ -81,7 +81,7 @@ class BaseMatcher(ABC):
         if self._roi is None:
             return image
         x, y, w, h = self._roi
-        return image[y : y + h, x : x + w]
+        return image[y: y + h, x: x + w]
 
     @abstractmethod
     def match(self, image: np.ndarray) -> bool:
@@ -312,8 +312,8 @@ def build_matcher(config: MatcherConfig) -> Optional[BaseMatcher]:
             int(roi_cfg.get("width", 0)),
             int(roi_cfg.get("height", 0)),
         )
-    if config.type == "hash" and (config.hash_path or config.template_path):
-        path = config.hash_path or config.template_path
+    if config.type == "hash" and config.template_path:
+        path = config.template_path
         try:
             return HashMatcher(path, roi)
         except Exception:

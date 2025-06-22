@@ -20,7 +20,7 @@ class FrameAnalyzer:
     """OpenCV を用いた画面解析処理を提供する。"""
 
     def __init__(
-        self, plugin: AnalyzerPlugin, settings: "ImageMatchingSettings"
+        self, plugin: AnalyzerPlugin, settings: ImageMatchingSettings
     ) -> None:
         """プラグインと設定を受け取って初期化する。"""
         self.plugin = plugin
