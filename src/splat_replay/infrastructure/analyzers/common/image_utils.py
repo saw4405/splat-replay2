@@ -55,7 +55,7 @@ def match_template(
 def calculate_brightness(
     image: np.ndarray, mask: Optional[np.ndarray] = None
 ) -> float:
-    """画像の平均明度を計算するユーティリティ。"""
+    """画像の最大明度を計算するユーティリティ。"""
 
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
     if mask is not None:
@@ -64,7 +64,7 @@ def calculate_brightness(
         pixels = gray.flatten()
     if pixels.size == 0:
         return 0.0
-    return float(np.mean(pixels))
+    return float(np.max(pixels))
 
 
 class BaseMatcher(ABC):
@@ -272,7 +272,7 @@ class TemplateMatcher(BaseMatcher):
 
 
 class BrightnessMatcher(BaseMatcher):
-    """平均明度が閾値内か判定するマッチャー。"""
+    """最大明度が閾値内か判定するマッチャー。"""
 
     def __init__(
         self,

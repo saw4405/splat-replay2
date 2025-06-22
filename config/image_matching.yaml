@@ -2,77 +2,102 @@
 simple_matchers:
   virtual_camera_off:
     type: "hash"
-    hash_path: "hashes/virtual_camera_off.png"
+    hash_path: "assets/matching/virtual_camera_off.png"
     threshold: 0.9
-    description: "仮想カメラOFFのハッシュ"
+    description: "仮想カメラOFF状態を検出する"
     enabled: true
 
   black_screen:
     type: "brightness"
     max_value: 20
     min_value: null
-    description: "電源OFF時の暗さ判定"
+    description: "電源OFF時を暗さで検出する"
     enabled: true
 
   power_off_template:
     type: "template"
-    template_path: "templates/power_off.png"
+    template_path: "assets/matching/power_off.png"
     threshold: 0.9
-    description: "電源OFFテンプレート"
+    description: "電源OFFをテンプレートで検出する"
+    enabled: true
+
+  select_match:
+    type: "uniform"
+    roi:
+      x: 280
+      y: 390
+      width: 20
+      height: 20
+    hue_threshold: 10.0
+    description: "マッチ選択画面を検出する"
+    enabled: true
+
+  select_x_match_hsv:
+    type: "hsv"
+    lower_bound: [80, 230, 230]
+    upper_bound: [90, 255, 255]
+    threshold: 0.9
+    description: "マッチ選択画面でXマッチ選択を検出する"
+    enabled: true
+
+  select_bankara_match_hsv:
+    type: "hsv"
+    lower_bound: [13, 230, 230]
+    upper_bound: [15, 255, 255]
+    threshold: 0.9
+    description: "マッチ選択画面でバンカラマッチ選択を検出する"
     enabled: true
 
   matching_start_hsv:
     type: "hsv"
-    mask_path: "templates/matching_start.png"
+    mask_path: "assets/matching/matching_mask.png"
     lower_bound: [0, 0, 200]
     upper_bound: [179, 20, 255]
     threshold: 0.9
-    description: "マッチング開始時のHSV"
+    description: "マッチング開始時の文字の色域を検出する"
     enabled: true
 
   matching_start_template:
     type: "template"
-    template_path: "templates/matching_start.png"
+    template_path: "assets/matching/matching_start.png"
     threshold: 0.9
-    description: "マッチング開始テンプレート"
+    description: "マッチング開始を検出する"
     enabled: true
 
-  change_schedule_brightness:
+  schedule_change_bright:
     type: "brightness"
-    max_value: null
-    min_value: 20
+    max_value: 20
     roi:
       x: 555
       y: 444
       width: 111
       height: 111
-    description: "スケジュール変更時の明るさ判定"
+    description: "スケジュール変更を素早く検出する"
     enabled: true
 
-  change_schedule_template:
+  schedule_change_template:
     type: "template"
-    template_path: "templates/change_schedule.png"
+    template_path: "assets/matching/schedule_change.png"
     threshold: 0.9
-    description: "スケジュール変更テンプレート"
+    description: "スケジュール変更を検出する"
     enabled: true
 
-  battle_start_brightness:
+  battle_start_bright:
     type: "brightness"
-    max_value: null
-    min_value: 20
+    max_value: 20
     roi:
       x: 900
       y: 360
       width: 140
       height: 20
-    description: "バトル開始時の明るさ判定"
+    description: "バトル開始を素早く検出する"
     enabled: true
 
   battle_start_template:
     type: "template"
-    template_path: "templates/battle_start.png"
+    template_path: "assets/matching/battle_start.png"
     threshold: 0.9
-    description: "バトル開始テンプレート"
+    description: "バトル開始を検出する"
     enabled: true
 
   battle_abort_hsv:
@@ -85,35 +110,17 @@ simple_matchers:
     lower_bound: [0, 0, 25]
     upper_bound: [0, 0, 35]
     threshold: 0.9
-    description: "バトル中止時のHSV"
+    description: "バトル中止を素早く検出する"
     enabled: true
 
   battle_abort_template:
     type: "template"
-    template_path: "templates/battle_abort.png"
+    template_path: "assets/matching/battle_abort.png"
     threshold: 0.9
-    description: "バトル中止テンプレート"
+    description: "バトル中止を検出する"
     enabled: true
 
-  finish_text_hsv:
-    type: "hsv"
-    mask_path: "templates/finish_text_mask.png"
-    lower_bound: [0, 0, 0]
-    upper_bound: [179, 255, 50]
-    threshold: 0.9
-    description: "FINISH文字の色域"
-    enabled: true
-
-  finish_band_hsv:
-    type: "hsv"
-    mask_path: "templates/finish_band_mask.png"
-    lower_bound: [0, 0, 50]
-    upper_bound: [179, 255, 255]
-    threshold: 0.9
-    description: "FINISH帯の色域"
-    enabled: true
-
-  finish_uniform:
+  battle_finish_uniform:
     type: "uniform"
     hue_threshold: 10.0
     roi:
@@ -121,10 +128,10 @@ simple_matchers:
       y: 400
       width: 30
       height: 40
-    description: "FINISH判定領域の色揃い"
+    description: "FINISH表示を素早く検出する"
     enabled: true
 
-  finish_dark:
+  battle_finish_bright:
     type: "brightness"
     max_value: 20
     roi:
@@ -132,75 +139,105 @@ simple_matchers:
       y: 400
       width: 30
       height: 40
-    description: "FINISH領域の暗さ"
+    description: "FINISH表示を素早く明るさで検出する"
     enabled: true
 
-  finish_bright:
-    type: "brightness"
-    min_value: 21
-    roi:
-      x: 810
-      y: 400
-      width: 30
-      height: 40
-    description: "FINISH領域の明るさ"
-    enabled: true
-
-  stop_template:
-    type: "template"
-    template_path: "templates/stop.png"
-    threshold: 0.95
-    description: "リザルトストップテンプレ"
-    enabled: true
-
-  stop_message_hsv:
+  battle_finish_text_hsv:
     type: "hsv"
-    mask_path: "templates/stop_mask.png"
-    lower_bound: [0, 0, 200]
-    upper_bound: [179, 20, 255]
-    threshold: 0.9
-    description: "ストップメッセージの色域"
-    enabled: true
-
-  stop_icon_hsv:
-    type: "hsv"
-    mask_path: "templates/stop_icon_mask.png"
-    lower_bound: [0, 0, 200]
-    upper_bound: [179, 20, 255]
-    threshold: 0.9
-    description: "ストップアイコンの色域"
-    enabled: true
-
-  stop_gear_hsv:
-    type: "hsv"
-    mask_path: "templates/stop_gear_mask.png"
+    mask_path: "assets/matching/battle_finish_text_mask.png"
     lower_bound: [0, 0, 0]
     upper_bound: [179, 255, 50]
     threshold: 0.9
-    description: "ストップギアの色域"
+    description: "FINISH文字を色域で検出する"
     enabled: true
 
-  stop_icon_absent:
-    type: "brightness"
-    max_value: 50
-    mask_path: "templates/stop_icon_mask.png"
-    description: "ストップアイコン未表示"
-    enabled: true
-
-  stop_gear_absent:
-    type: "brightness"
-    max_value: 50
-    mask_path: "templates/stop_gear_mask.png"
-    description: "ストップギア未表示"
-    enabled: true
-
-  stop_background_hsv:
+  battle_finish_band_hsv:
     type: "hsv"
-    mask_path: "templates/stop_background_mask.png"
+    mask_path: "assets/matching/battle_finish_band_mask.png"
+    lower_bound: [0, 0, 50]
+    upper_bound: [179, 255, 255]
+    threshold: 0.9
+    description: "FINISH帯を色域で検出する"
+    enabled: true
+
+  battle_judgement_bright:
+    type: "brightness"
+    max_value: 20
+    roi:
+      x: 0
+      y: 0
+      width: 230
+      height: 40
+    description: "ジャッジ画面は左上が黒い"
+    enabled: true
+
+  battle_judgement_latter_half_bright:
+    type: "brightness"
+    max_value: 20
+    roi:
+      x: 1820
+      y: 0
+      width: 100
+      height: 100
+    description: "ジャッジ画面(後半)は右上が黒い"
+    enabled: true
+
+  loading_top_bright:
+    type: "brightness"
+    max_value: 20
+    roi:
+      x: 0
+      y: 0
+      width: 1920
+      height: 200
+    description: "ローディング画面は上部が黒い"
+    enabled: true
+
+  loading_bottom_bright:
+    type: "brightness"
+    max_value: 20
+    roi:
+      x: 0
+      y: 880
+      width: 1920
+      height: 200
+    description: "ローディング画面は下部が黒くない"
+    enabled: true
+
+  battle_result_message_hsv:
+    type: "hsv"
+    mask_path: "assets/matching/battle_result_message_mask.png"
+    lower_bound: [0, 0, 200]
+    upper_bound: [179, 20, 255]
+    threshold: 0.9
+    description: "バトルリザルトメッセージの色域"
+    enabled: true
+
+  battle_result_icon_hsv:
+    type: "hsv"
+    mask_path: "assets/matching/battle_result_icon_mask.png"
+    lower_bound: [0, 0, 200]
+    upper_bound: [179, 20, 255]
+    threshold: 0.9
+    description: "バトルリザルトアイコンの色域"
+    enabled: true
+
+  battle_result_gear_hsv:
+    type: "hsv"
+    mask_path: "assets/matching/battle_result_gear_mask.png"
+    lower_bound: [0, 0, 0]
+    upper_bound: [179, 255, 50]
+    threshold: 0.9
+    description: "バトルリザルトギアの色域"
+    enabled: true
+
+  battle_result_background_hsv:
+    type: "hsv"
+    mask_path: "assets/matching/battle_result_background_mask.png"
     lower_bound: [0, 0, 25]
     upper_bound: [179, 30, 40]
     threshold: 0.9
-    description: "ストップ背景の色域"
+    description: "バトルリザルト背景の色域"
     enabled: true
 
 # 複合条件検出（より複雑な条件組み合わせ）
@@ -210,30 +247,52 @@ composite_detection:
       - matcher: black_screen
       - matcher: power_off_template
 
-  battle_start:
-    and:
-      - matcher: battle_start_brightness
-      - matcher: battle_start_template
-
-  matching_start_hsv:
+  matching_start:
     and:
       - matcher: matching_start_hsv
       - matcher: matching_start_template
 
-  finish_display:
+  schedule_change:
     and:
-      - matcher: finish_uniform
-      - matcher: finish_bright
-      - matcher: finish_text_hsv
-      - matcher: finish_band_hsv
+      - matcher: schedule_change_bright
+      - matcher: schedule_change_template
+
+  battle_start:
+    and:
+      - matcher: battle_start_bright
+      - matcher: battle_start_template
+        
+  battle_abort:
+    and:
+      - matcher: battle_abort_hsv
+      - matcher: battle_abort_template
 
   battle_finish:
     and:
-      - matcher: stop_message_hsv
-      - matcher: stop_background_hsv
-      - matcher: stop_icon_absent
-      - matcher: stop_gear_absent
+      - matcher: battle_finish_uniform
       - not:
-          matcher: stop_icon_hsv
+          matcher: battle_finish_bright
+      - matcher: battle_finish_text_hsv
+      - matcher: battle_finish_band_hsv
+        
+  battle_judgement_latter_half:
+    and:
       - not:
-          matcher: stop_gear_hsv
+          matcher: loading
+      - matcher: battle_judgement_bright
+      - matcher: battle_judgement_latter_half_bright
+        
+  loading:
+    and:
+      - matcher: loading_top_bright
+      - not:
+          matcher: loading_bottom_bright
+          
+  battle_result:
+    and:
+      - matcher: battle_result_message_hsv
+      - not:
+          matcher: battle_result_icon_hsv
+      - not:
+          matcher: battle_result_gear_hsv
+      - matcher: battle_result_background_hsv

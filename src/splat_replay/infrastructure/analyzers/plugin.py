@@ -33,14 +33,14 @@ class AnalyzerPlugin(Protocol):
     def detect_loading_end(self, frame: np.ndarray) -> bool:
         """ローディング終了を検出する。"""
 
-    def detect_finish(self, frame: np.ndarray) -> bool:
+    def detect_battle_finish(self, frame: np.ndarray) -> bool:
         """Finish 演出を検出する。"""
 
-    def detect_finish_end(self, frame: np.ndarray) -> bool:
+    def detect_battle_finish_end(self, frame: np.ndarray) -> bool:
         """Finish 終了を検出する。"""
 
-    def detect_judgement(self, frame: np.ndarray) -> str | None:
+    def detect_battle_judgement(self, frame: np.ndarray) -> str | None:
         """勝敗画面から勝敗を取得する。"""
 
-    def detect_result(self, frame: np.ndarray) -> bool:
+    def detect_battle_result(self, frame: np.ndarray) -> bool:
         """結果画面を検出する。"""

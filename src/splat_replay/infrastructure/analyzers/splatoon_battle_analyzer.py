@@ -33,7 +33,19 @@ class BattleFrameAnalyzer(AnalyzerPlugin):
         return self.registry.match("battle_start", frame)
 
     def detect_battle_abort(self, frame: np.ndarray) -> bool:
-        return False
+        return self.registry.match("battle_abort", frame)
+
+    def detect_battle_finish(self, frame: np.ndarray) -> bool:
+        return self.registry.match("battle_finish", frame)
+
+    def detect_battle_finish_end(self, frame: np.ndarray) -> bool:
+        return self.detect_battle_judgement_latter_half(frame)
+
+    def detect_battle_judgement_latter_half(self, frame: np.ndarray) -> bool:
+        return self.registry.match("battle_judgement_latter_half", frame)
+
+    def extract_judgement(self, frame: np.ndarray) -> str | None:
+        return None
 
     def detect_loading(self, frame: np.ndarray) -> bool:
         return self.registry.match("loading", frame)
@@ -41,14 +53,5 @@ class BattleFrameAnalyzer(AnalyzerPlugin):
     def detect_loading_end(self, frame: np.ndarray) -> bool:
         return self.registry.match("loading_end", frame)
 
-    def detect_finish(self, frame: np.ndarray) -> bool:
-        return False
-
-    def detect_finish_end(self, frame: np.ndarray) -> bool:
-        return False
-
-    def detect_judgement(self, frame: np.ndarray) -> str | None:
-        return None
-
-    def detect_result(self, frame: np.ndarray) -> bool:
+    def detect_battle_result(self, frame: np.ndarray) -> bool:
         return self.registry.match("battle_result", frame)

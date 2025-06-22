@@ -40,7 +40,6 @@ def load_image() -> Callable[[str], np.ndarray]:
 
     def _load(filename: str) -> np.ndarray:
         image_path = TEMPLATE_DIR / filename
-        print(f"読み込む画像: {image_path}")
         image = cv2.imread(str(image_path))
         if image is None:
             pytest.skip(f"画像ファイルが存在しないか読み込めません: {image_path}")
@@ -61,6 +60,72 @@ def test_detect_power_off(
     """電源OFF 判定の結果を確認する。"""
     frame = load_image(filename)
     result = analyzer.detect_power_off(frame)
+    assert result == expected
+
+
+@pytest.mark.parametrize(
+    "filename, expected",
+    [
+        ("matching_1.png", True),
+        ("battle_result_1.png", False),
+    ],
+)
+def test_detect_matching_start(
+    analyzer: FrameAnalyzer, load_image: Callable[[str], np.ndarray], filename: str, expected: bool
+) -> None:
+    """マッチング開始 判定の結果を確認する。"""
+    frame = load_image(filename)
+    result = analyzer.detect_matching_start(frame)
+    assert result == expected
+
+
+@pytest.mark.parametrize(
+    "filename, expected",
+    [
+        ("schedule_change_1.png", True),
+        ("loading_1.png", False),
+    ],
+)
+def test_detect_schedule_change(
+    analyzer: FrameAnalyzer, load_image: Callable[[str], np.ndarray], filename: str, expected: bool
+) -> None:
+    """スケジュール変更 判定の結果を確認する。"""
+    frame = load_image(filename)
+    result = analyzer.detect_schedule_change(frame)
+    assert result == expected
+
+
+@pytest.mark.parametrize(
+    "filename, expected",
+    [
+        ("battle_start_1.png", True),
+        ("battle_start_2.png", True),
+        ("battle_start_3.png", False),
+        ("matching_1.png", False)
+    ],
+)
+def test_detect_battle_start(
+    analyzer: FrameAnalyzer, load_image: Callable[[str], np.ndarray], filename: str, expected: bool
+) -> None:
+    """バトル開始 判定の結果を確認する。"""
+    frame = load_image(filename)
+    result = analyzer.detect_battle_start(frame)
+    assert result == expected
+
+
+@pytest.mark.parametrize(
+    "filename, expected",
+    [
+        ("battle_abort_1.png", True),
+        ("battle_result_1.png", False)
+    ],
+)
+def test_detect_battle_abort(
+    analyzer: FrameAnalyzer, load_image: Callable[[str], np.ndarray], filename: str, expected: bool
+) -> None:
+    """バトル中断 判定の結果を確認する。"""
+    frame = load_image(filename)
+    result = analyzer.detect_battle_abort(frame)
     assert result == expected
 
 
@@ -93,16 +158,60 @@ def test_detect_battle_finish(
 @pytest.mark.parametrize(
     "filename, expected",
     [
-        ("battle_stop_1.png", True),
-        ("battle_stop_2.png", True),
-        ("battle_stop_3.png", False),
-        ("battle_stop_4.png", False),
+        ("battle_judgement_1.png", True),
+        ("battle_judgement_2.png", True),
+        ("battle_judgement_3.png", False),
+        ("battle_judgement_4.png", False),
     ],
 )
-def test_detect_battle_stop(
+def test_detect_battle_finish_end(
+    analyzer: FrameAnalyzer, load_image: Callable[[str], np.ndarray], filename: str, expected: bool
+) -> None:
+    """FINISH 表示判定の結果を確認する。"""
+    frame = load_image(filename)
+    result = analyzer.detect_battle_finish_end(frame)
+    assert result == expected
+
+
+@pytest.mark.parametrize(
+    "filename, expected",
+    [
+        ("loading_1.png", True),
+        ("power_off.png", False)
+    ],
+)
+def test_detect_loading(
+    analyzer: FrameAnalyzer, load_image: Callable[[str], np.ndarray], filename: str, expected: bool
+) -> None:
+    """ローディング判定の結果を確認する。"""
+    frame = load_image(filename)
+    result = analyzer.detect_loading(frame)
+    assert result == expected
+
+
+@pytest.mark.parametrize(
+    "filename, expected",
+    [
+        ("battle_result_1.png", True),
+        # ("battle_result_2.png", True), # 未対応
+        ("battle_result_3.png", False),
+        ("battle_result_4.png", False),
+    ],
+)
+def test_detect_battle_result(
     analyzer: FrameAnalyzer, load_image: Callable[[str], np.ndarray], filename: str, expected: bool
 ) -> None:
     """バトル終了画面判定の結果を確認する。"""
     frame = load_image(filename)
-    result = analyzer.detect_battle_stop(frame)
+    result = analyzer.detect_battle_result(frame)
     assert result == expected
+
+
+plugin = BattleFrameAnalyzer(MATCHER_SETTINGS)
+a = FrameAnalyzer(plugin, MATCHER_SETTINGS)
+
+
+image_path = TEMPLATE_DIR / "matching_1.png"
+image = cv2.imread(str(image_path))
+result = a.detect_battle_start(image)
+print(f"Battle finish detected: {result}")

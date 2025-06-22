@@ -144,15 +144,15 @@ class DaemonUseCase:
             self.sm.handle(Event.POSTGAME_DETECTED)
             self._reset()
             return
-        if self.analyzer.detect_loading(frame) or self.analyzer.detect_finish(frame):
+        if self.analyzer.detect_loading(frame) or self.analyzer.detect_battle_finish(frame):
             self.recorder.pause()
             self.transcriber.stop_capture()
             self.sm.handle(Event.LOADING_DETECTED)
             return
-        jud = self.analyzer.detect_judgement(frame)
+        jud = self.analyzer.detect_battle_judgement(frame)
         if jud is not None:
             self.result = jud
-        if self.analyzer.detect_result(frame):
+        if self.analyzer.detect_battle_result(frame):
             video = self.recorder.stop()
             audio = self.transcriber.stop_capture()
             _ = self.transcriber.transcribe(audio)
@@ -162,7 +162,7 @@ class DaemonUseCase:
 
     def _handle_paused(self, frame) -> None:
         """PAUSED 状態でのフレーム処理。"""
-        if self.analyzer.detect_loading_end(frame) or self.analyzer.detect_finish_end(frame):
+        if self.analyzer.detect_loading_end(frame) or self.analyzer.detect_battle_finish_end(frame):
             self.recorder.resume()
             self.transcriber.start_capture()
             self.sm.handle(Event.LOADING_FINISHED)
@@ -199,7 +199,8 @@ class DaemonUseCase:
                         time.sleep(1)
                         continue
 
-                    off_count, last_check, detected = self._update_power_off_count(frame, off_count, last_check)
+                    off_count, last_check, detected = self._update_power_off_count(
+                        frame, off_count, last_check)
                     if detected:
                         self._handle_power_off()
                         break
