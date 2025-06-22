@@ -95,112 +95,117 @@ class DaemonUseCase:
                 detected = True
         return off_count, last_check, detected
 
+    def _handle_power_off(self) -> None:
+        """電源 OFF が確定した際の処理。"""
+        if self.sm.state in {State.RECORDING, State.PAUSED}:
+            video = self.recorder.stop()
+            audio = self.transcriber.stop_capture()
+            _ = self.transcriber.transcribe(audio)
+            self.pending.append(video)
+            self.sm.handle(Event.POSTGAME_DETECTED)
+        self._process_pending()
+
+    def _handle_standby(self, frame) -> None:
+        """STANDBY 状態でのフレーム処理。"""
+        if self.analyzer.detect_match_select(frame):
+            rate = self.analyzer.extract_rate(frame)
+            if rate is not None:
+                self.rate = rate
+                self.logger.info("レート取得", rate=rate)
+        if self.analyzer.detect_schedule_change(frame):
+            self.logger.info("スケジュール変更を検出、情報をリセット")
+            self._reset()
+            return
+        if not self._matching and self.analyzer.detect_matching_start(frame):
+            self._matching = True
+            return
+        if self._matching and self.analyzer.detect_battle_start(frame):
+            self.recorder.start()
+            self.transcriber.start_capture()
+            self._battle_started_at = time.time()
+            self.sm.handle(Event.BATTLE_STARTED)
+            self._matching = False
+
+    def _handle_recording(self, frame) -> None:
+        """RECORDING 状態でのフレーム処理。"""
+        now = time.time()
+        if now - self._battle_started_at <= 60 and self.analyzer.detect_battle_abort(frame):
+            self.logger.info("バトル中断を検出")
+            self.recorder.stop()
+            self.transcriber.stop_capture()
+            self.sm.handle(Event.EARLY_ABORT)
+            self._reset()
+            return
+        if now - self._battle_started_at >= 600:
+            video = self.recorder.stop()
+            audio = self.transcriber.stop_capture()
+            _ = self.transcriber.transcribe(audio)
+            self.pending.append(video)
+            self.sm.handle(Event.POSTGAME_DETECTED)
+            self._reset()
+            return
+        if self.analyzer.detect_loading(frame) or self.analyzer.detect_finish(frame):
+            self.recorder.pause()
+            self.transcriber.stop_capture()
+            self.sm.handle(Event.LOADING_DETECTED)
+            return
+        jud = self.analyzer.detect_judgement(frame)
+        if jud is not None:
+            self.result = jud
+        if self.analyzer.detect_result(frame):
+            video = self.recorder.stop()
+            audio = self.transcriber.stop_capture()
+            _ = self.transcriber.transcribe(audio)
+            self.pending.append(video)
+            self.sm.handle(Event.POSTGAME_DETECTED)
+            self._reset()
+
+    def _handle_paused(self, frame) -> None:
+        """PAUSED 状態でのフレーム処理。"""
+        if self.analyzer.detect_loading_end(frame) or self.analyzer.detect_finish_end(frame):
+            self.recorder.resume()
+            self.transcriber.start_capture()
+            self.sm.handle(Event.LOADING_FINISHED)
+
+    def _handle_frame(self, frame) -> None:
+        """現在の状態に応じてフレームを処理する。"""
+        if self.sm.state is State.STANDBY:
+            self._handle_standby(frame)
+        elif self.sm.state is State.RECORDING:
+            self._handle_recording(frame)
+        elif self.sm.state is State.PAUSED:
+            self._handle_paused(frame)
+
     def execute(self) -> None:
-        """電源 OFF を監視しつつ自動録画を繰り返す。"""
-        self.logger.info("デーモン開始")
+        """電源 OFF を監視しつつ自動録画を繰り返す。PC がスリープしたら最初から再開する。"""
+        while True:
+            self.logger.info("デーモン開始")
 
-        cap = cv2.VideoCapture(self.settings.capture_device_index)
-        if not cap.isOpened():
-            self.logger.error(
-                "キャプチャデバイスを開けません",
-                index=self.settings.capture_device_index,
-            )
-            raise RuntimeError("キャプチャデバイスの取得に失敗しました")
-
-        off_count = 0
-        last_check = 0.0
-        try:
-            while True:
-                success, frame = cap.read()
-                if not success:
-                    self.logger.warning("フレーム取得に失敗しました")
-                    time.sleep(1)
-                    continue
-
-                off_count, last_check, power_off_detected = (
-                    self._update_power_off_count(frame, off_count, last_check)
+            cap = cv2.VideoCapture(self.settings.capture_device_index)
+            if not cap.isOpened():
+                self.logger.error(
+                    "キャプチャデバイスを開けません",
+                    index=self.settings.capture_device_index,
                 )
-                if power_off_detected:
-                    if self.sm.state in {State.RECORDING, State.PAUSED}:
-                        video = self.recorder.stop()
-                        audio = self.transcriber.stop_capture()
-                        _ = self.transcriber.transcribe(audio)
-                        self.pending.append(video)
-                        self.sm.handle(Event.POSTGAME_DETECTED)
-                    self._process_pending()
-                    break
+                raise RuntimeError("キャプチャデバイスの取得に失敗しました")
 
-                if self.sm.state is State.STANDBY:
-                    if self.analyzer.detect_match_select(frame):
-                        rate = self.analyzer.extract_rate(frame)
-                        if rate is not None:
-                            self.rate = rate
-                            self.logger.info("レート取得", rate=rate)
-                    if self.analyzer.detect_schedule_change(frame):
-                        self.logger.info(
-                            "スケジュール変更を検出、情報をリセット"
-                        )
-                        self._reset()
+            off_count = 0
+            last_check = 0.0
+            try:
+                while True:
+                    success, frame = cap.read()
+                    if not success:
+                        self.logger.warning("フレーム取得に失敗しました")
+                        time.sleep(1)
                         continue
-                    if (
-                        not self._matching
-                        and self.analyzer.detect_matching_start(frame)
-                    ):
-                        self._matching = True
-                        continue
-                    if self._matching and self.analyzer.detect_battle_start(
-                        frame
-                    ):
-                        self.recorder.start()
-                        self.transcriber.start_capture()
-                        self._battle_started_at = time.time()
-                        self.sm.handle(Event.BATTLE_STARTED)
-                        self._matching = False
 
-                elif self.sm.state is State.RECORDING:
-                    now = time.time()
-                    if (
-                        now - self._battle_started_at <= 60
-                        and self.analyzer.detect_battle_abort(frame)
-                    ):
-                        self.logger.info("バトル中断を検出")
-                        self.recorder.stop()
-                        self.transcriber.stop_capture()
-                        self.sm.handle(Event.EARLY_ABORT)
-                        self._reset()
-                        continue
-                    if now - self._battle_started_at >= 600:
-                        video = self.recorder.stop()
-                        audio = self.transcriber.stop_capture()
-                        _ = self.transcriber.transcribe(audio)
-                        self.pending.append(video)
-                        self.sm.handle(Event.POSTGAME_DETECTED)
-                        self._reset()
-                        continue
-                    if self.analyzer.detect_loading(
-                        frame
-                    ) or self.analyzer.detect_finish(frame):
-                        self.recorder.pause()
-                        self.transcriber.stop_capture()
-                        self.sm.handle(Event.LOADING_DETECTED)
-                        continue
-                    jud = self.analyzer.detect_judgement(frame)
-                    if jud is not None:
-                        self.result = jud
-                    if self.analyzer.detect_result(frame):
-                        video = self.recorder.stop()
-                        audio = self.transcriber.stop_capture()
-                        _ = self.transcriber.transcribe(audio)
-                        self.pending.append(video)
-                        self.sm.handle(Event.POSTGAME_DETECTED)
-                        self._reset()
+                    off_count, last_check, detected = self._update_power_off_count(frame, off_count, last_check)
+                    if detected:
+                        self._handle_power_off()
+                        break
 
-                elif self.sm.state is State.PAUSED:
-                    if self.analyzer.detect_loading_end(
-                        frame
-                    ) or self.analyzer.detect_finish_end(frame):
-                        self.recorder.resume()
-                        self.transcriber.start_capture()
-                        self.sm.handle(Event.LOADING_FINISHED)
-        finally:
-            cap.release()
+                    self._handle_frame(frame)
+            finally:
+                cap.release()
+                self._reset()
+                self.sm.state = State.STANDBY
