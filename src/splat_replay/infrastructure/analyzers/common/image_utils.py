@@ -15,6 +15,10 @@ from splat_replay.shared.config import (
     MatcherConfig,
     CompositeMatcherConfig,
 )
+from splat_replay.domain.models import MatchExpression
+from splat_replay.shared.logger import get_logger
+
+logger = get_logger()
 
 
 def load_image(path: str, *, grayscale: bool = False) -> Optional[np.ndarray]:
@@ -81,7 +85,7 @@ class BaseMatcher(ABC):
         if self._roi is None:
             return image
         x, y, w, h = self._roi
-        return image[y: y + h, x: x + w]
+        return image[y : y + h, x : x + w]
 
     @abstractmethod
     def match(self, image: np.ndarray) -> bool:
@@ -103,7 +107,14 @@ class HashMatcher(BaseMatcher):
     def match(self, image: np.ndarray) -> bool:
         img = self._apply_roi(image)
         image_hash = self._compute_hash(img)
-        return image_hash == self._hash_value
+        result = image_hash == self._hash_value
+        if not result:
+            logger.debug(
+                "ハッシュ不一致",
+                expected=self._hash_value,
+                actual=image_hash,
+            )
+        return result
 
 
 class HSVMatcher(BaseMatcher):
@@ -141,7 +152,14 @@ class HSVMatcher(BaseMatcher):
             count = cv2.countNonZero(color_mask)
 
         ratio = count / total if total > 0 else 0
-        return ratio >= self._threshold
+        result = ratio >= self._threshold
+        if not result:
+            logger.debug(
+                "HSV 比率不足",
+                ratio=float(ratio),
+                threshold=self._threshold,
+            )
+        return result
 
 
 class UniformColorMatcher(BaseMatcher):
@@ -169,7 +187,12 @@ class UniformColorMatcher(BaseMatcher):
             return False
 
         std_hue = np.std(values.astype(np.float32))
-        return bool(std_hue <= self._hue_threshold)
+        result = bool(std_hue <= self._hue_threshold)
+        if not result:
+            logger.debug(
+                "色相分散大", std=float(std_hue), threshold=self._hue_threshold
+            )
+        return result
 
 
 class RGBMatcher(BaseMatcher):
@@ -201,7 +224,12 @@ class RGBMatcher(BaseMatcher):
         if total == 0:
             return False
         ratio = match_count / total
-        return ratio >= self._threshold
+        result = ratio >= self._threshold
+        if not result:
+            logger.debug(
+                "RGB 比率不足", ratio=float(ratio), threshold=self._threshold
+            )
+        return result
 
 
 class TemplateMatcher(BaseMatcher):
@@ -235,7 +263,12 @@ class TemplateMatcher(BaseMatcher):
                 gray, self._template, cv2.TM_CCOEFF_NORMED
             )
         _, max_val, _, _ = cv2.minMaxLoc(result)
-        return max_val >= self._threshold
+        result_flag = max_val >= self._threshold
+        if not result_flag:
+            logger.debug(
+                "テンプレート不一致", score=float(max_val), threshold=self._threshold
+            )
+        return result_flag
 
 
 class BrightnessMatcher(BaseMatcher):
@@ -256,44 +289,44 @@ class BrightnessMatcher(BaseMatcher):
         img = self._apply_roi(image)
         level = calculate_brightness(img, self._mask)
         if self._max_value is not None and level > self._max_value:
+            logger.debug(
+                "明度上限超過", level=float(level), max=self._max_value
+            )
             return False
         if self._min_value is not None and level < self._min_value:
+            logger.debug(
+                "明度下限未満", level=float(level), min=self._min_value
+            )
             return False
         return True
 
 
 class CompositeMatcher:
-    """複数のマッチャー結果をまとめて評価するクラス。"""
+    """複数条件を評価するマッチャー。"""
 
     def __init__(
-        self,
-        matchers: list[BaseMatcher],
-        policy: str = "any_can_pass",
-        min_required: int = 1,
+        self, expr: MatchExpression, lookup: Dict[str, BaseMatcher]
     ) -> None:
-        self.matchers = matchers
-        self.policy = policy
-        self.min_required = min_required
+        self.expr = expr
+        self.lookup = lookup
 
     def match(self, image: np.ndarray) -> bool:
-        """設定されたポリシーに基づき判定する。"""
-        if self.policy == "all_must_pass":
-            for m in self.matchers:
-                if not m.match(image):
-                    return False
-            return True
-        if self.policy == "majority_pass":
-            required = max(self.min_required, 1)
-            count = 0
-            for m in self.matchers:
-                if m.match(image):
-                    count += 1
-            return count >= required
-        # any_can_pass がデフォルト
-        for m in self.matchers:
-            if m.match(image):
-                return True
-        return False
+        """設定された式に基づき判定する。"""
+
+        def _eval(name: str) -> bool:
+            matcher = self.lookup.get(name)
+            if matcher is None:
+                logger.debug("マッチャー未登録", matcher=name)
+                return False
+            result = matcher.match(image)
+            if not result:
+                logger.debug("サブマッチャー不一致", matcher=name)
+            return result
+
+        result = self.expr.evaluate(_eval)
+        if not result:
+            logger.debug("複合条件不一致")
+        return result
 
 
 def build_matcher(config: MatcherConfig) -> Optional[BaseMatcher]:
@@ -359,18 +392,10 @@ def build_composite_matcher(
 ) -> Optional[CompositeMatcher]:
     """設定から複合マッチャーを生成する。"""
 
-    matchers: list[BaseMatcher] = []
-    for name in config.matchers:
-        m = lookup.get(name)
-        if m:
-            matchers.append(m)
-
-    if not matchers:
+    if not config or not config.rule:
         return None
 
-    return CompositeMatcher(
-        matchers, config.success_condition, config.min_required_steps
-    )
+    return CompositeMatcher(config.rule, lookup)
 
 
 class MatcherRegistry:

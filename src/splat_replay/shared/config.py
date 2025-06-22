@@ -65,14 +65,14 @@ class MatcherConfig(BaseModel):
     roi: Optional[Dict[str, int]] = None
 
 
-class CompositeMatcherConfig(BaseModel):
-    """複数マッチャーを組み合わせる設定。"""
 
-    matchers: List[str]
-    success_condition: Literal["all_must_pass", "any_can_pass"] = (
-        "any_can_pass"
-    )
-    min_required_steps: int = 1
+from splat_replay.domain.models import MatchExpression
+
+
+class CompositeMatcherConfig(BaseModel):
+    """複合条件を表す設定。"""
+
+    rule: MatchExpression
 
 
 class ImageMatchingSettings(BaseModel):
@@ -95,7 +95,8 @@ class ImageMatchingSettings(BaseModel):
 
         composites: Dict[str, CompositeMatcherConfig] = {}
         for name, cfg in raw.get("composite_detection", {}).items():
-            composites[name] = CompositeMatcherConfig(**cfg)
+            expr = MatchExpression.parse_obj(cfg)
+            composites[name] = CompositeMatcherConfig(rule=expr)
 
         return cls(
             matchers=matchers,
@@ -104,6 +105,9 @@ class ImageMatchingSettings(BaseModel):
 
     class Config:
         pass
+
+
+MatchExpression.update_forward_refs()
 
 
 class AppSettings(BaseModel):
