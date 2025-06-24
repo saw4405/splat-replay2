@@ -75,3 +75,8 @@ class FrameAnalyzer:
     def detect_battle_stop(self, frame: np.ndarray) -> bool:
         """バトル終了画面を検出する。"""
         return self.registry.match("battle_result", frame)
+
+    def detect_from_group(self, key: str, frame: np.ndarray) -> str | None:
+        """設定されたグループから一致した名前を取得する。"""
+
+        return self.registry.match_first_group(key, frame)

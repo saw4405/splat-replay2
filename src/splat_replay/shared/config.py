@@ -65,7 +65,6 @@ class MatcherConfig(BaseModel):
     roi: Optional[Dict[str, int]] = None
 
 
-
 from splat_replay.domain.models import MatchExpression
 
 
@@ -80,6 +79,7 @@ class ImageMatchingSettings(BaseModel):
 
     matchers: Dict[str, MatcherConfig] = {}
     composites: Dict[str, CompositeMatcherConfig] = {}
+    matcher_groups: Dict[str, List[str]] = {}
 
     @classmethod
     def load_from_yaml(cls, path: Path) -> "ImageMatchingSettings":
@@ -98,9 +98,14 @@ class ImageMatchingSettings(BaseModel):
             expr = MatchExpression.parse_obj(cfg)
             composites[name] = CompositeMatcherConfig(rule=expr)
 
+        groups: Dict[str, List[str]] = {}
+        for name, keys in raw.get("matcher_groups", {}).items():
+            groups[name] = list(keys)
+
         return cls(
             matchers=matchers,
             composites=composites,
+            matcher_groups=groups,
         )
 
     class Config:

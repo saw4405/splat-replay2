@@ -240,6 +240,36 @@ simple_matchers:
     description: "バトルリザルト背景の色域"
     enabled: true
 
+  # --- ルール判定用テンプレート ---
+  rule_area:
+    type: "template"
+    template_path: "assets/matching/rule_area.png"
+    threshold: 0.9
+    description: "ガチエリアのルールアイコン"
+    enabled: true
+
+  rule_hoko:
+    type: "template"
+    template_path: "assets/matching/rule_hoko.png"
+    threshold: 0.9
+    description: "ガチホコのルールアイコン"
+    enabled: true
+
+  # --- ステージ判定用テンプレート ---
+  stage_hagglefish:
+    type: "template"
+    template_path: "assets/matching/stage_hagglefish.png"
+    threshold: 0.9
+    description: "マサバ海峡大橋"
+    enabled: true
+
+  stage_manta_maria:
+    type: "template"
+    template_path: "assets/matching/stage_manta_maria.png"
+    threshold: 0.9
+    description: "マンタマリア号"
+    enabled: true
+
 # 複合条件検出（より複雑な条件組み合わせ）
 composite_detection:
   power_off:
@@ -296,3 +326,20 @@ composite_detection:
       - not:
           matcher: battle_result_gear_hsv
       - matcher: battle_result_background_hsv
+
+# マッチャーグループ定義
+matcher_groups:
+  # ステージ名を取得するためのキー一覧
+  stages:
+    - stage_hagglefish
+    - stage_manta_maria
+
+  # ルール名を取得するためのキー一覧
+  rules:
+    - rule_area
+    - rule_hoko
+
+  # テスト用グループ
+  sample:
+    - battle_start
+    - battle_abort
