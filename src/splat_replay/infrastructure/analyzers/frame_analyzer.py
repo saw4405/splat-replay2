@@ -57,8 +57,12 @@ class FrameAnalyzer:
     def detect_battle_finish_end(self, frame: np.ndarray) -> bool:
         return self.plugin.detect_battle_finish_end(frame)
 
-    def detect_battle_judgement(self, frame: np.ndarray) -> str | None:
+    def detect_battle_judgement(self, frame: np.ndarray) -> bool:
         return self.plugin.detect_battle_judgement(frame)
+
+    def extract_battle_judgement(self, frame: np.ndarray) -> str | None:
+        """バトルの結果を抽出する。"""
+        return self.plugin.extract_battle_judgement(frame)
 
     def detect_loading(self, frame: np.ndarray) -> bool:
         """ローディング画面かどうか判定する。"""
@@ -71,7 +75,3 @@ class FrameAnalyzer:
     def detect_battle_result(self, frame: np.ndarray) -> bool:
         """結果画面を検出する。"""
         return self.plugin.detect_battle_result(frame)
-
-    def detect_battle_stop(self, frame: np.ndarray) -> bool:
-        """バトル終了画面を検出する。"""
-        return self.registry.match("battle_result", frame)

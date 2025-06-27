@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
-from typing import Callable
+from typing import Callable, Optional
 
 import numpy as np
 import pytest
@@ -176,6 +176,24 @@ def test_detect_battle_finish_end(
 @pytest.mark.parametrize(
     "filename, expected",
     [
+        ("battle_judgement_1.png", "win"),
+        ("battle_judgement_2.png", "lose"),
+        ("battle_judgement_3.png", "lose"),
+        ("battle_judgement_4.png", None),
+    ],
+)
+def test_extract_battle_judgement(
+    analyzer: FrameAnalyzer, load_image: Callable[[str], np.ndarray], filename: str, expected: Optional[str]
+) -> None:
+    """FINISH 表示判定の結果を確認する。"""
+    frame = load_image(filename)
+    result = analyzer.extract_battle_judgement(frame)
+    assert result == expected
+
+
+@pytest.mark.parametrize(
+    "filename, expected",
+    [
         ("loading_1.png", True),
         ("power_off.png", False)
     ],
@@ -211,7 +229,7 @@ plugin = BattleFrameAnalyzer(MATCHER_SETTINGS)
 a = FrameAnalyzer(plugin, MATCHER_SETTINGS)
 
 
-image_path = TEMPLATE_DIR / "matching_1.png"
+image_path = TEMPLATE_DIR / "battle_judgement_2.png"
 image = cv2.imread(str(image_path))
-result = a.detect_battle_start(image)
+result = a.extract_battle_judgement(image)
 print(f"Battle finish detected: {result}")

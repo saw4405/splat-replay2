@@ -89,7 +89,7 @@ class BaseMatcher(ABC):
         if self._roi is None:
             return image
         x, y, w, h = self._roi
-        return image[y : y + h, x : x + w]
+        return image[y: y + h, x: x + w]
 
     @abstractmethod
     def match(self, image: np.ndarray) -> bool:
@@ -354,21 +354,22 @@ class CompositeMatcher:
         return result
 
 
-def build_matcher(name: str, config: MatcherConfig) -> Optional[BaseMatcher]:
+def build_matcher(config: MatcherConfig) -> Optional[BaseMatcher]:
     """設定からマッチャーインスタンスを生成する。"""
 
     if not config:
         return None
 
-    mask_path = getattr(config, "mask_path", None)
-    roi_cfg = getattr(config, "roi", None)
+    name = config.name
+    mask_path = config.mask_path
+    roi_cfg = config.roi
     roi = None
     if roi_cfg:
         roi = (
-            int(roi_cfg.get("x", 0)),
-            int(roi_cfg.get("y", 0)),
-            int(roi_cfg.get("width", 0)),
-            int(roi_cfg.get("height", 0)),
+            roi_cfg.get("x", 0),
+            roi_cfg.get("y", 0),
+            roi_cfg.get("width", 0),
+            roi_cfg.get("height", 0),
         )
     if config.type == "hash" and config.hash_path:
         path = config.hash_path
@@ -438,11 +439,11 @@ def build_composite_matcher(
 class MatcherRegistry:
     """設定に基づいてマッチャーを管理するクラス。"""
 
-    def __init__(self, settings: "ImageMatchingSettings") -> None:
+    def __init__(self, settings: ImageMatchingSettings) -> None:
         # 単体マッチャーの登録
         self.matchers: Dict[str, BaseMatcher] = {}
         for name, cfg in settings.matchers.items():
-            matcher = build_matcher(name, cfg)
+            matcher = build_matcher(cfg)
             if matcher:
                 self.matchers[name] = matcher
 
@@ -452,6 +453,9 @@ class MatcherRegistry:
             composite = build_composite_matcher(name, comp, self.matchers)
             if composite:
                 self.composites[name] = composite
+
+        # グループ定義の登録
+        self.groups: Dict[str, list[str]] = settings.matcher_groups
 
     def match(self, key: str, image: np.ndarray) -> bool:
         """指定されたキーのマッチャーで判定する。"""
@@ -471,3 +475,11 @@ class MatcherRegistry:
             if matcher and matcher.match(image):
                 return matcher.name or key
         return None
+
+    def match_first_group(self, group: str, image: np.ndarray) -> str | None:
+        """グループに登録されたキーから最初に一致した名称を返す。"""
+
+        keys = self.groups.get(group)
+        if not keys:
+            return None
+        return self.match_first(keys, image)

@@ -1,244 +1,4 @@
-# 単一手法検出器（シンプルな検出用）
-simple_matchers:
-  virtual_camera_off:
-    type: "hash"
-    hash_path: "assets/matching/virtual_camera_off.png"
-    threshold: 0.9
-    description: "仮想カメラOFF状態を検出する"
-    enabled: true
-
-  black_screen:
-    type: "brightness"
-    max_value: 20
-    min_value: null
-    description: "電源OFF時を暗さで検出する"
-    enabled: true
-
-  power_off_template:
-    type: "template"
-    template_path: "assets/matching/power_off.png"
-    threshold: 0.9
-    description: "電源OFFをテンプレートで検出する"
-    enabled: true
-
-  select_match:
-    type: "uniform"
-    roi:
-      x: 280
-      y: 390
-      width: 20
-      height: 20
-    hue_threshold: 10.0
-    description: "マッチ選択画面を検出する"
-    enabled: true
-
-  select_x_match_hsv:
-    type: "hsv"
-    lower_bound: [80, 230, 230]
-    upper_bound: [90, 255, 255]
-    threshold: 0.9
-    description: "マッチ選択画面でXマッチ選択を検出する"
-    enabled: true
-
-  select_bankara_match_hsv:
-    type: "hsv"
-    lower_bound: [13, 230, 230]
-    upper_bound: [15, 255, 255]
-    threshold: 0.9
-    description: "マッチ選択画面でバンカラマッチ選択を検出する"
-    enabled: true
-
-  matching_start_hsv:
-    type: "hsv"
-    mask_path: "assets/matching/matching_mask.png"
-    lower_bound: [0, 0, 200]
-    upper_bound: [179, 20, 255]
-    threshold: 0.9
-    description: "マッチング開始時の文字の色域を検出する"
-    enabled: true
-
-  matching_start_template:
-    type: "template"
-    template_path: "assets/matching/matching_start.png"
-    threshold: 0.9
-    description: "マッチング開始を検出する"
-    enabled: true
-
-  schedule_change_bright:
-    type: "brightness"
-    max_value: 20
-    roi:
-      x: 555
-      y: 444
-      width: 111
-      height: 111
-    description: "スケジュール変更を素早く検出する"
-    enabled: true
-
-  schedule_change_template:
-    type: "template"
-    template_path: "assets/matching/schedule_change.png"
-    threshold: 0.9
-    description: "スケジュール変更を検出する"
-    enabled: true
-
-  battle_start_bright:
-    type: "brightness"
-    max_value: 20
-    roi:
-      x: 900
-      y: 360
-      width: 140
-      height: 20
-    description: "バトル開始を素早く検出する"
-    enabled: true
-
-  battle_start_template:
-    type: "template"
-    template_path: "assets/matching/battle_start.png"
-    threshold: 0.9
-    description: "バトル開始を検出する"
-    enabled: true
-
-  battle_abort_hsv:
-    type: "hsv"
-    roi:
-      x: 800
-      y: 220
-      width: 300
-      height: 80
-    lower_bound: [0, 0, 25]
-    upper_bound: [0, 0, 35]
-    threshold: 0.9
-    description: "バトル中止を素早く検出する"
-    enabled: true
-
-  battle_abort_template:
-    type: "template"
-    template_path: "assets/matching/battle_abort.png"
-    threshold: 0.9
-    description: "バトル中止を検出する"
-    enabled: true
-
-  battle_finish_uniform:
-    type: "uniform"
-    hue_threshold: 10.0
-    roi:
-      x: 810
-      y: 400
-      width: 30
-      height: 40
-    description: "FINISH表示を素早く検出する"
-    enabled: true
-
-  battle_finish_bright:
-    type: "brightness"
-    max_value: 20
-    roi:
-      x: 810
-      y: 400
-      width: 30
-      height: 40
-    description: "FINISH表示を素早く明るさで検出する"
-    enabled: true
-
-  battle_finish_text_hsv:
-    type: "hsv"
-    mask_path: "assets/matching/battle_finish_text_mask.png"
-    lower_bound: [0, 0, 0]
-    upper_bound: [179, 255, 50]
-    threshold: 0.9
-    description: "FINISH文字を色域で検出する"
-    enabled: true
-
-  battle_finish_band_hsv:
-    type: "hsv"
-    mask_path: "assets/matching/battle_finish_band_mask.png"
-    lower_bound: [0, 0, 50]
-    upper_bound: [179, 255, 255]
-    threshold: 0.9
-    description: "FINISH帯を色域で検出する"
-    enabled: true
-
-  battle_judgement_bright:
-    type: "brightness"
-    max_value: 20
-    roi:
-      x: 0
-      y: 0
-      width: 230
-      height: 40
-    description: "ジャッジ画面は左上が黒い"
-    enabled: true
-
-  battle_judgement_latter_half_bright:
-    type: "brightness"
-    max_value: 20
-    roi:
-      x: 1820
-      y: 0
-      width: 100
-      height: 100
-    description: "ジャッジ画面(後半)は右上が黒い"
-    enabled: true
-
-  loading_top_bright:
-    type: "brightness"
-    max_value: 20
-    roi:
-      x: 0
-      y: 0
-      width: 1920
-      height: 200
-    description: "ローディング画面は上部が黒い"
-    enabled: true
-
-  loading_bottom_bright:
-    type: "brightness"
-    max_value: 20
-    roi:
-      x: 0
-      y: 880
-      width: 1920
-      height: 200
-    description: "ローディング画面は下部が黒くない"
-    enabled: true
-
-  battle_result_message_hsv:
-    type: "hsv"
-    mask_path: "assets/matching/battle_result_message_mask.png"
-    lower_bound: [0, 0, 200]
-    upper_bound: [179, 20, 255]
-    threshold: 0.9
-    description: "バトルリザルトメッセージの色域"
-    enabled: true
-
-  battle_result_icon_hsv:
-    type: "hsv"
-    mask_path: "assets/matching/battle_result_icon_mask.png"
-    lower_bound: [0, 0, 200]
-    upper_bound: [179, 20, 255]
-    threshold: 0.9
-    description: "バトルリザルトアイコンの色域"
-    enabled: true
-
-  battle_result_gear_hsv:
-    type: "hsv"
-    mask_path: "assets/matching/battle_result_gear_mask.png"
-    lower_bound: [0, 0, 0]
-    upper_bound: [179, 255, 50]
-    threshold: 0.9
-    description: "バトルリザルトギアの色域"
-    enabled: true
-
-  battle_result_background_hsv:
-    type: "hsv"
-    mask_path: "assets/matching/battle_result_background_mask.png"
-    lower_bound: [0, 0, 25]
-    upper_bound: [179, 30, 40]
-    threshold: 0.9
-    description: "バトルリザルト背景の色域"
-    enabled: true
+# 画像マッチング設定ファイル
 
 # 複合条件検出（より複雑な条件組み合わせ）
 composite_detection:
@@ -296,3 +56,602 @@ composite_detection:
       - not:
           matcher: battle_result_gear_hsv
       - matcher: battle_result_background_hsv
+
+# マッチャーグループ定義      
+matcher_groups:
+  battle_judgements:
+    - battle_judgement_lose
+    - battle_judgement_win
+
+  battle_matches:
+    - battle_match_regular                # レギュラーマッチ
+    - battle_match_anarchy_battle_series  # バンカラマッチ(チャレンジ)
+    - battle_match_anarchy_battle_open    # バンカラマッチ(オープン)
+    - battle_match_x_battle               # Xマッチ
+    - battle_match_splatfest_battle_pro   # フェスマッチ(チャレンジ)
+    - battle_match_splatfest_battle_open  # フェスマッチ(オープン)
+    - battle_match_tricolor_battle        # トリカラマッチ
+
+  battle_rules:
+    - battle_rule_turf_war            # ナワバリバトル
+    - battle_rule_rainmaker           # ガチホコ
+    - battle_rule_splat_zones         # ガチエリア
+    - battle_rule_tower_control       # ガチヤグラ
+    - battle_rule_clam_blitz          # ガチアサリ
+    - battle_rule_tricolor_turf_war   # トリカラバトル
+  
+  battle_rate_udemae:
+    - battle_rate_udemae_s
+    - battle_rate_udemae_s_plus
+
+  battle_rate_xp_rules:
+    - battle_rate_xp_rainmaker        # ガチホコ
+    - battle_rate_xp_splat_zones      # ガチエリア
+    - battle_rate_xp_tower_control    # ガチヤグラ
+    - battle_rate_xp_clam_blitz       # ガチアサリ
+  
+  battle_stages:
+    - battle_stage_scorch_gorge        # ユノハナ大渓谷
+    - battle_stage_eeltail_alley       # ゴンズイ地区
+    - battle_stage_hagglefish_market   # ヤガラ市場
+    - battle_stage_undertow_spillway   # マテガイ放水路
+    - battle_stage_mincemeat_metalworks # ナメロウ金属
+    - battle_stage_mahi_mahi_resort    # マヒマヒリゾート＆スパ
+    - battle_stage_museum_d_alfonsino  # キンメダイ美術館
+    - battle_stage_hammerhead_bridge   # マサバ海峡大橋
+    - battle_stage_inkblot_art_academy # 海女美術大学
+    - battle_stage_sturgeon_shipyard   # チョウザメ造船
+    - battle_stage_mako_mart           # ザトウマーケット
+    - battle_stage_wahoo_world         # スメーシーワールド
+    - battle_stage_flounder_heights    # ヒラメが丘団地
+    - battle_stage_brinewater_springs  # クサヤ温泉
+    - battle_stage_umami_ruins         # ナンプラー遺跡
+    - battle_stage_manta_maria         # マンタマリア号
+    - battle_stage_barnacle_and_dime   # タラポートショッピングパーク
+    - battle_stage_humpback_pump_track # コンブトラック
+    - battle_stage_crableg_capital     # タカアシ経済特区
+    - battle_stage_shipshape_cargo_co  # オヒョウ海運
+    - battle_stage_robo_rom_en         # バイガイ亭
+    - battle_stage_bluefin_depot       # ネギトロ炭鉱
+    - battle_stage_marlin_airport      # カジキ空港
+    - battle_stage_lemuria_hub         # リュウグウターミナル
+    - battle_stage_urchin_underpass    # デカライン高架下
+
+# 単一手法検出器（シンプルな検出用）
+simple_matchers:
+  virtual_camera_off:
+    type: "hash"
+    hash_path: "assets/matching/virtual_camera_off.png"
+    threshold: 0.9
+    description: "仮想カメラOFF状態を検出する"
+
+  black_screen:
+    type: "brightness"
+    max_value: 20
+    min_value: null
+    description: "電源OFF時を暗さで検出する"
+
+  power_off_template:
+    type: "template"
+    template_path: "assets/matching/power_off.png"
+    threshold: 0.9
+    description: "電源OFFをテンプレートで検出する"
+
+  select_match:
+    type: "uniform"
+    roi:
+      x: 280
+      y: 390
+      width: 20
+      height: 20
+    hue_threshold: 10.0
+    description: "マッチ選択画面を検出する"
+
+  select_x_match_hsv:
+    type: "hsv"
+    lower_bound: [80, 230, 230]
+    upper_bound: [90, 255, 255]
+    threshold: 0.9
+    description: "マッチ選択画面でXマッチ選択を検出する"
+
+  select_bankara_match_hsv:
+    type: "hsv"
+    lower_bound: [13, 230, 230]
+    upper_bound: [15, 255, 255]
+    threshold: 0.9
+    description: "マッチ選択画面でバンカラマッチ選択を検出する"
+
+  matching_start_hsv:
+    type: "hsv"
+    mask_path: "assets/matching/matching_mask.png"
+    lower_bound: [0, 0, 200]
+    upper_bound: [179, 20, 255]
+    threshold: 0.9
+    description: "マッチング開始時の文字の色域を検出する"
+
+  matching_start_template:
+    type: "template"
+    template_path: "assets/matching/matching_start.png"
+    threshold: 0.9
+    description: "マッチング開始を検出する"
+
+  schedule_change_bright:
+    type: "brightness"
+    max_value: 20
+    roi:
+      x: 555
+      y: 444
+      width: 111
+      height: 111
+    description: "スケジュール変更を素早く検出する"
+
+  schedule_change_template:
+    type: "template"
+    template_path: "assets/matching/schedule_change.png"
+    threshold: 0.9
+    description: "スケジュール変更を検出する"
+
+  battle_start_bright:
+    type: "brightness"
+    max_value: 20
+    roi:
+      x: 900
+      y: 360
+      width: 140
+      height: 20
+    description: "バトル開始を素早く検出する"
+
+  battle_start_template:
+    type: "template"
+    template_path: "assets/matching/battle_start.png"
+    threshold: 0.9
+    description: "バトル開始を検出する"
+
+  battle_abort_hsv:
+    type: "hsv"
+    roi:
+      x: 800
+      y: 220
+      width: 300
+      height: 80
+    lower_bound: [0, 0, 25]
+    upper_bound: [0, 0, 35]
+    threshold: 0.9
+    description: "バトル中止を素早く検出する"
+
+  battle_abort_template:
+    type: "template"
+    template_path: "assets/matching/battle_abort.png"
+    threshold: 0.9
+    description: "バトル中止を検出する"
+
+  battle_finish_uniform:
+    type: "uniform"
+    hue_threshold: 10.0
+    roi:
+      x: 810
+      y: 400
+      width: 30
+      height: 40
+    description: "FINISH表示を素早く検出する"
+
+  battle_finish_bright:
+    type: "brightness"
+    max_value: 20
+    roi:
+      x: 810
+      y: 400
+      width: 30
+      height: 40
+    description: "FINISH表示を素早く明るさで検出する"
+
+  battle_finish_text_hsv:
+    type: "hsv"
+    mask_path: "assets/matching/battle_finish_text_mask.png"
+    lower_bound: [0, 0, 0]
+    upper_bound: [179, 255, 50]
+    threshold: 0.9
+    description: "FINISH文字を色域で検出する"
+
+  battle_finish_band_hsv:
+    type: "hsv"
+    mask_path: "assets/matching/battle_finish_band_mask.png"
+    lower_bound: [0, 0, 50]
+    upper_bound: [179, 255, 255]
+    threshold: 0.9
+    description: "FINISH帯を色域で検出する"
+
+  battle_judgement_bright:
+    type: "brightness"
+    max_value: 20
+    roi:
+      x: 0
+      y: 0
+      width: 230
+      height: 40
+    description: "ジャッジ画面は左上が黒い"
+
+  battle_judgement_latter_half_bright:
+    type: "brightness"
+    max_value: 20
+    roi:
+      x: 1820
+      y: 0
+      width: 100
+      height: 100
+    description: "ジャッジ画面(後半)は右上が黒い"
+
+  battle_judgement_win:
+    name: "win"
+    type: "template"
+    template_path: "assets/matching/battle_judgement_win.png"
+    threshold: 0.9
+    description: "勝利表示を検出する"
+
+  battle_judgement_lose:
+    name: "lose"
+    type: "template"
+    template_path: "assets/matching/battle_judgement_lose.png"
+    threshold: 0.9
+    description: "敗北表示を検出する"
+
+  loading_top_bright:
+    type: "brightness"
+    max_value: 20
+    roi:
+      x: 0
+      y: 0
+      width: 1920
+      height: 200
+    description: "ローディング画面は上部が黒い"
+
+  loading_bottom_bright:
+    type: "brightness"
+    max_value: 20
+    roi:
+      x: 0
+      y: 880
+      width: 1920
+      height: 200
+    description: "ローディング画面は下部が黒くない"
+
+  battle_result_message_hsv:
+    type: "hsv"
+    mask_path: "assets/matching/battle_result_message_mask.png"
+    lower_bound: [0, 0, 200]
+    upper_bound: [179, 20, 255]
+    threshold: 0.9
+    description: "バトルリザルトメッセージの色域"
+
+  battle_result_icon_hsv:
+    type: "hsv"
+    mask_path: "assets/matching/battle_result_icon_mask.png"
+    lower_bound: [0, 0, 200]
+    upper_bound: [179, 20, 255]
+    threshold: 0.9
+    description: "バトルリザルトアイコンの色域"
+
+  battle_result_gear_hsv:
+    type: "hsv"
+    mask_path: "assets/matching/battle_result_gear_mask.png"
+    lower_bound: [0, 0, 0]
+    upper_bound: [179, 255, 50]
+    threshold: 0.9
+    description: "バトルリザルトギアの色域"
+
+  battle_result_background_hsv:
+    type: "hsv"
+    mask_path: "assets/matching/battle_result_background_mask.png"
+    lower_bound: [0, 0, 25]
+    upper_bound: [179, 30, 40]
+    threshold: 0.9
+    description: "バトルリザルト背景の色域"
+
+  battle_match_regular:
+    name: "レギュラーマッチ"
+    type: "template"
+    template_path: "assets/matching/battle_match_regular.png"
+    threshold: 0.9
+    description: "レギュラーマッチを検出する"
+
+  battle_match_anarchy_battle_series:
+    name: "バンカラマッチ(チャレンジ)"
+    type: "template"
+    template_path: "assets/matching/battle_match_anarchy_battle_series.png"
+    threshold: 0.9
+    description: "バンカラマッチ(チャレンジ)を検出する"
+
+  battle_match_anarchy_battle_open:
+    name: "バンカラマッチ(オープン)"
+    type: "template"
+    template_path: "assets/matching/battle_match_anarchy_battle_open.png"
+    threshold: 0.9
+    description: "バンカラマッチ(オープン)を検出する"
+
+  battle_match_x_battle:
+    name: "Xマッチ"
+    type: "template"
+    template_path: "assets/matching/battle_match_x_battle.png"
+    threshold: 0.9
+    description: "Xマッチを検出する"
+
+  battle_match_splatfest_battle_pro:
+    name: "フェスマッチ(チャレンジ)"
+    type: "template"
+    template_path: "assets/matching/battle_match_splatfest_battle_pro.png"
+    threshold: 0.9
+    description: "フェスマッチ(チャレンジ)を検出する"
+
+  battle_match_splatfest_battle_open:
+    name: "フェスマッチ(オープン)"
+    type: "template"
+    template_path: "assets/matching/battle_match_splatfest_battle_open.png"
+    threshold: 0.9
+    description: "フェスマッチ(オープン)を検出する"
+
+  battle_match_tricolor_battle:
+    name: "トリカラマッチ"
+    type: "template"
+    template_path: "assets/matching/battle_match_tricolor_battle.png"
+    threshold: 0.9
+    description: "トリカラマッチを検出する"
+
+  battle_rule_turf_war:
+    name: "ナワバリバトル"
+    type: "template"
+    template_path: "assets/matching/battle_rule_turf_war.png"
+    threshold: 0.9
+    description: "ナワバリバトルを検出する"
+
+  battle_rule_rainmaker:
+    name: "ガチホコ"
+    type: "template"
+    template_path: "assets/matching/battle_rule_rainmaker.png"
+    threshold: 0.9
+    description: "ガチホコバトルを検出する"
+
+  battle_rule_splat_zones:
+    name: "ガチエリア"
+    type: "template"
+    template_path: "assets/matching/battle_rule_splat_zones.png"
+    threshold: 0.9
+    description: "ガチエリアバトルを検出する"
+
+  battle_rule_tower_control:
+    name: "ガチヤグラ"
+    type: "template"
+    template_path: "assets/matching/battle_rule_tower_control.png"
+    threshold: 0.9
+    description: "ガチヤグラバトルを検出する"
+
+  battle_rule_clam_blitz:
+    name: "ガチアサリ"
+    type: "template"
+    template_path: "assets/matching/battle_rule_clam_blitz.png"
+    threshold: 0.9
+    description: "ガチアサリバトルを検出する"
+
+  battle_rule_tricolor_turf_war:
+    name: "トリカラバトル"
+    type: "template"
+    template_path: "assets/matching/battle_rule_tricolor_turf_war.png"
+    threshold: 0.9
+    description: "トリカラバトルを検出する"
+
+  battle_rate_udemae_s:
+    name: "S"
+    type: "template"
+    template_path: "assets/matching/battle_rate_udemae_s.png"
+    mask_path: "assets/matching/battle_rate_udemae_s_mask.png"
+    threshold: 0.9
+    description: "ウデマエSを検出する"
+
+  battle_rate_udemae_s_plus:
+    name: "S+"
+    type: "template"
+    template_path: "assets/matching/battle_rate_udemae_s_plus.png"
+    threshold: 0.9
+    description: "ウデマエS+を検出する"
+
+  battle_rate_xp_rainmaker:
+    name: "ガチホコ"
+    type: "template"
+    template_path: "assets/matching/battle_rate_xp_rainmaker.png"
+    threshold: 0.9
+    description: "ガチホコレートを検出する"
+
+  battle_rate_xp_splat_zones:
+    name: "ガチエリア"
+    type: "template"
+    template_path: "assets/matching/battle_rate_xp_splat_zones.png"
+    threshold: 0.9
+    description: "ガチエリアレートを検出する"
+
+  battle_rate_xp_tower_control:
+    name: "ガチヤグラ"
+    type: "template"
+    template_path: "assets/matching/battle_rate_xp_tower_control.png"
+    threshold: 0.9
+    description: "ガチヤグラレートを検出する"
+
+  battle_rate_xp_clam_blitz:
+    name: "ガチアサリ"
+    type: "template"
+    template_path: "assets/matching/battle_rate_xp_clam_blitz.png"
+    threshold: 0.9
+    description: "ガチアサリレートを検出する"
+
+  battle_stage_scorch_gorge:
+    name: "ユノハナ大渓谷"
+    type: "template"
+    template_path: "assets/matching/battle_stage_scorch_gorge.png"
+    threshold: 0.9
+    description: "ユノハナ大渓谷を検出する"
+
+  battle_stage_eeltail_alley:
+    name: "ゴンズイ地区"
+    type: "template"
+    template_path: "assets/matching/battle_stage_eeltail_alley.png"
+    threshold: 0.9
+    description: "ゴンズイ地区を検出する"
+
+  battle_stage_hagglefish_market:
+    name: "ヤガラ市場"
+    type: "template"
+    template_path: "assets/matching/battle_stage_hagglefish_market.png"
+    threshold: 0.9
+    description: "ヤガラ市場を検出する"
+
+  battle_stage_undertow_spillway:
+    name: "マテガイ放水路"
+    type: "template"
+    template_path: "assets/matching/battle_stage_undertow_spillway.png"
+    threshold: 0.9
+    description: "マテガイ放水路を検出する"
+
+  battle_stage_mincemeat_metalworks:
+    name: "ナメロウ金属"
+    type: "template"
+    template_path: "assets/matching/battle_stage_mincemeat_metalworks.png"
+    threshold: 0.9
+    description: "ナメロウ金属を検出する"
+
+  battle_stage_mahi_mahi_resort:
+    name: "マヒマヒリゾート＆スパ"
+    type: "template"
+    template_path: "assets/matching/battle_stage_mahi_mahi_resort.png"
+    threshold: 0.9
+    description: "マヒマヒリゾート＆スパを検出する"
+
+  battle_stage_museum_d_alfonsino:
+    name: "キンメダイ美術館"
+    type: "template"
+    template_path: "assets/matching/battle_stage_museum_d_alfonsino.png"
+    threshold: 0.9
+    description: "キンメダイ美術館を検出する"
+
+  battle_stage_hammerhead_bridge:
+    name: "マサバ海峡大橋"
+    type: "template"
+    template_path: "assets/matching/battle_stage_hammerhead_bridge.png"
+    threshold: 0.9
+    description: "マサバ海峡大橋を検出する"
+
+  battle_stage_inkblot_art_academy:
+    name: "海女美術大学"
+    type: "template"
+    template_path: "assets/matching/battle_stage_inkblot_art_academy.png"
+    threshold: 0.9
+    description: "海女美術大学を検出する"
+
+  battle_stage_sturgeon_shipyard:
+    name: "チョウザメ造船"
+    type: "template"
+    template_path: "assets/matching/battle_stage_sturgeon_shipyard.png"
+    threshold: 0.9
+    description: "チョウザメ造船を検出する"
+
+  battle_stage_mako_mart:
+    name: "ザトウマーケット"
+    type: "template"
+    template_path: "assets/matching/battle_stage_mako_mart.png"
+    threshold: 0.9
+    description: "ザトウマーケットを検出する"
+
+  battle_stage_wahoo_world:
+    name: "スメーシーワールド"
+    type: "template"
+    template_path: "assets/matching/battle_stage_wahoo_world.png"
+    threshold: 0.9
+    description: "スメーシーワールドを検出する"
+
+  battle_stage_flounder_heights:
+    name: "ヒラメが丘団地"
+    type: "template"
+    template_path: "assets/matching/battle_stage_flounder_heights.png"
+    threshold: 0.9
+    description: "ヒラメが丘団地を検出する"
+
+  battle_stage_brinewater_springs:
+    name: "クサヤ温泉"
+    type: "template"
+    template_path: "assets/matching/battle_stage_brinewater_springs.png"
+    threshold: 0.9
+    description: "クサヤ温泉を検出する"
+
+  battle_stage_umami_ruins:
+    name: "ナンプラー遺跡"
+    type: "template"
+    template_path: "assets/matching/battle_stage_umami_ruins.png"
+    threshold: 0.9
+    description: "ナンプラー遺跡を検出する"
+
+  battle_stage_manta_maria:
+    name: "マンタマリア号"
+    type: "template"
+    template_path: "assets/matching/battle_stage_manta_maria.png"
+    threshold: 0.9
+    description: "マンタマリア号を検出する"
+
+  battle_stage_barnacle_and_dime:
+    name: "タラポートショッピングパーク"
+    type: "template"
+    template_path: "assets/matching/battle_stage_barnacle_and_dime.png"
+    threshold: 0.9
+    description: "タラポートショッピングパークを検出する"
+
+  battle_stage_humpback_pump_track:
+    name: "コンブトラック"
+    type: "template"
+    template_path: "assets/matching/battle_stage_humpback_pump_track.png"
+    threshold: 0.9
+    description: "コンブトラックを検出する"
+
+  battle_stage_crableg_capital:
+    name: "タカアシ経済特区"
+    type: "template"
+    template_path: "assets/matching/battle_stage_crableg_capital.png"
+    threshold: 0.9
+    description: "タカアシ経済特区を検出する"
+
+  battle_stage_shipshape_cargo_co:
+    name: "オヒョウ海運"
+    type: "template"
+    template_path: "assets/matching/battle_stage_shipshape_cargo_co.png"
+    threshold: 0.9
+    description: "オヒョウ海運を検出する"
+
+  battle_stage_robo_rom_en:
+    name: "バイガイ亭"
+    type: "template"
+    template_path: "assets/matching/battle_stage_robo_rom_en.png"
+    threshold: 0.9
+    description: "バイガイ亭を検出する"
+
+  battle_stage_bluefin_depot:
+    name: "ネギトロ炭鉱"
+    type: "template"
+    template_path: "assets/matching/battle_stage_bluefin_depot.png"
+    threshold: 0.9
+    description: "ネギトロ炭鉱を検出する"
+
+  battle_stage_marlin_airport:
+    name: "カジキ空港"
+    type: "template"
+    template_path: "assets/matching/battle_stage_marlin_airport.png"
+    threshold: 0.9
+    description: "カジキ空港を検出する"
+
+  battle_stage_lemuria_hub:
+    name: "リュウグウターミナル"
+    type: "template"
+    template_path: "assets/matching/battle_stage_lemuria_hub.png"
+    threshold: 0.9
+    description: "リュウグウターミナルを検出する"
+
+  battle_stage_urchin_underpass:
+    name: "デカライン高架下"
+    type: "template"
+    template_path: "assets/matching/battle_stage_urchin_underpass.png"
+    threshold: 0.9
+    description: "デカライン高架下を検出する"

@@ -1,6 +1,7 @@
 """アプリ全体の設定管理モジュール。"""
 
 from __future__ import annotations
+from splat_replay.domain.models import MatchExpression
 
 from pathlib import Path
 from typing import Dict, List, Optional, Literal, Tuple
@@ -51,6 +52,7 @@ class OBSSettings(BaseModel):
 class MatcherConfig(BaseModel):
     """画像マッチング1件分の設定。"""
 
+    name: Optional[str] = None
     type: Literal["template", "hsv", "rgb", "hash", "uniform", "brightness"]
     threshold: float = 0.8
     template_path: Optional[str] = None
@@ -65,10 +67,6 @@ class MatcherConfig(BaseModel):
     roi: Optional[Dict[str, int]] = None
 
 
-
-from splat_replay.domain.models import MatchExpression
-
-
 class CompositeMatcherConfig(BaseModel):
     """複合条件を表す設定。"""
 
@@ -80,6 +78,7 @@ class ImageMatchingSettings(BaseModel):
 
     matchers: Dict[str, MatcherConfig] = {}
     composites: Dict[str, CompositeMatcherConfig] = {}
+    matcher_groups: Dict[str, List[str]] = {}
 
     @classmethod
     def load_from_yaml(cls, path: Path) -> "ImageMatchingSettings":
@@ -98,9 +97,14 @@ class ImageMatchingSettings(BaseModel):
             expr = MatchExpression.parse_obj(cfg)
             composites[name] = CompositeMatcherConfig(rule=expr)
 
+        groups: Dict[str, List[str]] = {}
+        for name, keys in raw.get("matcher_groups", {}).items():
+            groups[name] = list(keys)
+
         return cls(
             matchers=matchers,
             composites=composites,
+            matcher_groups=groups,
         )
 
     class Config:
