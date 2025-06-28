@@ -14,10 +14,6 @@ from splat_replay.shared.logger import (
     buffer_console_logs,
 )
 
-from splat_replay.domain.services.state_machine import (
-    Event,
-    StateMachine,
-)
 
 from splat_replay.application import (
     ProcessPostGameUseCase,

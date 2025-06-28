@@ -5,6 +5,8 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Protocol
 
+from splat_replay.domain.models import GameMode
+
 import numpy as np
 
 from splat_replay.domain.models.match import Match
@@ -43,6 +45,12 @@ class PowerPort(Protocol):
 class FrameAnalyzerPort(Protocol):
     """フレーム解析処理を提供するポート。"""
 
+    def set_mode(self, mode: "GameMode") -> None:
+        """解析モードを設定する。"""
+
+    def reset_mode(self) -> None:
+        """解析モードを未確定に戻す。"""
+
     def detect_match_select(self, frame: np.ndarray) -> bool: ...
 
     def extract_rate(self, frame: np.ndarray) -> int | None: ...
@@ -63,7 +71,9 @@ class FrameAnalyzerPort(Protocol):
 
     def detect_battle_finish_end(self, frame: np.ndarray) -> bool: ...
 
-    def detect_battle_judgement(self, frame: np.ndarray) -> str | None: ...
+    def detect_battle_judgement(self, frame: np.ndarray) -> bool: ...
+
+    def extract_battle_judgement(self, frame: np.ndarray) -> str | None: ...
 
     def detect_battle_result(self, frame: np.ndarray) -> bool: ...
 

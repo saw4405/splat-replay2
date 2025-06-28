@@ -66,6 +66,7 @@ class DaemonUseCase:
         self.result = None
         self._matching = False
         self._battle_started_at = 0.0
+        self.analyzer.reset_mode()
 
     def _process_pending(self) -> None:
         """溜まっている録画を編集しアップロードする。"""
@@ -129,7 +130,10 @@ class DaemonUseCase:
     def _handle_recording(self, frame) -> None:
         """RECORDING 状態でのフレーム処理。"""
         now = time.time()
-        if now - self._battle_started_at <= 60 and self.analyzer.detect_battle_abort(frame):
+        if (
+            now - self._battle_started_at <= 60
+            and self.analyzer.detect_battle_abort(frame)
+        ):
             self.logger.info("バトル中断を検出")
             self.recorder.stop()
             self.transcriber.stop_capture()
@@ -144,7 +148,9 @@ class DaemonUseCase:
             self.sm.handle(Event.POSTGAME_DETECTED)
             self._reset()
             return
-        if self.analyzer.detect_loading(frame) or self.analyzer.detect_battle_finish(frame):
+        if self.analyzer.detect_loading(
+            frame
+        ) or self.analyzer.detect_battle_finish(frame):
             self.recorder.pause()
             self.transcriber.stop_capture()
             self.sm.handle(Event.LOADING_DETECTED)
@@ -162,7 +168,9 @@ class DaemonUseCase:
 
     def _handle_paused(self, frame) -> None:
         """PAUSED 状態でのフレーム処理。"""
-        if self.analyzer.detect_loading_end(frame) or self.analyzer.detect_battle_finish_end(frame):
+        if self.analyzer.detect_loading_end(
+            frame
+        ) or self.analyzer.detect_battle_finish_end(frame):
             self.recorder.resume()
             self.transcriber.start_capture()
             self.sm.handle(Event.LOADING_FINISHED)
@@ -199,8 +207,11 @@ class DaemonUseCase:
                         time.sleep(1)
                         continue
 
-                    off_count, last_check, detected = self._update_power_off_count(
-                        frame, off_count, last_check)
+                    off_count, last_check, detected = (
+                        self._update_power_off_count(
+                            frame, off_count, last_check
+                        )
+                    )
                     if detected:
                         self._handle_power_off()
                         break

@@ -30,7 +30,6 @@ from splat_replay.infrastructure import (
     SystemPower,
     YouTubeClient,
     FrameAnalyzer,
-    AnalyzerPlugin,
     BattleFrameAnalyzer,
     SalmonFrameAnalyzer,
 )
@@ -102,10 +101,8 @@ def configure_container() -> punq.Container:
     container.register(VideoEditorPort, VideoEditor)
     container.register(UploadPort, YouTubeClient)
     container.register(PowerPort, SystemPower)
-    if settings.game_mode == "salmon":
-        container.register(AnalyzerPlugin, SalmonFrameAnalyzer)
-    else:
-        container.register(AnalyzerPlugin, BattleFrameAnalyzer)
+    container.register(BattleFrameAnalyzer, BattleFrameAnalyzer)
+    container.register(SalmonFrameAnalyzer, SalmonFrameAnalyzer)
     container.register(FrameAnalyzerPort, FrameAnalyzer)
     container.register(SpeechTranscriberPort, SpeechTranscriber)
     container.register(MetadataExtractorPort, MetadataExtractor)

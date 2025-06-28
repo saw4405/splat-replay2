@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+# ruff: noqa: E402
+
 import sys
 import types
 from pathlib import Path
@@ -9,8 +11,8 @@ sys.path.insert(0, str(BASE / "src"))  # noqa: E402
 
 from splat_replay.infrastructure.adapters.capture_device_checker import (
     CaptureDeviceChecker,
-)
-from splat_replay.shared.config import OBSSettings
+)  # noqa: E402
+from splat_replay.shared.config import OBSSettings  # noqa: E402
 
 
 def test_is_connected_uses_settings(monkeypatch):

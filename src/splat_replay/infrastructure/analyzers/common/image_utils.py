@@ -89,7 +89,7 @@ class BaseMatcher(ABC):
         if self._roi is None:
             return image
         x, y, w, h = self._roi
-        return image[y: y + h, x: x + w]
+        return image[y : y + h, x : x + w]
 
     @abstractmethod
     def match(self, image: np.ndarray) -> bool:

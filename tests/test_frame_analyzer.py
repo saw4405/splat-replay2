@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+# ruff: noqa: E402
+
 import sys
 from pathlib import Path
 from typing import Callable, Optional
@@ -12,7 +14,13 @@ BASE = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(BASE / "src"))  # noqa: E402
 
 from splat_replay.infrastructure.analyzers.frame_analyzer import FrameAnalyzer  # noqa: E402
-from splat_replay.infrastructure.analyzers.splatoon_battle_analyzer import BattleFrameAnalyzer  # noqa: E402
+from splat_replay.infrastructure.analyzers.splatoon_battle_analyzer import (
+    BattleFrameAnalyzer,
+)  # noqa: E402
+from splat_replay.infrastructure.analyzers.splatoon_salmon_analyzer import (
+    SalmonFrameAnalyzer,
+)  # noqa: E402
+from splat_replay.domain.models import GameMode  # noqa: E402
 from splat_replay.shared.config import ImageMatchingSettings  # noqa: E402
 import cv2  # noqa: E402
 
@@ -30,8 +38,11 @@ TEMPLATE_DIR = BASE_DIR / "fixtures" / "templates"
 @pytest.fixture()
 def analyzer() -> FrameAnalyzer:
     """レジストリを利用する ``FrameAnalyzer`` を返す。"""
-    plugin = BattleFrameAnalyzer(MATCHER_SETTINGS)
-    return FrameAnalyzer(plugin, MATCHER_SETTINGS)
+    battle = BattleFrameAnalyzer(MATCHER_SETTINGS)
+    salmon = SalmonFrameAnalyzer(MATCHER_SETTINGS)
+    analyzer = FrameAnalyzer(battle, salmon, MATCHER_SETTINGS)
+    analyzer.set_mode(GameMode.BATTLE)
+    return analyzer
 
 
 @pytest.fixture()
@@ -42,8 +53,11 @@ def load_image() -> Callable[[str], np.ndarray]:
         image_path = TEMPLATE_DIR / filename
         image = cv2.imread(str(image_path))
         if image is None:
-            pytest.skip(f"画像ファイルが存在しないか読み込めません: {image_path}")
+            pytest.skip(
+                f"画像ファイルが存在しないか読み込めません: {image_path}"
+            )
         return image
+
     return _load
 
 
@@ -55,7 +69,10 @@ def load_image() -> Callable[[str], np.ndarray]:
     ],
 )
 def test_detect_power_off(
-    analyzer: FrameAnalyzer, load_image: Callable[[str], np.ndarray], filename: str, expected: bool
+    analyzer: FrameAnalyzer,
+    load_image: Callable[[str], np.ndarray],
+    filename: str,
+    expected: bool,
 ) -> None:
     """電源OFF 判定の結果を確認する。"""
     frame = load_image(filename)
@@ -71,7 +88,10 @@ def test_detect_power_off(
     ],
 )
 def test_detect_matching_start(
-    analyzer: FrameAnalyzer, load_image: Callable[[str], np.ndarray], filename: str, expected: bool
+    analyzer: FrameAnalyzer,
+    load_image: Callable[[str], np.ndarray],
+    filename: str,
+    expected: bool,
 ) -> None:
     """マッチング開始 判定の結果を確認する。"""
     frame = load_image(filename)
@@ -87,7 +107,10 @@ def test_detect_matching_start(
     ],
 )
 def test_detect_schedule_change(
-    analyzer: FrameAnalyzer, load_image: Callable[[str], np.ndarray], filename: str, expected: bool
+    analyzer: FrameAnalyzer,
+    load_image: Callable[[str], np.ndarray],
+    filename: str,
+    expected: bool,
 ) -> None:
     """スケジュール変更 判定の結果を確認する。"""
     frame = load_image(filename)
@@ -101,11 +124,14 @@ def test_detect_schedule_change(
         ("battle_start_1.png", True),
         ("battle_start_2.png", True),
         ("battle_start_3.png", False),
-        ("matching_1.png", False)
+        ("matching_1.png", False),
     ],
 )
 def test_detect_battle_start(
-    analyzer: FrameAnalyzer, load_image: Callable[[str], np.ndarray], filename: str, expected: bool
+    analyzer: FrameAnalyzer,
+    load_image: Callable[[str], np.ndarray],
+    filename: str,
+    expected: bool,
 ) -> None:
     """バトル開始 判定の結果を確認する。"""
     frame = load_image(filename)
@@ -115,13 +141,13 @@ def test_detect_battle_start(
 
 @pytest.mark.parametrize(
     "filename, expected",
-    [
-        ("battle_abort_1.png", True),
-        ("battle_result_1.png", False)
-    ],
+    [("battle_abort_1.png", True), ("battle_result_1.png", False)],
 )
 def test_detect_battle_abort(
-    analyzer: FrameAnalyzer, load_image: Callable[[str], np.ndarray], filename: str, expected: bool
+    analyzer: FrameAnalyzer,
+    load_image: Callable[[str], np.ndarray],
+    filename: str,
+    expected: bool,
 ) -> None:
     """バトル中断 判定の結果を確認する。"""
     frame = load_image(filename)
@@ -143,11 +169,14 @@ def test_detect_battle_abort(
         ("battle_finish_9.png", True),
         ("battle_finish_10.png", True),
         ("battle_finish_11.png", False),
-        ("loading_1.png", False)
+        ("loading_1.png", False),
     ],
 )
 def test_detect_battle_finish(
-    analyzer: FrameAnalyzer, load_image: Callable[[str], np.ndarray], filename: str, expected: bool
+    analyzer: FrameAnalyzer,
+    load_image: Callable[[str], np.ndarray],
+    filename: str,
+    expected: bool,
 ) -> None:
     """FINISH 表示判定の結果を確認する。"""
     frame = load_image(filename)
@@ -165,7 +194,10 @@ def test_detect_battle_finish(
     ],
 )
 def test_detect_battle_finish_end(
-    analyzer: FrameAnalyzer, load_image: Callable[[str], np.ndarray], filename: str, expected: bool
+    analyzer: FrameAnalyzer,
+    load_image: Callable[[str], np.ndarray],
+    filename: str,
+    expected: bool,
 ) -> None:
     """FINISH 表示判定の結果を確認する。"""
     frame = load_image(filename)
@@ -183,7 +215,10 @@ def test_detect_battle_finish_end(
     ],
 )
 def test_extract_battle_judgement(
-    analyzer: FrameAnalyzer, load_image: Callable[[str], np.ndarray], filename: str, expected: Optional[str]
+    analyzer: FrameAnalyzer,
+    load_image: Callable[[str], np.ndarray],
+    filename: str,
+    expected: Optional[str],
 ) -> None:
     """FINISH 表示判定の結果を確認する。"""
     frame = load_image(filename)
@@ -193,13 +228,13 @@ def test_extract_battle_judgement(
 
 @pytest.mark.parametrize(
     "filename, expected",
-    [
-        ("loading_1.png", True),
-        ("power_off.png", False)
-    ],
+    [("loading_1.png", True), ("power_off.png", False)],
 )
 def test_detect_loading(
-    analyzer: FrameAnalyzer, load_image: Callable[[str], np.ndarray], filename: str, expected: bool
+    analyzer: FrameAnalyzer,
+    load_image: Callable[[str], np.ndarray],
+    filename: str,
+    expected: bool,
 ) -> None:
     """ローディング判定の結果を確認する。"""
     frame = load_image(filename)
@@ -217,19 +252,12 @@ def test_detect_loading(
     ],
 )
 def test_detect_battle_result(
-    analyzer: FrameAnalyzer, load_image: Callable[[str], np.ndarray], filename: str, expected: bool
+    analyzer: FrameAnalyzer,
+    load_image: Callable[[str], np.ndarray],
+    filename: str,
+    expected: bool,
 ) -> None:
     """バトル終了画面判定の結果を確認する。"""
     frame = load_image(filename)
     result = analyzer.detect_battle_result(frame)
     assert result == expected
-
-
-plugin = BattleFrameAnalyzer(MATCHER_SETTINGS)
-a = FrameAnalyzer(plugin, MATCHER_SETTINGS)
-
-
-image_path = TEMPLATE_DIR / "battle_judgement_2.png"
-image = cv2.imread(str(image_path))
-result = a.extract_battle_judgement(image)
-print(f"Battle finish detected: {result}")
