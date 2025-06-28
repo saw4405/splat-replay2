@@ -22,4 +22,3 @@ def test_brightness_matcher_min_max(tmp_path: Path) -> None:
     assert m.match(img)
     m2 = BrightnessMatcher(max_value=100)
     assert not m2.match(img)
-

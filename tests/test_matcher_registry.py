@@ -3,15 +3,17 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 from typing import Callable
-import pytest
+
 import cv2
+import numpy as np
+import pytest
 
 BASE = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(BASE / "src"))  # noqa: E402
 
-from splat_replay.infrastructure.analyzers.common.image_utils import (
+from splat_replay.infrastructure.analyzers.common.image_utils import (  # noqa: E402
     MatcherRegistry,
-)  # noqa: E402
+)
 from splat_replay.shared.config import ImageMatchingSettings  # noqa: E402
 
 BASE_DIR = Path(__file__).resolve().parent

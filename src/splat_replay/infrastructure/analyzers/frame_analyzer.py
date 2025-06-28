@@ -10,6 +10,7 @@ from splat_replay.infrastructure.analyzers.common.image_utils import (
 
 from splat_replay.shared.config import ImageMatchingSettings
 from .plugin import AnalyzerPlugin
+from splat_replay.domain.models import GameMode
 
 from splat_replay.shared.logger import get_logger
 
@@ -20,49 +21,90 @@ class FrameAnalyzer:
     """OpenCV を用いた画面解析処理を提供する。"""
 
     def __init__(
-        self, plugin: AnalyzerPlugin, settings: ImageMatchingSettings
+        self,
+        battle_plugin: AnalyzerPlugin,
+        salmon_plugin: AnalyzerPlugin,
+        settings: ImageMatchingSettings,
     ) -> None:
-        """プラグインと設定を受け取って初期化する。"""
-        self.plugin = plugin
+        """2 種類のプラグインと設定を受け取って初期化する。"""
+        self.plugins = {
+            GameMode.BATTLE: battle_plugin,
+            GameMode.SALMON: salmon_plugin,
+        }
+        self.mode = GameMode.UNKNOWN
         self.registry = MatcherRegistry(settings)
+
+    def set_mode(self, mode: GameMode) -> None:
+        """解析対象モードを外部から設定する。"""
+        self.mode = mode
+
+    def reset_mode(self) -> None:
+        """モードを未確定状態へ戻す。"""
+        self.mode = GameMode.UNKNOWN
 
     def detect_power_off(self, frame: np.ndarray) -> bool:
         """Switch の電源 OFF を検出する。"""
         return self.registry.match("power_off", frame)
 
     def detect_match_select(self, frame: np.ndarray) -> bool:
-        return getattr(self.plugin, "detect_match_select", lambda f: False)(
-            frame
-        )
+        """マッチ選択画面かを判定しモードを設定する。"""
+        if self.plugins[GameMode.BATTLE].detect_match_select(frame):
+            self.mode = GameMode.BATTLE
+            return True
+        if self.plugins[GameMode.SALMON].detect_match_select(frame):
+            self.mode = GameMode.SALMON
+            return True
+        return False
 
     def extract_rate(self, frame: np.ndarray) -> int | None:
-        return getattr(self.plugin, "extract_rate", lambda f: None)(frame)
+        plugin = self.plugins.get(self.mode)
+        if plugin is None:
+            return None
+        return getattr(plugin, "extract_rate", lambda f: None)(frame)
 
     def detect_matching_start(self, frame: np.ndarray) -> bool:
+        """マッチング開始画面を検出する。"""
         return self.registry.match("matching_start", frame)
 
     def detect_schedule_change(self, frame: np.ndarray) -> bool:
         return self.registry.match("schedule_change", frame)
 
     def detect_battle_start(self, frame: np.ndarray) -> bool:
-        """バトル開始を検出する。"""
-        return self.plugin.detect_battle_start(frame)
+        plugin = self.plugins.get(self.mode)
+        if plugin is None:
+            return False
+        return plugin.detect_battle_start(frame)
 
     def detect_battle_abort(self, frame: np.ndarray) -> bool:
-        return self.plugin.detect_battle_abort(frame)
+        plugin = self.plugins.get(self.mode)
+        if plugin is None:
+            return False
+        return plugin.detect_battle_abort(frame)
 
     def detect_battle_finish(self, frame: np.ndarray) -> bool:
-        return self.plugin.detect_battle_finish(frame)
+        plugin = self.plugins.get(self.mode)
+        if plugin is None:
+            return False
+        return plugin.detect_battle_finish(frame)
 
     def detect_battle_finish_end(self, frame: np.ndarray) -> bool:
-        return self.plugin.detect_battle_finish_end(frame)
+        plugin = self.plugins.get(self.mode)
+        if plugin is None:
+            return False
+        return plugin.detect_battle_finish_end(frame)
 
     def detect_battle_judgement(self, frame: np.ndarray) -> bool:
-        return self.plugin.detect_battle_judgement(frame)
+        plugin = self.plugins.get(self.mode)
+        if plugin is None:
+            return False
+        return plugin.detect_battle_judgement(frame)
 
     def extract_battle_judgement(self, frame: np.ndarray) -> str | None:
         """バトルの結果を抽出する。"""
-        return self.plugin.extract_battle_judgement(frame)
+        plugin = self.plugins.get(self.mode)
+        if plugin is None:
+            return None
+        return plugin.extract_battle_judgement(frame)
 
     def detect_loading(self, frame: np.ndarray) -> bool:
         """ローディング画面かどうか判定する。"""
@@ -74,4 +116,7 @@ class FrameAnalyzer:
 
     def detect_battle_result(self, frame: np.ndarray) -> bool:
         """結果画面を検出する。"""
-        return self.plugin.detect_battle_result(frame)
+        plugin = self.plugins.get(self.mode)
+        if plugin is None:
+            return False
+        return plugin.detect_battle_result(frame)

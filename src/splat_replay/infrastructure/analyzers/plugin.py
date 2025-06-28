@@ -1,6 +1,6 @@
-from __future__ import annotations
-
 """解析プラグイン共通インターフェース。"""
+
+from __future__ import annotations
 
 from typing import Protocol
 import numpy as np

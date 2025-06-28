@@ -8,6 +8,7 @@ __all__ = [
     "YouTubeUploadConfig",
     "VideoEditConfig",
     "MatchExpression",
+    "GameMode",
 ]
 
 from .match import Match
@@ -17,3 +18,4 @@ from .video_clip import VideoClip
 from .upload_config import YouTubeUploadConfig
 from .edit_config import VideoEditConfig
 from .match_expression import MatchExpression
+from .game_mode import GameMode

@@ -8,7 +8,6 @@ __all__ = [
     "SystemPower",
     "CaptureDeviceChecker",
     "FrameAnalyzer",
-    "AnalyzerPlugin",
     "BattleFrameAnalyzer",
     "SalmonFrameAnalyzer",
     "SplatoonSalmonAnalyzer",
@@ -21,9 +20,9 @@ from .adapters.groq_client import GroqClient
 from .adapters.youtube_client import YouTubeClient
 from .adapters.system_power import SystemPower
 from .adapters.capture_device_checker import CaptureDeviceChecker
-from .analyzers.plugin import AnalyzerPlugin
 from .analyzers.frame_analyzer import FrameAnalyzer
 from .analyzers.splatoon_battle_analyzer import BattleFrameAnalyzer
 from .analyzers.splatoon_salmon_analyzer import SalmonFrameAnalyzer
-SplatoonSalmonAnalyzer = SalmonFrameAnalyzer
 from .repositories.file_metadata_repo import FileMetadataRepository
+
+SplatoonSalmonAnalyzer = SalmonFrameAnalyzer

@@ -29,7 +29,10 @@ class MatchExpression(BaseModel):
     def _convert_list(cls, v: object) -> object:
         """リスト要素を `MatchExpression` に変換する。"""
         if isinstance(v, list):
-            return [MatchExpression.parse_obj(i) if isinstance(i, dict) else i for i in v]
+            return [
+                MatchExpression.parse_obj(i) if isinstance(i, dict) else i
+                for i in v
+            ]
         return v
 
     def evaluate(self, fn: Callable[[str], bool]) -> bool:

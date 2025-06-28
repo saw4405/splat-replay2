@@ -71,6 +71,8 @@ class BattleFrameAnalyzer(AnalyzerPlugin):
         """バトルステージを取得する。"""
         return self.registry.match_first_group("battle_stages", frame)
 
-    def extract_battle_kill_record(self, frame: np.ndarray) -> Tuple[int, int, int] | None:
+    def extract_battle_kill_record(
+        self, frame: np.ndarray
+    ) -> Tuple[int, int, int] | None:
         """キルレコードを取得する。"""
         return (0, 0, 0)
