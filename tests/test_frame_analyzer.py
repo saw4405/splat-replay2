@@ -41,7 +41,6 @@ def analyzer() -> FrameAnalyzer:
     battle = BattleFrameAnalyzer(MATCHER_SETTINGS)
     salmon = SalmonFrameAnalyzer(MATCHER_SETTINGS)
     analyzer = FrameAnalyzer(battle, salmon, MATCHER_SETTINGS)
-    analyzer.set_mode(GameMode.BATTLE)
     return analyzer
 
 
@@ -77,6 +76,27 @@ def test_detect_power_off(
     """電源OFF 判定の結果を確認する。"""
     frame = load_image(filename)
     result = analyzer.detect_power_off(frame)
+    assert result == expected
+
+
+@pytest.mark.parametrize(
+    "filename, expected",
+    [
+        ("match_select_anarchy_battle.png", GameMode.BATTLE),
+        ("match_select_x_battle.png", GameMode.BATTLE),
+        ("match_select_splatfest_battle.png", GameMode.BATTLE),
+    ],
+)
+def test_detect_match_select(
+    analyzer: FrameAnalyzer,
+    load_image: Callable[[str], np.ndarray],
+    filename: str,
+    expected: GameMode,
+) -> None:
+    """マッチング開始 判定の結果を確認する。"""
+    frame = load_image(filename)
+    analyzer.detect_match_select(frame)
+    result = analyzer.mode
     assert result == expected
 
 
@@ -135,13 +155,17 @@ def test_detect_battle_start(
 ) -> None:
     """バトル開始 判定の結果を確認する。"""
     frame = load_image(filename)
+    analyzer.set_mode(GameMode.BATTLE)
     result = analyzer.detect_battle_start(frame)
     assert result == expected
 
 
 @pytest.mark.parametrize(
     "filename, expected",
-    [("battle_abort_1.png", True), ("battle_result_1.png", False)],
+    [
+        ("battle_abort_1.png", True),
+        ("battle_result_1.png", False)
+    ],
 )
 def test_detect_battle_abort(
     analyzer: FrameAnalyzer,
@@ -151,6 +175,7 @@ def test_detect_battle_abort(
 ) -> None:
     """バトル中断 判定の結果を確認する。"""
     frame = load_image(filename)
+    analyzer.set_mode(GameMode.BATTLE)
     result = analyzer.detect_battle_abort(frame)
     assert result == expected
 
@@ -180,6 +205,7 @@ def test_detect_battle_finish(
 ) -> None:
     """FINISH 表示判定の結果を確認する。"""
     frame = load_image(filename)
+    analyzer.set_mode(GameMode.BATTLE)
     result = analyzer.detect_battle_finish(frame)
     assert result == expected
 
@@ -201,7 +227,30 @@ def test_detect_battle_finish_end(
 ) -> None:
     """FINISH 表示判定の結果を確認する。"""
     frame = load_image(filename)
+    analyzer.set_mode(GameMode.BATTLE)
     result = analyzer.detect_battle_finish_end(frame)
+    assert result == expected
+
+
+@pytest.mark.parametrize(
+    "filename, expected",
+    [
+        ("battle_judgement_1.png", True),
+        ("battle_judgement_2.png", True),
+        ("battle_judgement_3.png", False),
+        ("battle_judgement_4.png", False),
+    ],
+)
+def test_detect_battle_judgement(
+    analyzer: FrameAnalyzer,
+    load_image: Callable[[str], np.ndarray],
+    filename: str,
+    expected: bool,
+) -> None:
+    """バトル判定の結果を確認する。"""
+    frame = load_image(filename)
+    analyzer.set_mode(GameMode.BATTLE)
+    result = analyzer.detect_battle_judgement(frame)
     assert result == expected
 
 
@@ -222,6 +271,7 @@ def test_extract_battle_judgement(
 ) -> None:
     """FINISH 表示判定の結果を確認する。"""
     frame = load_image(filename)
+    analyzer.set_mode(GameMode.BATTLE)
     result = analyzer.extract_battle_judgement(frame)
     assert result == expected
 
@@ -245,6 +295,26 @@ def test_detect_loading(
 @pytest.mark.parametrize(
     "filename, expected",
     [
+        ("loading_1.png", False),
+        ("power_off.png", True),
+        ("battle_result_1.png", True)
+    ],
+)
+def test_detect_loading_end(
+    analyzer: FrameAnalyzer,
+    load_image: Callable[[str], np.ndarray],
+    filename: str,
+    expected: bool,
+) -> None:
+    """ローディング判定の結果を確認する。"""
+    frame = load_image(filename)
+    result = analyzer.detect_loading_end(frame)
+    assert result == expected
+
+
+@pytest.mark.parametrize(
+    "filename, expected",
+    [
         ("battle_result_1.png", True),
         # ("battle_result_2.png", True), # 未対応
         ("battle_result_3.png", False),
@@ -259,5 +329,19 @@ def test_detect_battle_result(
 ) -> None:
     """バトル終了画面判定の結果を確認する。"""
     frame = load_image(filename)
+    analyzer.set_mode(GameMode.BATTLE)
     result = analyzer.detect_battle_result(frame)
+    assert result == expected
+
+
+if __name__ == "__main__":
+    battle = BattleFrameAnalyzer(MATCHER_SETTINGS)
+    salmon = SalmonFrameAnalyzer(MATCHER_SETTINGS)
+    analyzer_ = FrameAnalyzer(battle, salmon, MATCHER_SETTINGS)
+    filename = "match_select_splatfest_battle.png"
+    expected = GameMode.BATTLE
+    image_path = TEMPLATE_DIR / filename
+    frame = cv2.imread(str(image_path))
+    analyzer_.detect_match_select(frame)
+    result = analyzer_.mode
     assert result == expected

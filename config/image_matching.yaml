@@ -6,6 +6,11 @@ composite_detection:
     or:
       - matcher: black_screen
       - matcher: power_off_template
+        
+  match_select:
+    or:
+      - matcher: match_select_normal
+      - matcher: match_select_splatfest
 
   matching_start:
     and:
@@ -59,6 +64,13 @@ composite_detection:
 
 # マッチャーグループ定義      
 matcher_groups:
+  battle_select:
+    - match_select_regular
+    - match_select_anarchy_battle
+    - match_select_x_battle
+    - match_select_challenge
+    - match_select_splatfest_battle
+
   battle_judgements:
     - battle_judgement_lose
     - battle_judgement_win
@@ -137,7 +149,7 @@ simple_matchers:
     threshold: 0.9
     description: "電源OFFをテンプレートで検出する"
 
-  select_match:
+  match_select_normal:
     type: "uniform"
     roi:
       x: 280
@@ -145,21 +157,77 @@ simple_matchers:
       width: 20
       height: 20
     hue_threshold: 10.0
-    description: "マッチ選択画面を検出する"
+    description: "通常時のマッチ選択画面を検出する"
 
-  select_x_match_hsv:
+  match_select_splatfest:
+    type: "uniform"
+    roi:
+      x: 280
+      y: 450
+      width: 20
+      height: 20
+    hue_threshold: 10.0
+    description: "フェス時のマッチ選択画面を検出する"
+
+  match_select_regular:
+    name: "レギュラーマッチ"
     type: "hsv"
+    roi:
+      x: 280
+      y: 390
+      width: 20
+      height: 20
+    lower_bound: [0, 230, 230]
+    upper_bound: [2, 255, 255]
+    threshold: 0.9
+    description: "マッチ選択画面でレギュラーマッチ選択を検出する"
+
+  match_select_anarchy_battle:
+    name: "バンカラマッチ"
+    type: "hsv"
+    roi:
+      x: 280
+      y: 390
+      width: 20
+      height: 20
+    lower_bound: [13, 230, 230]
+    upper_bound: [15, 255, 255]
+    threshold: 0.9
+    description: "マッチ選択画面でバンカラマッチ選択を検出する"
+
+  match_select_x_battle:
+    name: "Xマッチ"
+    type: "hsv"
+    roi:
+      x: 280
+      y: 390
+      width: 20
+      height: 20
     lower_bound: [80, 230, 230]
     upper_bound: [90, 255, 255]
     threshold: 0.9
     description: "マッチ選択画面でXマッチ選択を検出する"
 
-  select_bankara_match_hsv:
+  match_select_challenge:
+    name: "イベントマッチ"
     type: "hsv"
-    lower_bound: [13, 230, 230]
-    upper_bound: [15, 255, 255]
+    roi:
+      x: 280
+      y: 390
+      width: 20
+      height: 20
+    lower_bound: [100, 230, 230]
+    upper_bound: [110, 255, 255]
     threshold: 0.9
-    description: "マッチ選択画面でバンカラマッチ選択を検出する"
+    description: "マッチ選択画面でイベントマッチ選択を検出する"
+
+  match_select_splatfest_battle:
+    name: "フェスマッチ"
+    type: "template"
+    template_path: "assets/matching/match_select_splatfest_battle.png"
+    mask_path: "assets/matching/match_select_splatfest_battle_mask.png"
+    threshold: 0.85
+    description: "マッチ選択画面でフェスマッチ選択を検出する"
 
   matching_start_hsv:
     type: "hsv"

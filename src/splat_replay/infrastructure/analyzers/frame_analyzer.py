@@ -35,8 +35,11 @@ class FrameAnalyzer:
         self.registry = MatcherRegistry(settings)
 
     def set_mode(self, mode: GameMode) -> None:
-        """解析対象モードを外部から設定する。"""
+        """解析モードを設定する。"""
+        if mode not in self.plugins:
+            raise ValueError(f"Unsupported game mode: {mode}")
         self.mode = mode
+        logger.debug(f"Game mode set to: {self.mode}")
 
     def reset_mode(self) -> None:
         """モードを未確定状態へ戻す。"""
@@ -48,12 +51,15 @@ class FrameAnalyzer:
 
     def detect_match_select(self, frame: np.ndarray) -> bool:
         """マッチ選択画面かを判定しモードを設定する。"""
-        if self.plugins[GameMode.BATTLE].detect_match_select(frame):
-            self.mode = GameMode.BATTLE
-            return True
-        if self.plugins[GameMode.SALMON].detect_match_select(frame):
-            self.mode = GameMode.SALMON
-            return True
+        if self.registry.match("match_select", frame):
+            if self.plugins[GameMode.BATTLE].detect_match_select(frame):
+                self.mode = GameMode.BATTLE
+                return True
+
+            if self.plugins[GameMode.SALMON].detect_match_select(frame):
+                self.mode = GameMode.SALMON
+                return True
+
         return False
 
     def extract_rate(self, frame: np.ndarray) -> int | None:
@@ -120,3 +126,10 @@ class FrameAnalyzer:
         if plugin is None:
             return False
         return plugin.detect_battle_result(frame)
+
+    def extract_battle_result(self, frame: np.ndarray) -> str | None:
+        """バトルの結果を抽出する。"""
+        plugin = self.plugins.get(self.mode)
+        if plugin is None:
+            return None
+        return plugin.extract_battle_result(frame)

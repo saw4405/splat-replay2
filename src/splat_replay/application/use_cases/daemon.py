@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import time
+import datetime
 from pathlib import Path
 from typing import List
 
@@ -56,17 +57,46 @@ class DaemonUseCase:
         self.pending: List[Path] = []
         self.logger = get_logger()
         self.rate: int | None = None
-        self.result: str | None = None
-        self._matching = False
+        self.finish: bool = False
+        self.judgement: str | None = None
         self._battle_started_at = 0.0
+        self._matching_started_at: datetime.datetime | None = None
 
-    def _reset(self) -> None:
-        """保持している一時情報をリセットする。"""
+    def _start(self) -> None:
+        """録画と音声キャプチャを開始する。"""
+        self.recorder.start()
+        self.transcriber.start_capture()
+        self._battle_started_at = time.time()
+
+    def _stop(self, save: bool = True) -> None:
+        """録画と音声キャプチャを停止する。"""
+        video = self.recorder.stop()
+        audio = self.transcriber.stop_capture()
+        _ = self.transcriber.transcribe(audio)
+
+        if save:
+            self.pending.append(video)
+
         self.rate = None
-        self.result = None
-        self._matching = False
+        self.finish = False
+        self.judgement = None
         self._battle_started_at = 0.0
+        self._matching_started_at = None
         self.analyzer.reset_mode()
+
+    def _cancel(self) -> None:
+        """録画と音声キャプチャをキャンセルする。"""
+        self._stop(save=False)
+
+    def _pause(self) -> None:
+        """録画と音声キャプチャを一時停止する。"""
+        self.recorder.pause()
+        self.transcriber.stop_capture()
+
+    def _resume(self) -> None:
+        """録画と音声キャプチャを再開する。"""
+        self.recorder.resume()
+        self.transcriber.start_capture()
 
     def _process_pending(self) -> None:
         """溜まっている録画を編集しアップロードする。"""
@@ -99,93 +129,93 @@ class DaemonUseCase:
     def _handle_power_off(self) -> None:
         """電源 OFF が確定した際の処理。"""
         if self.sm.state in {State.RECORDING, State.PAUSED}:
-            video = self.recorder.stop()
-            audio = self.transcriber.stop_capture()
-            _ = self.transcriber.transcribe(audio)
-            self.pending.append(video)
+            self._stop()
             self.sm.handle(Event.POSTGAME_DETECTED)
         self._process_pending()
 
     def _handle_standby(self, frame) -> None:
         """STANDBY 状態でのフレーム処理。"""
-        if self.analyzer.detect_match_select(frame):
-            rate = self.analyzer.extract_rate(frame)
-            if rate is not None:
-                self.rate = rate
-                self.logger.info("レート取得", rate=rate)
-        if self.analyzer.detect_schedule_change(frame):
-            self.logger.info("スケジュール変更を検出、情報をリセット")
-            self._reset()
-            return
-        if not self._matching and self.analyzer.detect_matching_start(frame):
-            self._matching = True
-            return
-        if self._matching and self.analyzer.detect_battle_start(frame):
-            self.recorder.start()
-            self.transcriber.start_capture()
-            self._battle_started_at = time.time()
-            self.sm.handle(Event.BATTLE_STARTED)
-            self._matching = False
+        if self._matching_started_at is None:
+            if self.analyzer.detect_match_select(frame):
+                rate = self.analyzer.extract_rate(frame)
+                if rate is not None and rate != self.rate:
+                    self.rate = rate
+                    self.logger.info("レート取得", rate=rate)
+                return
+
+            if self.analyzer.detect_matching_start(frame):
+                self.logger.info("マッチング開始を検出")
+                self._matching_started_at = datetime.datetime.now()
+                return
+
+        else:
+            if self.analyzer.detect_schedule_change(frame):
+                self.logger.info("スケジュール変更を検出、情報をリセット")
+                self._cancel()
+                return
+
+            if self.analyzer.detect_battle_start(frame):
+                self.logger.info("バトル開始を検出")
+                self._start()
+                self.sm.handle(Event.BATTLE_STARTED)
+                return
 
     def _handle_recording(self, frame) -> None:
         """RECORDING 状態でのフレーム処理。"""
-        now = time.time()
-        if (
-            now - self._battle_started_at <= 60
-            and self.analyzer.detect_battle_abort(frame)
-        ):
-            self.logger.info("バトル中断を検出")
-            self.recorder.stop()
-            self.transcriber.stop_capture()
-            self.sm.handle(Event.EARLY_ABORT)
-            self._reset()
-            return
-        if now - self._battle_started_at >= 600:
-            video = self.recorder.stop()
-            audio = self.transcriber.stop_capture()
-            _ = self.transcriber.transcribe(audio)
-            self.pending.append(video)
-            self.sm.handle(Event.POSTGAME_DETECTED)
-            self._reset()
-            return
-        if self.analyzer.detect_loading(
-            frame
-        ) or self.analyzer.detect_battle_finish(frame):
-            self.recorder.pause()
-            self.transcriber.stop_capture()
-            self.sm.handle(Event.LOADING_DETECTED)
-            return
-        jud = self.analyzer.detect_battle_judgement(frame)
-        if jud is not None:
-            self.result = jud
-        if self.analyzer.detect_battle_result(frame):
-            video = self.recorder.stop()
-            audio = self.transcriber.stop_capture()
-            _ = self.transcriber.transcribe(audio)
-            self.pending.append(video)
-            self.sm.handle(Event.POSTGAME_DETECTED)
-            self._reset()
+        if not self.finish:
+            now = time.time()
+            if (
+                now - self._battle_started_at <= 60
+                and self.analyzer.detect_battle_abort(frame)
+            ):
+                self.logger.info("バトル中断を検出")
+                self._cancel()
+                self.sm.handle(Event.EARLY_ABORT)
+                return
+
+            if now - self._battle_started_at >= 600:
+                self.logger.info("バトルが長すぎるため中断")
+                self._stop()
+                self.sm.handle(Event.POSTGAME_DETECTED)
+                return
+
+            if self.analyzer.detect_battle_finish(frame):
+                self.logger.info("バトル終了を検出")
+                self.finish = True
+                self._pause()
+                self.sm.handle(Event.LOADING_DETECTED)
+                return
+
+        else:
+            if self.analyzer.detect_loading(frame):
+                self.logger.info("ロード画面を検出")
+                self._pause()
+                self.sm.handle(Event.LOADING_DETECTED)
+                return
+
+            if self.analyzer.detect_battle_result(frame):
+                self.logger.info("バトル結果を検出")
+                self.result = self.analyzer.extract_battle_result(frame)
+                self._stop()
+                self.sm.handle(Event.POSTGAME_DETECTED)
 
     def _handle_paused(self, frame) -> None:
         """PAUSED 状態でのフレーム処理。"""
-        if self.analyzer.detect_loading_end(
-            frame
-        ) or self.analyzer.detect_battle_finish_end(frame):
-            self.recorder.resume()
-            self.transcriber.start_capture()
+        if self.analyzer.detect_battle_judgement(frame):
+            self.logger.info("バトルジャッジメントを検出")
+            self.judgement = self.analyzer.extract_battle_judgement(frame)
+            self._resume()
             self.sm.handle(Event.LOADING_FINISHED)
+            return
 
-    def _handle_frame(self, frame) -> None:
-        """現在の状態に応じてフレームを処理する。"""
-        if self.sm.state is State.STANDBY:
-            self._handle_standby(frame)
-        elif self.sm.state is State.RECORDING:
-            self._handle_recording(frame)
-        elif self.sm.state is State.PAUSED:
-            self._handle_paused(frame)
+        if self.analyzer.detect_loading_end(frame):
+            self.logger.info("ロード終了を検出")
+            self._resume()
+            self.sm.handle(Event.LOADING_FINISHED)
+            return
 
     def execute(self) -> None:
-        """電源 OFF を監視しつつ自動録画を繰り返す。PC がスリープしたら最初から再開する。"""
+        """電源 OFF を監視しつつ自動録画を繰り返す。PC がスリープしたら最初から再開する."""
         while True:
             self.logger.info("デーモン開始")
 
@@ -204,8 +234,9 @@ class DaemonUseCase:
                     success, frame = cap.read()
                     if not success:
                         self.logger.warning("フレーム取得に失敗しました")
-                        time.sleep(1)
-                        continue
+                        raise RuntimeError(
+                            "フレームの読み込みに失敗しました。\n他のアプリケーションがカメラを使用していないか確認してください。"
+                        )
 
                     off_count, last_check, detected = (
                         self._update_power_off_count(
@@ -216,8 +247,13 @@ class DaemonUseCase:
                         self._handle_power_off()
                         break
 
-                    self._handle_frame(frame)
+                    if self.sm.state is State.STANDBY:
+                        self._handle_standby(frame)
+                    elif self.sm.state is State.RECORDING:
+                        self._handle_recording(frame)
+                    elif self.sm.state is State.PAUSED:
+                        self._handle_paused(frame)
             finally:
                 cap.release()
-                self._reset()
+                self._cancel()
                 self.sm.state = State.STANDBY

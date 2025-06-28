@@ -89,7 +89,7 @@ class BaseMatcher(ABC):
         if self._roi is None:
             return image
         x, y, w, h = self._roi
-        return image[y : y + h, x : x + w]
+        return image[y: y + h, x: x + w]
 
     @abstractmethod
     def match(self, image: np.ndarray) -> bool:
@@ -151,6 +151,7 @@ class HSVMatcher(BaseMatcher):
             masked = img
 
         hsv = cv2.cvtColor(masked, cv2.COLOR_BGR2HSV)
+
         color_mask = cv2.inRange(hsv, self._lower_bound, self._upper_bound)
 
         if self._mask is not None:

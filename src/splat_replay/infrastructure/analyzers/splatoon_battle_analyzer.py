@@ -20,7 +20,7 @@ class BattleFrameAnalyzer(AnalyzerPlugin):
         self.registry = MatcherRegistry(settings)
 
     def detect_match_select(self, frame: np.ndarray) -> bool:
-        return False
+        return self.registry.match_first_group("battle_select", frame) is not None
 
     def extract_rate(self, frame: np.ndarray) -> int | None:
         return None
