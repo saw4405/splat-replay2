@@ -5,13 +5,16 @@ from __future__ import annotations
 from typing import Protocol
 import numpy as np
 
+from splat_replay.domain.models import Match, RateBase
+
 
 class AnalyzerPlugin(Protocol):
     """ゲーム画面解析プラグインのプロトコル。"""
 
-    def detect_match_select(self, frame: np.ndarray) -> bool: ...
+    def extract_match_select(self, frame: np.ndarray) -> Match | None: ...
 
-    def extract_rate(self, frame: np.ndarray) -> int | None: ...
+    def extract_rate(self, frame: np.ndarray,
+                     match: Match) -> RateBase | None: ...
 
     def detect_matching_start(self, frame: np.ndarray) -> bool: ...
 

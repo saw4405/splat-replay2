@@ -8,16 +8,17 @@ from splat_replay.infrastructure.analyzers.common.image_utils import (
     MatcherRegistry,
 )
 
+from splat_replay.application.interfaces import FrameAnalyzerPort
 from splat_replay.shared.config import ImageMatchingSettings
 from .plugin import AnalyzerPlugin
-from splat_replay.domain.models import GameMode
+from splat_replay.domain.models import GameMode, Match, RateBase
 
 from splat_replay.shared.logger import get_logger
 
 logger = get_logger()
 
 
-class FrameAnalyzer:
+class FrameAnalyzer(FrameAnalyzerPort):
     """OpenCV を用いた画面解析処理を提供する。"""
 
     def __init__(
@@ -32,6 +33,7 @@ class FrameAnalyzer:
             GameMode.SALMON: salmon_plugin,
         }
         self.mode = GameMode.UNKNOWN
+        self.match: Match | None = None
         self.registry = MatcherRegistry(settings)
 
     def set_mode(self, mode: GameMode) -> None:
@@ -41,8 +43,9 @@ class FrameAnalyzer:
         self.mode = mode
         logger.debug(f"Game mode set to: {self.mode}")
 
-    def reset_mode(self) -> None:
+    def reset(self) -> None:
         """モードを未確定状態へ戻す。"""
+        self.match = None
         self.mode = GameMode.UNKNOWN
 
     def detect_power_off(self, frame: np.ndarray) -> bool:
@@ -52,21 +55,28 @@ class FrameAnalyzer:
     def detect_match_select(self, frame: np.ndarray) -> bool:
         """マッチ選択画面かを判定しモードを設定する。"""
         if self.registry.match("match_select", frame):
-            if self.plugins[GameMode.BATTLE].detect_match_select(frame):
+            match = self.plugins[GameMode.BATTLE].extract_match_select(frame)
+            if match:
+                self.match = match
                 self.mode = GameMode.BATTLE
                 return True
 
-            if self.plugins[GameMode.SALMON].detect_match_select(frame):
+            match = self.plugins[GameMode.SALMON].extract_match_select(frame)
+            if match:
+                self.match = match
                 self.mode = GameMode.SALMON
                 return True
 
         return False
 
-    def extract_rate(self, frame: np.ndarray) -> int | None:
+    def extract_rate(self, frame: np.ndarray) -> RateBase | None:
         plugin = self.plugins.get(self.mode)
         if plugin is None:
             return None
-        return getattr(plugin, "extract_rate", lambda f: None)(frame)
+        if self.match is None:
+            logger.warning("マッチが未設定のためレートを抽出できません")
+            return None
+        return plugin.extract_rate(frame, self.match)
 
     def detect_matching_start(self, frame: np.ndarray) -> bool:
         """マッチング開始画面を検出する。"""

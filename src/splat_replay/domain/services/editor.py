@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from splat_replay.domain.models.edit_config import VideoEditConfig
-from splat_replay.domain.models.match import Match
+from splat_replay.domain.models.play import Play
 from splat_replay.domain.models.video_clip import VideoClip
 from splat_replay.shared.logger import get_logger
 
@@ -25,7 +25,7 @@ class VideoEditor:
         logger.info("クリップ結合", clips=[c.path.name for c in clips])
         raise NotImplementedError
 
-    def embed_metadata(self, clip: VideoClip, match: Match) -> None:
+    def embed_metadata(self, clip: VideoClip, match: Play) -> None:
         """メタデータを動画に書き込む。"""
         logger.info("メタデータ書き込み", clip=str(clip.path))
         raise NotImplementedError

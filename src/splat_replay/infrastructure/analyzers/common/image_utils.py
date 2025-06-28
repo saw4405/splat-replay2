@@ -484,3 +484,9 @@ class MatcherRegistry:
         if not keys:
             return None
         return self.match_first(keys, image)
+
+
+def rotate_image(image: np.ndarray, angle: float) -> np.ndarray:
+    rows, cols = image.shape[:2]
+    M = cv2.getRotationMatrix2D((cols/2, rows/2), angle, 1)
+    return cv2.warpAffine(image, M, (cols, rows))

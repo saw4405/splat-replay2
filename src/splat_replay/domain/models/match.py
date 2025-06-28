@@ -1,30 +1,40 @@
-"""バトル情報。"""
+"""マッチ(バトル種別)を表す列挙型。"""
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from datetime import datetime
-from uuid import uuid4
-
-from .rule import Rule
-from .stage import Stage
+from enum import Enum
 
 
-@dataclass
-class Match:
-    """バトル1件分のメタデータ。"""
+class Match(Enum):
+    """マッチ(バトル種別)を表す列挙型。"""
 
-    rule: Rule
-    stage: Stage
-    start_at: datetime
-    end_at: datetime | None = None
-    result: str | None = None
-    """"win" または "lose" を設定する。"""
-    kill: int | None = None
-    death: int | None = None
-    special: int | None = None
-    rate: int | None = None
-    id: str = field(init=False, repr=False)
+    REGULAR = "レギュラーマッチ"
+    ANARCHY = "バンカラマッチ"
+    ANARCHY_OPEN = "バンカラマッチ(オープン)"
+    ANARCHY_SERIES = "バンカラマッチ(チャレンジ)"
+    X = "Xマッチ"
+    CHALLENGE = "イベントマッチ"
+    SPLATFEST = "フェスマッチ"
+    SPLATFEST_OPEN = "フェスマッチ(オープン)"
+    SPLATFEST_PRO = "フェスマッチ(チャレンジ)"
+    TRICOLOR = "トリカラマッチ"
 
-    def __post_init__(self) -> None:
-        self.id = str(uuid4())
+    def is_anarchy(self) -> bool:
+        """バンカラマッチかどうかを返す。"""
+        return self in {self.ANARCHY, self.ANARCHY_OPEN, self.ANARCHY_SERIES}
+
+    def is_fest(self) -> bool:
+        """フェスマッチかどうかを返す。"""
+        return self in {self.SPLATFEST, self.SPLATFEST_OPEN, self.SPLATFEST_PRO}
+
+    def equal(self, other: Match, ignore_open_challenge: bool = False) -> bool:
+        """種別が一致するか判定する。"""
+        if self is other:
+            return True
+        if not ignore_open_challenge:
+            return False
+        if self.is_anarchy() and other.is_anarchy():
+            return True
+        if self.is_fest() and other.is_fest():
+            return True
+        return False

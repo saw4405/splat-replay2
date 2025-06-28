@@ -82,7 +82,7 @@ class DaemonUseCase:
         self.judgement = None
         self._battle_started_at = 0.0
         self._matching_started_at = None
-        self.analyzer.reset_mode()
+        self.analyzer.reset()
 
     def _cancel(self) -> None:
         """録画と音声キャプチャをキャンセルする。"""

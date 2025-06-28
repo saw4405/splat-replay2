@@ -20,7 +20,7 @@ from splat_replay.infrastructure.analyzers.splatoon_battle_analyzer import (
 from splat_replay.infrastructure.analyzers.splatoon_salmon_analyzer import (
     SalmonFrameAnalyzer,
 )  # noqa: E402
-from splat_replay.domain.models import GameMode  # noqa: E402
+from splat_replay.domain.models import GameMode, RateBase, Udemae, XP  # noqa: E402
 from splat_replay.shared.config import ImageMatchingSettings  # noqa: E402
 import cv2  # noqa: E402
 
@@ -97,6 +97,31 @@ def test_detect_match_select(
     frame = load_image(filename)
     analyzer.detect_match_select(frame)
     result = analyzer.mode
+    assert result == expected
+
+
+@pytest.mark.parametrize(
+    "filename, expected",
+    [
+        ("rate_XP1971.9.png", XP(1971.9)),
+        ("rate_XP2033.9.png", XP(2033.9)),
+        ("rate_S.png", Udemae("S")),
+        ("rate_S+.png", Udemae("S+")),
+        ("rate_None.png", None)
+    ],
+)
+def test_extract_rate(
+    analyzer: FrameAnalyzer,
+    load_image: Callable[[str], np.ndarray],
+    filename: str,
+    expected: RateBase,
+) -> None:
+    """レート取得の結果を確認する。"""
+    frame = load_image(filename)
+    analyzer.set_mode(GameMode.BATTLE)
+    if not analyzer.detect_match_select(frame):
+        pytest.fail("マッチ選択画面ではない")
+    result = analyzer.extract_rate(frame)
     assert result == expected
 
 
@@ -338,10 +363,10 @@ if __name__ == "__main__":
     battle = BattleFrameAnalyzer(MATCHER_SETTINGS)
     salmon = SalmonFrameAnalyzer(MATCHER_SETTINGS)
     analyzer_ = FrameAnalyzer(battle, salmon, MATCHER_SETTINGS)
-    filename = "match_select_splatfest_battle.png"
-    expected = GameMode.BATTLE
+    filename = "rate_XP1971.9.png"
+    expected = XP(1971.9)
     image_path = TEMPLATE_DIR / filename
     frame = cv2.imread(str(image_path))
     analyzer_.detect_match_select(frame)
-    result = analyzer_.mode
+    result = analyzer_.extract_rate(frame)
     assert result == expected

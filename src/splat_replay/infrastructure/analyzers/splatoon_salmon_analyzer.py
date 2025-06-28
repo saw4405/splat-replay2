@@ -9,6 +9,7 @@ from splat_replay.infrastructure.analyzers.common.image_utils import (
 )
 from splat_replay.shared.config import ImageMatchingSettings
 from .plugin import AnalyzerPlugin
+from splat_replay.domain.models import Match, RateBase
 
 
 class SalmonFrameAnalyzer(AnalyzerPlugin):
@@ -17,10 +18,10 @@ class SalmonFrameAnalyzer(AnalyzerPlugin):
     def __init__(self, settings: ImageMatchingSettings) -> None:
         self.registry = MatcherRegistry(settings)
 
-    def detect_match_select(self, frame: np.ndarray) -> bool:
-        return False
+    def extract_match_select(self, frame: np.ndarray) -> Match | None:
+        return None
 
-    def extract_rate(self, frame: np.ndarray) -> int | None:
+    def extract_rate(self, frame: np.ndarray, match: Match) -> RateBase | None:
         return None
 
     def detect_matching_start(self, frame: np.ndarray) -> bool:
@@ -47,8 +48,8 @@ class SalmonFrameAnalyzer(AnalyzerPlugin):
     def detect_battle_finish_end(self, frame: np.ndarray) -> bool:
         return False
 
-    def detect_battle_judgement(self, frame: np.ndarray) -> str | None:
-        return None
+    def detect_battle_judgement(self, frame: np.ndarray) -> bool:
+        return False
 
     def detect_battle_result(self, frame: np.ndarray) -> bool:
         return self.registry.match("salmon_result", frame)

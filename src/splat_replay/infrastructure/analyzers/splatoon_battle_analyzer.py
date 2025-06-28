@@ -8,9 +8,13 @@ import numpy as np
 
 from splat_replay.infrastructure.analyzers.common.image_utils import (
     MatcherRegistry,
+    rotate_image
 )
 from splat_replay.shared.config import ImageMatchingSettings
 from .plugin import AnalyzerPlugin
+from .common.ocr import recognize_text
+from splat_replay.domain.models import Match, RateBase, Udemae, XP
+from splat_replay.shared.logger import get_logger
 
 
 class BattleFrameAnalyzer(AnalyzerPlugin):
@@ -18,12 +22,45 @@ class BattleFrameAnalyzer(AnalyzerPlugin):
 
     def __init__(self, settings: ImageMatchingSettings) -> None:
         self.registry = MatcherRegistry(settings)
+        self._logger = get_logger()
 
-    def detect_match_select(self, frame: np.ndarray) -> bool:
-        return self.registry.match_first_group("battle_select", frame) is not None
+    def extract_match_select(self, frame: np.ndarray) -> Match | None:
+        match = self.registry.match_first_group("battle_select", frame)
+        return Match(match) if match else None
 
-    def extract_rate(self, frame: np.ndarray) -> int | None:
+    def extract_rate(self, frame: np.ndarray, match: Match) -> RateBase | None:
+        """レートを取得する。"""
+        if match.is_anarchy():
+            udemae = self.registry.match_first_group(
+                "battle_rate_udemae", frame)
+            return Udemae(udemae) if udemae else None
+
+        if match is Match.X:
+            return self.extract_xp(frame)
+
         return None
+
+    def extract_xp(self, frame: np.ndarray) -> XP | None:
+        """XPを取得する。"""
+        xp_image = frame[190:240, 1730:1880]
+        xp_image = rotate_image(xp_image, -4)
+        xp_str = recognize_text(xp_image)
+        if xp_str is None:
+            self._logger.warning(f"XパワーのOCRに失敗しました")
+            return None
+        xp_str = xp_str.strip()
+
+        try:
+            xp = float(xp_str)
+        except ValueError:
+            self._logger.warning(f"Xパワーが数値ではありません: {xp_str}")
+            return None
+
+        if xp < 500 or xp > 5500:
+            self._logger.warning(f"Xパワーが異常です: {xp}")
+            return None
+
+        return XP(xp)
 
     def detect_matching_start(self, frame: np.ndarray) -> bool:
         return False
