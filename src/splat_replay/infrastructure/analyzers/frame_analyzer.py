@@ -11,8 +11,9 @@ from splat_replay.infrastructure.analyzers.common.image_utils import (
 from splat_replay.application.interfaces import FrameAnalyzerPort
 from splat_replay.shared.config import ImageMatchingSettings
 from .plugin import AnalyzerPlugin
-from splat_replay.domain.models import GameMode, Match, RateBase
-
+from splat_replay.domain.models import GameMode, Match, RateBase, Result, BattleResult
+from splat_replay.infrastructure.analyzers.splatoon_battle_analyzer import BattleFrameAnalyzer
+from splat_replay.infrastructure.analyzers.splatoon_salmon_analyzer import SalmonFrameAnalyzer
 from splat_replay.shared.logger import get_logger
 
 logger = get_logger()
@@ -23,8 +24,8 @@ class FrameAnalyzer(FrameAnalyzerPort):
 
     def __init__(
         self,
-        battle_plugin: AnalyzerPlugin,
-        salmon_plugin: AnalyzerPlugin,
+        battle_plugin: BattleFrameAnalyzer,
+        salmon_plugin: SalmonFrameAnalyzer,
         settings: ImageMatchingSettings,
     ) -> None:
         """2 種類のプラグインと設定を受け取って初期化する。"""
@@ -41,7 +42,6 @@ class FrameAnalyzer(FrameAnalyzerPort):
         if mode not in self.plugins:
             raise ValueError(f"Unsupported game mode: {mode}")
         self.mode = mode
-        logger.debug(f"Game mode set to: {self.mode}")
 
     def reset(self) -> None:
         """モードを未確定状態へ戻す。"""
@@ -55,17 +55,14 @@ class FrameAnalyzer(FrameAnalyzerPort):
     def detect_match_select(self, frame: np.ndarray) -> bool:
         """マッチ選択画面かを判定しモードを設定する。"""
         if self.registry.match("match_select", frame):
-            match = self.plugins[GameMode.BATTLE].extract_match_select(frame)
-            if match:
-                self.match = match
-                self.mode = GameMode.BATTLE
-                return True
-
-            match = self.plugins[GameMode.SALMON].extract_match_select(frame)
-            if match:
-                self.match = match
-                self.mode = GameMode.SALMON
-                return True
+            for mode in GameMode:
+                plugin = self.plugins.get(mode)
+                if plugin is None:
+                    continue
+                if match := plugin.extract_match_select(frame):
+                    self.match = match
+                    self.mode = mode
+                    return True
 
         return False
 
@@ -137,9 +134,42 @@ class FrameAnalyzer(FrameAnalyzerPort):
             return False
         return plugin.detect_battle_result(frame)
 
-    def extract_battle_result(self, frame: np.ndarray) -> str | None:
+    def extract_battle_result(self, frame: np.ndarray) -> Result | None:
         """バトルの結果を抽出する。"""
         plugin = self.plugins.get(self.mode)
         if plugin is None:
             return None
-        return plugin.extract_battle_result(frame)
+
+        if isinstance(plugin, BattleFrameAnalyzer):
+            match = plugin.extract_battle_match(frame)
+            if match is None:
+                logger.warning("バトルマッチが抽出できません")
+                return None
+            rule = plugin.extract_battle_rule(frame)
+            if rule is None:
+                logger.warning("バトルルールが抽出できません")
+                return None
+            stage = plugin.extract_battle_stage(frame)
+            if stage is None:
+                logger.warning("バトルステージが抽出できません")
+                return None
+            kill_record = plugin.extract_battle_kill_record(frame, match)
+            if kill_record is None:
+                logger.warning("キルレコードが抽出できません")
+                return None
+
+            return BattleResult(
+                match=match,
+                rule=rule,
+                stage=stage,
+                kill=kill_record[0],
+                death=kill_record[1],
+                special=kill_record[2],
+            )
+
+        elif isinstance(plugin, SalmonFrameAnalyzer):
+            raise NotImplementedError(
+                "サーモンランの結果抽出は未実装です"
+            )
+
+        return None

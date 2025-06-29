@@ -5,9 +5,10 @@ from __future__ import annotations
 import time
 import datetime
 from pathlib import Path
-from typing import List
+from typing import List, Callable
 
 import cv2
+import numpy as np
 
 from splat_replay.application.interfaces import (
     VideoRecorder,
@@ -26,6 +27,7 @@ from splat_replay.domain.services.state_machine import (
 )
 from splat_replay.shared.logger import get_logger
 from splat_replay.shared.config import OBSSettings
+from splat_replay.domain.models import RateBase, Result
 
 
 class DaemonUseCase:
@@ -56,11 +58,14 @@ class DaemonUseCase:
         self.settings = obs_settings
         self.pending: List[Path] = []
         self.logger = get_logger()
-        self.rate: int | None = None
+        self._resume_trigger: Callable[[np.ndarray], bool] | None = None
         self.finish: bool = False
-        self.judgement: str | None = None
         self._battle_started_at = 0.0
         self._matching_started_at: datetime.datetime | None = None
+        self.rate: RateBase | None = None
+        self.judgement: str | None = None
+        self.result: Result | None = None
+        self.result_screenshot: np.ndarray | None = None
 
     def _start(self) -> None:
         """録画と音声キャプチャを開始する。"""
@@ -72,26 +77,34 @@ class DaemonUseCase:
         """録画と音声キャプチャを停止する。"""
         video = self.recorder.stop()
         audio = self.transcriber.stop_capture()
-        _ = self.transcriber.transcribe(audio)
+        srt = self.transcriber.transcribe(audio)
 
         if save:
-            self.pending.append(video)
+            self.logger.info("録画と音声キャプチャを停止", video=video, audio=audio, srt=srt,
+                             start_at=self._matching_started_at, rate=str(self.rate), judgement=self.judgement, result=self.result)
+            # 動画ファイルに字幕とサムネイル(結果画面)を結合し、ファイル名にマッチング開始時間・レート・判定・結果を含めて、編集待ちフォルダに移動する。
+            raise NotImplementedError(
+                "動画の編集とアップロード処理は未実装です"
+            )
 
-        self.rate = None
         self.finish = False
-        self.judgement = None
         self._battle_started_at = 0.0
         self._matching_started_at = None
+        self.rate = None
+        self.judgement = None
+        self.result = None
+        self.result_screenshot = None
         self.analyzer.reset()
 
     def _cancel(self) -> None:
         """録画と音声キャプチャをキャンセルする。"""
         self._stop(save=False)
 
-    def _pause(self) -> None:
+    def _pause(self, resume_trigger: Callable[[np.ndarray], bool]) -> None:
         """録画と音声キャプチャを一時停止する。"""
         self.recorder.pause()
         self.transcriber.stop_capture()
+        self._resume_trigger = resume_trigger
 
     def _resume(self) -> None:
         """録画と音声キャプチャを再開する。"""
@@ -100,6 +113,7 @@ class DaemonUseCase:
 
     def _process_pending(self) -> None:
         """溜まっている録画を編集しアップロードする。"""
+        self.logger.info("編集待ちの録画を処理中", count=len(self.pending))
         for clip in list(self.pending):
             edited = self.editor.process(clip)
             match = self.extractor.extract_from_video(edited)
@@ -133,14 +147,14 @@ class DaemonUseCase:
             self.sm.handle(Event.POSTGAME_DETECTED)
         self._process_pending()
 
-    def _handle_standby(self, frame) -> None:
+    def _handle_standby(self, frame: np.ndarray) -> None:
         """STANDBY 状態でのフレーム処理。"""
         if self._matching_started_at is None:
             if self.analyzer.detect_match_select(frame):
                 rate = self.analyzer.extract_rate(frame)
-                if rate is not None and rate != self.rate:
+                if not isinstance(rate, type(self.rate)) or rate != self.rate:
                     self.rate = rate
-                    self.logger.info("レート取得", rate=rate)
+                    self.logger.info("レート取得", rate=str(rate))
                 return
 
             if self.analyzer.detect_matching_start(frame):
@@ -160,7 +174,7 @@ class DaemonUseCase:
                 self.sm.handle(Event.BATTLE_STARTED)
                 return
 
-    def _handle_recording(self, frame) -> None:
+    def _handle_recording(self, frame: np.ndarray) -> None:
         """RECORDING 状態でのフレーム処理。"""
         if not self.finish:
             now = time.time()
@@ -168,48 +182,51 @@ class DaemonUseCase:
                 now - self._battle_started_at <= 60
                 and self.analyzer.detect_battle_abort(frame)
             ):
-                self.logger.info("バトル中断を検出")
+                self.logger.info("バトル中断を検出したため、録画を中止します")
                 self._cancel()
                 self.sm.handle(Event.EARLY_ABORT)
                 return
 
             if now - self._battle_started_at >= 600:
-                self.logger.info("バトルが長すぎるため中断")
+                self.logger.info("録画が10分以上続いているため、録画を停止します")
                 self._stop()
                 self.sm.handle(Event.POSTGAME_DETECTED)
                 return
 
             if self.analyzer.detect_battle_finish(frame):
-                self.logger.info("バトル終了を検出")
+                self.logger.info("バトル終了を検出したので、録画を一時停止します")
                 self.finish = True
-                self._pause()
+                self._pause(self.analyzer.detect_battle_judgement)
                 self.sm.handle(Event.LOADING_DETECTED)
                 return
 
         else:
+            if self.analyzer.detect_battle_judgement(frame):
+                judgement = self.analyzer.extract_battle_judgement(frame)
+                if judgement is not None and self.judgement is None:
+                    self.judgement = judgement
+                    self.logger.info(
+                        "バトルジャッジメントを検出", judgement=str(self.judgement)
+                    )
+                return
+
             if self.analyzer.detect_loading(frame):
-                self.logger.info("ロード画面を検出")
-                self._pause()
+                self.logger.info("ロード画面を検出したので、録画を一時停止します")
+                self._pause(self.analyzer.detect_loading_end)
                 self.sm.handle(Event.LOADING_DETECTED)
                 return
 
             if self.analyzer.detect_battle_result(frame):
-                self.logger.info("バトル結果を検出")
                 self.result = self.analyzer.extract_battle_result(frame)
+                self.result_screenshot = frame
+                self.logger.info("バトル結果を検出", result=str(self.result))
                 self._stop()
                 self.sm.handle(Event.POSTGAME_DETECTED)
 
-    def _handle_paused(self, frame) -> None:
+    def _handle_paused(self, frame: np.ndarray) -> None:
         """PAUSED 状態でのフレーム処理。"""
-        if self.analyzer.detect_battle_judgement(frame):
-            self.logger.info("バトルジャッジメントを検出")
-            self.judgement = self.analyzer.extract_battle_judgement(frame)
-            self._resume()
-            self.sm.handle(Event.LOADING_FINISHED)
-            return
-
-        if self.analyzer.detect_loading_end(frame):
-            self.logger.info("ロード終了を検出")
+        if self._resume_trigger and self._resume_trigger(frame):
+            self.logger.info("録画を再開します")
             self._resume()
             self.sm.handle(Event.LOADING_FINISHED)
             return
@@ -226,6 +243,9 @@ class DaemonUseCase:
                     index=self.settings.capture_device_index,
                 )
                 raise RuntimeError("キャプチャデバイスの取得に失敗しました")
+
+            cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1920)
+            cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 1080)
 
             off_count = 0
             last_check = 0.0
@@ -255,5 +275,6 @@ class DaemonUseCase:
                         self._handle_paused(frame)
             finally:
                 cap.release()
-                self._cancel()
+                if self.sm.state is State.RECORDING:
+                    self._cancel()
                 self.sm.state = State.STANDBY

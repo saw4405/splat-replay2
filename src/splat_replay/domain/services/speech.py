@@ -15,14 +15,16 @@ class SpeechTranscriber:
     def start_capture(self) -> None:
         """音声キャプチャを開始する。"""
         logger.info("音声キャプチャ開始")
-        raise NotImplementedError
+        # raise NotImplementedError
 
     def stop_capture(self) -> Path:
         """録音ファイルのパスを返しつつキャプチャを停止する。"""
         logger.info("音声キャプチャ停止")
-        raise NotImplementedError
+        # raise NotImplementedError
+        return Path("dummy_audio.wav")
 
     def transcribe(self, audio: Path) -> str:
         """音声ファイルをテキストに変換する。"""
         logger.info("音声文字起こし", audio=str(audio))
-        raise NotImplementedError
+        # raise NotImplementedError
+        return "ダミーの文字起こし結果です。"

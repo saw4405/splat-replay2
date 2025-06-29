@@ -13,6 +13,9 @@ __all__ = [
     "RateBase",
     "XP",
     "Udemae",
+    "Result",
+    "BattleResult",
+    "SalmonResult",
 ]
 
 from .play import Play
@@ -25,3 +28,4 @@ from .match_expression import MatchExpression
 from .game_mode import GameMode
 from .match import Match
 from .rate import RateBase, XP, Udemae
+from .result import Result, BattleResult, SalmonResult

@@ -30,9 +30,10 @@ from splat_replay.infrastructure import (
     SystemPower,
     YouTubeClient,
     FrameAnalyzer,
-    BattleFrameAnalyzer,
-    SalmonFrameAnalyzer,
 )
+from splat_replay.infrastructure.analyzers.plugin import AnalyzerPlugin
+from splat_replay.infrastructure.analyzers.splatoon_battle_analyzer import BattleFrameAnalyzer
+from splat_replay.infrastructure.analyzers.splatoon_salmon_analyzer import SalmonFrameAnalyzer
 from splat_replay.domain.services import (
     VideoEditor,
     SpeechTranscriber,
@@ -103,6 +104,8 @@ def configure_container() -> punq.Container:
     container.register(PowerPort, SystemPower)
     container.register(BattleFrameAnalyzer, BattleFrameAnalyzer)
     container.register(SalmonFrameAnalyzer, SalmonFrameAnalyzer)
+    container.register(AnalyzerPlugin, BattleFrameAnalyzer)
+    container.register(AnalyzerPlugin, SalmonFrameAnalyzer)
     container.register(FrameAnalyzerPort, FrameAnalyzer)
     container.register(SpeechTranscriberPort, SpeechTranscriber)
     container.register(MetadataExtractorPort, MetadataExtractor)

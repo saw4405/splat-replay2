@@ -43,9 +43,12 @@ composite_detection:
   battle_judgement_latter_half:
     and:
       - not:
-          matcher: loading
+          matcher: black_screen
       - matcher: battle_judgement_bright
       - matcher: battle_judgement_latter_half_bright
+      - or:
+        - matcher: battle_judgement_win
+        - matcher: battle_judgement_lose
         
   loading:
     and:
@@ -177,8 +180,8 @@ simple_matchers:
       y: 390
       width: 20
       height: 20
-    lower_bound: [0, 230, 230]
-    upper_bound: [2, 255, 255]
+    lower_bound: [39, 250, 230]
+    upper_bound: [41, 255, 255]
     threshold: 0.9
     description: "マッチ選択画面でレギュラーマッチ選択を検出する"
 
@@ -216,8 +219,8 @@ simple_matchers:
       y: 390
       width: 20
       height: 20
-    lower_bound: [100, 230, 230]
-    upper_bound: [110, 255, 255]
+    lower_bound: [165, 190, 230]
+    upper_bound: [168, 220, 255]
     threshold: 0.9
     description: "マッチ選択画面でイベントマッチ選択を検出する"
 
@@ -295,7 +298,7 @@ simple_matchers:
 
   battle_finish_uniform:
     type: "uniform"
-    hue_threshold: 10.0
+    hue_threshold: 12.0
     roi:
       x: 810
       y: 400

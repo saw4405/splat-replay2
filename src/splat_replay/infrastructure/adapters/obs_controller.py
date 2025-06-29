@@ -125,6 +125,7 @@ class OBSController(OBSControlPort):
         """OBS の仮想カメラを開始する。"""
 
         logger.info("OBS 仮想カメラ開始指示")
+        self.connect()
         status = self._ws.call(requests.GetVirtualCamStatus())
         if not status.datain.get("outputActive", False):
             self._ws.call(requests.StartVirtualCam())
@@ -132,21 +133,14 @@ class OBSController(OBSControlPort):
     def is_virtual_camera_active(self) -> bool:
         """仮想カメラが有効かどうかを返す。"""
 
-        if not self.is_running():
-            return False
-
-        try:
-            if not self.is_connected():
-                self.connect()
-            status = self._ws.call(requests.GetVirtualCamStatus())
-            return status.datain.get("outputActive", False)
-        except Exception as e:  # pragma: no cover - 実機依存
-            logger.warning("仮想カメラ状態取得失敗", error=str(e))
-            return False
+        self.connect()
+        status = self._ws.call(requests.GetVirtualCamStatus())
+        return status.datain.get("outputActive", False)
 
     def _get_record_status(self) -> tuple[bool, bool]:
         """録画状態を取得する。"""
 
+        self.connect()
         status = self._ws.call(requests.GetRecordStatus())
         active = status.datain.get("outputActive", False)
         paused = status.datain.get("outputPaused", False)

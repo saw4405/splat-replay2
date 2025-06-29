@@ -18,8 +18,8 @@ class CheckInitializationUseCase:
     def execute(self) -> bool:
         """初期化済みなら状態遷移させて True を返す。"""
         if self.obs.is_running() and self.obs.is_virtual_camera_active():
-            self.logger.info("既に初期化済みと判断")
+            self.logger.info("初期化済み")
             self.sm.handle(Event.INITIALIZED)
             return True
-        self.logger.info("未初期化と判断")
+        self.logger.info("未初期化")
         return False

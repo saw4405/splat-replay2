@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Protocol
 
-from splat_replay.domain.models import GameMode, RateBase
+from splat_replay.domain.models import GameMode, RateBase, Result
 
 import numpy as np
 
@@ -75,7 +75,7 @@ class FrameAnalyzerPort(Protocol):
 
     def detect_battle_result(self, frame: np.ndarray) -> bool: ...
 
-    def extract_battle_result(self, frame: np.ndarray) -> str | None: ...
+    def extract_battle_result(self, frame: np.ndarray) -> Result | None: ...
 
     def detect_power_off(self, frame: np.ndarray) -> bool: ...
 

@@ -8,8 +8,9 @@ from enum import Enum
 class Rule(Enum):
     """スプラトゥーンの主要ルール。"""
 
-    TURF_WAR = "turf_war"
-    SPLAT_ZONES = "splat_zones"
-    TOWER_CONTROL = "tower_control"
-    RAINMAKER = "rainmaker"
-    CLAM_BLITZ = "clam_blitz"
+    TURF_WAR = "ナワバリバトル"
+    RAINMAKER = "ガチホコ"
+    SPLAT_ZONES = "ガチエリア"
+    TOWER_CONTROL = "ガチヤグラ"
+    CLAM_BLITZ = "ガチアサリ"
+    TRICOLOR_TURF_WAR = "トリカラバトル"

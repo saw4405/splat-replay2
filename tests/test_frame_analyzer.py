@@ -20,7 +20,7 @@ from splat_replay.infrastructure.analyzers.splatoon_battle_analyzer import (
 from splat_replay.infrastructure.analyzers.splatoon_salmon_analyzer import (
     SalmonFrameAnalyzer,
 )  # noqa: E402
-from splat_replay.domain.models import GameMode, RateBase, Udemae, XP  # noqa: E402
+from splat_replay.domain.models import GameMode, RateBase, Udemae, XP, Match  # noqa: E402
 from splat_replay.shared.config import ImageMatchingSettings  # noqa: E402
 import cv2  # noqa: E402
 
@@ -82,6 +82,8 @@ def test_detect_power_off(
 @pytest.mark.parametrize(
     "filename, expected",
     [
+        ("match_select_regular.png", GameMode.BATTLE),
+        ("match_select_challenge.png", GameMode.BATTLE),
         ("match_select_anarchy_battle.png", GameMode.BATTLE),
         ("match_select_x_battle.png", GameMode.BATTLE),
         ("match_select_splatfest_battle.png", GameMode.BATTLE),
@@ -97,6 +99,28 @@ def test_detect_match_select(
     frame = load_image(filename)
     analyzer.detect_match_select(frame)
     result = analyzer.mode
+    assert result == expected
+
+
+@pytest.mark.parametrize(
+    "filename, expected",
+    [
+        ("match_select_regular.png", Match.REGULAR),
+        ("match_select_challenge.png", Match.CHALLENGE),
+        ("match_select_anarchy_battle.png", Match.ANARCHY),
+        ("match_select_x_battle.png", Match.X),
+        ("match_select_splatfest_battle.png", Match.SPLATFEST),
+    ],
+)
+def test_extract_match_select(
+    analyzer: FrameAnalyzer,
+    load_image: Callable[[str], np.ndarray],
+    filename: str,
+    expected: str,
+) -> None:
+    """マッチング開始 判定の結果を確認する。"""
+    frame = load_image(filename)
+    result = analyzer.plugins[GameMode.BATTLE].extract_match_select(frame)
     assert result == expected
 
 
@@ -264,6 +288,7 @@ def test_detect_battle_finish_end(
         ("battle_judgement_2.png", True),
         ("battle_judgement_3.png", False),
         ("battle_judgement_4.png", False),
+        ("loading_1.png", False),
     ],
 )
 def test_detect_battle_judgement(
@@ -363,10 +388,10 @@ if __name__ == "__main__":
     battle = BattleFrameAnalyzer(MATCHER_SETTINGS)
     salmon = SalmonFrameAnalyzer(MATCHER_SETTINGS)
     analyzer_ = FrameAnalyzer(battle, salmon, MATCHER_SETTINGS)
-    filename = "rate_XP1971.9.png"
-    expected = XP(1971.9)
+    filename = "loading_1.png"
+    expected = True
     image_path = TEMPLATE_DIR / filename
     frame = cv2.imread(str(image_path))
-    analyzer_.detect_match_select(frame)
-    result = analyzer_.extract_rate(frame)
-    assert result == expected
+    analyzer_.set_mode(GameMode.BATTLE)
+    result = analyzer_.detect_battle_judgement(frame)
+    print(result == expected)
