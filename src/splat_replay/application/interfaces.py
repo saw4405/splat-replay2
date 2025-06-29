@@ -5,10 +5,10 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Protocol
 
-from splat_replay.domain.models import GameMode, RateBase, Result
-
 import numpy as np
+import speech_recognition as sr
 
+from splat_replay.domain.models import GameMode, RateBase, Result
 from splat_replay.domain.models.play import Play
 
 
@@ -18,6 +18,24 @@ class VideoRecorder(Protocol):
     def start(self) -> None: ...
 
     def stop(self) -> Path: ...
+
+    def pause(self) -> None: ...
+
+    def resume(self) -> None: ...
+
+
+class SpeechRecognizerPort(Protocol):
+    """音声認識処理を提供するポート。"""
+
+    def recognize(self, audio: sr.AudioData) -> str | None: ...
+
+
+class SpeechTranscriberPort(Protocol):
+    """音声文字起こし処理を提供するポート。"""
+
+    def start(self) -> None: ...
+
+    def stop(self) -> str: ...
 
     def pause(self) -> None: ...
 
@@ -78,16 +96,6 @@ class FrameAnalyzerPort(Protocol):
     def extract_battle_result(self, frame: np.ndarray) -> Result | None: ...
 
     def detect_power_off(self, frame: np.ndarray) -> bool: ...
-
-
-class SpeechTranscriberPort(Protocol):
-    """音声文字起こし処理を提供するポート。"""
-
-    def start_capture(self) -> None: ...
-
-    def stop_capture(self) -> Path: ...
-
-    def transcribe(self, audio: Path) -> str: ...
 
 
 class MetadataExtractorPort(Protocol):

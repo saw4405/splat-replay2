@@ -25,7 +25,6 @@ from splat_replay.infrastructure import (
     CaptureDeviceChecker,
     FFmpegProcessor,
     FileMetadataRepository,
-    GroqClient,
     OBSController,
     SystemPower,
     YouTubeClient,
@@ -58,6 +57,7 @@ from splat_replay.shared.config import (
     VideoEditSettings,
     OBSSettings,
     ImageMatchingSettings,
+    SpeechTranscriberSettings,
 )
 
 
@@ -70,28 +70,27 @@ def configure_container() -> punq.Container:
 
     settings_path = Path("config/settings.toml")
     # settings.toml が存在する場合はそこから設定を読み込む
-    if settings_path.exists():
-        settings = AppSettings.load_from_toml(settings_path)
-    else:
-        settings = AppSettings()
+    if not settings_path.exists():
+        raise FileNotFoundError(
+            f"設定ファイルが見つかりません: {settings_path}"
+        )
+    settings = AppSettings.load_from_toml(settings_path)
     # 設定オブジェクトを登録
     container.register(AppSettings, instance=settings)
     container.register(YouTubeSettings, instance=settings.youtube)
     container.register(VideoEditSettings, instance=settings.video_edit)
     container.register(OBSSettings, instance=settings.obs)
+    container.register(SpeechTranscriberSettings,
+                       instance=settings.speech_transcriber)
 
     image_match_path = Path("config/image_matching.yaml")
-    if image_match_path.exists():
-        try:
-            image_settings = ImageMatchingSettings.load_from_yaml(
-                image_match_path
-            )
-            settings.image_matching = image_settings
-        except ValidationError as e:
-            logger.warning("画像マッチング設定の読み込みに失敗", exc_info=e)
-            image_settings = settings.image_matching
-    else:
-        image_settings = settings.image_matching
+    if not image_match_path.exists():
+        raise FileNotFoundError(
+            f"画像マッチング設定ファイルが見つかりません: {image_match_path}"
+        )
+    image_settings = ImageMatchingSettings.load_from_yaml(
+        image_match_path
+    )
 
     container.register(ImageMatchingSettings, instance=image_settings)
 
@@ -109,7 +108,6 @@ def configure_container() -> punq.Container:
     container.register(FrameAnalyzerPort, FrameAnalyzer)
     container.register(SpeechTranscriberPort, SpeechTranscriber)
     container.register(MetadataExtractorPort, MetadataExtractor)
-    container.register(GroqClient, GroqClient)
     container.register(FFmpegProcessor, FFmpegProcessor)
     container.register(
         FileMetadataRepository,

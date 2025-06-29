@@ -7,13 +7,11 @@ __all__ = [
     "VideoEditor",
     "YouTubeUploader",
     "SpeechTranscriber",
-    "PowerManager",
 ]
 
 from .state_machine import StateMachine
-from .recorder import Recorder
 from .metadata_extractor import MetadataExtractor
+from .recorder import Recorder
 from .editor import VideoEditor
 from .uploader import YouTubeUploader
-from .speech import SpeechTranscriber
-from .power_manager import PowerManager
+from ...infrastructure.audio.speech_transcriber import SpeechTranscriber

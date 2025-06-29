@@ -70,17 +70,16 @@ class DaemonUseCase:
     def _start(self) -> None:
         """録画と音声キャプチャを開始する。"""
         self.recorder.start()
-        self.transcriber.start_capture()
+        self.transcriber.start()
         self._battle_started_at = time.time()
 
     def _stop(self, save: bool = True) -> None:
         """録画と音声キャプチャを停止する。"""
         video = self.recorder.stop()
-        audio = self.transcriber.stop_capture()
-        srt = self.transcriber.transcribe(audio)
+        srt = self.transcriber.stop()
 
         if save:
-            self.logger.info("録画と音声キャプチャを停止", video=video, audio=audio, srt=srt,
+            self.logger.info("録画と音声キャプチャを停止", video=video, srt=srt,
                              start_at=self._matching_started_at, rate=str(self.rate), judgement=self.judgement, result=self.result)
             # 動画ファイルに字幕とサムネイル(結果画面)を結合し、ファイル名にマッチング開始時間・レート・判定・結果を含めて、編集待ちフォルダに移動する。
             raise NotImplementedError(
@@ -103,13 +102,13 @@ class DaemonUseCase:
     def _pause(self, resume_trigger: Callable[[np.ndarray], bool]) -> None:
         """録画と音声キャプチャを一時停止する。"""
         self.recorder.pause()
-        self.transcriber.stop_capture()
+        self.transcriber.pause()
         self._resume_trigger = resume_trigger
 
     def _resume(self) -> None:
         """録画と音声キャプチャを再開する。"""
         self.recorder.resume()
-        self.transcriber.start_capture()
+        self.transcriber.resume()
 
     def _process_pending(self) -> None:
         """溜まっている録画を編集しアップロードする。"""

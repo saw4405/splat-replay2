@@ -35,6 +35,19 @@ class VideoEditSettings(BaseModel):
         pass
 
 
+class SpeechTranscriberSettings(BaseModel):
+    """音声認識処理の設定。"""
+
+    mic_device_name: str = "マイク (USB Audio Device)"
+    groq_api_key: str = ""
+    language: str = "ja-JP"
+    phrase_time_limit: float = 3.0
+    custom_dictionary: List[str] = ["ナイス", "キル", "デス"]
+
+    class Config:
+        pass
+
+
 class OBSSettings(BaseModel):
     """OBS 接続設定。"""
 
@@ -117,10 +130,10 @@ MatchExpression.update_forward_refs()
 class AppSettings(BaseModel):
     """アプリケーション全体の設定。"""
 
-    youtube: YouTubeSettings = YouTubeSettings()
-    video_edit: VideoEditSettings = VideoEditSettings()
-    obs: OBSSettings = OBSSettings()
-    image_matching: ImageMatchingSettings = ImageMatchingSettings()
+    youtube = YouTubeSettings()
+    video_edit = VideoEditSettings()
+    obs = OBSSettings()
+    speech_transcriber = SpeechTranscriberSettings()
 
     class Config:
         pass
@@ -137,7 +150,7 @@ class AppSettings(BaseModel):
             "youtube": YouTubeSettings,
             "video_edit": VideoEditSettings,
             "obs": OBSSettings,
-            "image_matching": ImageMatchingSettings,
+            "speech_transcriber": SpeechTranscriberSettings,
         }
         kwargs = {}
         for section, cls_ in section_classes.items():
