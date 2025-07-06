@@ -12,6 +12,7 @@ __all__ = [
     "SalmonFrameAnalyzer",
     "SplatoonSalmonAnalyzer",
     "FileMetadataRepository",
+    "FileVideoAssetRepository",
 ]
 
 from .adapters.obs_controller import OBSController
@@ -24,5 +25,6 @@ from .analyzers.frame_analyzer import FrameAnalyzer
 from .analyzers.splatoon_battle_analyzer import BattleFrameAnalyzer
 from .analyzers.splatoon_salmon_analyzer import SalmonFrameAnalyzer
 from .repositories.file_metadata_repo import FileMetadataRepository
+from .repositories.video_asset_repo import FileVideoAssetRepository
 
 SplatoonSalmonAnalyzer = SalmonFrameAnalyzer

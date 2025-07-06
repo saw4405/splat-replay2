@@ -23,7 +23,9 @@ from splat_replay.application import (
     StopRecordingUseCase,
     UploadVideoUseCase,
     InitializeEnvironmentUseCase,
-    DaemonUseCase,
+    AutoRecordUseCase,
+    AutoEditUseCase,
+    AutoUploadUseCase,
 )
 from splat_replay.application.use_cases.check_initialization import (
     CheckInitializationUseCase,
@@ -178,12 +180,16 @@ def upload(file_path: Path) -> None:
 
 
 @app.command()
-def daemon() -> None:
+def auto() -> None:
     """録画からアップロードまで自動実行する。"""
-    logger.info("daemon コマンド開始")
+    logger.info("auto コマンド開始")
     _require_initialized()
-    uc = resolve(DaemonUseCase)
-    uc.execute()
+    record_uc = resolve(AutoRecordUseCase)
+    edit_uc = resolve(AutoEditUseCase)
+    upload_uc = resolve(AutoUploadUseCase)
+    record_uc.execute()
+    edit_uc.execute()
+    upload_uc.execute()
 
 
 if __name__ == "__main__":

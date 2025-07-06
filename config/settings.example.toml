@@ -39,3 +39,8 @@ description_template = "{CHAPTERS}"
 chapter_template = "{RESULT} {KILL}k {DEATH}d {SPECIAL}s  {STAGE}"
 tags = ["Splatoon3"]
 playlist_id = ""
+
+[storage]
+# 録画・編集動画を保存するベースフォルダ
+# 未指定の場合はアプリ実行ディレクトリを利用します
+base_dir = "videos"

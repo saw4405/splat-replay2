@@ -3,9 +3,6 @@
 from __future__ import annotations
 
 from pathlib import Path
-from pydantic import ValidationError
-
-from splat_replay.shared.logger import get_logger
 
 import punq
 
@@ -17,22 +14,29 @@ from splat_replay.application import (
     StopRecordingUseCase,
     ShutdownPCUseCase,
     UploadVideoUseCase,
+    AutoRecordUseCase,
+    AutoEditUseCase,
+    AutoUploadUseCase,
     InitializeEnvironmentUseCase,
     CheckInitializationUseCase,
-    DaemonUseCase,
 )
 from splat_replay.infrastructure import (
     CaptureDeviceChecker,
     FFmpegProcessor,
     FileMetadataRepository,
+    FileVideoAssetRepository,
     OBSController,
     SystemPower,
     YouTubeClient,
     FrameAnalyzer,
 )
 from splat_replay.infrastructure.analyzers.plugin import AnalyzerPlugin
-from splat_replay.infrastructure.analyzers.splatoon_battle_analyzer import BattleFrameAnalyzer
-from splat_replay.infrastructure.analyzers.splatoon_salmon_analyzer import SalmonFrameAnalyzer
+from splat_replay.infrastructure.analyzers.splatoon_battle_analyzer import (
+    BattleFrameAnalyzer,
+)
+from splat_replay.infrastructure.analyzers.splatoon_salmon_analyzer import (
+    SalmonFrameAnalyzer,
+)
 from splat_replay.domain.services import (
     VideoEditor,
     SpeechTranscriber,
@@ -50,6 +54,7 @@ from splat_replay.application.interfaces import (
     MetadataExtractorPort,
     CaptureDevicePort,
     OBSControlPort,
+    VideoAssetRepository,
 )
 from splat_replay.shared.config import (
     AppSettings,
@@ -58,13 +63,12 @@ from splat_replay.shared.config import (
     OBSSettings,
     ImageMatchingSettings,
     SpeechTranscriberSettings,
+    VideoStorageSettings,
 )
 
 
 def configure_container() -> punq.Container:
     """アプリで利用する依存関係を登録する。"""
-
-    logger = get_logger()
 
     container = punq.Container()
 
@@ -80,17 +84,17 @@ def configure_container() -> punq.Container:
     container.register(YouTubeSettings, instance=settings.youtube)
     container.register(VideoEditSettings, instance=settings.video_edit)
     container.register(OBSSettings, instance=settings.obs)
-    container.register(SpeechTranscriberSettings,
-                       instance=settings.speech_transcriber)
+    container.register(
+        SpeechTranscriberSettings, instance=settings.speech_transcriber
+    )
+    container.register(VideoStorageSettings, instance=settings.storage)
 
     image_match_path = Path("config/image_matching.yaml")
     if not image_match_path.exists():
         raise FileNotFoundError(
             f"画像マッチング設定ファイルが見つかりません: {image_match_path}"
         )
-    image_settings = ImageMatchingSettings.load_from_yaml(
-        image_match_path
-    )
+    image_settings = ImageMatchingSettings.load_from_yaml(image_match_path)
 
     container.register(ImageMatchingSettings, instance=image_settings)
 
@@ -115,9 +119,19 @@ def configure_container() -> punq.Container:
         base_dir=Path("metadata"),
     )
     container.register(
+        FileVideoAssetRepository,
+        FileVideoAssetRepository,
+        settings=settings.storage,
+    )
+    container.register(
         MetadataRepository,
         FileMetadataRepository,
         base_dir=Path("metadata"),
+    )
+    container.register(
+        VideoAssetRepository,
+        FileVideoAssetRepository,
+        settings=settings.storage,
     )
     state_machine = StateMachine()
     container.register(StateMachine, instance=state_machine)
@@ -129,11 +143,12 @@ def configure_container() -> punq.Container:
     container.register(StopRecordingUseCase, StopRecordingUseCase)
     container.register(ProcessPostGameUseCase, ProcessPostGameUseCase)
     container.register(UploadVideoUseCase, UploadVideoUseCase)
+    container.register(AutoRecordUseCase, AutoRecordUseCase)
+    container.register(AutoEditUseCase, AutoEditUseCase)
+    container.register(AutoUploadUseCase, AutoUploadUseCase)
     container.register(ShutdownPCUseCase, ShutdownPCUseCase)
     container.register(
         InitializeEnvironmentUseCase, InitializeEnvironmentUseCase
     )
     container.register(CheckInitializationUseCase, CheckInitializationUseCase)
-    container.register(DaemonUseCase, DaemonUseCase)
-
     return container

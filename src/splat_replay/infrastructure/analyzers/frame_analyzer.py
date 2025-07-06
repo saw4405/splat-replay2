@@ -10,10 +10,19 @@ from splat_replay.infrastructure.analyzers.common.image_utils import (
 
 from splat_replay.application.interfaces import FrameAnalyzerPort
 from splat_replay.shared.config import ImageMatchingSettings
-from .plugin import AnalyzerPlugin
-from splat_replay.domain.models import GameMode, Match, RateBase, Result, BattleResult
-from splat_replay.infrastructure.analyzers.splatoon_battle_analyzer import BattleFrameAnalyzer
-from splat_replay.infrastructure.analyzers.splatoon_salmon_analyzer import SalmonFrameAnalyzer
+from splat_replay.domain.models import (
+    GameMode,
+    Match,
+    RateBase,
+    Result,
+    BattleResult,
+)
+from splat_replay.infrastructure.analyzers.splatoon_battle_analyzer import (
+    BattleFrameAnalyzer,
+)
+from splat_replay.infrastructure.analyzers.splatoon_salmon_analyzer import (
+    SalmonFrameAnalyzer,
+)
 from splat_replay.shared.logger import get_logger
 
 logger = get_logger()
@@ -168,8 +177,6 @@ class FrameAnalyzer(FrameAnalyzerPort):
             )
 
         elif isinstance(plugin, SalmonFrameAnalyzer):
-            raise NotImplementedError(
-                "サーモンランの結果抽出は未実装です"
-            )
+            raise NotImplementedError("サーモンランの結果抽出は未実装です")
 
         return None

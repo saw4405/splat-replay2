@@ -8,7 +8,7 @@ import numpy as np
 
 from splat_replay.infrastructure.analyzers.common.image_utils import (
     MatcherRegistry,
-    rotate_image
+    rotate_image,
 )
 from splat_replay.shared.config import ImageMatchingSettings
 from .plugin import AnalyzerPlugin
@@ -32,7 +32,8 @@ class BattleFrameAnalyzer(AnalyzerPlugin):
         """レートを取得する。"""
         if match.is_anarchy():
             udemae = self.registry.match_first_group(
-                "battle_rate_udemae", frame)
+                "battle_rate_udemae", frame
+            )
             return Udemae(udemae) if udemae else None
 
         if match is Match.X:
@@ -46,7 +47,7 @@ class BattleFrameAnalyzer(AnalyzerPlugin):
         xp_image = rotate_image(xp_image, -4)
         xp_str = recognize_text(xp_image)
         if xp_str is None:
-            self._logger.warning(f"XパワーのOCRに失敗しました")
+            self._logger.warning("XパワーのOCRに失敗しました")
             return None
         xp_str = xp_str.strip()
 
@@ -116,37 +117,49 @@ class BattleFrameAnalyzer(AnalyzerPlugin):
             record_positions: Dict[str, Dict[str, int]] = {
                 "kill": {"x1": 1556, "y1": 293, "x2": 1585, "y2": 316},
                 "death": {"x1": 1616, "y1": 293, "x2": 1644, "y2": 316},
-                "special": {"x1": 1674, "y1": 293, "x2": 1703, "y2": 316}
+                "special": {"x1": 1674, "y1": 293, "x2": 1703, "y2": 316},
             }
         else:
             record_positions: Dict[str, Dict[str, int]] = {
                 "kill": {"x1": 1519, "y1": 293, "x2": 1548, "y2": 316},
                 "death": {"x1": 1597, "y1": 293, "x2": 1626, "y2": 316},
-                "special": {"x1": 1674, "y1": 293, "x2": 1703, "y2": 316}
+                "special": {"x1": 1674, "y1": 293, "x2": 1703, "y2": 316},
             }
 
         records: Dict[str, int] = {}
         for name, position in record_positions.items():
-            count_image = frame[position["y1"]:position["y2"],
-                                position["x1"]:position["x2"]]
+            count_image = frame[
+                position["y1"] : position["y2"],
+                position["x1"] : position["x2"],
+            ]
 
             # 文字認識の精度向上のため、拡大・余白・白文字・細字化を行う
             import cv2
+
             count_image = cv2.resize(count_image, (0, 0), fx=3.5, fy=3.5)
             count_image = cv2.copyMakeBorder(
-                count_image, 50, 50, 50, 50, cv2.BORDER_CONSTANT, value=(0, 0, 0))
+                count_image,
+                50,
+                50,
+                50,
+                50,
+                cv2.BORDER_CONSTANT,
+                value=(0, 0, 0),
+            )
             count_image = cv2.cvtColor(count_image, cv2.COLOR_BGR2GRAY)
             count_image = cv2.threshold(
-                count_image, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)[1]
+                count_image, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU
+            )[1]
             count_image = cv2.erode(
-                count_image, np.ones((2, 2), np.uint8), iterations=5)
+                count_image, np.ones((2, 2), np.uint8), iterations=5
+            )
             count_image = cv2.bitwise_not(count_image)
 
             count_str = recognize_text(
-                count_image, "SINGLE_LINE", "0123456789")
+                count_image, "SINGLE_LINE", "0123456789"
+            )
             if count_str is None:
-                self._logger.warning(
-                    f"{name}数のOCRに失敗しました")
+                self._logger.warning(f"{name}数のOCRに失敗しました")
                 return None
 
             count_str = count_str.strip()
@@ -154,7 +167,9 @@ class BattleFrameAnalyzer(AnalyzerPlugin):
                 count = int(count_str)
                 records[name] = count
             except ValueError:
-                self._logger.warning(f"{name}数が数値ではありません: {count_str}")
+                self._logger.warning(
+                    f"{name}数が数値ではありません: {count_str}"
+                )
 
         if len(records) != 3:
             return None
