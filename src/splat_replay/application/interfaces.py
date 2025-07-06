@@ -139,7 +139,7 @@ class VideoAssetRepository(Protocol):
         self,
         video: Path,
         subtitle: str,
-        screenshot: np.ndarray,
+        screenshot: np.ndarray | None,
         metadata: RecordingMetadata,
     ) -> VideoAsset: ...
 

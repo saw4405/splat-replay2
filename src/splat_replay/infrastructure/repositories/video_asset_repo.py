@@ -22,42 +22,23 @@ class FileVideoAssetRepository(VideoAssetRepository):
         self.settings = settings
         self.logger = get_logger()
 
-    def _name_from_metadata(
-        self, meta: RecordingMetadata | None, default: str
-    ) -> str:
-        parts: list[str] = []
-        if meta is None:
-            return default
-        if meta.started_at:
-            parts.append(meta.started_at.strftime("%Y%m%d_%H%M%S"))
-        if meta.rate:
-            parts.append(meta.rate.short_str())
-        if meta.judgement:
-            parts.append(meta.judgement)
-        if (
-            meta.kill is not None
-            and meta.death is not None
-            and meta.special is not None
-        ):
-            parts.append(f"{meta.kill}k{meta.death}d{meta.special}s")
-        return "_".join(parts) if parts else default
-
     def save_recording(
         self,
         video: Path,
         subtitle: str,
-        screenshot: np.ndarray,
+        screenshot: np.ndarray | None,
         metadata: RecordingMetadata,
     ) -> VideoAsset:
         dest = self.settings.recorded_dir
         dest.mkdir(parents=True, exist_ok=True)
-        name_root = self._name_from_metadata(metadata, video.stem)
+        name_root = metadata.started_at.strftime("%Y%m%d_%H%M%S")
         target = dest / f"{name_root}{video.suffix}"
         try:
             shutil.move(str(video), target)
         except Exception:
             target = video
-        cv2.imwrite(str(dest / f"{name_root}.png"), screenshot)
+        if screenshot is not None:
+            cv2.imwrite(str(dest / f"{name_root}.png"), screenshot)
         (dest / f"{name_root}.srt").write_text(subtitle)
         (dest / f"{name_root}.json").write_text(
             json.dumps(metadata.to_dict(), ensure_ascii=False)
@@ -72,7 +53,7 @@ class FileVideoAssetRepository(VideoAssetRepository):
 
     def list_recordings(self) -> list[VideoAsset]:
         assets: list[VideoAsset] = []
-        for video in self.settings.recorded_dir.glob("*.mp4"):
+        for video in self.settings.recorded_dir.glob("*.mkv"):
             assets.append(VideoAsset.load(video))
         return assets
 
@@ -88,4 +69,4 @@ class FileVideoAssetRepository(VideoAssetRepository):
         return target
 
     def list_edited(self) -> list[Path]:
-        return list(self.settings.edited_dir.glob("*.mp4"))
+        return list(self.settings.edited_dir.glob("*.mkv"))

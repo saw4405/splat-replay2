@@ -51,7 +51,6 @@ class AutoRecordUseCase:
         self.sm = state_machine
         self.settings = obs_settings
         self.asset_repo = asset_repo
-        self.pending: List[VideoAsset] = []
         self.logger = get_logger()
         self._resume_trigger: Callable[[np.ndarray], bool] | None = None
         self.finish: bool = False
@@ -70,17 +69,18 @@ class AutoRecordUseCase:
     def _stop(self, save: bool = True) -> None:
         video = self.recorder.stop()
         subtitle = self.transcriber.stop()
+
         if save:
+            if self._matching_started_at is None:
+                raise RuntimeError(
+                    "マッチング開始時刻が設定されていません。"
+                )
+
             metadata = RecordingMetadata(
                 started_at=self._matching_started_at,
-                match=self.result.match if self.result else None,
-                rule=self.result.rule if self.result else None,
-                stage=self.result.stage if self.result else None,
                 rate=self.rate,
                 judgement=self.judgement,
-                kill=self.result.kill if self.result else None,
-                death=self.result.death if self.result else None,
-                special=self.result.special if self.result else None,
+                result=self.result,
             )
             asset = self.asset_repo.save_recording(
                 video,
@@ -93,7 +93,7 @@ class AutoRecordUseCase:
                 video=str(asset.video),
                 start_at=self._matching_started_at,
             )
-            self.pending.append(asset)
+
         self.finish = False
         self._battle_started_at = 0.0
         self._matching_started_at = None
@@ -209,8 +209,7 @@ class AutoRecordUseCase:
             self._resume()
             self.sm.handle(Event.LOADING_FINISHED)
 
-    def execute(self) -> List[VideoAsset]:
-        self.pending.clear()
+    def execute(self):
         self.logger.info("自動録画開始")
         cap = cv2.VideoCapture(self.settings.capture_device_index)
         if not cap.isOpened():
@@ -248,4 +247,3 @@ class AutoRecordUseCase:
             if self.sm.state is State.RECORDING:
                 self._cancel()
             self.sm.state = State.STANDBY
-        return list(self.pending)
