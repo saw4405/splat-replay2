@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from splat_replay.application.interfaces import VideoRecorder, VideoEditorPort
+from splat_replay.domain.models import VideoAsset
 from splat_replay.shared.logger import get_logger
 
 
@@ -22,4 +23,6 @@ class ProcessPostGameUseCase:
         """録画停止後に動画を編集する。"""
         self.logger.info("編集処理開始")
         path = self.recorder.stop()
-        return self.editor.process(path)
+        asset = VideoAsset.load(path)
+        results = self.editor.process([asset])
+        return results[0] if results else path

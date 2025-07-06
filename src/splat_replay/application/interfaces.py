@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 from typing import Protocol
+from datetime import date, time
 
 import numpy as np
 import speech_recognition as sr
@@ -51,7 +52,7 @@ class SpeechTranscriberPort(Protocol):
 class VideoEditorPort(Protocol):
     """動画編集処理を提供するポート。"""
 
-    def process(self, path: Path) -> Path: ...
+    def process(self, assets: list[VideoAsset]) -> list[Path]: ...
 
 
 class UploadPort(Protocol):

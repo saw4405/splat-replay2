@@ -149,11 +149,11 @@ MatchExpression.update_forward_refs()
 class AppSettings(BaseModel):
     """アプリケーション全体の設定。"""
 
-    youtube = YouTubeSettings()
-    video_edit = VideoEditSettings()
-    obs = OBSSettings()
-    speech_transcriber = SpeechTranscriberSettings()
-    storage = VideoStorageSettings()
+    youtube: YouTubeSettings = YouTubeSettings()
+    video_edit: VideoEditSettings = VideoEditSettings()
+    obs: OBSSettings = OBSSettings()
+    speech_transcriber: SpeechTranscriberSettings = SpeechTranscriberSettings()
+    storage: VideoStorageSettings = VideoStorageSettings()
 
     class Config:
         pass
