@@ -18,7 +18,7 @@ def test_cli_help() -> None:
     output = result.output
     assert "Splat Replay" in output
     assert "init" in output
-    assert "daemon" in output
+    assert "auto" in output
     assert "pause" in output
     assert "resume" in output
     assert "stop" in output

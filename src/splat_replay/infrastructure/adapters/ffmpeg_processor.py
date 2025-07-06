@@ -15,7 +15,33 @@ class FFmpegProcessor:
     def merge(self, clips: list[Path]) -> Path:
         """動画を結合する。"""
         logger.info("FFmpeg 動画結合", clips=[str(c) for c in clips])
-        raise NotImplementedError
+        if not clips:
+            raise ValueError("clips is empty")
+        filelist = clips[0].parent / "concat.txt"
+        filelist.write_text("\n".join([f"file '{c}'" for c in clips]))
+        output = (
+            clips[0].parent / f"merged_{int(clips[0].stat().st_mtime)}.mp4"
+        )
+        import subprocess
+
+        subprocess.run(
+            [
+                "ffmpeg",
+                "-y",
+                "-f",
+                "concat",
+                "-safe",
+                "0",
+                "-i",
+                str(filelist),
+                "-c",
+                "copy",
+                str(output),
+            ],
+            check=False,
+        )
+        filelist.unlink()
+        return output
 
     def embed_metadata(self, path: Path) -> None:
         """メタデータを埋め込む。"""

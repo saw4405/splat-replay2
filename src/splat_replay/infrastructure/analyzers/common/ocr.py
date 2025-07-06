@@ -8,8 +8,14 @@ import pytesseract
 
 
 # ps_modeの型を定義する
-PS_MODE = Literal["AUTO", "SINGLE_COLUMN", "SINGLE_LINE",
-                  "SINGLE_WORD", "SINGLE_BLOCK", "SINGLE_CHAR"]
+PS_MODE = Literal[
+    "AUTO",
+    "SINGLE_COLUMN",
+    "SINGLE_LINE",
+    "SINGLE_WORD",
+    "SINGLE_BLOCK",
+    "SINGLE_CHAR",
+]
 
 # ps_modeの文字列をTesseractの数字に変換するマッピング
 PSM_MAPPING = {
@@ -19,11 +25,14 @@ PSM_MAPPING = {
     "SINGLE_LINE": 7,
     "SINGLE_WORD": 8,
     "SINGLE_CHAR": 10,
-
 }
 
 
-def recognize_text(image: np.ndarray, ps_mode: Optional[PS_MODE] = None, whitelist: Optional[str] = None) -> str | None:
+def recognize_text(
+    image: np.ndarray,
+    ps_mode: Optional[PS_MODE] = None,
+    whitelist: Optional[str] = None,
+) -> str | None:
     try:
         config = ""
         if ps_mode:
@@ -36,5 +45,5 @@ def recognize_text(image: np.ndarray, ps_mode: Optional[PS_MODE] = None, whiteli
         return text
     except pytesseract.TesseractNotFoundError:
         return None
-    except Exception as e:
+    except Exception:
         return None

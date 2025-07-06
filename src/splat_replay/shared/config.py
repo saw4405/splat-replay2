@@ -62,6 +62,25 @@ class OBSSettings(BaseModel):
         pass
 
 
+class VideoStorageSettings(BaseModel):
+    """動画ファイルを保存するフォルダ設定。"""
+
+    base_dir: Optional[Path] = None
+
+    @property
+    def recorded_dir(self) -> Path:
+        """録画済み動画を保存するフォルダ."""
+        return (self.base_dir or Path(".")) / "recorded"
+
+    @property
+    def edited_dir(self) -> Path:
+        """編集済み動画を保存するフォルダ."""
+        return (self.base_dir or Path(".")) / "edited"
+
+    class Config:
+        pass
+
+
 class MatcherConfig(BaseModel):
     """画像マッチング1件分の設定。"""
 
@@ -134,6 +153,7 @@ class AppSettings(BaseModel):
     video_edit = VideoEditSettings()
     obs = OBSSettings()
     speech_transcriber = SpeechTranscriberSettings()
+    storage = VideoStorageSettings()
 
     class Config:
         pass
@@ -151,6 +171,7 @@ class AppSettings(BaseModel):
             "video_edit": VideoEditSettings,
             "obs": OBSSettings,
             "speech_transcriber": SpeechTranscriberSettings,
+            "storage": VideoStorageSettings,
         }
         kwargs = {}
         for section, cls_ in section_classes.items():

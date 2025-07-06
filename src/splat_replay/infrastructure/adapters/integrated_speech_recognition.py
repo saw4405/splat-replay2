@@ -1,6 +1,4 @@
-import json
 import os
-from typing import List, Tuple
 
 import speech_recognition as sr
 from groq import Groq
@@ -28,23 +26,30 @@ class IntegratedSpeechRecognizer(SpeechRecognizerPort):
 
     def recognize(self, audio: sr.AudioData) -> str | None:
         try:
-            google: str = self._recognizer.recognize_google(    # type: ignore
-                audio, language=self.language)
+            google: str = self._recognizer.recognize_google(  # type: ignore
+                audio, language=self.language
+            )
             self._logger.info(f"google: {google}")
-            groq: str = self._recognizer.recognize_groq(    # type: ignore
-                audio, model="whisper-large-v3", language=self.primary_language)
+            groq: str = self._recognizer.recognize_groq(  # type: ignore
+                audio, model="whisper-large-v3", language=self.primary_language
+            )
             self._logger.info(f"groq: {groq}")
             result = self._estimate_speech(f"google: {google}\ngroq: {groq}")
             self._logger.info(
-                f"推定: {result.estimated_text} 理由: {result.reason}")
+                f"推定: {result.estimated_text} 理由: {result.reason}"
+            )
             return result.estimated_text
 
         except sr.UnknownValueError as e:
-            self._logger.error(f"音声認識エンジンが入力を理解できませんでした: {e}")
+            self._logger.error(
+                f"音声認識エンジンが入力を理解できませんでした: {e}"
+            )
             return None
 
         except sr.RequestError as e:
-            self._logger.error(f"音声認識エンジンへのリクエストが失敗しました: {e}")
+            self._logger.error(
+                f"音声認識エンジンへのリクエストが失敗しました: {e}"
+            )
             return None
 
         except Exception as e:

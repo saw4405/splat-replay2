@@ -8,7 +8,13 @@ from typing import Protocol
 import numpy as np
 import speech_recognition as sr
 
-from splat_replay.domain.models import GameMode, RateBase, Result
+from splat_replay.domain.models import (
+    GameMode,
+    RateBase,
+    Result,
+    RecordingMetadata,
+    VideoAsset,
+)
 from splat_replay.domain.models.play import Play
 
 
@@ -124,3 +130,21 @@ class OBSControlPort(VideoRecorder, Protocol):
     def start_virtual_camera(self) -> None: ...
 
     def is_virtual_camera_active(self) -> bool: ...
+
+
+class VideoAssetRepository(Protocol):
+    """動画ファイルを保存・管理するポート."""
+
+    def save_recording(
+        self,
+        video: Path,
+        subtitle: str,
+        screenshot: np.ndarray,
+        metadata: RecordingMetadata,
+    ) -> VideoAsset: ...
+
+    def list_recordings(self) -> list[VideoAsset]: ...
+
+    def save_edited(self, video: Path) -> Path: ...
+
+    def list_edited(self) -> list[Path]: ...
