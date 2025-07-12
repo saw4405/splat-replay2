@@ -13,14 +13,11 @@ from pydantic import BaseModel
 class YouTubeSettings(BaseModel):
     """YouTube アップロード関連の設定。"""
 
-    enabled: bool = False
-    client_secrets_file: str = "config/youtube_client_secrets.json"
-    upload_privacy: Literal["public", "unlisted", "private"] = "private"
-    title_template: Optional[str] = None
-    description_template: Optional[str] = None
-    chapter_template: Optional[str] = None
+    privacy_status: Literal["public",
+                            "unlisted", "private"] = "private"
     tags: Optional[List[str]] = None
     playlist_id: Optional[str] = None
+    caption_name: str = "ひとりごと"
 
     class Config:
         pass
@@ -30,6 +27,9 @@ class VideoEditSettings(BaseModel):
     """動画編集処理の設定。"""
 
     volume_multiplier: float = 1.0
+    title_template: Optional[str] = None
+    description_template: Optional[str] = None
+    chapter_template: Optional[str] = None
 
     class Config:
         pass
@@ -65,17 +65,26 @@ class OBSSettings(BaseModel):
 class VideoStorageSettings(BaseModel):
     """動画ファイルを保存するフォルダ設定。"""
 
-    base_dir: Optional[Path] = None
+    base_dir: Path = Path("videos")
 
     @property
     def recorded_dir(self) -> Path:
         """録画済み動画を保存するフォルダ."""
-        return (self.base_dir or Path(".")) / "recorded"
+        return self.base_dir / "recorded"
 
     @property
     def edited_dir(self) -> Path:
         """編集済み動画を保存するフォルダ."""
-        return (self.base_dir or Path(".")) / "edited"
+        return self.base_dir / "edited"
+
+    class Config:
+        pass
+
+
+class PCSettings(BaseModel):
+    """PC固有の設定。"""
+
+    sleep_after_finish: bool = True
 
     class Config:
         pass
@@ -154,6 +163,7 @@ class AppSettings(BaseModel):
     obs: OBSSettings = OBSSettings()
     speech_transcriber: SpeechTranscriberSettings = SpeechTranscriberSettings()
     storage: VideoStorageSettings = VideoStorageSettings()
+    pc: PCSettings = PCSettings()
 
     class Config:
         pass
@@ -172,6 +182,7 @@ class AppSettings(BaseModel):
             "obs": OBSSettings,
             "speech_transcriber": SpeechTranscriberSettings,
             "storage": VideoStorageSettings,
+            "pc": PCSettings,
         }
         kwargs = {}
         for section, cls_ in section_classes.items():

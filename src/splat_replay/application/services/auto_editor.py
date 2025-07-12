@@ -27,20 +27,18 @@ class AutoEditor:
         self.sm = sm
         self.logger = get_logger()
 
-    def _collect_assets(self) -> list[VideoAsset]:
-        return self.repo.list_recordings()
-
-    def _process(self, assets: list[VideoAsset]) -> list[Path]:
-        return self.editor.process(assets)
-
     def execute(self) -> list[Path]:
         self.logger.info("自動編集開始")
         self.sm.handle(Event.EDIT_START)
-        assets = self._collect_assets()
-        results = self._process(assets)
+        assets = self.repo.list_recordings()
+        results, edited_assets = self.editor.process(assets)
         edited: list[Path] = []
         for out in results:
             target = self.repo.save_edited(Path(out))
+            self.logger.info("動画編集完了", path=str(target))
             edited.append(target)
+        for asset in edited_assets:
+            self.repo.delete_recording(asset.video)
         self.sm.handle(Event.EDIT_END)
+        self.logger.info("自動編集終了")
         return edited

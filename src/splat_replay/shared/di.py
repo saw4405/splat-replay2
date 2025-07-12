@@ -21,8 +21,8 @@ from splat_replay.infrastructure import (
     FileVideoAssetRepository,
     OBSController,
     SystemPower,
-    YouTubeClient,
     FrameAnalyzer,
+    YouTubeClient
 )
 from splat_replay.infrastructure.analyzers.plugin import AnalyzerPlugin
 from splat_replay.infrastructure.analyzers.splatoon_battle_analyzer import (
@@ -33,6 +33,7 @@ from splat_replay.infrastructure.analyzers.splatoon_salmon_analyzer import (
 )
 from splat_replay.domain.services.state_machine import StateMachine
 from splat_replay.domain.services.editor import VideoEditor
+from splat_replay.domain.services.uploader import YouTubeUploader
 from splat_replay.domain.services.metadata_extractor import MetadataExtractor
 from splat_replay.infrastructure.audio.speech_transcriber import SpeechTranscriber
 from splat_replay.domain.repositories.metadata_repo import MetadataRepository
@@ -56,6 +57,7 @@ from splat_replay.shared.config import (
     ImageMatchingSettings,
     SpeechTranscriberSettings,
     VideoStorageSettings,
+    PCSettings,
 )
 
 
@@ -80,6 +82,7 @@ def configure_container() -> punq.Container:
         SpeechTranscriberSettings, instance=settings.speech_transcriber
     )
     container.register(VideoStorageSettings, instance=settings.storage)
+    container.register(PCSettings, instance=settings.pc)
 
     image_match_path = Path("config/image_matching.yaml")
     if not image_match_path.exists():
@@ -95,7 +98,8 @@ def configure_container() -> punq.Container:
     container.register(CaptureDevicePort, CaptureDeviceChecker)
     container.register(OBSControlPort, OBSController)
     container.register(VideoEditorPort, VideoEditor)
-    container.register(UploadPort, YouTubeClient)
+    container.register(UploadPort, YouTubeUploader)
+    container.register(YouTubeClient, YouTubeClient)
     container.register(PowerPort, SystemPower)
     container.register(BattleFrameAnalyzer, BattleFrameAnalyzer)
     container.register(SalmonFrameAnalyzer, SalmonFrameAnalyzer)

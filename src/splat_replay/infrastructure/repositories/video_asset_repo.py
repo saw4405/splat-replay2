@@ -57,6 +57,20 @@ class FileVideoAssetRepository(VideoAssetRepository):
             assets.append(VideoAsset.load(video))
         return assets
 
+    def delete_recording(self, video: Path) -> None:
+        video = video.resolve()
+        if video.exists():
+            video.unlink(missing_ok=True)
+        subtitle = video.with_suffix(".srt")
+        if subtitle.exists():
+            subtitle.unlink(missing_ok=True)
+        thumbnail = video.with_suffix(".png")
+        if thumbnail.exists():
+            thumbnail.unlink(missing_ok=True)
+        metadata = video.with_suffix(".json")
+        if metadata.exists():
+            metadata.unlink(missing_ok=True)
+
     def save_edited(self, video: Path) -> Path:
         dest = self.settings.edited_dir
         dest.mkdir(parents=True, exist_ok=True)
@@ -70,3 +84,8 @@ class FileVideoAssetRepository(VideoAssetRepository):
 
     def list_edited(self) -> list[Path]:
         return list(self.settings.edited_dir.glob("*.mkv"))
+
+    def delete_edited(self, video: Path) -> None:
+        video = video.resolve()
+        if video.exists():
+            video.unlink(missing_ok=True)

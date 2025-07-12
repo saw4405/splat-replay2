@@ -26,7 +26,7 @@ def test_state_transitions() -> None:
     sm.handle(Event.LOADING_FINISHED)
     assert sm.state is State.RECORDING
 
-    sm.handle(Event.POSTGAME_DETECTED)
+    sm.handle(Event.BATTLE_ENDED)
     assert sm.state is State.STANDBY
 
     sm.handle(Event.EDIT_START)

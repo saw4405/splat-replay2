@@ -1,9 +1,3 @@
-[recording]
-# Recording settings
-output_dir = "recordings"
-max_duration_minutes = 30
-auto_cleanup_days = 30
-
 [obs]
 websocket_host = "localhost"
 websocket_port = 4455
@@ -14,6 +8,9 @@ capture_device_name = "MiraBox Capture"
 
 [video_edit]
 volume_multiplier = 1.0
+title_template = "{BATTLE}({RATE}) {RULE} {WIN}勝{LOSE}敗 {DAY} {SCHEDULE}時～"
+description_template = "{CHAPTERS}"
+chapter_template = "{RESULT} {KILL}k {DEATH}d {SPECIAL}s  {STAGE}"
 
 [speech_transcriber]
 mic_device_name = "マイク (USB Audio Device)"
@@ -23,7 +20,6 @@ phrase_time_limit = 3.0
 custom_dictionary = ["ナイス", "キル", "デス"]
 
 [logging]
-# Logging settings
 level = "INFO"
 format = "json"
 file_path = "logs/splat_replay.log"
@@ -31,16 +27,13 @@ max_file_size_mb = 10
 backup_count = 5
 
 [youtube]
-enabled = false
-client_secrets_file = "config/youtube_client_secrets.json"
-upload_privacy = "private"
-title_template = "{BATTLE}({RATE}) {RULE} {WIN}勝{LOSE}敗 {DAY} {SCHEDULE}時～"
-description_template = "{CHAPTERS}"
-chapter_template = "{RESULT} {KILL}k {DEATH}d {SPECIAL}s  {STAGE}"
+privacy_status = "private"
 tags = ["Splatoon3"]
 playlist_id = ""
+caption_name = "ひとりごと"
 
-[storage]
-# 録画・編集動画を保存するベースフォルダ
-# 未指定の場合はアプリ実行ディレクトリを利用します
+[video_storage]
 base_dir = "videos"
+
+[pc]
+sleep_after_finish = false

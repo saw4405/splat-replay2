@@ -214,5 +214,9 @@ $RECYCLE.BIN/
 # End of https://www.toptal.com/developers/gitignore/api/python,venv,windows
 
 
-config/settings.toml
+settings.toml
+client_secrets.json
+token.pickle
 logs/
+videos/
+ikamodoki1.ttf

@@ -4,42 +4,60 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from splat_replay.domain.models.upload_config import YouTubeUploadConfig
-from splat_replay.domain.models.video_clip import VideoClip
+from splat_replay.application.interfaces import UploadPort
+from splat_replay.infrastructure.adapters.ffmpeg_processor import FFmpegProcessor
+from splat_replay.infrastructure.adapters.youtube_client import YouTubeClient
+from splat_replay.shared.config import YouTubeSettings
 from splat_replay.shared.logger import get_logger
 
 logger = get_logger()
 
 
-class YouTubeUploader:
+class YouTubeUploader(UploadPort):
     """YouTube API を用いて動画をアップロードする。"""
 
-    def upload_video(
-        self, clip: VideoClip, config: YouTubeUploadConfig
-    ) -> str:
+    def __init__(self, client: YouTubeClient, ffmpeg: FFmpegProcessor, settings: YouTubeSettings) -> None:
+        self.client = client
+        self.ffmpeg = ffmpeg
+        self.settings = settings
+
+    def upload(self, path: Path) -> str:
         """動画をアップロードし、動画 ID を返す。"""
-        logger.info("動画アップロード", clip=str(clip.path))
-        raise NotImplementedError
+        logger.info("動画アップロード", clip=str(path))
 
-    def upload_thumbnail(self, video_id: str, thumbnail: Path) -> None:
-        """サムネイルをアップロードする。"""
-        logger.info(
-            "サムネイルアップロード",
-            video_id=video_id,
-            thumbnail=str(thumbnail),
-        )
-        raise NotImplementedError
+        metadata = self.ffmpeg.get_metadata(path)
 
-    def upload_subtitle(self, video_id: str, subtitle: Path) -> None:
-        """字幕ファイルをアップロードする。"""
-        logger.info(
-            "字幕アップロード", video_id=video_id, subtitle=str(subtitle)
+        id = self.client.upload(
+            path,
+            title=metadata.get("title", ""),
+            description=metadata.get("comment", ""),
+            tags=self.settings.tags or [],
+            privacy_status=self.settings.privacy_status,
         )
-        raise NotImplementedError
+        logger.info("動画アップロード完了", video_id=id)
 
-    def add_to_playlist(self, video_id: str, playlist_id: str) -> None:
-        """動画を指定したプレイリストへ追加する。"""
-        logger.info(
-            "プレイリスト追加", video_id=video_id, playlist_id=playlist_id
-        )
-        raise NotImplementedError
+        if not id:
+            return ""
+
+        thumb_data = self.ffmpeg.get_thumbnail(path)
+        if thumb_data:
+            thumb = path.with_suffix(".png")
+            thumb.write_bytes(thumb_data)
+            self.client.upload_thumbnail(id, thumb)
+            thumb.unlink(missing_ok=True)
+            logger.info("サムネイルアップロード完了", video_id=id)
+
+        srt = self.ffmpeg.get_subtitle(path)
+        if srt:
+            subtitle = path.with_suffix(".srt")
+            subtitle.write_text(srt, encoding="utf-8")
+            self.client.upload_subtitle(
+                id, subtitle, self.settings.caption_name)
+            subtitle.unlink(missing_ok=True)
+            logger.info("字幕アップロード完了", video_id=id)
+
+        if self.settings.playlist_id:
+            self.client.add_to_playlist(id, self.settings.playlist_id)
+            logger.info("プレイリストに追加完了", video_id=id)
+
+        return id

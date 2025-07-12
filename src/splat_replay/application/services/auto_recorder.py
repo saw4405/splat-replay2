@@ -13,7 +13,6 @@ from splat_replay.application.interfaces import (
     VideoRecorder,
     FrameAnalyzerPort,
     SpeechTranscriberPort,
-    PowerPort,
     VideoAssetRepository,
 )
 from splat_replay.domain.services.state_machine import Event, State, StateMachine
@@ -30,7 +29,6 @@ class AutoRecorder:
         recorder: VideoRecorder,
         analyzer: FrameAnalyzerPort,
         transcriber: SpeechTranscriberPort,
-        power: PowerPort,
         state_machine: StateMachine,
         obs_settings: OBSSettings,
         asset_repo: VideoAssetRepository,
@@ -38,7 +36,6 @@ class AutoRecorder:
         self.recorder = recorder
         self.analyzer = analyzer
         self.transcriber = transcriber
-        self.power = power
         self.sm = state_machine
         self.settings = obs_settings
         self.asset_repo = asset_repo
@@ -99,8 +96,6 @@ class AutoRecorder:
         self.recorder.resume()
         self.transcriber.resume()
 
-    # ----- 手動操作用メソッド -----
-
     def manual_start(self) -> None:
         """手動で録画を開始する。"""
         if self.sm.state is not State.STANDBY:
@@ -143,12 +138,6 @@ class AutoRecorder:
                 detected = True
         return off_count, last_check, detected
 
-    def _handle_power_off(self) -> None:
-        if self.sm.state in {State.RECORDING, State.PAUSED}:
-            self._stop()
-            self.sm.handle(Event.POSTGAME_DETECTED)
-        self.power.sleep()
-
     def _handle_standby(self, frame: np.ndarray) -> None:
         if self._matching_started_at is None:
             if self.analyzer.detect_match_select(frame):
@@ -186,7 +175,7 @@ class AutoRecorder:
             if now - self._battle_started_at >= 600:
                 self.logger.info("録画が10分以上続いたため停止")
                 self._stop()
-                self.sm.handle(Event.POSTGAME_DETECTED)
+                self.sm.handle(Event.TIME_OUT)
                 return
             if self.analyzer.detect_battle_finish(frame):
                 self.logger.info("バトル終了を検出、一時停止")
@@ -211,7 +200,7 @@ class AutoRecorder:
                 self.result_screenshot = frame
                 self.logger.info("バトル結果を検出", result=str(self.result))
                 self._stop()
-                self.sm.handle(Event.POSTGAME_DETECTED)
+                self.sm.handle(Event.BATTLE_ENDED)
 
     def _handle_paused(self, frame: np.ndarray) -> None:
         if self._resume_trigger and self._resume_trigger(frame):
@@ -244,7 +233,6 @@ class AutoRecorder:
                     frame, off_count, last_check
                 )
                 if detected:
-                    self._handle_power_off()
                     break
                 if self.sm.state is State.STANDBY:
                     self._handle_standby(frame)
@@ -253,7 +241,7 @@ class AutoRecorder:
                 elif self.sm.state is State.PAUSED:
                     self._handle_paused(frame)
         finally:
+            self.logger.info("自動録画終了")
             cap.release()
-            if self.sm.state is State.RECORDING:
+            if self.sm.state is not State.STANDBY:
                 self._cancel()
-            self.sm.state = State.STANDBY

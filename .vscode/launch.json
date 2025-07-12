@@ -5,12 +5,12 @@
   "version": "0.2.0",
   "configurations": [
     {
-      "name": "Init",
+      "name": "Auto",
       "type": "debugpy",
       "request": "launch",
       "program": "${workspaceFolder}/src/splat_replay/cli.py",
       "console": "integratedTerminal",
-      "args": ["init"],
+      "args": ["auto"],
       "cwd": "${workspaceFolder}",
       "justMyCode": false,
       "env": {
@@ -18,12 +18,12 @@
       }
     },
     {
-      "name": "Daemon",
+      "name": "Upload",
       "type": "debugpy",
       "request": "launch",
       "program": "${workspaceFolder}/src/splat_replay/cli.py",
       "console": "integratedTerminal",
-      "args": ["daemon"],
+      "args": ["upload"],
       "cwd": "${workspaceFolder}",
       "justMyCode": false,
       "env": {

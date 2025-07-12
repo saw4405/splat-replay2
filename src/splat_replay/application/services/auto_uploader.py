@@ -30,6 +30,9 @@ class AutoUploader:
         ids: list[str] = []
         for video in self.repo.list_edited():
             self.logger.info("アップロード", path=str(video))
-            ids.append(self.uploader.upload(video))
+            id = self.uploader.upload(video)
+            ids.append(id)
+            self.repo.delete_edited(video)
         self.sm.handle(Event.UPLOAD_END)
+        self.logger.info("自動アップロード終了")
         return ids

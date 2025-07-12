@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Protocol
+from typing import Protocol, Tuple
 
 import numpy as np
 import speech_recognition as sr
@@ -51,7 +51,8 @@ class SpeechTranscriberPort(Protocol):
 class VideoEditorPort(Protocol):
     """動画編集処理を提供するポート。"""
 
-    def process(self, assets: list[VideoAsset]) -> list[Path]: ...
+    def process(self, assets: list[VideoAsset]) -> Tuple[list[Path],
+                                                         list[VideoAsset]]: ...
 
 
 class UploadPort(Protocol):
@@ -145,6 +146,10 @@ class VideoAssetRepository(Protocol):
 
     def list_recordings(self) -> list[VideoAsset]: ...
 
+    def delete_recording(self, video: Path) -> None: ...
+
     def save_edited(self, video: Path) -> Path: ...
 
     def list_edited(self) -> list[Path]: ...
+
+    def delete_edited(self, video: Path) -> None: ...

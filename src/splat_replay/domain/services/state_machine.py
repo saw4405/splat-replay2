@@ -32,8 +32,9 @@ class Event(Enum):
     BATTLE_STARTED = auto()
     LOADING_DETECTED = auto()
     LOADING_FINISHED = auto()
-    POSTGAME_DETECTED = auto()
     EARLY_ABORT = auto()
+    TIME_OUT = auto()
+    BATTLE_ENDED = auto()
     MANUAL_PAUSE = auto()
     MANUAL_RESUME = auto()
     MANUAL_STOP = auto()
@@ -53,8 +54,9 @@ TRANSITIONS: dict[tuple[State, Event], State] = {
     (State.PAUSED, Event.LOADING_FINISHED): State.RECORDING,
     (State.RECORDING, Event.MANUAL_PAUSE): State.PAUSED,
     (State.PAUSED, Event.MANUAL_RESUME): State.RECORDING,
-    (State.RECORDING, Event.POSTGAME_DETECTED): State.STANDBY,
     (State.RECORDING, Event.EARLY_ABORT): State.STANDBY,
+    (State.RECORDING, Event.TIME_OUT): State.STANDBY,
+    (State.RECORDING, Event.BATTLE_ENDED): State.STANDBY,
     (State.RECORDING, Event.MANUAL_STOP): State.STANDBY,
     (State.PAUSED, Event.MANUAL_STOP): State.STANDBY,
     (State.STANDBY, Event.EDIT_START): State.EDITING,
