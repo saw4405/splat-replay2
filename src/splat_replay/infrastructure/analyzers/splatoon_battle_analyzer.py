@@ -26,7 +26,11 @@ class BattleFrameAnalyzer(AnalyzerPlugin):
 
     def extract_match_select(self, frame: np.ndarray) -> Match | None:
         match = self.registry.match_first_group("battle_select", frame)
-        return Match(match) if match else None
+        if match:
+            return Match(match)
+        if self.registry.match("match_select_splatfest", frame):
+            return Match.SPLATFEST
+        return None
 
     def extract_rate(self, frame: np.ndarray, match: Match) -> RateBase | None:
         """レートを取得する。"""

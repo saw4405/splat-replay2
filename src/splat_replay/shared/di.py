@@ -31,12 +31,10 @@ from splat_replay.infrastructure.analyzers.splatoon_battle_analyzer import (
 from splat_replay.infrastructure.analyzers.splatoon_salmon_analyzer import (
     SalmonFrameAnalyzer,
 )
-from splat_replay.domain.services import (
-    VideoEditor,
-    SpeechTranscriber,
-    MetadataExtractor,
-    StateMachine,
-)
+from splat_replay.domain.services.state_machine import StateMachine
+from splat_replay.domain.services.editor import VideoEditor
+from splat_replay.domain.services.metadata_extractor import MetadataExtractor
+from splat_replay.infrastructure.audio.speech_transcriber import SpeechTranscriber
 from splat_replay.domain.repositories.metadata_repo import MetadataRepository
 from splat_replay.application.interfaces import (
     VideoRecorder,

@@ -96,8 +96,8 @@ matcher_groups:
     - battle_rule_tricolor_turf_war   # トリカラバトル
   
   battle_rate_udemae:
-    - battle_rate_udemae_s
     - battle_rate_udemae_s_plus
+    - battle_rate_udemae_s
 
   battle_rate_xp_rules:
     - battle_rate_xp_rainmaker        # ガチホコ

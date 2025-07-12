@@ -61,6 +61,19 @@ def test_manual_pause_resume() -> None:
     assert sm.state is State.RECORDING
 
 
+def test_manual_start_stop() -> None:
+    sm = StateMachine()
+
+    sm.handle(Event.DEVICE_CONNECTED)
+    sm.handle(Event.INITIALIZED)
+
+    sm.handle(Event.MANUAL_START)
+    assert sm.state is State.RECORDING
+
+    sm.handle(Event.MANUAL_STOP)
+    assert sm.state is State.STANDBY
+
+
 def test_state_listener() -> None:
     sm = StateMachine()
     history: list[State] = []

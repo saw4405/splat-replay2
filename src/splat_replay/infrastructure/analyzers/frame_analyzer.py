@@ -63,17 +63,18 @@ class FrameAnalyzer(FrameAnalyzerPort):
 
     def detect_match_select(self, frame: np.ndarray) -> bool:
         """マッチ選択画面かを判定しモードを設定する。"""
-        if self.registry.match("match_select", frame):
-            for mode in GameMode:
-                plugin = self.plugins.get(mode)
-                if plugin is None:
-                    continue
-                if match := plugin.extract_match_select(frame):
-                    self.match = match
-                    self.mode = mode
-                    return True
+        detected = self.registry.match("match_select", frame)
+        for mode in GameMode:
+            plugin = self.plugins.get(mode)
+            if plugin is None:
+                continue
+            match = plugin.extract_match_select(frame)
+            if match:
+                self.match = match
+                self.mode = mode
+                return True
 
-        return False
+        return detected
 
     def extract_rate(self, frame: np.ndarray) -> RateBase | None:
         plugin = self.plugins.get(self.mode)
