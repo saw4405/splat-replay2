@@ -7,8 +7,7 @@ BASE = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(BASE / "src"))  # noqa: E402
 
 from typer.testing import CliRunner  # noqa: E402
-from splat_replay import cli  # noqa: E402
-from splat_replay.cli import app  # noqa: E402
+from splat_replay.cli import app, container  # noqa: E402
 
 
 def test_cli_help() -> None:
@@ -17,33 +16,26 @@ def test_cli_help() -> None:
     assert result.exit_code == 0
     output = result.output
     assert "Splat Replay" in output
-    assert "init" in output
     assert "auto" in output
-    assert "pause" in output
-    assert "resume" in output
-    assert "stop" in output
+    assert "upload" in output
 
 
-def test_record_without_init(monkeypatch) -> None:
+def test_auto(monkeypatch) -> None:
     runner = CliRunner()
     with runner.isolated_filesystem():
-        from splat_replay.application.use_cases.record_battle import (
-            RecordBattleUseCase,
+        from splat_replay.application.use_cases.auto import AutoUseCase
+        from splat_replay.domain.services.state_machine import (
+            StateMachine,
+            Event,
         )
 
-        monkeypatch.setattr(RecordBattleUseCase, "execute", lambda self: None)
+        async def _execute(self, timeout=None):
+            sm = container.resolve(StateMachine)
+            sm.handle(Event.DEVICE_CONNECTED)
+            sm.handle(Event.INITIALIZED)
+            return None
 
-        class DummyCheck:
-            def execute(self) -> bool:
-                return True
+        monkeypatch.setattr(AutoUseCase, "execute", _execute)
 
-        original_resolve = cli.resolve
-
-        def fake_resolve(cls):
-            if cls is cli.CheckInitializationUseCase:
-                return DummyCheck()
-            return original_resolve(cls)
-
-        monkeypatch.setattr(cli, "resolve", fake_resolve)
-        result = runner.invoke(app, ["record"])
+        result = runner.invoke(app, ["auto"])
     assert result.exit_code == 0

@@ -6,19 +6,13 @@ from pathlib import Path
 
 import punq
 
-from splat_replay.application import (
-    ProcessPostGameUseCase,
-    RecordBattleUseCase,
-    PauseRecordingUseCase,
-    ResumeRecordingUseCase,
-    StopRecordingUseCase,
-    ShutdownPCUseCase,
-    UploadVideoUseCase,
-    AutoRecordUseCase,
-    AutoEditUseCase,
-    AutoUploadUseCase,
-    InitializeEnvironmentUseCase,
-    CheckInitializationUseCase,
+from splat_replay.application import AutoUseCase, UploadUseCase
+from splat_replay.application.services import (
+    EnvironmentInitializer,
+    AutoRecorder,
+    AutoEditor,
+    AutoUploader,
+    PowerManager,
 )
 from splat_replay.infrastructure import (
     CaptureDeviceChecker,
@@ -136,19 +130,14 @@ def configure_container() -> punq.Container:
     state_machine = StateMachine()
     container.register(StateMachine, instance=state_machine)
 
+    # サービス登録
+    container.register(EnvironmentInitializer, EnvironmentInitializer)
+    container.register(AutoRecorder, AutoRecorder)
+    container.register(AutoEditor, AutoEditor)
+    container.register(AutoUploader, AutoUploader)
+    container.register(PowerManager, PowerManager)
+
     # ユースケース登録
-    container.register(RecordBattleUseCase, RecordBattleUseCase)
-    container.register(PauseRecordingUseCase, PauseRecordingUseCase)
-    container.register(ResumeRecordingUseCase, ResumeRecordingUseCase)
-    container.register(StopRecordingUseCase, StopRecordingUseCase)
-    container.register(ProcessPostGameUseCase, ProcessPostGameUseCase)
-    container.register(UploadVideoUseCase, UploadVideoUseCase)
-    container.register(AutoRecordUseCase, AutoRecordUseCase)
-    container.register(AutoEditUseCase, AutoEditUseCase)
-    container.register(AutoUploadUseCase, AutoUploadUseCase)
-    container.register(ShutdownPCUseCase, ShutdownPCUseCase)
-    container.register(
-        InitializeEnvironmentUseCase, InitializeEnvironmentUseCase
-    )
-    container.register(CheckInitializationUseCase, CheckInitializationUseCase)
+    container.register(AutoUseCase, AutoUseCase)
+    container.register(UploadUseCase, UploadUseCase)
     return container

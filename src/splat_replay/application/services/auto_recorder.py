@@ -1,10 +1,10 @@
-"""自動録画ユースケース。"""
+"""自動録画サービス。"""
 
 from __future__ import annotations
 
-import time
 import datetime
-from typing import Callable, List
+import time
+from typing import Callable
 
 import cv2
 import numpy as np
@@ -16,23 +16,14 @@ from splat_replay.application.interfaces import (
     PowerPort,
     VideoAssetRepository,
 )
-from splat_replay.domain.services.state_machine import (
-    Event,
-    State,
-    StateMachine,
-)
+from splat_replay.domain.services.state_machine import Event, State, StateMachine
 from splat_replay.shared.config import OBSSettings
 from splat_replay.shared.logger import get_logger
-from splat_replay.domain.models import (
-    RateBase,
-    Result,
-    RecordingMetadata,
-    VideoAsset,
-)
+from splat_replay.domain.models import RateBase, Result, RecordingMetadata
 
 
-class AutoRecordUseCase:
-    """電源OFFまで自動録画を行い、VideoAsset の一覧を返す。"""
+class AutoRecorder:
+    """電源OFFまで自動で録画を行うサービス。"""
 
     def __init__(
         self,
@@ -72,9 +63,7 @@ class AutoRecordUseCase:
 
         if save:
             if self._matching_started_at is None:
-                raise RuntimeError(
-                    "マッチング開始時刻が設定されていません。"
-                )
+                raise RuntimeError("マッチング開始時刻が設定されていません。")
 
             metadata = RecordingMetadata(
                 started_at=self._matching_started_at,
@@ -83,15 +72,10 @@ class AutoRecordUseCase:
                 result=self.result,
             )
             asset = self.asset_repo.save_recording(
-                video,
-                subtitle,
-                self.result_screenshot,
-                metadata,
+                video, subtitle, self.result_screenshot, metadata
             )
             self.logger.info(
-                "録画終了",
-                video=str(asset.video),
-                start_at=self._matching_started_at,
+                "録画終了", video=str(asset.video), start_at=self._matching_started_at
             )
 
         self.finish = False
@@ -187,9 +171,7 @@ class AutoRecordUseCase:
                 judgement = self.analyzer.extract_battle_judgement(frame)
                 if judgement is not None and self.judgement is None:
                     self.judgement = judgement
-                    self.logger.info(
-                        "バトルジャッジメント取得", judgement=str(judgement)
-                    )
+                    self.logger.info("バトルジャッジメント取得", judgement=str(judgement))
                 return
             if self.analyzer.detect_loading(frame):
                 self.logger.info("ロード画面を検出、一時停止")
@@ -209,7 +191,7 @@ class AutoRecordUseCase:
             self._resume()
             self.sm.handle(Event.LOADING_FINISHED)
 
-    def execute(self):
+    def execute(self) -> None:
         self.logger.info("自動録画開始")
         cap = cv2.VideoCapture(self.settings.capture_device_index)
         if not cap.isOpened():

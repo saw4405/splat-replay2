@@ -6,7 +6,6 @@ from pathlib import Path
 import datetime
 from collections import defaultdict
 from typing import Dict, List, Tuple
-import io
 
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont
