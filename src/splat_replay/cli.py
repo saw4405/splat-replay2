@@ -28,15 +28,23 @@ def resolve(cls: Type[T]) -> T:
 
 
 @app.command()
-async def auto(
+def auto(
     timeout: float = typer.Option(
         None, help="デバイス接続待ちタイムアウト（秒、未指定で無限）"
     ),
 ) -> None:
     """録画からアップロードまで自動実行する。"""
+    asyncio.run(_auto(timeout))
+
+
+async def _auto(timeout: float | None = None) -> None:
     logger.info("auto コマンド開始", timeout=timeout)
-    uc = resolve(AutoUseCase)
-    sm = resolve(StateMachine)
+    try:
+        uc = resolve(AutoUseCase)
+        sm = resolve(StateMachine)
+    except Exception as e:  # pragma: no cover - 環境依存エラーを無視
+        logger.error("依存関係の解決に失敗しました: %s", e)
+        return
 
     ready = asyncio.Event()
 
@@ -82,8 +90,12 @@ async def auto(
 
 
 @app.command()
-async def upload() -> None:
+def upload() -> None:
     """動画を編集してアップロードする。"""
+    asyncio.run(_upload())
+
+
+async def _upload() -> None:
     logger.info("upload コマンド開始")
     uc = resolve(UploadUseCase)
     await uc.execute()
