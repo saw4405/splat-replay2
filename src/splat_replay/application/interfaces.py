@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from pathlib import Path
 from typing import Protocol
-from datetime import date, time
 
 import numpy as np
 import speech_recognition as sr

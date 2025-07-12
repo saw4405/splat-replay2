@@ -1,41 +1,19 @@
-"""コマンドラインインターフェース定義。"""
+"""Splat Replay CLI。"""
 
 from __future__ import annotations
 
-import time
-import threading
 import typer
-from pathlib import Path
-
-
-from splat_replay.shared.logger import (
-    initialize_logger,
-    get_logger,
-    buffer_console_logs,
-)
-
-
-from splat_replay.application import (
-    ProcessPostGameUseCase,
-    RecordBattleUseCase,
-    PauseRecordingUseCase,
-    ResumeRecordingUseCase,
-    StopRecordingUseCase,
-    UploadVideoUseCase,
-    InitializeEnvironmentUseCase,
-    AutoRecordUseCase,
-    AutoEditUseCase,
-    AutoUploadUseCase,
-)
-from splat_replay.application.use_cases.check_initialization import (
-    CheckInitializationUseCase,
-)
 from typing import Type, TypeVar, cast
+import asyncio
+import threading
+import time
 
 from splat_replay.shared.di import configure_container
+from splat_replay.shared.logger import initialize_logger, get_logger
+from splat_replay.application import AutoUseCase, UploadUseCase
+from splat_replay.domain.services.state_machine import StateMachine, State
 
 app = typer.Typer(help="Splat Replay ツール群")
-
 
 container = configure_container()
 initialize_logger()
@@ -45,46 +23,29 @@ T = TypeVar("T")
 
 
 def resolve(cls: Type[T]) -> T:
-    """DI コンテナから型指定付きで依存を取得する。"""
+    """DI コンテナから依存を取得する。"""
     return cast(T, container.resolve(cls))
 
 
-def _require_initialized() -> None:
-    """他のコマンド実行前に初期化済みか確認する。"""
-
-    uc = resolve(CheckInitializationUseCase)
-    if uc.execute():
-        return
-
-    typer.echo(
-        "初期化が完了していません。先に `init` コマンドを実行してください。",
-        err=True,
-    )
-    raise typer.Exit(code=1)
-
-
-@app.callback()
-def main() -> None:
-    """Splat Replay CLI のエントリーポイント。"""
-    logger.info("CLI 起動")
-
-
 @app.command()
-def init(
+async def auto(
     timeout: float = typer.Option(
         None, help="デバイス接続待ちタイムアウト（秒、未指定で無限）"
     ),
 ) -> None:
-    """起動準備を行う。"""
-    logger.info("init コマンド開始", timeout=timeout)
-    uc = resolve(InitializeEnvironmentUseCase)
-    if not uc.device.is_connected():
-        typer.echo(
-            "\033[1;33mキャプチャボードをPCに接続してください。\033[0m\n"
-        )
-    stop_event = threading.Event()
+    """録画からアップロードまで自動実行する。"""
+    logger.info("auto コマンド開始", timeout=timeout)
+    uc = resolve(AutoUseCase)
+    sm = resolve(StateMachine)
 
-    def animate():
+    ready = asyncio.Event()
+
+    def _on_state_change(state: State) -> None:
+        if state not in {State.WAITING_DEVICE, State.OBS_STARTING}:
+            ready.set()
+
+    def _animate(stop_event: threading.Event) -> None:
+        """キャプチャデバイス接続待ちアニメーション."""
         animation = [
             "(●´・ω・)    ",
             "(●´・ω・)σ   ",
@@ -92,7 +53,7 @@ def init(
             "(●´・ω・)σσσ ",
             "(●´・ω・)σσσσ",
         ]
-        print("\033[?25l", end="")  # カーソル非表示
+        print("\033[?25l", end="")
         idx = 0
         try:
             while not stop_event.is_set():
@@ -101,95 +62,31 @@ def init(
                 idx += 1
                 time.sleep(0.5)
         finally:
-            print("\033[?25h", end="")  # カーソル表示
+            print("\033[?25h", end="")
 
-    with buffer_console_logs():
-        anim_thread = threading.Thread(target=animate)
-        anim_thread.start()
-        try:
-            uc.execute(timeout=timeout)
-            stop_event.set()
-            anim_thread.join()
-            print("\r初期化が完了しました。           ")
-        except KeyboardInterrupt:
-            stop_event.set()
-            anim_thread.join()
-            print("\r初期化を中断しました。           ")
-            raise typer.Exit(1)
-        except Exception as e:
-            stop_event.set()
-            anim_thread.join()
-            print(f"\r初期化に失敗しました: {e}")
-            raise typer.Exit(code=1)
+    sm.add_listener(_on_state_change)
+    try:
+        task = asyncio.create_task(uc.execute(timeout))
+        stop_event = threading.Event()
+        thread = threading.Thread(
+            target=_animate, args=(stop_event,), daemon=True
+        )
+        thread.start()
+        await ready.wait()
+        stop_event.set()
+        thread.join()
+        print()
+        await task
+    finally:
+        sm.remove_listener(_on_state_change)
 
 
 @app.command()
-def record() -> None:
-    """録画を開始する。"""
-    logger.info("record コマンド開始")
-    _require_initialized()
-    uc = resolve(RecordBattleUseCase)
-    uc.execute()
-
-
-@app.command()
-def pause() -> None:
-    """録画を一時停止する。"""
-    logger.info("pause コマンド開始")
-    _require_initialized()
-    uc = resolve(PauseRecordingUseCase)
-    uc.execute()
-
-
-@app.command()
-def resume() -> None:
-    """録画を再開する。"""
-    logger.info("resume コマンド開始")
-    _require_initialized()
-    uc = resolve(ResumeRecordingUseCase)
-    uc.execute()
-
-
-@app.command()
-def stop() -> None:
-    """録画を停止する。"""
-    logger.info("stop コマンド開始")
-    _require_initialized()
-    uc = resolve(StopRecordingUseCase)
-    video_path = uc.execute()
-    typer.echo(f"録画ファイル: {video_path}")
-
-
-@app.command()
-def edit() -> None:
-    """録画停止後の動画を編集する。"""
-    logger.info("edit コマンド開始")
-    _require_initialized()
-    uc = resolve(ProcessPostGameUseCase)
-    uc.execute()
-
-
-@app.command()
-def upload(file_path: Path) -> None:
-    """指定した動画を YouTube へアップロードする。"""
-    logger.info("upload コマンド開始", file_path=str(file_path))
-    _require_initialized()
-    uc = resolve(UploadVideoUseCase)
-    result = uc.execute(file_path)
-    typer.echo(f"アップロード完了: {result.url}")
-
-
-@app.command()
-def auto() -> None:
-    """録画からアップロードまで自動実行する。"""
-    logger.info("auto コマンド開始")
-    _require_initialized()
-    record_uc = resolve(AutoRecordUseCase)
-    edit_uc = resolve(AutoEditUseCase)
-    upload_uc = resolve(AutoUploadUseCase)
-    record_uc.execute()
-    edit_uc.execute()
-    upload_uc.execute()
+async def upload() -> None:
+    """動画を編集してアップロードする。"""
+    logger.info("upload コマンド開始")
+    uc = resolve(UploadUseCase)
+    await uc.execute()
 
 
 if __name__ == "__main__":
