@@ -1,7 +1,7 @@
 """アプリ全体の設定管理モジュール。"""
 
 from __future__ import annotations
-from splat_replay.domain.models import MatchExpression
+from splat_replay.domain.models.match_expression import MatchExpression
 
 from pathlib import Path
 from typing import Dict, List, Optional, Literal, Tuple

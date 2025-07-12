@@ -28,6 +28,7 @@ class Event(Enum):
 
     DEVICE_CONNECTED = auto()
     INITIALIZED = auto()
+    MANUAL_START = auto()
     BATTLE_STARTED = auto()
     LOADING_DETECTED = auto()
     LOADING_FINISHED = auto()
@@ -35,6 +36,7 @@ class Event(Enum):
     EARLY_ABORT = auto()
     MANUAL_PAUSE = auto()
     MANUAL_RESUME = auto()
+    MANUAL_STOP = auto()
     EDIT_START = auto()
     EDIT_END = auto()
     UPLOAD_START = auto()
@@ -46,12 +48,15 @@ TRANSITIONS: dict[tuple[State, Event], State] = {
     (State.WAITING_DEVICE, Event.DEVICE_CONNECTED): State.OBS_STARTING,
     (State.OBS_STARTING, Event.INITIALIZED): State.STANDBY,
     (State.STANDBY, Event.BATTLE_STARTED): State.RECORDING,
+    (State.STANDBY, Event.MANUAL_START): State.RECORDING,
     (State.RECORDING, Event.LOADING_DETECTED): State.PAUSED,
     (State.PAUSED, Event.LOADING_FINISHED): State.RECORDING,
     (State.RECORDING, Event.MANUAL_PAUSE): State.PAUSED,
     (State.PAUSED, Event.MANUAL_RESUME): State.RECORDING,
     (State.RECORDING, Event.POSTGAME_DETECTED): State.STANDBY,
     (State.RECORDING, Event.EARLY_ABORT): State.STANDBY,
+    (State.RECORDING, Event.MANUAL_STOP): State.STANDBY,
+    (State.PAUSED, Event.MANUAL_STOP): State.STANDBY,
     (State.STANDBY, Event.EDIT_START): State.EDITING,
     (State.EDITING, Event.EDIT_END): State.STANDBY,
     (State.STANDBY, Event.UPLOAD_START): State.UPLOADING,

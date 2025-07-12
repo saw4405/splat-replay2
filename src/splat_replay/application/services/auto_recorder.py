@@ -99,6 +99,34 @@ class AutoRecorder:
         self.recorder.resume()
         self.transcriber.resume()
 
+    # ----- 手動操作用メソッド -----
+
+    def manual_start(self) -> None:
+        """手動で録画を開始する。"""
+        if self.sm.state is not State.STANDBY:
+            return
+        self._matching_started_at = datetime.datetime.now()
+        self._start()
+        self.sm.handle(Event.MANUAL_START)
+
+    def manual_stop(self) -> None:
+        """手動で録画を停止する。"""
+        if self.sm.state in {State.RECORDING, State.PAUSED}:
+            self._stop()
+            self.sm.handle(Event.MANUAL_STOP)
+
+    def manual_pause(self) -> None:
+        """手動で録画を一時停止する。"""
+        if self.sm.state is State.RECORDING:
+            self._pause(lambda _frame: False)
+            self.sm.handle(Event.MANUAL_PAUSE)
+
+    def manual_resume(self) -> None:
+        """手動で録画を再開する。"""
+        if self.sm.state is State.PAUSED:
+            self._resume()
+            self.sm.handle(Event.MANUAL_RESUME)
+
     def _update_power_off_count(
         self, frame: np.ndarray, off_count: int, last_check: float
     ) -> tuple[int, float, bool]:
