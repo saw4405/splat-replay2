@@ -29,7 +29,6 @@ graph TD
     subgraph Infrastructure[インフラ層]
         OBSAdapter[OBS Controller]
         FFmpegAdapter[FFmpeg Processor]
-        GroqAdapter[Groq STT]
         YTAdapter[YouTube Uploader]
         AnalyzerPlugins[Analyzer Plugins]
         StorageAdapters[File/DB Repositories]
@@ -55,16 +54,12 @@ src/
 │  │  └─ video_clip.py
 │  ├─ services/
 │  │  └─ state_machine.py
-│  └─ repositories/
-│     └─ metadata_repo.py
 ├─ application/
 │  ├─ use_cases/
 │  │  ├─ record_battle.py
 │  │  ├─ process_postgame.py
 │  │  ├─ upload_video.py
 │  │  └─ shutdown_pc.py
-│  ├─ dto/
-│  │  └─ video_summary.py
 │  └─ interfaces.py
 ├─ infrastructure/
 │  ├─ adapters/
@@ -80,7 +75,6 @@ src/
 │  │     ├─ image_utils.py
 │  │     └─ ocr.py
 │  └─ repositories/
-│     └─ file_metadata_repo.py
 ├─ ui/
 │  ├─ cli/
 │  │  └─ main.py

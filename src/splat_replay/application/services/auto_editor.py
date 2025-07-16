@@ -9,7 +9,6 @@ from splat_replay.application.interfaces import (
     VideoAssetRepository,
 )
 from splat_replay.domain.services.state_machine import Event, StateMachine
-from splat_replay.domain.models import VideoAsset
 from splat_replay.shared.logger import get_logger
 
 

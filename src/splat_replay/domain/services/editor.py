@@ -11,7 +11,6 @@ import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 from splat_replay.application.interfaces import VideoEditorPort
 from splat_replay.infrastructure.adapters.ffmpeg_processor import FFmpegProcessor
-from splat_replay.domain.models.play import Play
 from splat_replay.domain.models.video_clip import VideoClip
 from splat_replay.domain.models import (
     VideoAsset,
@@ -431,11 +430,6 @@ class VideoEditor(VideoEditorPort):
     def merge_clips(self, clips: list[VideoClip]) -> VideoClip:
         """複数のクリップを結合して新しいクリップを作成する。"""
         logger.info("クリップ結合", clips=[c.path.name for c in clips])
-        raise NotImplementedError
-
-    def embed_metadata(self, clip: VideoClip, match: Play) -> None:
-        """メタデータを動画に書き込む。"""
-        logger.info("メタデータ書き込み", clip=str(clip.path))
         raise NotImplementedError
 
     def adjust_volume(self, clip: VideoClip, config) -> None:

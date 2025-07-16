@@ -13,7 +13,7 @@
 | 主なユースケース | ① プレイ後の自己分析 ②YouTube などへの共有 |
 | 対応ゲーム       | スプラトゥーン 3 (Ver. 最新)               |
 | 対応 OS          | Windows 11 64bit                           |
-| 入出力           | HDMI / USB / YouTube API / Groq API        |
+| 入出力           | HDMI / USB / YouTube API                    |
 
 ---
 
@@ -38,15 +38,12 @@ graph TD
         CaptureDevice[キャプチャデバイス]
     end
     subgraph 外部サービス
-        Groq[Groq]
         YouTube[YouTube]
     end
     subgraph PC
         CaptureDevice --> OBS[OBS Studio]
         OBS -- 仮想カメラ映像、録画データ --> App[本アプリ]
         Microphone[マイク] -- 音声データ --> App
-        App -- 音声データ --> Groq
-        Groq -- 文字起こしデータ --> App
         App -- 動画+メタデータ --> YouTube
     end
 ```
@@ -58,7 +55,6 @@ graph TD
 - **uv**（仮想環境管理）
 - **FFmpeg**（動画編集 CLI）
 - **Google YouTube Data API v3**（アップロード）
-- **Groq API**（音声認識）
 - **OpenCV**（映像解析）
 - **Tesseract** (OCR)
 
