@@ -15,7 +15,6 @@ from splat_replay.domain.models import (
     RecordingMetadata,
     VideoAsset,
 )
-from splat_replay.domain.models.play import Play
 
 
 class VideoRecorder(Protocol):
@@ -105,10 +104,6 @@ class FrameAnalyzerPort(Protocol):
     def detect_power_off(self, frame: np.ndarray) -> bool: ...
 
 
-class MetadataExtractorPort(Protocol):
-    """動画からメタデータを抽出するポート。"""
-
-    def extract_from_video(self, path: Path) -> "Play": ...
 
 
 class CaptureDevicePort(Protocol):

@@ -15,10 +15,7 @@ from splat_replay.application.services import (
     PowerManager,
 )
 from splat_replay.infrastructure import (
-    CaptureDeviceChecker,
     FFmpegProcessor,
-    FileMetadataRepository,
-    FileVideoAssetRepository,
     OBSController,
     SystemPower,
     FrameAnalyzer,
@@ -34,9 +31,7 @@ from splat_replay.infrastructure.analyzers.splatoon_salmon_analyzer import (
 from splat_replay.domain.services.state_machine import StateMachine
 from splat_replay.domain.services.editor import VideoEditor
 from splat_replay.domain.services.uploader import YouTubeUploader
-from splat_replay.domain.services.metadata_extractor import MetadataExtractor
 from splat_replay.infrastructure.audio.speech_transcriber import SpeechTranscriber
-from splat_replay.domain.repositories.metadata_repo import MetadataRepository
 from splat_replay.application.interfaces import (
     VideoRecorder,
     VideoEditorPort,
@@ -44,10 +39,7 @@ from splat_replay.application.interfaces import (
     PowerPort,
     FrameAnalyzerPort,
     SpeechTranscriberPort,
-    MetadataExtractorPort,
-    CaptureDevicePort,
     OBSControlPort,
-    VideoAssetRepository,
 )
 from splat_replay.shared.config import (
     AppSettings,
@@ -95,7 +87,6 @@ def configure_container() -> punq.Container:
 
     # アダプタ登録
     container.register(VideoRecorder, OBSController)
-    container.register(CaptureDevicePort, CaptureDeviceChecker)
     container.register(OBSControlPort, OBSController)
     container.register(VideoEditorPort, VideoEditor)
     container.register(UploadPort, YouTubeUploader)
@@ -107,28 +98,7 @@ def configure_container() -> punq.Container:
     container.register(AnalyzerPlugin, SalmonFrameAnalyzer)
     container.register(FrameAnalyzerPort, FrameAnalyzer)
     container.register(SpeechTranscriberPort, SpeechTranscriber)
-    container.register(MetadataExtractorPort, MetadataExtractor)
     container.register(FFmpegProcessor, FFmpegProcessor)
-    container.register(
-        FileMetadataRepository,
-        FileMetadataRepository,
-        base_dir=Path("metadata"),
-    )
-    container.register(
-        FileVideoAssetRepository,
-        FileVideoAssetRepository,
-        settings=settings.storage,
-    )
-    container.register(
-        MetadataRepository,
-        FileMetadataRepository,
-        base_dir=Path("metadata"),
-    )
-    container.register(
-        VideoAssetRepository,
-        FileVideoAssetRepository,
-        settings=settings.storage,
-    )
     state_machine = StateMachine()
     container.register(StateMachine, instance=state_machine)
 

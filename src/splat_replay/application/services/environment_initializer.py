@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import time
 
 from splat_replay.application.interfaces import (
     CaptureDevicePort,
@@ -28,8 +29,6 @@ class EnvironmentInitializer:
 
     async def wait_for_device(self, timeout: float | None = None) -> bool:
         """キャプチャデバイスの接続を待機する。"""
-        import asyncio
-        import time
 
         start_time = time.time()
         while not await asyncio.to_thread(self.device.is_connected):

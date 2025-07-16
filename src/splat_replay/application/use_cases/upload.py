@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from splat_replay.application.services import AutoEditor, AutoUploader
 
+import asyncio
+
 
 class UploadUseCase:
     """自動編集と自動アップロードのみ実行するユースケース。"""
@@ -14,7 +16,5 @@ class UploadUseCase:
 
     async def execute(self) -> None:
         """動画編集とアップロードを行う。"""
-        import asyncio
-
         await asyncio.to_thread(self.editor.execute)
         await asyncio.to_thread(self.uploader.execute)

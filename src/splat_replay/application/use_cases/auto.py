@@ -10,6 +10,8 @@ from splat_replay.application.services import (
     PowerManager,
 )
 
+import asyncio
+
 
 class AutoUseCase:
     """録画からアップロードまで自動実行するユースケース。"""
@@ -30,8 +32,6 @@ class AutoUseCase:
 
     async def execute(self, timeout: float | None = None) -> None:
         """録画準備からスリープまでを実行する。"""
-        import asyncio
-
         await self.initializer.execute(timeout)
         await asyncio.to_thread(self.recorder.execute)
         await asyncio.to_thread(self.editor.execute)

@@ -75,7 +75,7 @@ class YouTubeClient:
                     credentials.refresh(Request())
                     self._save_credentials(credentials)
                 return credentials
-            except:
+            except Exception:
                 # 認証更新できなかった場合は新規認証を行う
                 pass
 
