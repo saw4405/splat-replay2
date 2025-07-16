@@ -39,9 +39,9 @@ class FileVideoAssetRepository(VideoAssetRepository):
             target = video
         if screenshot is not None:
             cv2.imwrite(str(dest / f"{name_root}.png"), screenshot)
-        (dest / f"{name_root}.srt").write_text(subtitle)
+        (dest / f"{name_root}.srt").write_text(subtitle, encoding="utf-8")
         (dest / f"{name_root}.json").write_text(
-            json.dumps(metadata.to_dict(), ensure_ascii=False)
+            json.dumps(metadata.to_dict(), ensure_ascii=False), encoding="utf-8"
         )
         self.logger.info("録画ファイル保存", path=str(target))
         return VideoAsset(

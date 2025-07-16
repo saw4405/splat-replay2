@@ -9,7 +9,7 @@ import threading
 import time
 
 from splat_replay.shared.di import configure_container
-from splat_replay.shared.logger import initialize_logger, get_logger
+from splat_replay.shared.logger import initialize_logger, get_logger, buffer_console_logs
 from splat_replay.application import AutoUseCase, UploadUseCase
 from splat_replay.domain.services.state_machine import StateMachine, State
 
@@ -80,7 +80,8 @@ async def _auto(timeout: float | None = None) -> None:
             target=_animate, args=(stop_event,), daemon=True
         )
         thread.start()
-        await ready.wait()
+        with buffer_console_logs():
+            await ready.wait()
         stop_event.set()
         thread.join()
         print()

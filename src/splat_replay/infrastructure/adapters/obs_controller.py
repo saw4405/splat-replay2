@@ -34,7 +34,7 @@ class OBSController(OBSControlPort):
             settings.websocket_password,
             on_disconnect=self._on_disconnect,
         )
-        self._process: subprocess.Popen[str] | None = None
+        self._process: subprocess.Popen[bytes] | None = None
 
     def is_running(self) -> bool:
         """OBS が起動しているかどうかを返す。"""
@@ -77,7 +77,7 @@ class OBSController(OBSControlPort):
         try:
             file_name = self._settings.executable_path.name
             directory = self._settings.executable_path.parent
-            self.process = subprocess.Popen(
+            self._process = subprocess.Popen(
                 file_name, cwd=directory, shell=True
             )
         except Exception as e:  # pragma: no cover - 実機依存
@@ -87,6 +87,30 @@ class OBSController(OBSControlPort):
         # 起動直後はWebSocket接続に失敗するので起動待ちする
         while not self.is_running():
             time.sleep(1)
+
+    def terminate(self) -> None:
+        """OBS を終了する。"""
+
+        logger.info("OBS 終了指示")
+
+        if self.is_connected():
+            active, _ = self._get_record_status()
+            if active:
+                self.stop()
+            if self.is_virtual_camera_active():
+                self.stop_virtual_camera()
+
+        if self.is_running():
+            try:
+                if self._process is not None:
+                    self._process.terminate()
+                    self._process.wait(timeout=5)
+                    self._process = None
+            except Exception as e:
+                logger.error("OBS 終了失敗", error=str(e))
+
+    def close(self) -> None:
+        self.terminate()
 
     def is_connected(self) -> bool:
         """WebSocket が接続済みか確認する。"""
@@ -125,22 +149,35 @@ class OBSController(OBSControlPort):
         """OBS の仮想カメラを開始する。"""
 
         logger.info("OBS 仮想カメラ開始指示")
-        self.connect()
+        if not self.is_connected():
+            self.connect()
         status = self._ws.call(requests.GetVirtualCamStatus())
         if not status.datain.get("outputActive", False):
             self._ws.call(requests.StartVirtualCam())
 
+    def stop_virtual_camera(self) -> None:
+        """OBS の仮想カメラを停止する。"""
+
+        logger.info("OBS 仮想カメラ停止指示")
+        if not self.is_connected():
+            self.connect()
+        status = self._ws.call(requests.GetVirtualCamStatus())
+        if status.datain.get("outputActive", False):
+            self._ws.call(requests.StopVirtualCam())
+
     def is_virtual_camera_active(self) -> bool:
         """仮想カメラが有効かどうかを返す。"""
 
-        self.connect()
+        if not self.is_connected():
+            self.connect()
         status = self._ws.call(requests.GetVirtualCamStatus())
         return status.datain.get("outputActive", False)
 
     def _get_record_status(self) -> tuple[bool, bool]:
         """録画状態を取得する。"""
 
-        self.connect()
+        if not self.is_connected():
+            self.connect()
         status = self._ws.call(requests.GetRecordStatus())
         active = status.datain.get("outputActive", False)
         paused = status.datain.get("outputPaused", False)
@@ -150,7 +187,6 @@ class OBSController(OBSControlPort):
         """録画開始指示を送る。"""
 
         logger.info("OBS 録画開始指示")
-        self.connect()
         active, _ = self._get_record_status()
         if not active:
             self._ws.call(requests.StartRecord())
@@ -159,7 +195,6 @@ class OBSController(OBSControlPort):
         """録画停止指示を送る。"""
 
         logger.info("OBS 録画停止指示")
-        self.connect()
         active, _ = self._get_record_status()
         if not active:
             raise RuntimeError("録画は開始されていません")
@@ -173,7 +208,6 @@ class OBSController(OBSControlPort):
         """録画を一時停止する。"""
 
         logger.info("OBS 録画一時停止指示")
-        self.connect()
         active, paused = self._get_record_status()
         if active and not paused:
             self._ws.call(requests.PauseRecord())
@@ -182,7 +216,6 @@ class OBSController(OBSControlPort):
         """録画を再開する。"""
 
         logger.info("OBS 録画再開指示")
-        self.connect()
         _, paused = self._get_record_status()
         if paused:
             self._ws.call(requests.ResumeRecord())

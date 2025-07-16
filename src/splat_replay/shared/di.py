@@ -51,13 +51,15 @@ from splat_replay.application.interfaces import (
 )
 from splat_replay.shared.config import (
     AppSettings,
-    YouTubeSettings,
-    VideoEditSettings,
+    CaptureDeviceSettings,
     OBSSettings,
-    ImageMatchingSettings,
+    RecordSettings,
     SpeechTranscriberSettings,
     VideoStorageSettings,
+    VideoEditSettings,
+    YouTubeSettings,
     PCSettings,
+    ImageMatchingSettings,
 )
 
 
@@ -74,14 +76,15 @@ def configure_container() -> punq.Container:
         )
     settings = AppSettings.load_from_toml(settings_path)
     # 設定オブジェクトを登録
-    container.register(AppSettings, instance=settings)
-    container.register(YouTubeSettings, instance=settings.youtube)
-    container.register(VideoEditSettings, instance=settings.video_edit)
+    container.register(CaptureDeviceSettings, instance=settings.capture_device)
     container.register(OBSSettings, instance=settings.obs)
+    container.register(RecordSettings, instance=settings.record)
     container.register(
         SpeechTranscriberSettings, instance=settings.speech_transcriber
     )
     container.register(VideoStorageSettings, instance=settings.storage)
+    container.register(VideoEditSettings, instance=settings.video_edit)
+    container.register(YouTubeSettings, instance=settings.youtube)
     container.register(PCSettings, instance=settings.pc)
 
     image_match_path = Path("config/image_matching.yaml")

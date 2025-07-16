@@ -16,9 +16,9 @@ from splat_replay.application.interfaces import (
     VideoAssetRepository,
 )
 from splat_replay.domain.services.state_machine import Event, State, StateMachine
-from splat_replay.shared.config import OBSSettings
+from splat_replay.shared.config import RecordSettings
 from splat_replay.shared.logger import get_logger
-from splat_replay.domain.models import RateBase, Result, RecordingMetadata
+from splat_replay.domain.models import RateBase, Result, RecordingMetadata, GameMode
 
 
 class AutoRecorder:
@@ -30,21 +30,22 @@ class AutoRecorder:
         analyzer: FrameAnalyzerPort,
         transcriber: SpeechTranscriberPort,
         state_machine: StateMachine,
-        obs_settings: OBSSettings,
+        settings: RecordSettings,
         asset_repo: VideoAssetRepository,
     ) -> None:
         self.recorder = recorder
         self.analyzer = analyzer
         self.transcriber = transcriber
         self.sm = state_machine
-        self.settings = obs_settings
+        self.settings = settings
         self.asset_repo = asset_repo
         self.logger = get_logger()
         self._resume_trigger: Callable[[np.ndarray], bool] | None = None
-        self.finish: bool = False
-        self._battle_started_at = 0.0
-        self._matching_started_at: datetime.datetime | None = None
+        self.game_mode: GameMode | None = None
         self.rate: RateBase | None = None
+        self.matching_started_at: datetime.datetime | None = None
+        self.battle_started_at = 0.0
+        self.finish: bool = False
         self.judgement: str | None = None
         self.result: Result | None = None
         self.result_screenshot: np.ndarray | None = None
@@ -52,18 +53,18 @@ class AutoRecorder:
     def _start(self) -> None:
         self.recorder.start()
         self.transcriber.start()
-        self._battle_started_at = time.time()
+        self.battle_started_at = time.time()
 
     def _stop(self, save: bool = True) -> None:
         video = self.recorder.stop()
         subtitle = self.transcriber.stop()
 
         if save:
-            if self._matching_started_at is None:
+            if self.matching_started_at is None:
                 raise RuntimeError("マッチング開始時刻が設定されていません。")
 
             metadata = RecordingMetadata(
-                started_at=self._matching_started_at,
+                started_at=self.matching_started_at,
                 rate=self.rate,
                 judgement=self.judgement,
                 result=self.result,
@@ -72,17 +73,17 @@ class AutoRecorder:
                 video, subtitle, self.result_screenshot, metadata
             )
             self.logger.info(
-                "録画終了", video=str(asset.video), start_at=self._matching_started_at
+                "録画終了", video=str(asset.video), start_at=self.matching_started_at
             )
 
-        self.finish = False
-        self._battle_started_at = 0.0
-        self._matching_started_at = None
+        self.game_mode = None
         self.rate = None
+        self.matching_started_at = None
+        self.battle_started_at = 0.0
+        self.finish = False
         self.judgement = None
         self.result = None
         self.result_screenshot = None
-        self.analyzer.reset()
 
     def _cancel(self) -> None:
         self._stop(save=False)
@@ -100,7 +101,7 @@ class AutoRecorder:
         """手動で録画を開始する。"""
         if self.sm.state is not State.STANDBY:
             return
-        self._matching_started_at = datetime.datetime.now()
+        self.matching_started_at = datetime.datetime.now()
         self._start()
         self.sm.handle(Event.MANUAL_START)
 
@@ -139,53 +140,64 @@ class AutoRecorder:
         return off_count, last_check, detected
 
     def _handle_standby(self, frame: np.ndarray) -> None:
-        if self._matching_started_at is None:
+        if self.matching_started_at is None:
             if self.analyzer.detect_match_select(frame):
-                rate = self.analyzer.extract_rate(frame)
-                if not isinstance(rate, type(self.rate)) or rate != self.rate:
-                    self.rate = rate
-                    self.logger.info("レート取得", rate=str(rate))
-                return
+                if self.game_mode is None:
+                    self.game_mode = self.analyzer.extract_game_mode(frame)
+                    self.logger.info("ゲームモード取得", mode=str(self.game_mode))
+
+                if self.game_mode is not None:
+                    rate = self.analyzer.extract_rate(frame, self.game_mode)
+                    if not isinstance(rate, type(self.rate)) or rate != self.rate:
+                        self.rate = rate
+                        self.logger.info("レート取得", rate=str(rate))
+
             if self.analyzer.detect_matching_start(frame):
                 self.logger.info("マッチング開始を検出")
-                self._matching_started_at = datetime.datetime.now()
+                self.matching_started_at = datetime.datetime.now()
                 return
         else:
             if self.analyzer.detect_schedule_change(frame):
                 self.logger.info("スケジュール変更を検出、情報をリセット")
                 self._cancel()
                 return
-            if self.analyzer.detect_battle_start(frame):
+            if self.game_mode and self.analyzer.detect_session_start(frame, self.game_mode):
                 self.logger.info("バトル開始を検出")
                 self._start()
                 self.sm.handle(Event.BATTLE_STARTED)
                 return
 
     def _handle_recording(self, frame: np.ndarray) -> None:
+        if self.game_mode is None:
+            raise RuntimeError("ゲームモードが設定されていません。")
+
         if not self.finish:
             now = time.time()
             if (
-                now - self._battle_started_at <= 60
-                and self.analyzer.detect_battle_abort(frame)
+                now - self.battle_started_at <= 60
+                and self.analyzer.detect_session_abort(frame, self.game_mode)
             ):
                 self.logger.info("バトル中断を検出したため録画を中止")
                 self._cancel()
                 self.sm.handle(Event.EARLY_ABORT)
                 return
-            if now - self._battle_started_at >= 600:
+            if now - self.battle_started_at >= 600:
                 self.logger.info("録画が10分以上続いたため停止")
                 self._stop()
                 self.sm.handle(Event.TIME_OUT)
                 return
-            if self.analyzer.detect_battle_finish(frame):
+            if self.analyzer.detect_session_finish(frame, self.game_mode):
                 self.logger.info("バトル終了を検出、一時停止")
                 self.finish = True
-                self._pause(self.analyzer.detect_battle_judgement)
+                mode = self.game_mode
+                self._pause(
+                    lambda x: self.analyzer.detect_session_judgement(x, mode))
                 self.sm.handle(Event.LOADING_DETECTED)
                 return
         else:
-            if self.analyzer.detect_battle_judgement(frame):
-                judgement = self.analyzer.extract_battle_judgement(frame)
+            if self.analyzer.detect_session_judgement(frame, self.game_mode):
+                judgement = self.analyzer.extract_session_judgement(
+                    frame, self.game_mode)
                 if judgement is not None and self.judgement is None:
                     self.judgement = judgement
                     self.logger.info("バトルジャッジメント取得", judgement=str(judgement))
@@ -195,8 +207,9 @@ class AutoRecorder:
                 self._pause(self.analyzer.detect_loading_end)
                 self.sm.handle(Event.LOADING_DETECTED)
                 return
-            if self.analyzer.detect_battle_result(frame):
-                self.result = self.analyzer.extract_battle_result(frame)
+            if self.analyzer.detect_session_result(frame, self.game_mode):
+                self.result = self.analyzer.extract_session_result(
+                    frame, self.game_mode)
                 self.result_screenshot = frame
                 self.logger.info("バトル結果を検出", result=str(self.result))
                 self._stop()
@@ -210,11 +223,11 @@ class AutoRecorder:
 
     def execute(self) -> None:
         self.logger.info("自動録画開始")
-        cap = cv2.VideoCapture(self.settings.capture_device_index)
+        cap = cv2.VideoCapture(self.settings.capture_index)
         if not cap.isOpened():
             self.logger.error(
                 "キャプチャデバイスを開けません",
-                index=self.settings.capture_device_index,
+                index=self.settings.capture_index,
             )
             raise RuntimeError("キャプチャデバイスの取得に失敗しました")
         cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1920)
@@ -222,6 +235,7 @@ class AutoRecorder:
         off_count = 0
         last_check = 0.0
         try:
+            self.logger.info("🎮🎮🎮 Let's play! 🎮🎮🎮")
             while True:
                 success, frame = cap.read()
                 if not success:
@@ -245,3 +259,4 @@ class AutoRecorder:
             cap.release()
             if self.sm.state is not State.STANDBY:
                 self._cancel()
+            self.recorder.close()

@@ -1,16 +1,21 @@
+[logging]
+level = "INFO"
+format = "json"
+file_path = "logs/splat_replay.log"
+max_file_size_mb = 10
+backup_count = 5
+
+[capture_device]
+name = "Capture Device"
+
 [obs]
 websocket_host = "localhost"
 websocket_port = 4455
 websocket_password = ""
-executable_path = "obs"
-capture_device_index = 0
-capture_device_name = "MiraBox Capture"
+executable_path = "C:\\Program Files\\obs-studio\\bin\\64bit\\obs64.exe"
 
-[video_edit]
-volume_multiplier = 1.0
-title_template = "{BATTLE}({RATE}) {RULE} {WIN}勝{LOSE}敗 {DAY} {SCHEDULE}時～"
-description_template = "{CHAPTERS}"
-chapter_template = "{RESULT} {KILL}k {DEATH}d {SPECIAL}s  {STAGE}"
+[record]
+capture_index = 0
 
 [speech_transcriber]
 mic_device_name = "マイク (USB Audio Device)"
@@ -19,21 +24,20 @@ language = "ja-JP"
 phrase_time_limit = 3.0
 custom_dictionary = ["ナイス", "キル", "デス"]
 
-[logging]
-level = "INFO"
-format = "json"
-file_path = "logs/splat_replay.log"
-max_file_size_mb = 10
-backup_count = 5
+[video_storage]
+base_dir = "videos"
+
+[video_edit]
+volume_multiplier = 1.0
+title_template = "{BATTLE}({RATE}) {RULE} {WIN}勝{LOSE}敗 {DAY} {SCHEDULE}時～"
+description_template = "{CHAPTERS}"
+chapter_template = "{RESULT} {KILL}k {DEATH}d {SPECIAL}s  {STAGE}"
 
 [youtube]
 privacy_status = "private"
 tags = ["Splatoon3"]
 playlist_id = ""
 caption_name = "ひとりごと"
-
-[video_storage]
-base_dir = "videos"
 
 [pc]
 sleep_after_finish = false

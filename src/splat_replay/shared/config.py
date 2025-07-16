@@ -10,26 +10,32 @@ import tomllib
 from pydantic import BaseModel
 
 
-class YouTubeSettings(BaseModel):
-    """YouTube アップロード関連の設定。"""
+class CaptureDeviceSettings(BaseModel):
+    """OBS のキャプチャデバイス設定。"""
 
-    privacy_status: Literal["public",
-                            "unlisted", "private"] = "private"
-    tags: Optional[List[str]] = None
-    playlist_id: Optional[str] = None
-    caption_name: str = "ひとりごと"
+    name: str = "Capture Device"
 
     class Config:
         pass
 
 
-class VideoEditSettings(BaseModel):
-    """動画編集処理の設定。"""
+class OBSSettings(BaseModel):
+    """OBS 接続設定。"""
 
-    volume_multiplier: float = 1.0
-    title_template: Optional[str] = None
-    description_template: Optional[str] = None
-    chapter_template: Optional[str] = None
+    websocket_host: str = "localhost"
+    websocket_port: int = 4455
+    websocket_password: str = ""
+    executable_path: Path = Path(
+        "C:\\Program Files\\obs-studio\\bin\\64bit\\obs64.exe")
+
+    class Config:
+        pass
+
+
+class RecordSettings(BaseModel):
+    """録画関連の設定。"""
+
+    capture_index: int = 0
 
     class Config:
         pass
@@ -43,20 +49,6 @@ class SpeechTranscriberSettings(BaseModel):
     language: str = "ja-JP"
     phrase_time_limit: float = 3.0
     custom_dictionary: List[str] = ["ナイス", "キル", "デス"]
-
-    class Config:
-        pass
-
-
-class OBSSettings(BaseModel):
-    """OBS 接続設定。"""
-
-    websocket_host: str = "localhost"
-    websocket_port: int = 4455
-    websocket_password: str = ""
-    executable_path: Path = Path("obs")
-    capture_device_name: Optional[str] = None
-    capture_device_index: int = 0
 
     class Config:
         pass
@@ -81,6 +73,31 @@ class VideoStorageSettings(BaseModel):
         pass
 
 
+class VideoEditSettings(BaseModel):
+    """動画編集処理の設定。"""
+
+    volume_multiplier: float = 1.0
+    title_template: Optional[str] = None
+    description_template: Optional[str] = None
+    chapter_template: Optional[str] = None
+
+    class Config:
+        pass
+
+
+class YouTubeSettings(BaseModel):
+    """YouTube アップロード関連の設定。"""
+
+    privacy_status: Literal["public",
+                            "unlisted", "private"] = "private"
+    tags: Optional[List[str]] = None
+    playlist_id: Optional[str] = None
+    caption_name: str = "ひとりごと"
+
+    class Config:
+        pass
+
+
 class PCSettings(BaseModel):
     """PC固有の設定。"""
 
@@ -94,7 +111,8 @@ class MatcherConfig(BaseModel):
     """画像マッチング1件分の設定。"""
 
     name: Optional[str] = None
-    type: Literal["template", "hsv", "rgb", "hash", "uniform", "brightness"]
+    type: Literal["template", "hsv", "hsv_ratio",
+                  "rgb", "hash", "uniform", "brightness"]
     threshold: float = 0.8
     template_path: Optional[str] = None
     hash_path: Optional[str] = None
@@ -158,11 +176,13 @@ MatchExpression.update_forward_refs()
 class AppSettings(BaseModel):
     """アプリケーション全体の設定。"""
 
-    youtube: YouTubeSettings = YouTubeSettings()
-    video_edit: VideoEditSettings = VideoEditSettings()
+    capture_device: CaptureDeviceSettings = CaptureDeviceSettings()
     obs: OBSSettings = OBSSettings()
+    record: RecordSettings = RecordSettings()
     speech_transcriber: SpeechTranscriberSettings = SpeechTranscriberSettings()
     storage: VideoStorageSettings = VideoStorageSettings()
+    video_edit: VideoEditSettings = VideoEditSettings()
+    youtube: YouTubeSettings = YouTubeSettings()
     pc: PCSettings = PCSettings()
 
     class Config:
@@ -177,11 +197,13 @@ class AppSettings(BaseModel):
 
         # セクション名とSettingsクラスの対応をまとめてループで処理
         section_classes = {
-            "youtube": YouTubeSettings,
-            "video_edit": VideoEditSettings,
+            "capture_device": CaptureDeviceSettings,
             "obs": OBSSettings,
+            "record": RecordSettings,
             "speech_transcriber": SpeechTranscriberSettings,
             "storage": VideoStorageSettings,
+            "video_edit": VideoEditSettings,
+            "youtube": YouTubeSettings,
             "pc": PCSettings,
         }
         kwargs = {}

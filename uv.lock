@@ -776,6 +776,7 @@ dependencies = [
     { name = "pywin32", marker = "sys_platform == 'win32'" },
     { name = "pyyaml" },
     { name = "speechrecognition" },
+    { name = "srt" },
     { name = "structlog" },
     { name = "typer" },
 ]
@@ -805,6 +806,7 @@ requires-dist = [
     { name = "pywin32", marker = "sys_platform == 'win32'", specifier = ">=306" },
     { name = "pyyaml", specifier = ">=6.0" },
     { name = "speechrecognition", specifier = ">=3.14.3" },
+    { name = "srt", specifier = ">=3.5.3" },
     { name = "structlog", specifier = ">=24.1" },
     { name = "typer", specifier = ">=0.9" },
 ]
@@ -815,6 +817,12 @@ dev = [
     { name = "pytest", specifier = ">=8.4.0" },
     { name = "ruff", specifier = ">=0.12.0" },
 ]
+
+[[package]]
+name = "srt"
+version = "3.5.3"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/66/b7/4a1bc231e0681ebf339337b0cd05b91dc6a0d701fa852bb812e244b7a030/srt-3.5.3.tar.gz", hash = "sha256:4884315043a4f0740fd1f878ed6caa376ac06d70e135f306a6dc44632eed0cc0", size = 28296 }
 
 [[package]]
 name = "standard-aifc"

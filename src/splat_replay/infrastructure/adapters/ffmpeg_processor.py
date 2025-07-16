@@ -15,7 +15,7 @@ logger = get_logger()
 class FFmpegProcessor:
     """FFmpeg を呼び出して動画加工を行うアダプタ."""
 
-    def merge(self, clips: list[Path]) -> Path:
+    def merge(self, clips: list[Path], output: Path) -> Path:
         """動画を結合する."""
         abs_clips = [c.resolve() for c in clips]
         logger.info("FFmpeg 動画結合", clips=[str(c) for c in abs_clips])
@@ -25,24 +25,17 @@ class FFmpegProcessor:
         filelist.write_text(
             "\n".join([f"file '{str(c)}'" for c in abs_clips])
         )
-        output = (
-            abs_clips[0].parent /
-            f"merged_{int(abs_clips[0].stat().st_mtime)}.mkv"
-        )
+        abs_output = output.resolve()
 
         subprocess.run(
             [
                 "ffmpeg",
                 "-y",
-                "-f",
-                "concat",
-                "-safe",
-                "0",
-                "-i",
-                str(filelist),
-                "-c",
-                "copy",
-                str(output),
+                "-f", "concat",
+                "-safe", "0",
+                "-i", str(filelist),
+                "-c", "copy",
+                str(abs_output),
             ],
             check=False,
             cwd=str(abs_clips[0].parent),
@@ -64,12 +57,10 @@ class FFmpegProcessor:
             [
                 "ffmpeg",
                 "-y",
-                "-i",
-                str(abs_path),
+                "-i", str(abs_path),
                 *[item for key, value in metadata.items()
                   if value for item in ("-metadata", f"{key}={value}")],
-                "-c",
-                "copy",
+                "-c", "copy",
                 str(temp),
             ],
             check=False,
@@ -217,16 +208,11 @@ class FFmpegProcessor:
             [
                 "ffmpeg",
                 "-y",
-                "-i",
-                str(abs_path),
-                "-map",
-                "0",
-                "-c:v",
-                "copy",
-                "-af",
-                f"volume={multiplier}",
-                "-c:s",
-                "copy",
+                "-i", str(abs_path),
+                "-map", "0",
+                "-c:v", "copy",
+                "-af", f"volume={multiplier}",
+                "-c:s", "copy",
                 str(temp),
             ],
             check=False,

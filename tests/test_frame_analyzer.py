@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
-from typing import Callable, Optional
+from typing import Callable, Optional, Tuple
 
 import numpy as np
 import pytest
@@ -82,6 +82,28 @@ def test_detect_power_off(
 @pytest.mark.parametrize(
     "filename, expected",
     [
+        ("match_select_regular.png", True),
+        ("match_select_challenge.png", True),
+        ("match_select_anarchy_battle.png", True),
+        ("match_select_x_battle.png", True),
+        ("match_select_splatfest_battle.png", True),
+    ],
+)
+def test_detect_match_select(
+    analyzer: FrameAnalyzer,
+    load_image: Callable[[str], np.ndarray],
+    filename: str,
+    expected: bool,
+) -> None:
+    """マッチ選択画面の判定結果を確認する。"""
+    frame = load_image(filename)
+    result = analyzer.detect_match_select(frame)
+    assert result == expected
+
+
+@pytest.mark.parametrize(
+    "filename, expected",
+    [
         ("match_select_regular.png", GameMode.BATTLE),
         ("match_select_challenge.png", GameMode.BATTLE),
         ("match_select_anarchy_battle.png", GameMode.BATTLE),
@@ -89,38 +111,15 @@ def test_detect_power_off(
         ("match_select_splatfest_battle.png", GameMode.BATTLE),
     ],
 )
-def test_detect_match_select(
+def test_extract_game_mode(
     analyzer: FrameAnalyzer,
     load_image: Callable[[str], np.ndarray],
     filename: str,
     expected: GameMode,
 ) -> None:
-    """マッチング開始 判定の結果を確認する。"""
+    """ゲームモードの抽出結果を確認する。"""
     frame = load_image(filename)
-    analyzer.detect_match_select(frame)
-    result = analyzer.mode
-    assert result == expected
-
-
-@pytest.mark.parametrize(
-    "filename, expected",
-    [
-        ("match_select_regular.png", Match.REGULAR),
-        ("match_select_challenge.png", Match.CHALLENGE),
-        ("match_select_anarchy_battle.png", Match.ANARCHY),
-        ("match_select_x_battle.png", Match.X),
-        ("match_select_splatfest_battle.png", Match.SPLATFEST),
-    ],
-)
-def test_extract_match_select(
-    analyzer: FrameAnalyzer,
-    load_image: Callable[[str], np.ndarray],
-    filename: str,
-    expected: str,
-) -> None:
-    """マッチング開始 判定の結果を確認する。"""
-    frame = load_image(filename)
-    result = analyzer.plugins[GameMode.BATTLE].extract_match_select(frame)
+    result = analyzer.extract_game_mode(frame)
     assert result == expected
 
 
@@ -142,10 +141,12 @@ def test_extract_rate(
 ) -> None:
     """レート取得の結果を確認する。"""
     frame = load_image(filename)
-    analyzer.set_mode(GameMode.BATTLE)
     if not analyzer.detect_match_select(frame):
         pytest.fail("マッチ選択画面ではない")
-    result = analyzer.extract_rate(frame)
+    mode = analyzer.extract_game_mode(frame)
+    if mode is None:
+        pytest.fail("モードが抽出できない")
+    result = analyzer.extract_rate(frame, mode)
     assert result == expected
 
 
@@ -192,7 +193,8 @@ def test_detect_schedule_change(
     [
         ("battle_start_1.png", True),
         ("battle_start_2.png", True),
-        ("battle_start_3.png", False),
+        ("battle_start_3.png", True),
+        ("battle_start_4.png", False),
         ("matching_1.png", False),
     ],
 )
@@ -204,8 +206,7 @@ def test_detect_battle_start(
 ) -> None:
     """バトル開始 判定の結果を確認する。"""
     frame = load_image(filename)
-    analyzer.set_mode(GameMode.BATTLE)
-    result = analyzer.detect_battle_start(frame)
+    result = analyzer.detect_session_start(frame, GameMode.BATTLE)
     assert result == expected
 
 
@@ -224,8 +225,7 @@ def test_detect_battle_abort(
 ) -> None:
     """バトル中断 判定の結果を確認する。"""
     frame = load_image(filename)
-    analyzer.set_mode(GameMode.BATTLE)
-    result = analyzer.detect_battle_abort(frame)
+    result = analyzer.detect_session_abort(frame, GameMode.BATTLE)
     assert result == expected
 
 
@@ -254,8 +254,7 @@ def test_detect_battle_finish(
 ) -> None:
     """FINISH 表示判定の結果を確認する。"""
     frame = load_image(filename)
-    analyzer.set_mode(GameMode.BATTLE)
-    result = analyzer.detect_battle_finish(frame)
+    result = analyzer.detect_session_finish(frame, GameMode.BATTLE)
     assert result == expected
 
 
@@ -264,8 +263,9 @@ def test_detect_battle_finish(
     [
         ("battle_judgement_1.png", True),
         ("battle_judgement_2.png", True),
-        ("battle_judgement_3.png", False),
+        ("battle_judgement_3.png", True),
         ("battle_judgement_4.png", False),
+        ("battle_judgement_5.png", False),
     ],
 )
 def test_detect_battle_finish_end(
@@ -276,8 +276,7 @@ def test_detect_battle_finish_end(
 ) -> None:
     """FINISH 表示判定の結果を確認する。"""
     frame = load_image(filename)
-    analyzer.set_mode(GameMode.BATTLE)
-    result = analyzer.detect_battle_finish_end(frame)
+    result = analyzer.detect_session_finish_end(frame, GameMode.BATTLE)
     assert result == expected
 
 
@@ -286,8 +285,9 @@ def test_detect_battle_finish_end(
     [
         ("battle_judgement_1.png", True),
         ("battle_judgement_2.png", True),
-        ("battle_judgement_3.png", False),
+        ("battle_judgement_3.png", True),
         ("battle_judgement_4.png", False),
+        ("battle_judgement_5.png", False),
         ("loading_1.png", False),
     ],
 )
@@ -299,8 +299,7 @@ def test_detect_battle_judgement(
 ) -> None:
     """バトル判定の結果を確認する。"""
     frame = load_image(filename)
-    analyzer.set_mode(GameMode.BATTLE)
-    result = analyzer.detect_battle_judgement(frame)
+    result = analyzer.detect_session_judgement(frame, GameMode.BATTLE)
     assert result == expected
 
 
@@ -310,7 +309,8 @@ def test_detect_battle_judgement(
         ("battle_judgement_1.png", "win"),
         ("battle_judgement_2.png", "lose"),
         ("battle_judgement_3.png", "lose"),
-        ("battle_judgement_4.png", None),
+        ("battle_judgement_4.png", "lose"),
+        ("battle_judgement_5.png", None),
     ],
 )
 def test_extract_battle_judgement(
@@ -321,8 +321,7 @@ def test_extract_battle_judgement(
 ) -> None:
     """FINISH 表示判定の結果を確認する。"""
     frame = load_image(filename)
-    analyzer.set_mode(GameMode.BATTLE)
-    result = analyzer.extract_battle_judgement(frame)
+    result = analyzer.extract_session_judgement(frame, GameMode.BATTLE)
     assert result == expected
 
 
@@ -379,8 +378,7 @@ def test_detect_battle_result(
 ) -> None:
     """バトル終了画面判定の結果を確認する。"""
     frame = load_image(filename)
-    analyzer.set_mode(GameMode.BATTLE)
-    result = analyzer.detect_battle_result(frame)
+    result = analyzer.detect_session_result(frame, GameMode.BATTLE)
     assert result == expected
 
 
@@ -388,10 +386,9 @@ if __name__ == "__main__":
     battle = BattleFrameAnalyzer(MATCHER_SETTINGS)
     salmon = SalmonFrameAnalyzer(MATCHER_SETTINGS)
     analyzer_ = FrameAnalyzer(battle, salmon, MATCHER_SETTINGS)
-    filename = "loading_1.png"
+    filename = "battle_judgement_3.png"
     expected = True
     image_path = TEMPLATE_DIR / filename
     frame = cv2.imread(str(image_path))
-    analyzer_.set_mode(GameMode.BATTLE)
-    result = analyzer_.detect_battle_judgement(frame)
+    result = analyzer_.detect_session_judgement(frame, GameMode.BATTLE)
     print(result == expected)

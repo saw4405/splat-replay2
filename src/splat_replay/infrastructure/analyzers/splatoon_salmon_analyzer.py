@@ -9,7 +9,7 @@ from splat_replay.infrastructure.analyzers.common.image_utils import (
 )
 from splat_replay.shared.config import ImageMatchingSettings
 from .plugin import AnalyzerPlugin
-from splat_replay.domain.models import Match, RateBase
+from splat_replay.domain.models import Match, RateBase, SalmonResult
 
 
 class SalmonFrameAnalyzer(AnalyzerPlugin):
@@ -22,34 +22,28 @@ class SalmonFrameAnalyzer(AnalyzerPlugin):
         return None
 
     def extract_rate(self, frame: np.ndarray, match: Match) -> RateBase | None:
-        return None
+        raise NotImplementedError()
 
-    def detect_matching_start(self, frame: np.ndarray) -> bool:
-        return False
+    def detect_session_start(self, frame: np.ndarray) -> bool:
+        raise NotImplementedError()
 
-    def detect_schedule_change(self, frame: np.ndarray) -> bool:
-        return False
+    def detect_session_abort(self, frame: np.ndarray) -> bool:
+        raise NotImplementedError()
 
-    def detect_battle_start(self, frame: np.ndarray) -> bool:
-        return self.registry.match("salmon_start", frame)
+    def detect_session_finish(self, frame: np.ndarray) -> bool:
+        raise NotImplementedError()
 
-    def detect_battle_abort(self, frame: np.ndarray) -> bool:
-        return False
+    def detect_session_finish_end(self, frame: np.ndarray) -> bool:
+        raise NotImplementedError()
 
-    def detect_loading(self, frame: np.ndarray) -> bool:
-        return self.registry.match("salmon_loading", frame)
+    def detect_session_judgement(self, frame: np.ndarray) -> bool:
+        raise NotImplementedError()
 
-    def detect_loading_end(self, frame: np.ndarray) -> bool:
-        return self.registry.match("salmon_loading_end", frame)
+    def extract_session_judgement(self, frame: np.ndarray) -> str | None:
+        raise NotImplementedError()
 
-    def detect_battle_finish(self, frame: np.ndarray) -> bool:
-        return False
+    def detect_session_result(self, frame: np.ndarray) -> bool:
+        raise NotImplementedError()
 
-    def detect_battle_finish_end(self, frame: np.ndarray) -> bool:
-        return False
-
-    def detect_battle_judgement(self, frame: np.ndarray) -> bool:
-        return False
-
-    def detect_battle_result(self, frame: np.ndarray) -> bool:
-        return self.registry.match("salmon_result", frame)
+    def extract_session_result(self, frame: np.ndarray) -> SalmonResult | None:
+        raise NotImplementedError()

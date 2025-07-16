@@ -24,7 +24,9 @@ composite_detection:
 
   battle_start:
     and:
-      - matcher: battle_start_bright
+      - or:
+        - matcher: battle_start_bright
+        - matcher: battle_start_fes_bright
       - matcher: battle_start_template
         
   battle_abort:
@@ -155,9 +157,9 @@ simple_matchers:
   match_select_normal:
     type: "uniform"
     roi:
-      x: 280
+      x: 270
       y: 390
-      width: 20
+      width: 40
       height: 20
     hue_threshold: 10.0
     description: "通常時のマッチ選択画面を検出する"
@@ -165,9 +167,9 @@ simple_matchers:
   match_select_splatfest:
     type: "uniform"
     roi:
-      x: 280
+      x: 270
       y: 450
-      width: 20
+      width: 40
       height: 20
     hue_threshold: 10.0
     description: "フェス時のマッチ選択画面を検出する"
@@ -272,6 +274,16 @@ simple_matchers:
       height: 20
     description: "バトル開始を素早く検出する"
 
+  battle_start_fes_bright:
+    type: "brightness"
+    max_value: 20
+    roi:
+      x: 900
+      y: 300
+      width: 140
+      height: 20
+    description: "バトル開始を素早く検出する"
+
   battle_start_template:
     type: "template"
     template_path: "assets/matching/battle_start.png"
@@ -343,14 +355,11 @@ simple_matchers:
     description: "ジャッジ画面は左上が黒い"
 
   battle_judgement_latter_half_bright:
-    type: "brightness"
-    max_value: 20
-    roi:
-      x: 1820
-      y: 0
-      width: 100
-      height: 100
-    description: "ジャッジ画面(後半)は右上が黒い"
+    type: "hsv_ratio"
+    lower_bound: [0, 0, 0]
+    upper_bound: [179, 255, 10]
+    threshold: 0.3
+    description: "ジャッジ画面(後半)は黒い箇所が多い"
 
   battle_judgement_win:
     name: "win"
@@ -468,7 +477,7 @@ simple_matchers:
     description: "トリカラマッチを検出する"
 
   battle_rule_turf_war:
-    name: "ナワバリバトル"
+    name: "ナワバリ"
     type: "template"
     template_path: "assets/matching/battle_rule_turf_war.png"
     threshold: 0.9
@@ -503,7 +512,7 @@ simple_matchers:
     description: "ガチアサリバトルを検出する"
 
   battle_rule_tricolor_turf_war:
-    name: "トリカラバトル"
+    name: "トリカラ"
     type: "template"
     template_path: "assets/matching/battle_rule_tricolor_turf_war.png"
     threshold: 0.9

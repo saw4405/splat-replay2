@@ -13,7 +13,7 @@ from splat_replay.infrastructure.analyzers.common.image_utils import (
 from splat_replay.shared.config import ImageMatchingSettings
 from .plugin import AnalyzerPlugin
 from .common.ocr import recognize_text
-from splat_replay.domain.models import Match, RateBase, Udemae, XP, Rule, Stage
+from splat_replay.domain.models import Match, RateBase, Udemae, XP, Rule, Stage, BattleResult
 from splat_replay.shared.logger import get_logger
 
 
@@ -67,39 +67,55 @@ class BattleFrameAnalyzer(AnalyzerPlugin):
 
         return XP(xp)
 
-    def detect_matching_start(self, frame: np.ndarray) -> bool:
-        return False
-
-    def detect_schedule_change(self, frame: np.ndarray) -> bool:
-        return False
-
-    def detect_battle_start(self, frame: np.ndarray) -> bool:
+    def detect_session_start(self, frame: np.ndarray) -> bool:
         return self.registry.match("battle_start", frame)
 
-    def detect_battle_abort(self, frame: np.ndarray) -> bool:
+    def detect_session_abort(self, frame: np.ndarray) -> bool:
         return self.registry.match("battle_abort", frame)
 
-    def detect_battle_finish(self, frame: np.ndarray) -> bool:
+    def detect_session_finish(self, frame: np.ndarray) -> bool:
         return self.registry.match("battle_finish", frame)
 
-    def detect_battle_finish_end(self, frame: np.ndarray) -> bool:
-        return self.detect_battle_judgement(frame)
+    def detect_session_finish_end(self, frame: np.ndarray) -> bool:
+        return self.detect_session_judgement(frame)
 
-    def detect_battle_judgement(self, frame: np.ndarray) -> bool:
+    def detect_session_judgement(self, frame: np.ndarray) -> bool:
         return self.registry.match("battle_judgement_latter_half", frame)
 
-    def extract_battle_judgement(self, frame: np.ndarray) -> str | None:
+    def extract_session_judgement(self, frame: np.ndarray) -> str | None:
         """勝敗画面から勝敗を取得する。"""
         return self.registry.match_first_group("battle_judgements", frame)
 
-    def detect_loading(self, frame: np.ndarray) -> bool:
-        return self.registry.match("loading", frame)
-
-    def detect_loading_end(self, frame: np.ndarray) -> bool:
-        return self.registry.match("loading_end", frame)
-
-    def detect_battle_result(self, frame: np.ndarray) -> bool:
+    def detect_session_result(self, frame: np.ndarray) -> bool:
         return self.registry.match("battle_result", frame)
+
+    def extract_session_result(self, frame: np.ndarray) -> BattleResult | None:
+
+        match = self.extract_battle_match(frame)
+        if match is None:
+            self._logger.warning("バトルマッチが抽出できません")
+            return None
+        rule = self.extract_battle_rule(frame)
+        if rule is None:
+            self._logger.warning("バトルルールが抽出できません")
+            return None
+        stage = self.extract_battle_stage(frame)
+        if stage is None:
+            self._logger.warning("バトルステージが抽出できません")
+            return None
+        kill_record = self.extract_battle_kill_record(frame, match)
+        if kill_record is None:
+            self._logger.warning("キルレコードが抽出できません")
+            return None
+
+        return BattleResult(
+            match=match,
+            rule=rule,
+            stage=stage,
+            kill=kill_record[0],
+            death=kill_record[1],
+            special=kill_record[2],
+        )
 
     def extract_battle_match(self, frame: np.ndarray) -> Match | None:
         """バトルマッチの種類を取得する。"""
@@ -133,8 +149,8 @@ class BattleFrameAnalyzer(AnalyzerPlugin):
         records: Dict[str, int] = {}
         for name, position in record_positions.items():
             count_image = frame[
-                position["y1"] : position["y2"],
-                position["x1"] : position["x2"],
+                position["y1"]: position["y2"],
+                position["x1"]: position["x2"],
             ]
 
             # 文字認識の精度向上のため、拡大・余白・白文字・細字化を行う

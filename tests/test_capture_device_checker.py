@@ -12,11 +12,11 @@ sys.path.insert(0, str(BASE / "src"))  # noqa: E402
 from splat_replay.infrastructure.adapters.capture_device_checker import (
     CaptureDeviceChecker,
 )  # noqa: E402
-from splat_replay.shared.config import OBSSettings  # noqa: E402
+from splat_replay.shared.config import CaptureDeviceSettings  # noqa: E402
 
 
 def test_is_connected_uses_settings(monkeypatch):
-    settings = OBSSettings(capture_device_name="Test Device")
+    settings = CaptureDeviceSettings(name="Test Device")
     checker = CaptureDeviceChecker(settings)
 
     monkeypatch.setattr(sys, "platform", "win32")
@@ -30,7 +30,7 @@ def test_is_connected_uses_settings(monkeypatch):
 
     fake_win32 = types.SimpleNamespace(GetObject=lambda _: FakeWMI())
     fake_pkg = types.ModuleType("win32com")
-    fake_pkg.client = fake_win32
+    fake_pkg.client = fake_win32    # type: ignore
     monkeypatch.setitem(sys.modules, "win32com", fake_pkg)
     monkeypatch.setitem(sys.modules, "win32com.client", fake_win32)
 

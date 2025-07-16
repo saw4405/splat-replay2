@@ -7,12 +7,13 @@ import datetime
 from collections import defaultdict
 from typing import Dict, List, Tuple, Optional
 
+import cv2
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont
+import srt
+
 from splat_replay.application.interfaces import VideoEditorPort
 from splat_replay.infrastructure.adapters.ffmpeg_processor import FFmpegProcessor
-from splat_replay.domain.models.play import Play
-from splat_replay.domain.models.video_clip import VideoClip
 from splat_replay.domain.models import (
     VideoAsset,
     BattleResult,
@@ -54,17 +55,28 @@ class VideoEditor(VideoEditorPort):
         groups = self._group_assets(assets)
         outputs: List[Path] = []
         edited_assets: List[VideoAsset] = []
-        vol = self.settings.volume_multiplier
+
         for key, group in groups.items():
             if not group:
                 continue
-            if len(group) > 1:
-                merged = self.ffmpeg.merge([a.video for a in group])
-                target = VideoAsset.load(merged)
-                target.metadata = group[0].metadata
-            else:
-                target = group[0]
+
             day, time_slot, match_name, rule_name = key
+            ext = group[0].video.suffix
+            filename = f"{day.strftime('%Y%m%d')}_{time_slot.strftime('%H')}_{match_name}_{rule_name}{ext}"
+            target = group[0].video.with_name(filename)
+
+            if len(group) > 1:
+                self.ffmpeg.merge([a.video for a in group], target)
+            else:
+                target.write_bytes(group[0].video.read_bytes())
+
+            combined_subtitles = self._combine_subtitles(group)
+            combined_srt = srt.compose(combined_subtitles)
+            try:
+                self.ffmpeg.embed_subtitle(target, combined_srt)
+            except Exception as e:  # pragma: no cover - 埋め込み失敗は警告のみ
+                logger.warning("字幕埋め込み失敗", error=str(e))
+
             title, description = self._generate_title_and_description(
                 group,
                 day,
@@ -72,36 +84,34 @@ class VideoEditor(VideoEditorPort):
             )
             logger.info("タイトル生成", title=title)
             logger.debug("説明生成", description=description)
-            thumb = self._create_thumbnail(group)
-            if thumb:
-                logger.info("サムネイル生成", thumbnail=str(thumb))
             try:
                 metadata = {
                     "title": title,
                     "comment": description,
                 }
-                self.ffmpeg.embed_metadata(target.video, metadata)
+                self.ffmpeg.embed_metadata(target, metadata)
             except Exception as e:  # pragma: no cover - 埋め込み失敗は警告のみ
                 logger.warning("メタデータ埋め込み失敗", error=str(e))
+
+            thumb = self._create_thumbnail(group)
             if thumb:
+                logger.info("サムネイル生成", thumbnail=str(thumb))
                 try:
                     thumb_data = thumb.read_bytes()
-                    self.ffmpeg.embed_thumbnail(target.video, thumb_data)
+                    self.ffmpeg.embed_thumbnail(target, thumb_data)
                 except Exception as e:  # pragma: no cover
                     logger.warning("サムネイル埋め込み失敗", error=str(e))
                 finally:
                     thumb.unlink(missing_ok=True)
-            if target.subtitle:
+
+            if self.settings.volume_multiplier != 1.0:
                 try:
-                    srt = target.subtitle.read_text(encoding="utf-8")
-                    self.ffmpeg.embed_subtitle(target.video, srt)
-                except Exception as e:  # pragma: no cover - 失敗しても続行
-                    logger.warning("字幕埋め込み失敗", error=str(e))
-            try:
-                self.ffmpeg.change_volume(target.video, vol)
-            except Exception as e:  # pragma: no cover
-                logger.warning("音量変更失敗", error=str(e))
-            outputs.append(target.video)
+                    self.ffmpeg.change_volume(
+                        target, self.settings.volume_multiplier)
+                except Exception as e:  # pragma: no cover
+                    logger.warning("音量変更失敗", error=str(e))
+
+            outputs.append(target)
             edited_assets.extend(group)
         return outputs, edited_assets
 
@@ -184,20 +194,6 @@ class VideoEditor(VideoEditorPort):
             minutes, seconds = divmod(remainder, 60)
             return f"{hours:02}:{minutes:02}:{seconds:02}"
 
-        def length(video_path: Path) -> float:
-            import cv2
-            video = None
-            try:
-                video = cv2.VideoCapture(str(video_path.resolve()))
-                length = video.get(cv2.CAP_PROP_FRAME_COUNT) / \
-                    video.get(cv2.CAP_PROP_FPS)
-                return length
-            except Exception as e:
-                raise e
-            finally:
-                if video:
-                    video.release()
-
         win = 0
         lose = 0
         chapters = ""
@@ -219,7 +215,7 @@ class VideoEditor(VideoEditorPort):
                     ),
                 }
                 chapters += f"{format_seconds(elapsed)} {self.settings.chapter_template.format(**tokens) if self.settings.chapter_template else ''}\n"
-            elapsed += length(asset.video)
+            elapsed += self._get_video_length(asset.video)
 
             if asset.metadata and asset.metadata.rate and asset.metadata.rate != last_rate:
                 chapters += (
@@ -303,8 +299,6 @@ class VideoEditor(VideoEditorPort):
             logger.warning("サムネイル保存失敗", error=str(e))
             return None
         return out
-
-    # ----- 画像処理補助メソッド -----
 
     def _get_asset_path(self, name: str) -> Path:
         return self.THUMBNAIL_ASSETS_DIR / name
@@ -428,29 +422,38 @@ class VideoEditor(VideoEditorPort):
 
         return thumbnail
 
-    def merge_clips(self, clips: list[VideoClip]) -> VideoClip:
-        """複数のクリップを結合して新しいクリップを作成する。"""
-        logger.info("クリップ結合", clips=[c.path.name for c in clips])
-        raise NotImplementedError
+    def _combine_subtitles(self, assets: List[VideoAsset]):
+        logger.info("字幕を結合します")
+        combined_subtitles: List[srt.Subtitle] = []
+        offset = datetime.timedelta(seconds=0)
+        for asset in assets:
+            if asset.subtitle and asset.subtitle.exists():
+                srt_str = asset.subtitle.read_text(encoding="utf-8")
+                subtitles = list(srt.parse(srt_str))
+                if subtitles:
+                    for subtitle in subtitles:
+                        subtitle.start += offset
+                        subtitle.end += offset
+                    combined_subtitles.extend(subtitles)
 
-    def embed_metadata(self, clip: VideoClip, match: Play) -> None:
-        """メタデータを動画に書き込む。"""
-        logger.info("メタデータ書き込み", clip=str(clip.path))
-        raise NotImplementedError
+            offset += datetime.timedelta(
+                seconds=self._get_video_length(asset.video))
+        return combined_subtitles
 
-    def adjust_volume(self, clip: VideoClip, config) -> None:
-        """音量を調整する。"""
-        logger.info("音量調整", clip=str(clip.path))
-        raise NotImplementedError
-
-    def generate_thumbnail(self, clip: VideoClip) -> Path:
-        """サムネイル画像を生成する。"""
-        logger.info("サムネイル生成", clip=str(clip.path))
-        raise NotImplementedError
-
-    def embed_subtitle(self, clip: VideoClip, subtitle: Path) -> None:
-        """字幕を動画に埋め込む。"""
-        logger.info(
-            "字幕埋め込み", clip=str(clip.path), subtitle=str(subtitle)
-        )
-        raise NotImplementedError
+    def _get_video_length(self, video_path: Path) -> float:
+        video = None
+        try:
+            video = cv2.VideoCapture(str(video_path.resolve()))
+            if not video.isOpened():
+                raise ValueError("動画ファイルが開けません")
+            frame_count = video.get(cv2.CAP_PROP_FRAME_COUNT)
+            fps = video.get(cv2.CAP_PROP_FPS)
+            length = frame_count / fps
+            if length < 0:
+                raise ValueError("動画の長さが不正です")
+            return length
+        except Exception as e:
+            raise e
+        finally:
+            if video:
+                video.release()

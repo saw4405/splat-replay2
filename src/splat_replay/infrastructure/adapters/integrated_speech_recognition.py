@@ -41,9 +41,6 @@ class IntegratedSpeechRecognizer(SpeechRecognizerPort):
             return result.estimated_text
 
         except sr.UnknownValueError as e:
-            self._logger.error(
-                f"音声認識エンジンが入力を理解できませんでした: {e}"
-            )
             return None
 
         except sr.RequestError as e:
