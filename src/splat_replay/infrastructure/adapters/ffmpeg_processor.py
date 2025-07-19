@@ -237,7 +237,7 @@ class FFmpegProcessor:
 
         try:
             info = json.loads(result.stdout)
-        except Exception as e:
+        except Exception:
             logger.error("JSON解析中にエラーが発生しました")
             return []
 

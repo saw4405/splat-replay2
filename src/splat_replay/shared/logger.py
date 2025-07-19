@@ -118,8 +118,6 @@ def get_logger() -> structlog.stdlib.BoundLogger:
 @contextlib.contextmanager
 def buffer_console_logs():
     """コンソールログ出力を一時的にバッファし、終了時にまとめて出力する。"""
-    import logging
-
     root_logger = logging.getLogger()
     orig_handlers = list(root_logger.handlers)
     stream_handlers = [

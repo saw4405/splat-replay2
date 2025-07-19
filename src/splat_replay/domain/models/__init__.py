@@ -1,7 +1,6 @@
 """ドメインモデル公開API。"""
 
 __all__ = [
-    "Play",
     "Rule",
     "Stage",
     "MatchExpression",
@@ -18,7 +17,6 @@ __all__ = [
     "VideoAsset",
 ]
 
-from .play import Play
 from .rule import Rule
 from .stage import Stage
 from .match_expression import MatchExpression
