@@ -1,9 +1,10 @@
 """ドメインモデル公開API。"""
 
 __all__ = [
+    "Frame",
+    "as_frame",
     "Rule",
     "Stage",
-    "MatchExpression",
     "GameMode",
     "Match",
     "RateBase",
@@ -13,17 +14,17 @@ __all__ = [
     "BattleResult",
     "SalmonResult",
     "RecordingMetadata",
-    "VideoClip",
     "VideoAsset",
+    "TIME_RANGES",
 ]
 
+from .aliases import Frame, as_frame
 from .rule import Rule
 from .stage import Stage
-from .match_expression import MatchExpression
 from .game_mode import GameMode
 from .match import Match
 from .rate import RateBase, XP, Udemae
 from .result import Result, BattleResult, SalmonResult
 from .recording_metadata import RecordingMetadata
-from .video_clip import VideoClip
 from .video_asset import VideoAsset
+from .time_schedule import TIME_RANGES

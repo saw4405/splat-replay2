@@ -1,0 +1,34 @@
+"""解析プラグイン共通インターフェース。"""
+
+from __future__ import annotations
+
+from typing import Protocol, Optional
+
+from splat_replay.domain.models import Frame, Match, RateBase, Result
+
+
+class AnalyzerPlugin(Protocol):
+    """ゲーム画面解析プラグインのプロトコル。"""
+
+    def extract_match_select(self, frame: Frame) -> Optional[Match]: ...
+
+    def extract_rate(self, frame: Frame,
+                     match: Match) -> Optional[RateBase]: ...
+
+    def detect_session_start(self, frame: Frame) -> bool: ...
+
+    def detect_session_abort(self, frame: Frame) -> bool: ...
+
+    def detect_session_finish(self, frame: Frame) -> bool: ...
+
+    def detect_session_finish_end(self, frame: Frame) -> bool: ...
+
+    def detect_session_judgement(self, frame: Frame) -> bool: ...
+
+    def extract_session_judgement(
+        self, frame: Frame) -> Optional[str]: ...
+
+    def detect_session_result(self, frame: Frame) -> bool: ...
+
+    def extract_session_result(
+        self, frame: Frame) -> Optional[Result]: ...

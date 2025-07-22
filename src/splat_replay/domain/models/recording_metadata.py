@@ -23,7 +23,7 @@ class RecordingMetadata:
         """辞書へ変換する。"""
         return {
             "started_at": self.started_at.isoformat() if self.started_at else None,
-            "rate": self.rate if self.rate else None,
+            "rate": str(self.rate) if self.rate else None,
             "judgement": self.judgement,
             "result": self.result.to_dict() if self.result else None,
         }

@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-from splat_replay.application.interfaces import PowerPort
-from splat_replay.domain.services.state_machine import Event, StateMachine
 from splat_replay.shared.logger import get_logger
 from splat_replay.shared.config import PCSettings
+from splat_replay.domain.services.state_machine import Event, StateMachine
+from splat_replay.application.interfaces import PowerPort
 
 
 class PowerManager:

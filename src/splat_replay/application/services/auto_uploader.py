@@ -1,13 +1,12 @@
-"""自動アップロードサービス。"""
-
-from __future__ import annotations
-
-from splat_replay.application.interfaces import (
-    UploadPort,
-    VideoAssetRepository,
-)
-from splat_replay.domain.services.state_machine import Event, StateMachine
 from splat_replay.shared.logger import get_logger
+from splat_replay.shared.config import UploadSettings
+from splat_replay.domain.services.state_machine import Event, StateMachine
+from splat_replay.application.interfaces import (
+    VideoAssetRepository,
+    UploadPort,
+    VideoEditorPort
+)
+from .uploader import Uploader
 
 
 class AutoUploader:
@@ -16,23 +15,24 @@ class AutoUploader:
     def __init__(
         self,
         uploader: UploadPort,
+        video_editor: VideoEditorPort,
+        settings: UploadSettings,
         repo: VideoAssetRepository,
         sm: StateMachine,
-    ) -> None:
-        self.uploader = uploader
+    ):
         self.repo = repo
         self.sm = sm
         self.logger = get_logger()
+        self.uploader = Uploader(uploader, video_editor, settings)
 
-    def execute(self) -> list[str]:
+    def execute(self):
         self.logger.info("自動アップロード開始")
         self.sm.handle(Event.UPLOAD_START)
-        ids: list[str] = []
         for video in self.repo.list_edited():
             self.logger.info("アップロード", path=str(video))
-            id = self.uploader.upload(video)
-            ids.append(id)
+
+            self.uploader.process(video)
+
             self.repo.delete_edited(video)
         self.sm.handle(Event.UPLOAD_END)
         self.logger.info("自動アップロード終了")
-        return ids

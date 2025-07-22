@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from splat_replay.application.services import AutoEditor, AutoUploader
-
 import asyncio
+
+from splat_replay.application.services import AutoEditor, AutoUploader
 
 
 class UploadUseCase:

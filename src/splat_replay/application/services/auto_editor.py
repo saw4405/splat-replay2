@@ -1,15 +1,15 @@
-"""自動編集サービス。"""
-
-from __future__ import annotations
-
 from pathlib import Path
 
+from splat_replay.shared.config import VideoEditSettings
+from splat_replay.shared.logger import get_logger
+from splat_replay.domain.services.state_machine import Event, StateMachine
 from splat_replay.application.interfaces import (
     VideoEditorPort,
     VideoAssetRepository,
+    SubtitleEditorPort,
+    ImageSelector
 )
-from splat_replay.domain.services.state_machine import Event, StateMachine
-from splat_replay.shared.logger import get_logger
+from .editor import Editor
 
 
 class AutoEditor:
@@ -17,20 +17,26 @@ class AutoEditor:
 
     def __init__(
         self,
-        editor: VideoEditorPort,
+        video_editor: VideoEditorPort,
+        subtitle_editor: SubtitleEditorPort,
+        image_selector: ImageSelector,
+        settings: VideoEditSettings,
         repo: VideoAssetRepository,
         sm: StateMachine,
-    ) -> None:
-        self.editor = editor
+    ):
         self.repo = repo
         self.sm = sm
         self.logger = get_logger()
+        self.editor = Editor(video_editor, subtitle_editor,
+                             image_selector, settings)
 
     def execute(self) -> list[Path]:
         self.logger.info("自動編集開始")
         self.sm.handle(Event.EDIT_START)
         assets = self.repo.list_recordings()
+
         results, edited_assets = self.editor.process(assets)
+
         edited: list[Path] = []
         for out in results:
             target = self.repo.save_edited(Path(out))

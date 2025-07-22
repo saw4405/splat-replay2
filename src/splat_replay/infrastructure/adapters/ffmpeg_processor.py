@@ -8,11 +8,12 @@ from pathlib import Path
 from typing import List, Literal, Optional
 
 from splat_replay.shared.logger import get_logger
+from splat_replay.application.interfaces import VideoEditorPort
 
 logger = get_logger()
 
 
-class FFmpegProcessor:
+class FFmpegProcessor(VideoEditorPort):
     """FFmpeg を呼び出して動画加工を行うアダプタ."""
 
     def merge(self, clips: list[Path], output: Path) -> Path:
@@ -149,7 +150,7 @@ class FFmpegProcessor:
 
         return result.stdout
 
-    def embed_thumbnail(self, path: Path, thumbnail: bytes) -> None:
+    def embed_thumbnail(self, path: Path, thumbnail: bytes):
         """サムネイル画像を動画へ埋め込む."""
         abs_path = path.resolve()
         logger.info(
@@ -220,6 +221,33 @@ class FFmpegProcessor:
         if temp.exists():
             abs_path.unlink(missing_ok=True)
             temp.rename(abs_path)
+
+    def get_video_length(self, path: Path) -> Optional[float]:
+        """動画の長さを取得する."""
+        abs_path = path.resolve()
+        logger.info("FFmpeg 動画長さ取得", path=str(abs_path))
+
+        result = subprocess.run(
+            [
+                "ffprobe",
+                "-v", "error",
+                "-show_entries", "format=duration",
+                "-of", "default=noprint_wrappers=1:nokey=1",
+                str(abs_path)
+            ],
+            capture_output=True,
+            text=True,
+            encoding="utf-8"
+        )
+        if result.returncode != 0:
+            logger.error("動画の長さの取得に失敗しました")
+            return None
+
+        try:
+            return float(result.stdout.strip())
+        except ValueError:
+            logger.error("動画の長さの解析に失敗しました")
+            return None
 
     def _find_streams(self, path: Path, codec_type: Literal["video", "audio", "subtitle"], codec_name: str) -> List[int]:
         command = [

@@ -9,10 +9,10 @@ from pathlib import Path
 import cv2
 import numpy as np
 
-from splat_replay.application.interfaces import VideoAssetRepository
-from splat_replay.domain.models import RecordingMetadata, VideoAsset
 from splat_replay.shared.config import VideoStorageSettings
 from splat_replay.shared.logger import get_logger
+from splat_replay.domain.models import RecordingMetadata, VideoAsset
+from splat_replay.application.interfaces import VideoAssetRepository
 
 
 class FileVideoAssetRepository(VideoAssetRepository):

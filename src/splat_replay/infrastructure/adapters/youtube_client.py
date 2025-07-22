@@ -17,15 +17,15 @@ import google.auth.external_account_authorized_user
 import google.oauth2.credentials
 
 from splat_replay.shared.logger import get_logger
+from splat_replay.application.interfaces import UploadPort, PrivacyStatus, Caption
 
 logger = get_logger()
 
 Credentials = Union[google.auth.external_account_authorized_user.Credentials,
                     google.oauth2.credentials.Credentials]
-PrivacyStatus = Literal['public', 'private', 'unlisted']
 
 
-class YouTubeClient:
+class YouTubeClient(UploadPort):
     """YouTube Data API を利用する。"""
 
     def __init__(self):
@@ -92,7 +92,28 @@ class YouTubeClient:
             self._youtube = build(
                 self.API_NAME, self.API_VERSION, credentials=self._credentials)
 
-    def upload(self, path: Path, title: str, description: str, tags: List[str] = [], category: int = 20, privacy_status: PrivacyStatus = 'private') -> Optional[str]:
+    def upload(self, path: Path, title: str, description: str, tags: List[str] = [], privacy_status: PrivacyStatus = 'private', thumb: Optional[Path] = None, caption: Optional[Caption] = None, playlist_id: Optional[str] = None):
+        video_id = self.upload_video(
+            path, title, description, tags, privacy_status=privacy_status)
+        if not video_id:
+            raise RuntimeError("動画のアップロードに失敗しました")
+        logger.info("動画アップロード完了", video_id=video_id)
+
+        if thumb:
+            self.upload_thumbnail(video_id, thumb)
+            logger.info("サムネイルアップロード完了", video_id=video_id)
+
+        if caption:
+            self.upload_subtitle(video_id, caption.subtitle,
+                                 caption.caption_name, caption.language)
+            logger.info("字幕アップロード完了", video_id=video_id)
+
+        if playlist_id:
+            self.add_to_playlist(video_id, playlist_id)
+            logger.info("プレイリストに追加完了", video_id=video_id,
+                        playlist_id=playlist_id)
+
+    def upload_video(self, path: Path, title: str, description: str, tags: List[str] = [], category: int = 20, privacy_status: PrivacyStatus = 'private') -> Optional[str]:
         """動画をアップロードし ID を返す。"""
         logger.info("動画アップロード実行", path=str(path))
         self._ensure_credentials()

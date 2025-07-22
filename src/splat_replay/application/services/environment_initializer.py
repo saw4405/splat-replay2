@@ -5,12 +5,12 @@ from __future__ import annotations
 import asyncio
 import time
 
+from splat_replay.shared.logger import get_logger
+from splat_replay.domain.services.state_machine import Event, StateMachine
 from splat_replay.application.interfaces import (
     CaptureDevicePort,
     OBSControlPort,
 )
-from splat_replay.domain.services.state_machine import Event, StateMachine
-from splat_replay.shared.logger import get_logger
 
 
 class EnvironmentInitializer:

@@ -10,7 +10,7 @@ import time
 
 from splat_replay.shared.di import configure_container
 from splat_replay.shared.logger import initialize_logger, get_logger, buffer_console_logs
-from splat_replay.application import AutoUseCase, UploadUseCase
+from splat_replay.application.use_cases import AutoUseCase, UploadUseCase
 from splat_replay.domain.services.state_machine import StateMachine, State
 
 app = typer.Typer(help="Splat Replay ツール群")

@@ -7,7 +7,18 @@ from typing import Literal, Union
 
 
 class RateBase(ABC):
-    """レートの基底クラス。"""
+    @classmethod
+    def from_dict(cls, data: dict) -> "RateBase":
+        """to_dictで出力した辞書からRateBaseインスタンスを復元する。"""
+        type_ = data.get("type")
+        value = data.get("value")
+        if value is None:
+            raise ValueError("valueがNoneです")
+        if type_ == "XP":
+            return XP(float(value))
+        if type_ == "Udemae":
+            return Udemae(value)
+        raise ValueError(f"未知のtype: {type_}")
 
     @property
     @abstractmethod
@@ -51,11 +62,20 @@ class RateBase(ABC):
                 return Udemae(value)
         raise ValueError("XP または Udemae のインスタンスを生成できません")
 
+    @abstractmethod
+    def to_dict(self) -> dict:
+        """JSONシリアライズ可能な辞書を返す。"""
+        raise NotImplementedError
+
 
 class XP(RateBase):
-    """数値レートを表す。"""
+    MIN_XP = 500.0
+    MAX_XP = 5500.0
 
     def __init__(self, xp: float) -> None:
+        if not (self.MIN_XP <= xp <= self.MAX_XP):
+            raise ValueError(
+                f"XP は {self.MIN_XP} から {self.MAX_XP} の範囲でなければなりません")
         self.xp = xp
 
     @property
@@ -81,10 +101,11 @@ class XP(RateBase):
     def short_str(self) -> str:
         return str(int(self.xp) // 100)
 
+    def to_dict(self) -> dict:
+        return {"type": "XP", "value": self.xp}
+
 
 class Udemae(RateBase):
-    """ウデマエ表記のレート。"""
-
     Rank = Literal[
         "C-",
         "C",
@@ -144,3 +165,6 @@ class Udemae(RateBase):
 
     def short_str(self) -> str:
         return self.udemae
+
+    def to_dict(self) -> dict:
+        return {"type": "Udemae", "value": self.udemae}

@@ -6,6 +6,7 @@ import sys
 from pathlib import Path
 from typing import Callable, Optional, Tuple
 
+import cv2
 import numpy as np
 import pytest
 
@@ -13,16 +14,10 @@ import pytest
 BASE = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(BASE / "src"))  # noqa: E402
 
-from splat_replay.infrastructure.analyzers.frame_analyzer import FrameAnalyzer  # noqa: E402
-from splat_replay.infrastructure.analyzers.splatoon_battle_analyzer import (
-    BattleFrameAnalyzer,
-)  # noqa: E402
-from splat_replay.infrastructure.analyzers.splatoon_salmon_analyzer import (
-    SalmonFrameAnalyzer,
-)  # noqa: E402
-from splat_replay.domain.models import GameMode, RateBase, Udemae, XP, Match  # noqa: E402
 from splat_replay.shared.config import ImageMatchingSettings  # noqa: E402
-import cv2  # noqa: E402
+from splat_replay.domain.models import Frame, as_frame, GameMode, RateBase, Udemae, XP, Match  # noqa: E402
+from splat_replay.domain.services.analyzers import FrameAnalyzer, BattleFrameAnalyzer, SalmonFrameAnalyzer  # noqa: E402
+from splat_replay.infrastructure import MatcherRegistry, TesseractOCR, ImageEditor  # noqa: E402
 
 
 # config の YAML を読み込み、必要なパスをテスト用に上書きする
@@ -35,13 +30,20 @@ MATCHER_SETTINGS = ImageMatchingSettings.load_from_yaml(
 TEMPLATE_DIR = BASE_DIR / "fixtures" / "templates"
 
 
+def create_analyzer() -> FrameAnalyzer:
+    """レジストリを利用する ``FrameAnalyzer`` を返す。"""
+    matcher_registry = MatcherRegistry(MATCHER_SETTINGS)
+    ocr = TesseractOCR()
+    def image_editor_factory(image): return ImageEditor(image)
+    battle = BattleFrameAnalyzer(matcher_registry, ocr, image_editor_factory)
+    salmon = SalmonFrameAnalyzer(matcher_registry)
+    analyzer = FrameAnalyzer(battle, salmon, matcher_registry)
+    return analyzer
+
+
 @pytest.fixture()
 def analyzer() -> FrameAnalyzer:
-    """レジストリを利用する ``FrameAnalyzer`` を返す。"""
-    battle = BattleFrameAnalyzer(MATCHER_SETTINGS)
-    salmon = SalmonFrameAnalyzer(MATCHER_SETTINGS)
-    analyzer = FrameAnalyzer(battle, salmon, MATCHER_SETTINGS)
-    return analyzer
+    return create_analyzer()
 
 
 @pytest.fixture()
@@ -383,12 +385,10 @@ def test_detect_battle_result(
 
 
 if __name__ == "__main__":
-    battle = BattleFrameAnalyzer(MATCHER_SETTINGS)
-    salmon = SalmonFrameAnalyzer(MATCHER_SETTINGS)
-    analyzer_ = FrameAnalyzer(battle, salmon, MATCHER_SETTINGS)
+    analyzer_ = create_analyzer()
     filename = "battle_judgement_3.png"
     expected = True
     image_path = TEMPLATE_DIR / filename
-    frame = cv2.imread(str(image_path))
+    frame = as_frame(cv2.imread(str(image_path)))
     result = analyzer_.detect_session_judgement(frame, GameMode.BATTLE)
     print(result == expected)

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import asyncio
+
 from splat_replay.application.services import (
     EnvironmentInitializer,
     AutoRecorder,
@@ -9,8 +11,6 @@ from splat_replay.application.services import (
     AutoUploader,
     PowerManager,
 )
-
-import asyncio
 
 
 class AutoUseCase:

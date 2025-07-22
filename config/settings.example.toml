@@ -29,11 +29,11 @@ base_dir = "videos"
 
 [video_edit]
 volume_multiplier = 1.0
-title_template = "{BATTLE}({RATE}) {RULE} {WIN}勝{LOSE}敗 {DAY} {SCHEDULE}時～"
+title_template = "{BATTLE}({RATE}) {RULE} {WIN}勝{LOSE}敗 {DAY:'%y.%m.%d} {SCHEDULE:%H}時～"
 description_template = "{CHAPTERS}"
-chapter_template = "{RESULT} {KILL}k {DEATH}d {SPECIAL}s  {STAGE}"
+chapter_template = "{RESULT:<5} {KILL:>3}k {DEATH:>3}d {SPECIAL:>3}s  {STAGE}"
 
-[youtube]
+[upload]
 privacy_status = "private"
 tags = ["Splatoon3"]
 playlist_id = ""
