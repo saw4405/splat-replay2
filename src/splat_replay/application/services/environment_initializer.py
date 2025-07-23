@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 import time
 
-from splat_replay.shared.logger import get_logger
+from structlog.stdlib import BoundLogger
 from splat_replay.domain.services.state_machine import Event, StateMachine
 from splat_replay.application.interfaces import (
     CaptureDevicePort,
@@ -21,11 +21,12 @@ class EnvironmentInitializer:
         device: CaptureDevicePort,
         obs: OBSControlPort,
         sm: StateMachine,
+        logger: BoundLogger,
     ) -> None:
         self.device = device
         self.obs = obs
         self.sm = sm
-        self.logger = get_logger()
+        self.logger = logger
 
     async def wait_for_device(self, timeout: float | None = None) -> bool:
         """キャプチャデバイスの接続を待機する。"""

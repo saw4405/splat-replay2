@@ -2,13 +2,19 @@ import datetime
 import time
 from typing import Callable, Optional
 
-from splat_replay.shared.logger import get_logger
-from splat_replay.domain.models import Frame, RateBase, Result, RecordingMetadata, GameMode
+from structlog.stdlib import BoundLogger
+from splat_replay.domain.models import (
+    Frame,
+    RateBase,
+    Result,
+    RecordingMetadata,
+    GameMode,
+)
 from splat_replay.domain.services import (
     FrameAnalyzer,
     Event,
     State,
-    StateMachine
+    StateMachine,
 )
 from splat_replay.application.interfaces import (
     CapturePort,
@@ -29,6 +35,7 @@ class AutoRecorder:
         state_machine: StateMachine,
         asset_repo: VideoAssetRepository,
         capture: CapturePort,
+        logger: BoundLogger,
     ) -> None:
         self.recorder = recorder
         self.analyzer = analyzer
@@ -36,7 +43,7 @@ class AutoRecorder:
         self.sm = state_machine
         self.capture = capture
         self.asset_repo = asset_repo
-        self.logger = get_logger()
+        self.logger = logger
         self._resume_trigger: Callable[[Frame], bool] | None = None
         self.game_mode: GameMode | None = None
         self.rate: RateBase | None = None
@@ -58,7 +65,8 @@ class AutoRecorder:
 
         if frame is not None and self.game_mode:
             self.result = self.analyzer.extract_session_result(
-                frame, self.game_mode)
+                frame, self.game_mode
+            )
             self.result_screenshot = frame
             self.logger.info("バトル結果を検出", result=str(self.result))
 
@@ -76,7 +84,9 @@ class AutoRecorder:
                 video, subtitle, self.result_screenshot, metadata
             )
             self.logger.info(
-                "録画終了", video=str(asset.video), start_at=self.matching_started_at
+                "録画終了",
+                video=str(asset.video),
+                start_at=self.matching_started_at,
             )
 
         # 続けてプレイすることがあるので、ゲームモードはここでリセットしない
@@ -147,11 +157,16 @@ class AutoRecorder:
             if self.analyzer.detect_match_select(frame):
                 if self.game_mode is None:
                     self.game_mode = self.analyzer.extract_game_mode(frame)
-                    self.logger.info("ゲームモード取得", mode=str(self.game_mode))
+                    self.logger.info(
+                        "ゲームモード取得", mode=str(self.game_mode)
+                    )
 
                 if self.game_mode is not None:
                     rate = self.analyzer.extract_rate(frame, self.game_mode)
-                    if rate is not None and (not isinstance(rate, type(self.rate)) or rate != self.rate):
+                    if rate is not None and (
+                        not isinstance(rate, type(self.rate))
+                        or rate != self.rate
+                    ):
                         self.rate = rate
                         self.logger.info("レート取得", rate=str(rate))
 
@@ -164,7 +179,9 @@ class AutoRecorder:
                 self.logger.info("スケジュール変更を検出、情報をリセット")
                 self._cancel()
                 return
-            if self.game_mode and self.analyzer.detect_session_start(frame, self.game_mode):
+            if self.game_mode and self.analyzer.detect_session_start(
+                frame, self.game_mode
+            ):
                 self.logger.info("バトル開始を検出")
                 self._start()
                 self.sm.handle(Event.BATTLE_STARTED)
@@ -194,16 +211,20 @@ class AutoRecorder:
                 self.finish = True
                 mode = self.game_mode
                 self._pause(
-                    lambda x: self.analyzer.detect_session_judgement(x, mode))
+                    lambda x: self.analyzer.detect_session_judgement(x, mode)
+                )
                 self.sm.handle(Event.LOADING_DETECTED)
                 return
         else:
             if self.analyzer.detect_session_judgement(frame, self.game_mode):
                 judgement = self.analyzer.extract_session_judgement(
-                    frame, self.game_mode)
+                    frame, self.game_mode
+                )
                 if judgement is not None and self.judgement is None:
                     self.judgement = judgement
-                    self.logger.info("バトルジャッジメント取得", judgement=str(judgement))
+                    self.logger.info(
+                        "バトルジャッジメント取得", judgement=str(judgement)
+                    )
                 return
             if self.analyzer.detect_loading(frame):
                 self.logger.info("ロード画面を検出、一時停止")

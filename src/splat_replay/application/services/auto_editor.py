@@ -1,13 +1,13 @@
 from pathlib import Path
 
 from splat_replay.shared.config import VideoEditSettings
-from splat_replay.shared.logger import get_logger
+from structlog.stdlib import BoundLogger
 from splat_replay.domain.services.state_machine import Event, StateMachine
 from splat_replay.application.interfaces import (
     VideoEditorPort,
     VideoAssetRepository,
     SubtitleEditorPort,
-    ImageSelector
+    ImageSelector,
 )
 from .editor import Editor
 
@@ -23,12 +23,14 @@ class AutoEditor:
         settings: VideoEditSettings,
         repo: VideoAssetRepository,
         sm: StateMachine,
+        logger: BoundLogger,
     ):
         self.repo = repo
         self.sm = sm
-        self.logger = get_logger()
-        self.editor = Editor(video_editor, subtitle_editor,
-                             image_selector, settings)
+        self.logger = logger
+        self.editor = Editor(
+            video_editor, subtitle_editor, image_selector, settings
+        )
 
     def execute(self) -> list[Path]:
         self.logger.info("自動編集開始")

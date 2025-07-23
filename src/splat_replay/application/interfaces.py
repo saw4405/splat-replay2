@@ -13,7 +13,7 @@ from splat_replay.domain.models import (
     VideoAsset,
 )
 
-PrivacyStatus = Literal['public', 'private', 'unlisted']
+PrivacyStatus = Literal["public", "private", "unlisted"]
 
 
 @dataclass
@@ -135,43 +135,78 @@ class ImageDrawerPort(Protocol):
 
     @staticmethod
     def select_brightest_image(
-        paths: List[Path], target_rect: Tuple[float, float, float, float]) -> Optional[ImageDrawerPort]: ...
+        paths: List[Path], target_rect: Tuple[float, float, float, float]
+    ) -> Optional[ImageDrawerPort]: ...
 
     def save(self, path: Path): ...
 
-    def draw_rounded_rectangle(self, rect: Tuple[int, int, int, int], radius: int,
-                               fill_color: Color, outline_color: Color, outline_width: int) -> ImageDrawerPort: ...
+    def draw_rounded_rectangle(
+        self,
+        rect: Tuple[int, int, int, int],
+        radius: int,
+        fill_color: Color,
+        outline_color: Color,
+        outline_width: int,
+    ) -> ImageDrawerPort: ...
 
-    def draw_text(self, text: str, position: Tuple[int, int], font_name: str,
-                  font_size: int, fill_color: Color) -> ImageDrawerPort: ...
+    def draw_text(
+        self,
+        text: str,
+        position: Tuple[int, int],
+        font_name: str,
+        font_size: int,
+        fill_color: Color,
+    ) -> ImageDrawerPort: ...
 
     def draw_text_with_outline(
-        self, text: str, position: Tuple[int, int], font_name: str, font_size: int, fill_color: Color, outline_color: Color, outline_width: int, center: bool = False
+        self,
+        text: str,
+        position: Tuple[int, int],
+        font_name: str,
+        font_size: int,
+        fill_color: Color,
+        outline_color: Color,
+        outline_width: int,
+        center: bool = False,
     ) -> ImageDrawerPort: ...
 
     def draw_image(
-        self, path: Path, position: Tuple[int, int], size: Optional[Tuple[int, int]] = None
+        self,
+        path: Path,
+        position: Tuple[int, int],
+        size: Optional[Tuple[int, int]] = None,
     ) -> ImageDrawerPort: ...
 
     def overlay_image(self, path: Path) -> ImageDrawerPort: ...
 
 
-ImageSelector = Callable[[List[Path],
-                          Tuple[float, float, float, float]], ImageDrawerPort]
+ImageSelector = Callable[
+    [List[Path], Tuple[float, float, float, float]], ImageDrawerPort
+]
 
 
 class SubtitleEditorPort(Protocol):
     """字幕編集処理を提供するポート。"""
 
-    def merge(self, subtitles: List[Path],
-              video_length: List[float]) -> str: ...
+    def merge(
+        self, subtitles: List[Path], video_length: List[float]
+    ) -> str: ...
 
 
 class UploadPort(Protocol):
     """動画アップロード処理を提供するポート。"""
 
-    def upload(self, path: Path, title: str, description: str, tags: List[str] = [
-    ], privacy_status: PrivacyStatus = 'private', thumb: Optional[Path] = None, caption: Optional[Caption] = None, playlist_id: Optional[str] = None): ...
+    def upload(
+        self,
+        path: Path,
+        title: str,
+        description: str,
+        tags: List[str] = [],
+        privacy_status: PrivacyStatus = "private",
+        thumb: Optional[Path] = None,
+        caption: Optional[Caption] = None,
+        playlist_id: Optional[str] = None,
+    ): ...
 
 
 class PowerPort(Protocol):

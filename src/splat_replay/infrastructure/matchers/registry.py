@@ -3,7 +3,11 @@ from pathlib import Path
 
 import numpy as np
 
-from splat_replay.shared.config import ImageMatchingSettings, MatcherConfig, CompositeMatcherConfig
+from splat_replay.shared.config import (
+    ImageMatchingSettings,
+    MatcherConfig,
+    CompositeMatcherConfig,
+)
 from splat_replay.shared.logger import get_logger
 from splat_replay.domain.services import ImageMatcherPort
 from .base import BaseMatcher
@@ -25,7 +29,8 @@ class MatcherRegistry(ImageMatcherPort):
         self.composites: Dict[str, CompositeMatcher] = {}
         for name, comp in settings.composites.items():
             composite = self._build_composite_matcher(
-                name, comp, self.matchers)
+                name, comp, self.matchers
+            )
             if composite:
                 self.composites[name] = composite
 
@@ -58,9 +63,7 @@ class MatcherRegistry(ImageMatcherPort):
             if config.hash_path:
                 return HashMatcher(Path(config.hash_path), roi, name=name)
             else:
-                raise ValueError(
-                    "ハッシュマッチャーには hash_path が必要です"
-                )
+                raise ValueError("ハッシュマッチャーには hash_path が必要です")
         if config.type == "hsv":
             if config.lower_bound and config.upper_bound:
                 return HSVMatcher(
@@ -98,9 +101,7 @@ class MatcherRegistry(ImageMatcherPort):
                     name=name,
                 )
             else:
-                raise ValueError(
-                    "RGBマッチャーには rgb が必要です"
-                )
+                raise ValueError("RGBマッチャーには rgb が必要です")
         if config.type == "uniform":
             return UniformColorMatcher(
                 mask_path,
@@ -137,7 +138,10 @@ class MatcherRegistry(ImageMatcherPort):
         raise ValueError(f"不明なマッチャータイプ: {config.type}")
 
     def _build_composite_matcher(
-        self, name: str, config: CompositeMatcherConfig, lookup: dict[str, BaseMatcher]
+        self,
+        name: str,
+        config: CompositeMatcherConfig,
+        lookup: dict[str, BaseMatcher],
     ) -> Optional[CompositeMatcher]:
         if not config or not config.rule:
             return None

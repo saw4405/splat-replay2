@@ -3,9 +3,7 @@ from typing import Optional, Tuple
 import cv2
 import numpy as np
 from .base import BaseMatcher
-from splat_replay.shared.logger import get_logger
-
-logger = get_logger()
+from structlog.stdlib import BoundLogger
 
 
 class HSVMatcher(BaseMatcher):
@@ -20,8 +18,10 @@ class HSVMatcher(BaseMatcher):
         roi: Optional[Tuple[int, int, int, int]] = None,
         *,
         name: str | None = None,
+        logger: BoundLogger,
     ) -> None:
         super().__init__(mask_path, roi, name)
+        self.logger = logger
         self._lower_bound = np.array(lower_bound, dtype=np.uint8)
         self._upper_bound = np.array(upper_bound, dtype=np.uint8)
         self._threshold = threshold
@@ -47,7 +47,7 @@ class HSVMatcher(BaseMatcher):
         ratio = count / total if total > 0 else 0
         result = ratio >= self._threshold
         if not result:
-            logger.debug(
+            self.logger.debug(
                 "HSV 比率不足",
                 ratio=float(ratio),
                 threshold=self._threshold,

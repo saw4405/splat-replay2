@@ -4,19 +4,21 @@ import datetime
 
 import srt
 
-from splat_replay.shared.logger import get_logger
+from structlog.stdlib import BoundLogger
 from splat_replay.application.interfaces import SubtitleEditorPort
 
 
-logger = get_logger()
-
-
 class SubtitleEditor(SubtitleEditorPort):
+    def __init__(self, logger: BoundLogger) -> None:
+        self.logger = logger
+
     def merge(self, subtitles: List[Path], video_length: List[float]) -> str:
         if len(subtitles) != len(video_length):
-            raise ValueError("字幕ファイルと動画の長さのリストの長さが一致しません。")
+            raise ValueError(
+                "字幕ファイルと動画の長さのリストの長さが一致しません。"
+            )
 
-        logger.info("字幕を結合します")
+        self.logger.info("字幕を結合します")
         combined_subtitles: List[srt.Subtitle] = []
         offset = datetime.timedelta(seconds=0)
         for subtitle_path, length in zip(subtitles, video_length):

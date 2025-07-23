@@ -75,7 +75,8 @@ class XP(RateBase):
     def __init__(self, xp: float) -> None:
         if not (self.MIN_XP <= xp <= self.MAX_XP):
             raise ValueError(
-                f"XP は {self.MIN_XP} から {self.MAX_XP} の範囲でなければなりません")
+                f"XP は {self.MIN_XP} から {self.MAX_XP} の範囲でなければなりません"
+            )
         self.xp = xp
 
     @property

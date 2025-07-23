@@ -13,7 +13,7 @@ __all__ = [
     "BattleFrameAnalyzer",
     "SalmonFrameAnalyzer",
     "Editor",
-    "Uploader"
+    "Uploader",
 ]
 
 from .state_machine import StateMachine, Event, State
@@ -25,7 +25,7 @@ from .analyzers import (
     FrameAnalyzer,
     AnalyzerPlugin,
     BattleFrameAnalyzer,
-    SalmonFrameAnalyzer
+    SalmonFrameAnalyzer,
 )
 from ...application.services.editor import Editor
 from ...application.services.uploader import Uploader

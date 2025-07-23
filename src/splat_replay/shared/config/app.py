@@ -6,7 +6,9 @@ from pydantic import BaseModel
 from splat_replay.shared.config.capture_device import CaptureDeviceSettings
 from splat_replay.shared.config.obs import OBSSettings
 from splat_replay.shared.config.record import RecordSettings
-from splat_replay.shared.config.speech_transcriber import SpeechTranscriberSettings
+from splat_replay.shared.config.speech_transcriber import (
+    SpeechTranscriberSettings,
+)
 from splat_replay.shared.config.video_storage import VideoStorageSettings
 from splat_replay.shared.config.video_edit import VideoEditSettings
 from splat_replay.shared.config.upload import UploadSettings
@@ -15,6 +17,7 @@ from splat_replay.shared.config.pc import PCSettings
 
 class AppSettings(BaseModel):
     """アプリケーション全体の設定。"""
+
     capture_device: CaptureDeviceSettings = CaptureDeviceSettings()
     obs: OBSSettings = OBSSettings()
     record: RecordSettings = RecordSettings()

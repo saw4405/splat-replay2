@@ -15,9 +15,25 @@ BASE = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(BASE / "src"))  # noqa: E402
 
 from splat_replay.shared.config import ImageMatchingSettings  # noqa: E402
-from splat_replay.domain.models import Frame, as_frame, GameMode, RateBase, Udemae, XP, Match  # noqa: E402
-from splat_replay.domain.services.analyzers import FrameAnalyzer, BattleFrameAnalyzer, SalmonFrameAnalyzer  # noqa: E402
-from splat_replay.infrastructure import MatcherRegistry, TesseractOCR, ImageEditor  # noqa: E402
+from splat_replay.domain.models import (
+    Frame,
+    as_frame,
+    GameMode,
+    RateBase,
+    Udemae,
+    XP,
+    Match,
+)  # noqa: E402
+from splat_replay.domain.services.analyzers import (
+    FrameAnalyzer,
+    BattleFrameAnalyzer,
+    SalmonFrameAnalyzer,
+)  # noqa: E402
+from splat_replay.infrastructure import (
+    MatcherRegistry,
+    TesseractOCR,
+    ImageEditor,
+)  # noqa: E402
 
 
 # config の YAML を読み込み、必要なパスをテスト用に上書きする
@@ -34,7 +50,10 @@ def create_analyzer() -> FrameAnalyzer:
     """レジストリを利用する ``FrameAnalyzer`` を返す。"""
     matcher_registry = MatcherRegistry(MATCHER_SETTINGS)
     ocr = TesseractOCR()
-    def image_editor_factory(image): return ImageEditor(image)
+
+    def image_editor_factory(image):
+        return ImageEditor(image)
+
     battle = BattleFrameAnalyzer(matcher_registry, ocr, image_editor_factory)
     salmon = SalmonFrameAnalyzer(matcher_registry)
     analyzer = FrameAnalyzer(battle, salmon, matcher_registry)
@@ -132,7 +151,7 @@ def test_extract_game_mode(
         ("rate_XP2033.9.png", XP(2033.9)),
         ("rate_S.png", Udemae("S")),
         ("rate_S+.png", Udemae("S+")),
-        ("rate_None.png", None)
+        ("rate_None.png", None),
     ],
 )
 def test_extract_rate(
@@ -214,10 +233,7 @@ def test_detect_battle_start(
 
 @pytest.mark.parametrize(
     "filename, expected",
-    [
-        ("battle_abort_1.png", True),
-        ("battle_result_1.png", False)
-    ],
+    [("battle_abort_1.png", True), ("battle_result_1.png", False)],
 )
 def test_detect_battle_abort(
     analyzer: FrameAnalyzer,
@@ -348,7 +364,7 @@ def test_detect_loading(
     [
         ("loading_1.png", False),
         ("power_off.png", True),
-        ("battle_result_1.png", True)
+        ("battle_result_1.png", True),
     ],
 )
 def test_detect_loading_end(

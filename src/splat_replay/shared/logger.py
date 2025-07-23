@@ -9,6 +9,7 @@ from logging.handlers import TimedRotatingFileHandler
 from pathlib import Path
 
 import structlog
+from structlog.stdlib import BoundLogger
 from structlog.processors import CallsiteParameterAdder, CallsiteParameter
 
 _initialized = False
@@ -102,13 +103,13 @@ def initialize_logger(
                 structlog.stdlib.ProcessorFormatter.wrap_for_formatter,
             ],
             logger_factory=structlog.stdlib.LoggerFactory(),
-            wrapper_class=structlog.stdlib.BoundLogger,
+            wrapper_class=BoundLogger,
             cache_logger_on_first_use=True,
         )
         _initialized = True
 
 
-def get_logger() -> structlog.stdlib.BoundLogger:
+def get_logger() -> BoundLogger:
     """初期化済みロガーを取得する。"""
     if not _initialized:
         initialize_logger()

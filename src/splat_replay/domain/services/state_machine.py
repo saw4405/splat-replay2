@@ -5,9 +5,7 @@ from __future__ import annotations
 from enum import Enum, auto
 from typing import Callable
 
-from splat_replay.shared.logger import get_logger
-
-logger = get_logger()
+from structlog.stdlib import BoundLogger
 
 
 class State(Enum):
@@ -70,10 +68,11 @@ TRANSITIONS: dict[tuple[State, Event], State] = {
 class StateMachine:
     """状態を遷移させつつ通知する。"""
 
-    def __init__(self) -> None:
+    def __init__(self, logger: BoundLogger) -> None:
         self.state = State.WAITING_DEVICE
         self._listeners: list[Callable[[State], None]] = []
-        logger.info("state=%s", self.state.name)
+        self.logger = logger
+        self.logger.info("state=%s", self.state.name)
 
     def add_listener(self, func: Callable[[State], None]) -> None:
         """状態変化リスナーを登録する。"""
@@ -88,6 +87,6 @@ class StateMachine:
         before = self.state
         self.state = TRANSITIONS.get((self.state, event), self.state)
         if self.state != before:
-            logger.info("event=%s state=%s", event.name, self.state.name)
+            self.logger.info("event=%s state=%s", event.name, self.state.name)
             for cb in list(self._listeners):
                 cb(self.state)

@@ -2,23 +2,32 @@ from pathlib import Path
 from typing import Optional
 
 from splat_replay.shared.config import UploadSettings
-from splat_replay.shared.logger import get_logger
-from splat_replay.application.interfaces import UploadPort, VideoEditorPort, Caption
-
-logger = get_logger()
+from structlog.stdlib import BoundLogger
+from splat_replay.application.interfaces import (
+    UploadPort,
+    VideoEditorPort,
+    Caption,
+)
 
 
 class Uploader:
     """動画をアップロードする。"""
 
-    def __init__(self, uploader: UploadPort, video_editor: VideoEditorPort, settings: UploadSettings) -> None:
+    def __init__(
+        self,
+        uploader: UploadPort,
+        video_editor: VideoEditorPort,
+        settings: UploadSettings,
+        logger: BoundLogger,
+    ) -> None:
         self.uploader = uploader
         self.video_editor = video_editor
         self.settings = settings
+        self.logger = logger
 
     def process(self, path: Path):
         """動画をアップロードし、動画 ID を返す。"""
-        logger.info("動画アップロード", clip=str(path))
+        self.logger.info("動画アップロード", clip=str(path))
 
         thumb: Optional[Path] = None
         subtitle: Optional[Path] = None
@@ -46,10 +55,12 @@ class Uploader:
                 caption=Caption(
                     subtitle=subtitle,
                     caption_name=self.settings.caption_name,
-                ) if subtitle else None,
-                playlist_id=self.settings.playlist_id
+                )
+                if subtitle
+                else None,
+                playlist_id=self.settings.playlist_id,
             )
-            logger.info("動画アップロード完了", video_id=id)
+            self.logger.info("動画アップロード完了", video_id=id)
         finally:
             if thumb:
                 thumb.unlink(missing_ok=True)

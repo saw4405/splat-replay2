@@ -1,10 +1,10 @@
-from splat_replay.shared.logger import get_logger
+from structlog.stdlib import BoundLogger
 from splat_replay.shared.config import UploadSettings
 from splat_replay.domain.services.state_machine import Event, StateMachine
 from splat_replay.application.interfaces import (
     VideoAssetRepository,
     UploadPort,
-    VideoEditorPort
+    VideoEditorPort,
 )
 from .uploader import Uploader
 
@@ -19,11 +19,12 @@ class AutoUploader:
         settings: UploadSettings,
         repo: VideoAssetRepository,
         sm: StateMachine,
+        logger: BoundLogger,
     ):
         self.repo = repo
         self.sm = sm
-        self.logger = get_logger()
-        self.uploader = Uploader(uploader, video_editor, settings)
+        self.logger = logger
+        self.uploader = Uploader(uploader, video_editor, settings, logger)
 
     def execute(self):
         self.logger.info("自動アップロード開始")

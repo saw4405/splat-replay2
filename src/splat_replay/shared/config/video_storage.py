@@ -5,6 +5,7 @@ from pydantic import BaseModel
 
 class VideoStorageSettings(BaseModel):
     """動画ファイルを保存するフォルダ設定。"""
+
     base_dir: Path = Path("videos")
 
     @property
