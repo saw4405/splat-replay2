@@ -4,9 +4,6 @@ from pathlib import Path
 from typing import Protocol, Optional, List, Literal, Tuple, Callable, Union
 from dataclasses import dataclass
 
-import numpy as np
-import speech_recognition as sr
-
 from splat_replay.domain.models import (
     Frame,
     RecordingMetadata,
@@ -90,7 +87,7 @@ class VideoAssetRepository(Protocol):
         self,
         video: Path,
         subtitle: str,
-        screenshot: np.ndarray | None,
+        screenshot: Frame | None,
         metadata: RecordingMetadata,
     ) -> VideoAsset: ...
 
@@ -137,6 +134,13 @@ class ImageDrawerPort(Protocol):
     def select_brightest_image(
         paths: List[Path], target_rect: Tuple[float, float, float, float]
     ) -> Optional[ImageDrawerPort]: ...
+
+    def when(self,
+             flag: bool,
+             fn: Callable[..., ImageDrawerPort],
+             /,
+             *args,
+             **kwargs) -> ImageDrawerPort: ...
 
     def save(self, path: Path): ...
 

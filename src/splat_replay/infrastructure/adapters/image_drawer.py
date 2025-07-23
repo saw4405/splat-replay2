@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Tuple, List, Optional
+from typing import Tuple, List, Optional, Callable
 
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont
@@ -61,6 +61,14 @@ class ImageDrawer(ImageDrawerPort):
     def __init__(self, image: Image.Image):
         self._image = image
         self._draw = ImageDraw.Draw(image)
+
+    def when(self,
+             flag: bool,
+             fn: Callable[..., ImageDrawer],
+             /,
+             *args,
+             **kwargs) -> ImageDrawer:
+        return fn(self, *args, **kwargs) if flag else self
 
     def save(self, path: Path):
         self._image.save(path)

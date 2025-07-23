@@ -330,16 +330,16 @@ class Editor:
 
     def _create_thumbnail(self, assets: List[VideoAsset]) -> Path | None:
         """明るいサムネイルを選び文字を描画する。"""
+        # サーモンランは未対応
+        result = assets[0].metadata.result if assets[0].metadata else None
+        if result is None or isinstance(result, SalmonResult):
+            return None
+
         thumbnails = [
             asset.thumbnail
             for asset in assets
             if asset.thumbnail and asset.thumbnail.exists()
         ]
-
-        # サーモンランは未対応
-        result = assets[0].metadata.result if assets[0].metadata else None
-        if result is None or isinstance(result, SalmonResult):
-            return None
 
         win_count = sum(
             1
@@ -379,6 +379,13 @@ class Editor:
                 rate = f"{rate_prefix}{min_rate}"
             else:
                 rate = f"{rate_prefix}{min_rate} ~ {max_rate}"
+        rate_text_color = (
+            (1, 249, 196)
+            if match_name == "Xマッチ"
+            else (250, 97, 0)
+            if match_name == "バンカラマッチ"
+            else "white"
+        )
 
         stages = [
             a.metadata.result.stage.value
@@ -400,7 +407,8 @@ class Editor:
         font_paintball = str(self._get_asset_path("Paintball_Beta.otf"))
         font_ikamodoki = str(self._get_asset_path("ikamodoki1.ttf"))
 
-        image_drawer = (
+        out = assets[0].video.with_suffix(".thumb.png")
+        (
             self.image_selector(thumbnails, (0, 0, 750, 1.0))
             .draw_rounded_rectangle(
                 (777, 21, 1849, 750),
@@ -424,35 +432,21 @@ class Editor:
                 rule_name, (1120, 50), font_ikamodoki, 140, fill_color="white"
             )
             .draw_image(rule_image_path, (1660, 70), size=(150, 150))
-        )
-
-        if rate:
-            text_color = (
-                (1, 249, 196)
-                if match_name == "Xマッチ"
-                else (250, 97, 0)
-                if match_name == "バンカラマッチ"
-                else "white"
-            )
-            image_drawer.draw_text(
-                rate, (1125, 230), font_paintball, 70, fill_color=text_color
-            )
-
-        if stage1_image_path and stage1_image_path.exists():
-            image_drawer.draw_image(
+            .when(rate is not None, lambda d: d.draw_text(
+                rate, (1125, 230), font_paintball, 70, fill_color=rate_text_color
+            ))
+            .when(stage1_image_path is not None and stage1_image_path.exists(),
+                  lambda d: d.draw_image(
                 stage1_image_path, (860, 360), size=(960, 168)
-            )
-
-        if stage2_image_path and stage2_image_path.exists():
-            image_drawer.draw_image(
+            ))
+            .when(stage2_image_path is not None and stage2_image_path.exists(),
+                  lambda d: d.draw_image(
                 stage2_image_path, (860, 540), size=(960, 168)
-            )
-
-        if overlay_image_path.exists():
-            image_drawer.overlay_image(overlay_image_path)
-
-        out = assets[0].video.with_suffix(".thumb.png")
-        image_drawer.save(out)
+            ))
+            .when(overlay_image_path.exists(),
+                  lambda d: d.overlay_image(overlay_image_path))
+            .save(out)
+        )
         return out
 
     def _get_asset_path(self, name: str) -> Path:

@@ -29,7 +29,7 @@ class AutoEditor:
         self.sm = sm
         self.logger = logger
         self.editor = Editor(
-            video_editor, subtitle_editor, image_selector, settings
+            video_editor, subtitle_editor, image_selector, settings, logger
         )
 
     def execute(self) -> list[Path]:

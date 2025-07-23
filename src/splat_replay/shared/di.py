@@ -127,9 +127,6 @@ def register_domain_services(container: punq.Container):
     container.register(FrameAnalyzer, FrameAnalyzer)
     container.register(BattleFrameAnalyzer, BattleFrameAnalyzer)
     container.register(SalmonFrameAnalyzer, SalmonFrameAnalyzer)
-    logger = container.resolve(BoundLogger)
-    state_machine = StateMachine(logger)
-    container.register(StateMachine, instance=state_machine)
 
 
 def register_app_services(container: punq.Container):
@@ -150,8 +147,13 @@ def register_app_usecases(container: punq.Container):
 def configure_container() -> punq.Container:
     """アプリで利用する依存関係を登録する。"""
     container = punq.Container()
+
     initialize_logger()
-    container.register(BoundLogger, instance=structlog.get_logger())
+    logger = structlog.get_logger()
+    container.register(BoundLogger, instance=logger)
+    state_machine = StateMachine(logger)
+    container.register(StateMachine, instance=state_machine)
+
     register_config(container, Path("config/settings.toml"))
     register_image_matching_settings(
         container, Path("config/image_matching.yaml")
