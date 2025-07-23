@@ -2,19 +2,18 @@ from typing import Optional
 
 import cv2
 
-from splat_replay.shared.logger import get_logger
+from structlog.stdlib import BoundLogger
 from splat_replay.shared.config import RecordSettings
 from splat_replay.domain.models import Frame, as_frame
 from splat_replay.application.interfaces import CapturePort
 
-logger = get_logger()
-
 
 class Capture(CapturePort):
-    def __init__(self, settings: RecordSettings):
+    def __init__(self, settings: RecordSettings, logger: BoundLogger):
+        self.logger = logger
         self.video_capture = cv2.VideoCapture(settings.capture_index)
         if not self.video_capture.isOpened():
-            logger.error(
+            self.logger.error(
                 "キャプチャデバイスを開けません",
                 index=settings.capture_index,
             )
@@ -25,7 +24,7 @@ class Capture(CapturePort):
     def capture(self) -> Optional[Frame]:
         success, frame = self.video_capture.read()
         if not success:
-            logger.warning("フレーム取得に失敗")
+            self.logger.warning("フレーム取得に失敗")
             return None
         return as_frame(frame)
 
@@ -33,4 +32,4 @@ class Capture(CapturePort):
         """キャプチャデバイスを閉じる。"""
         if self.video_capture.isOpened():
             self.video_capture.release()
-            logger.info("キャプチャデバイスを閉じました")
+            self.logger.info("キャプチャデバイスを閉じました")

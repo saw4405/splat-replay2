@@ -5,9 +5,6 @@ from typing import Optional, Tuple
 from abc import ABC, abstractmethod
 import cv2
 import numpy as np
-from splat_replay.shared.logger import get_logger
-
-logger = get_logger()
 
 
 class BaseMatcher(ABC):
@@ -21,8 +18,9 @@ class BaseMatcher(ABC):
     ) -> None:
         self.name = name
         self._mask = (
-            cv2.imread(str(mask_path),
-                       cv2.IMREAD_GRAYSCALE) if mask_path else None
+            cv2.imread(str(mask_path), cv2.IMREAD_GRAYSCALE)
+            if mask_path
+            else None
         )
         self._roi = roi
 
@@ -30,7 +28,7 @@ class BaseMatcher(ABC):
         if self._roi is None:
             return image
         x, y, w, h = self._roi
-        return image[y: y + h, x: x + w]
+        return image[y : y + h, x : x + w]
 
     @abstractmethod
     def match(self, image: np.ndarray) -> bool:

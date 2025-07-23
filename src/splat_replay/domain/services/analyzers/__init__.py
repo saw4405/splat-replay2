@@ -8,7 +8,7 @@ __all__ = [
     "FrameAnalyzer",
     "AnalyzerPlugin",
     "BattleFrameAnalyzer",
-    "SalmonFrameAnalyzer"
+    "SalmonFrameAnalyzer",
 ]
 
 from .image_matcher import ImageMatcherPort

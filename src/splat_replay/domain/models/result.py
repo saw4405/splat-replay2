@@ -34,6 +34,7 @@ class BattleResult:
         from .match import Match
         from .rule import Rule
         from .stage import Stage
+
         return cls(
             match=Match[data["match"]],
             rule=Rule[data["rule"]],
@@ -69,6 +70,7 @@ class SalmonResult:
     @classmethod
     def from_dict(cls, data: dict) -> "SalmonResult":
         from .stage import Stage
+
         return cls(
             hazard=data["hazard"],
             stage=Stage[data["stage"]],

@@ -25,7 +25,11 @@ class Match(Enum):
 
     def is_fest(self) -> bool:
         """フェスマッチかどうかを返す。"""
-        return self in {self.SPLATFEST, self.SPLATFEST_OPEN, self.SPLATFEST_PRO}
+        return self in {
+            self.SPLATFEST,
+            self.SPLATFEST_OPEN,
+            self.SPLATFEST_PRO,
+        }
 
     def equal(self, other: Match, ignore_open_challenge: bool = False) -> bool:
         """種別が一致するか判定する。"""

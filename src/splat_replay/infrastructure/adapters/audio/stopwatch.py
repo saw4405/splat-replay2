@@ -41,7 +41,11 @@ class StopWatch:
         ストップウォッチを一時停止します.
         作動中でかつ一時停止中でない場合、現在の経過時間を加算し一時停止状態にします.
         """
-        if self._is_running and not self._is_paused and self._start_time is not None:
+        if (
+            self._is_running
+            and not self._is_paused
+            and self._start_time is not None
+        ):
             self._elapsed += time.perf_counter() - self._start_time
             self._is_paused = True
             self._start_time = None
@@ -78,6 +82,10 @@ class StopWatch:
         現在の経過時間を返します.
         作動中の場合、実際の経過時間を計算して返却します.
         """
-        if self._is_running and not self._is_paused and self._start_time is not None:
+        if (
+            self._is_running
+            and not self._is_paused
+            and self._start_time is not None
+        ):
             return self._elapsed + (time.perf_counter() - self._start_time)
         return self._elapsed

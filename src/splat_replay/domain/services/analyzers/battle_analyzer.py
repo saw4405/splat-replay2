@@ -4,8 +4,17 @@ from __future__ import annotations
 
 from typing import Tuple, Dict, Optional
 
-from splat_replay.shared.logger import get_logger
-from splat_replay.domain.models import Frame, Match, RateBase, Udemae, XP, Rule, Stage, BattleResult
+from structlog.stdlib import BoundLogger
+from splat_replay.domain.models import (
+    Frame,
+    Match,
+    RateBase,
+    Udemae,
+    XP,
+    Rule,
+    Stage,
+    BattleResult,
+)
 from .image_matcher import ImageMatcherPort
 from .ocr import OCRPort
 from .analyzer_plugin import AnalyzerPlugin
@@ -15,9 +24,15 @@ from .image_editor import ImageEditorFactory
 class BattleFrameAnalyzer(AnalyzerPlugin):
     """バトル向けフレーム解析ロジック。"""
 
-    def __init__(self, matcher: ImageMatcherPort, ocr: OCRPort, image_editor_factory: ImageEditorFactory) -> None:
+    def __init__(
+        self,
+        matcher: ImageMatcherPort,
+        ocr: OCRPort,
+        image_editor_factory: ImageEditorFactory,
+        logger: BoundLogger,
+    ) -> None:
         self.matcher = matcher
-        self._logger = get_logger()
+        self._logger = logger
         self.ocr = ocr
         self.image_editor_factory = image_editor_factory
 
@@ -32,9 +47,7 @@ class BattleFrameAnalyzer(AnalyzerPlugin):
     def extract_rate(self, frame: Frame, match: Match) -> Optional[RateBase]:
         """レートを取得する。"""
         if match.is_anarchy():
-            udemae = self.matcher.matched_name(
-                "battle_rate_udemae", frame
-            )
+            udemae = self.matcher.matched_name("battle_rate_udemae", frame)
             return Udemae(udemae) if udemae else None
 
         if match is Match.X:
@@ -83,7 +96,6 @@ class BattleFrameAnalyzer(AnalyzerPlugin):
         return self.matcher.match("battle_result", frame)
 
     def extract_session_result(self, frame: Frame) -> Optional[BattleResult]:
-
         match = self.extract_battle_match(frame)
         if match is None:
             self._logger.warning("バトルマッチが抽出できません")
@@ -142,17 +154,19 @@ class BattleFrameAnalyzer(AnalyzerPlugin):
         records: Dict[str, int] = {}
         for name, position in record_positions.items():
             count_image = frame[
-                position["y1"]: position["y2"],
-                position["x1"]: position["x2"],
+                position["y1"] : position["y2"],
+                position["x1"] : position["x2"],
             ]
 
-            count_image = self.image_editor_factory(count_image) \
-                .resize(3.5, 3.5) \
-                .padding(50, 50, 50, 50, (0, 0, 0)) \
-                .binarize() \
-                .erode((2, 2), 5) \
-                .invert() \
+            count_image = (
+                self.image_editor_factory(count_image)
+                .resize(3.5, 3.5)
+                .padding(50, 50, 50, 50, (0, 0, 0))
+                .binarize()
+                .erode((2, 2), 5)
+                .invert()
                 .image
+            )
 
             count_str = self.ocr.recognize_text(
                 count_image, ps_mode="SINGLE_LINE", whitelist="0123456789"

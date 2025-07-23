@@ -4,7 +4,7 @@ import speech_recognition as sr
 from groq import Groq
 from pydantic import BaseModel
 
-from splat_replay.shared.logger import get_logger
+from structlog.stdlib import BoundLogger
 from splat_replay.shared.config import SpeechTranscriberSettings
 
 
@@ -14,12 +14,16 @@ class RecognitionResult(BaseModel):
 
 
 class IntegratedSpeechRecognizer:
-    def __init__(self, settings: SpeechTranscriberSettings):
+    def __init__(
+        self,
+        settings: SpeechTranscriberSettings,
+        logger: BoundLogger,
+    ):
         os.environ["GROQ_API_KEY"] = settings.groq_api_key
         self.language = settings.language
         self.primary_language = settings.language.split("-")[0]
         self.custom_dictionary = settings.custom_dictionary
-        self._logger = get_logger()
+        self._logger = logger
         self._recognizer = sr.Recognizer()
         self._groq = Groq()
 

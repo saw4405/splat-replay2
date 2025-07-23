@@ -9,7 +9,7 @@ import time
 
 import speech_recognition as sr
 
-from splat_replay.shared.logger import get_logger
+from structlog.stdlib import BoundLogger
 from splat_replay.shared.config import SpeechTranscriberSettings
 from splat_replay.application.interfaces import SpeechTranscriberPort
 from .stopwatch import StopWatch
@@ -19,6 +19,7 @@ from .integrated_speech_recognition import IntegratedSpeechRecognizer
 
 class SpeechTranscriber(SpeechTranscriberPort):
     """文字起こし処理を提供する。"""
+
     LISTEN_TIMEOUT: int = 1
 
     @staticmethod
@@ -28,20 +29,26 @@ class SpeechTranscriber(SpeechTranscriberPort):
                 return index
         return None
 
-    def __init__(self, settings: SpeechTranscriberSettings, speech_recognizer: IntegratedSpeechRecognizer):
+    def __init__(
+        self,
+        settings: SpeechTranscriberSettings,
+        speech_recognizer: IntegratedSpeechRecognizer,
+        logger: BoundLogger,
+    ):
         microphone_index = self.find_microphone(settings.mic_device_name)
         if microphone_index is None:
             raise ValueError("マイクが見つかりません")
         self._microphone = sr.Microphone(device_index=microphone_index)
         self.phrase_time_limit = settings.phrase_time_limit
         self._speech_recognizer = speech_recognizer
-        self._logger = get_logger()
+        self._logger = logger
         self._stopwatch = StopWatch()
         self._recognizer = sr.Recognizer()
         self._is_paused: bool = False
         self._segments: List[Segment] = []
-        self._audio_queue: queue.Queue[Tuple[sr.AudioData,
-                                             float, float]] = queue.Queue()
+        self._audio_queue: queue.Queue[Tuple[sr.AudioData, float, float]] = (
+            queue.Queue()
+        )
         self._recording_event = threading.Event()
         self._recording_thread: Optional[threading.Thread] = None
         self._recognition_thread: Optional[threading.Thread] = None
@@ -51,7 +58,7 @@ class SpeechTranscriber(SpeechTranscriberPort):
             audio = self._recognizer.listen(
                 source,
                 timeout=self.LISTEN_TIMEOUT,
-                phrase_time_limit=self.phrase_time_limit
+                phrase_time_limit=self.phrase_time_limit,
             )
             # stream=Falseの場合、audioは常に sr.AudioDataとなる
             return cast(sr.AudioData, audio)
@@ -99,9 +106,11 @@ class SpeechTranscriber(SpeechTranscriberPort):
         self._recording_event.clear()
         self._segments.clear()
         self._recording_thread = threading.Thread(
-            target=self._recording_loop, daemon=True)
+            target=self._recording_loop, daemon=True
+        )
         self._recognition_thread = threading.Thread(
-            target=self._recognition_loop, daemon=True)
+            target=self._recognition_loop, daemon=True
+        )
         self._recording_thread.start()
         self._recognition_thread.start()
 

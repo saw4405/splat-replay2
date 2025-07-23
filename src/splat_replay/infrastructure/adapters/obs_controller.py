@@ -16,15 +16,13 @@ except Exception:  # pragma: no cover - OS 依存
 
 from splat_replay.application.interfaces import OBSControlPort
 from splat_replay.shared.config import OBSSettings
-from splat_replay.shared.logger import get_logger
-
-logger = get_logger()
+from structlog.stdlib import BoundLogger
 
 
 class OBSController(OBSControlPort):
     """OBS Studio と連携するアダプタ。"""
 
-    def __init__(self, settings: OBSSettings) -> None:
+    def __init__(self, settings: OBSSettings, logger: BoundLogger) -> None:
         """設定を受け取って初期化する。"""
 
         self._settings = settings
@@ -35,6 +33,7 @@ class OBSController(OBSControlPort):
             on_disconnect=self._on_disconnect,
         )
         self._process: subprocess.Popen[bytes] | None = None
+        self.logger = logger
 
     def is_running(self) -> bool:
         """OBS が起動しているかどうかを返す。"""
@@ -47,12 +46,12 @@ class OBSController(OBSControlPort):
 
         def exists_window(title: str) -> bool:
             if win32gui is None:  # pragma: no cover - OS 依存
-                logger.warning("win32gui が利用できません")
+                self.logger.warning("win32gui が利用できません")
                 return False
 
             def enum_window(hwnd, result):
                 if win32gui is None:  # pragma: no cover - OS 依存
-                    logger.warning("win32gui が利用できません")
+                    self.logger.warning("win32gui が利用できません")
                     return False
                 if win32gui.IsWindowVisible(hwnd):
                     window_title = win32gui.GetWindowText(hwnd)
@@ -70,7 +69,7 @@ class OBSController(OBSControlPort):
     def launch(self) -> None:
         """OBS を起動する。"""
 
-        logger.info("OBS 起動指示")
+        self.logger.info("OBS 起動指示")
         if self.is_running():
             return
 
@@ -81,7 +80,7 @@ class OBSController(OBSControlPort):
                 file_name, cwd=directory, shell=True
             )
         except Exception as e:  # pragma: no cover - 実機依存
-            logger.error("OBS 起動失敗", error=str(e))
+            self.logger.error("OBS 起動失敗", error=str(e))
             raise RuntimeError("OBS 起動に失敗しました") from e
 
         # 起動直後はWebSocket接続に失敗するので起動待ちする
@@ -91,7 +90,7 @@ class OBSController(OBSControlPort):
     def terminate(self) -> None:
         """OBS を終了する。"""
 
-        logger.info("OBS 終了指示")
+        self.logger.info("OBS 終了指示")
 
         if self.is_connected():
             active, _ = self._get_record_status()
@@ -107,7 +106,7 @@ class OBSController(OBSControlPort):
                     self._process.wait(timeout=5)
                     self._process = None
             except Exception as e:
-                logger.error("OBS 終了失敗", error=str(e))
+                self.logger.error("OBS 終了失敗", error=str(e))
 
     def close(self) -> None:
         self.terminate()
@@ -120,10 +119,10 @@ class OBSController(OBSControlPort):
     def connect(self) -> None:
         """OBS WebSocket に接続する。"""
 
-        logger.info("OBS WebSocket 接続試行")
+        self.logger.info("OBS WebSocket 接続試行")
 
         if not self.is_running():
-            logger.error("OBS が起動していません")
+            self.logger.error("OBS が起動していません")
             raise RuntimeError("OBS が起動していません")
 
         if self.is_connected():
@@ -134,21 +133,21 @@ class OBSController(OBSControlPort):
                 self._ws.connect()
                 return
             except Exception as e:  # pragma: no cover - 実機依存
-                logger.warning("OBS へ接続できません", error=str(e))
+                self.logger.warning("OBS へ接続できません", error=str(e))
                 time.sleep(1)
 
-        logger.error("OBS へ接続できませんでした")
+        self.logger.error("OBS へ接続できませんでした")
 
     def _on_disconnect(self, ws) -> None:
         """切断時に再接続を試みる。"""
 
-        logger.warning("OBS から切断されました")
+        self.logger.warning("OBS から切断されました")
         self.connect()
 
     def start_virtual_camera(self) -> None:
         """OBS の仮想カメラを開始する。"""
 
-        logger.info("OBS 仮想カメラ開始指示")
+        self.logger.info("OBS 仮想カメラ開始指示")
         if not self.is_connected():
             self.connect()
         status = self._ws.call(requests.GetVirtualCamStatus())
@@ -158,7 +157,7 @@ class OBSController(OBSControlPort):
     def stop_virtual_camera(self) -> None:
         """OBS の仮想カメラを停止する。"""
 
-        logger.info("OBS 仮想カメラ停止指示")
+        self.logger.info("OBS 仮想カメラ停止指示")
         if not self.is_connected():
             self.connect()
         status = self._ws.call(requests.GetVirtualCamStatus())
@@ -186,7 +185,7 @@ class OBSController(OBSControlPort):
     def start(self) -> None:
         """録画開始指示を送る。"""
 
-        logger.info("OBS 録画開始指示")
+        self.logger.info("OBS 録画開始指示")
         active, _ = self._get_record_status()
         if not active:
             self._ws.call(requests.StartRecord())
@@ -194,7 +193,7 @@ class OBSController(OBSControlPort):
     def stop(self) -> Path:
         """録画停止指示を送る。"""
 
-        logger.info("OBS 録画停止指示")
+        self.logger.info("OBS 録画停止指示")
         active, _ = self._get_record_status()
         if not active:
             raise RuntimeError("録画は開始されていません")
@@ -207,7 +206,7 @@ class OBSController(OBSControlPort):
     def pause(self) -> None:
         """録画を一時停止する。"""
 
-        logger.info("OBS 録画一時停止指示")
+        self.logger.info("OBS 録画一時停止指示")
         active, paused = self._get_record_status()
         if active and not paused:
             self._ws.call(requests.PauseRecord())
@@ -215,7 +214,7 @@ class OBSController(OBSControlPort):
     def resume(self) -> None:
         """録画を再開する。"""
 
-        logger.info("OBS 録画再開指示")
+        self.logger.info("OBS 録画再開指示")
         _, paused = self._get_record_status()
         if paused:
             self._ws.call(requests.ResumeRecord())

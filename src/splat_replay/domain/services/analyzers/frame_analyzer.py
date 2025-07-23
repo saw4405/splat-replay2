@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from typing import Optional
 
-from splat_replay.shared.logger import get_logger
 from splat_replay.domain.models import (
     Frame,
     GameMode,
@@ -14,8 +13,6 @@ from splat_replay.domain.models import (
 from .image_matcher import ImageMatcherPort
 from .battle_analyzer import BattleFrameAnalyzer
 from .salmon_analyzer import SalmonFrameAnalyzer
-
-logger = get_logger()
 
 
 class FrameAnalyzer:
@@ -99,7 +96,9 @@ class FrameAnalyzer:
             return False
         return plugin.detect_session_judgement(frame)
 
-    def extract_session_judgement(self, frame: Frame, mode: GameMode) -> Optional[str]:
+    def extract_session_judgement(
+        self, frame: Frame, mode: GameMode
+    ) -> Optional[str]:
         """バトルの結果を抽出する。"""
         plugin = self.plugins.get(mode)
         if plugin is None:
@@ -121,7 +120,9 @@ class FrameAnalyzer:
             return False
         return plugin.detect_session_result(frame)
 
-    def extract_session_result(self, frame: Frame, mode: GameMode) -> Optional[Result]:
+    def extract_session_result(
+        self, frame: Frame, mode: GameMode
+    ) -> Optional[Result]:
         """バトルの結果を抽出する。"""
         plugin = self.plugins.get(mode)
         if plugin is None:

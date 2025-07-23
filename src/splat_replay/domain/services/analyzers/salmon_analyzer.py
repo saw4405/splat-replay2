@@ -4,12 +4,7 @@ from __future__ import annotations
 
 from typing import Optional
 
-from splat_replay.domain.models import (
-    Frame,
-    Match,
-    RateBase,
-    SalmonResult
-)
+from splat_replay.domain.models import Frame, Match, RateBase, SalmonResult
 from .image_matcher import ImageMatcherPort
 from .analyzer_plugin import AnalyzerPlugin
 

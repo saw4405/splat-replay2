@@ -3,9 +3,7 @@ from typing import Optional, Tuple
 import numpy as np
 import cv2
 from .base import BaseMatcher
-from splat_replay.shared.logger import get_logger
-
-logger = get_logger()
+from structlog.stdlib import BoundLogger
 
 
 class BrightnessMatcher(BaseMatcher):
@@ -19,8 +17,10 @@ class BrightnessMatcher(BaseMatcher):
         roi: Optional[Tuple[int, int, int, int]] = None,
         *,
         name: str | None = None,
+        logger: BoundLogger,
     ) -> None:
         super().__init__(mask_path, roi, name)
+        self.logger = logger
         self._max_value = max_value
         self._min_value = min_value
 
@@ -40,12 +40,12 @@ class BrightnessMatcher(BaseMatcher):
         img = self._apply_roi(image)
         level = self._calculate_brightness(img, self._mask)
         if self._max_value is not None and level > self._max_value:
-            logger.debug(
+            self.logger.debug(
                 "明度上限超過", level=float(level), max=self._max_value
             )
             return False
         if self._min_value is not None and level < self._min_value:
-            logger.debug(
+            self.logger.debug(
                 "明度下限未満", level=float(level), min=self._min_value
             )
             return False

@@ -7,4 +7,9 @@ from .video_storage import VideoStorageSettings
 from .video_edit import VideoEditSettings
 from .upload import UploadSettings
 from .pc import PCSettings
-from .image_matching import ImageMatchingSettings, MatchExpression, MatcherConfig, CompositeMatcherConfig
+from .image_matching import (
+    ImageMatchingSettings,
+    MatchExpression,
+    MatcherConfig,
+    CompositeMatcherConfig,
+)

@@ -13,5 +13,4 @@ class OCRPort(Protocol):
         image: Frame,
         ps_mode: Optional[str] = None,
         whitelist: Optional[str] = None,
-    ) -> Optional[str]:
-        ...
+    ) -> Optional[str]: ...

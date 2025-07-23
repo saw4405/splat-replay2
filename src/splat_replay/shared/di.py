@@ -5,6 +5,9 @@ from __future__ import annotations
 from pathlib import Path
 
 import punq
+import structlog
+from structlog.stdlib import BoundLogger
+from splat_replay.shared.logger import initialize_logger
 
 from splat_replay.shared.config import (
     AppSettings,
@@ -35,10 +38,7 @@ from splat_replay.application.services import (
     AutoUploader,
     PowerManager,
 )
-from splat_replay.application.use_cases import (
-    AutoUseCase,
-    UploadUseCase
-)
+from splat_replay.application.use_cases import AutoUseCase, UploadUseCase
 from splat_replay.application.interfaces import (
     CaptureDevicePort,
     CapturePort,
@@ -66,7 +66,7 @@ from splat_replay.infrastructure import (
     SubtitleEditor,
     ImageDrawer,
     IntegratedSpeechRecognizer,
-    SpeechTranscriber
+    SpeechTranscriber,
 )
 
 
@@ -78,8 +78,9 @@ def register_config(container: punq.Container, path: Path) -> AppSettings:
     container.register(CaptureDeviceSettings, instance=settings.capture_device)
     container.register(OBSSettings, instance=settings.obs)
     container.register(RecordSettings, instance=settings.record)
-    container.register(SpeechTranscriberSettings,
-                       instance=settings.speech_transcriber)
+    container.register(
+        SpeechTranscriberSettings, instance=settings.speech_transcriber
+    )
     container.register(VideoStorageSettings, instance=settings.storage)
     container.register(VideoEditSettings, instance=settings.video_edit)
     container.register(UploadSettings, instance=settings.upload)
@@ -87,10 +88,14 @@ def register_config(container: punq.Container, path: Path) -> AppSettings:
     return settings
 
 
-def register_image_matching_settings(container: punq.Container, path: Path) -> ImageMatchingSettings:
+def register_image_matching_settings(
+    container: punq.Container, path: Path
+) -> ImageMatchingSettings:
     """画像マッチング設定を DI コンテナに登録する。"""
     if not path.exists():
-        raise FileNotFoundError(f"画像マッチング設定ファイルが見つかりません: {path}")
+        raise FileNotFoundError(
+            f"画像マッチング設定ファイルが見つかりません: {path}"
+        )
     image_settings = ImageMatchingSettings.load_from_yaml(path)
     container.register(ImageMatchingSettings, instance=image_settings)
     return image_settings
@@ -101,10 +106,7 @@ def register_adapters(container: punq.Container):
     container.register(CaptureDevicePort, CaptureDeviceChecker)
     container.register(CapturePort, Capture)
     container.register(VideoEditorPort, FFmpegProcessor)
-    container.register(
-        ImageEditorFactory,
-        instance=ImageEditor
-    )
+    container.register(ImageEditorFactory, instance=ImageEditor)
     container.register(VideoRecorder, OBSController)
     container.register(OBSControlPort, OBSController)
     container.register(PowerPort, SystemPower)
@@ -115,8 +117,7 @@ def register_adapters(container: punq.Container):
     container.register(ImageMatcherPort, MatcherRegistry)
     container.register(SubtitleEditorPort, SubtitleEditor)
     container.register(
-        ImageSelector,
-        instance=ImageDrawer.select_brightest_image
+        ImageSelector, instance=ImageDrawer.select_brightest_image
     )
     container.register(VideoAssetRepository, FileVideoAssetRepository)
 
@@ -126,7 +127,8 @@ def register_domain_services(container: punq.Container):
     container.register(FrameAnalyzer, FrameAnalyzer)
     container.register(BattleFrameAnalyzer, BattleFrameAnalyzer)
     container.register(SalmonFrameAnalyzer, SalmonFrameAnalyzer)
-    state_machine = StateMachine()
+    logger = container.resolve(BoundLogger)
+    state_machine = StateMachine(logger)
     container.register(StateMachine, instance=state_machine)
 
 
@@ -148,9 +150,12 @@ def register_app_usecases(container: punq.Container):
 def configure_container() -> punq.Container:
     """アプリで利用する依存関係を登録する。"""
     container = punq.Container()
+    initialize_logger()
+    container.register(BoundLogger, instance=structlog.get_logger())
     register_config(container, Path("config/settings.toml"))
     register_image_matching_settings(
-        container, Path("config/image_matching.yaml"))
+        container, Path("config/image_matching.yaml")
+    )
     register_adapters(container)
     register_domain_services(container)
     register_app_services(container)

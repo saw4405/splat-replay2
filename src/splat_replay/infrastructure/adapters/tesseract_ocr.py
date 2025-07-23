@@ -39,7 +39,6 @@ class TesseractOCR(OCRPort):
         ps_mode: Optional[str] = None,
         whitelist: Optional[str] = None,
     ) -> str | None:
-
         try:
             config = ""
             if ps_mode:

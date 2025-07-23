@@ -60,7 +60,9 @@ class ImageEditor(ImageEditorPort):
         self._image = as_frame(image)
         return self
 
-    def erode(self, kernel_size: tuple[int, int] = (2, 2), iterations: int = 1) -> "ImageEditor":
+    def erode(
+        self, kernel_size: tuple[int, int] = (2, 2), iterations: int = 1
+    ) -> "ImageEditor":
         kernel = np.ones(kernel_size, np.uint8)
         image = cv2.erode(self._image, kernel, iterations=iterations)
         self._image = as_frame(image)

@@ -10,7 +10,7 @@ import cv2
 import numpy as np
 
 from splat_replay.shared.config import VideoStorageSettings
-from splat_replay.shared.logger import get_logger
+from structlog.stdlib import BoundLogger
 from splat_replay.domain.models import RecordingMetadata, VideoAsset
 from splat_replay.application.interfaces import VideoAssetRepository
 
@@ -18,9 +18,13 @@ from splat_replay.application.interfaces import VideoAssetRepository
 class FileVideoAssetRepository(VideoAssetRepository):
     """ファイルシステム上で VideoAsset を管理する実装."""
 
-    def __init__(self, settings: VideoStorageSettings) -> None:
+    def __init__(
+        self,
+        settings: VideoStorageSettings,
+        logger: BoundLogger,
+    ) -> None:
         self.settings = settings
-        self.logger = get_logger()
+        self.logger = logger
 
     def save_recording(
         self,
@@ -41,7 +45,8 @@ class FileVideoAssetRepository(VideoAssetRepository):
             cv2.imwrite(str(dest / f"{name_root}.png"), screenshot)
         (dest / f"{name_root}.srt").write_text(subtitle, encoding="utf-8")
         (dest / f"{name_root}.json").write_text(
-            json.dumps(metadata.to_dict(), ensure_ascii=False), encoding="utf-8"
+            json.dumps(metadata.to_dict(), ensure_ascii=False),
+            encoding="utf-8",
         )
         self.logger.info("録画ファイル保存", path=str(target))
         return VideoAsset(

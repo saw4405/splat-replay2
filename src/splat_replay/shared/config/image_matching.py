@@ -50,9 +50,11 @@ MatchExpression.update_forward_refs()
 
 class MatcherConfig(BaseModel):
     """画像マッチング1件分の設定。"""
+
     name: Optional[str] = None
-    type: Literal["template", "hsv", "hsv_ratio",
-                  "rgb", "hash", "uniform", "brightness"]
+    type: Literal[
+        "template", "hsv", "hsv_ratio", "rgb", "hash", "uniform", "brightness"
+    ]
     threshold: float = 0.8
     template_path: Optional[str] = None
     hash_path: Optional[str] = None
@@ -68,11 +70,13 @@ class MatcherConfig(BaseModel):
 
 class CompositeMatcherConfig(BaseModel):
     """複合条件を表す設定。"""
+
     rule: MatchExpression
 
 
 class ImageMatchingSettings(BaseModel):
     """画像解析用のマッチャー設定。"""
+
     matchers: Dict[str, MatcherConfig] = {}
     composites: Dict[str, CompositeMatcherConfig] = {}
     matcher_groups: Dict[str, List[str]] = {}
@@ -81,6 +85,7 @@ class ImageMatchingSettings(BaseModel):
     def load_from_yaml(cls, path: Path) -> "ImageMatchingSettings":
         """YAML ファイルから設定を読み込む。"""
         import yaml
+
         with path.open("rb") as f:
             raw = yaml.safe_load(f) or {}
         matchers: Dict[str, MatcherConfig] = {}
