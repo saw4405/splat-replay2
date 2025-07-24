@@ -38,11 +38,7 @@ class BattleFrameAnalyzer(AnalyzerPlugin):
 
     def extract_match_select(self, frame: Frame) -> Optional[Match]:
         match = self.matcher.matched_name("battle_select", frame)
-        if match:
-            return Match(match)
-        if self.matcher.match("match_select_splatfest", frame):
-            return Match.SPLATFEST
-        return None
+        return Match(match) if match else None
 
     def extract_rate(self, frame: Frame, match: Match) -> Optional[RateBase]:
         """レートを取得する。"""
@@ -154,8 +150,8 @@ class BattleFrameAnalyzer(AnalyzerPlugin):
         records: Dict[str, int] = {}
         for name, position in record_positions.items():
             count_image = frame[
-                position["y1"] : position["y2"],
-                position["x1"] : position["x2"],
+                position["y1"]: position["y2"],
+                position["x1"]: position["x2"],
             ]
 
             count_image = (

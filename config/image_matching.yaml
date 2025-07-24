@@ -231,7 +231,7 @@ simple_matchers:
     type: "template"
     template_path: "assets/matching/match_select_splatfest_battle.png"
     mask_path: "assets/matching/match_select_splatfest_battle_mask.png"
-    threshold: 0.85
+    threshold: 0.9
     description: "マッチ選択画面でフェスマッチ選択を検出する"
 
   matching_start_hsv:

@@ -14,6 +14,7 @@ import pytest
 BASE = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(BASE / "src"))  # noqa: E402
 
+from splat_replay.shared.logger import get_logger  # noqa: E402
 from splat_replay.shared.config import ImageMatchingSettings  # noqa: E402
 from splat_replay.domain.models import (
     Frame,
@@ -54,7 +55,9 @@ def create_analyzer() -> FrameAnalyzer:
     def image_editor_factory(image):
         return ImageEditor(image)
 
-    battle = BattleFrameAnalyzer(matcher_registry, ocr, image_editor_factory)
+    logger = get_logger()
+    battle = BattleFrameAnalyzer(
+        matcher_registry, ocr, image_editor_factory, logger)
     salmon = SalmonFrameAnalyzer(matcher_registry)
     analyzer = FrameAnalyzer(battle, salmon, matcher_registry)
     return analyzer
@@ -126,21 +129,45 @@ def test_detect_match_select(
     "filename, expected",
     [
         ("match_select_regular.png", GameMode.BATTLE),
-        ("match_select_challenge.png", GameMode.BATTLE),
         ("match_select_anarchy_battle.png", GameMode.BATTLE),
         ("match_select_x_battle.png", GameMode.BATTLE),
+        ("match_select_challenge.png", GameMode.BATTLE),
         ("match_select_splatfest_battle.png", GameMode.BATTLE),
+        ("power_off.png", None)
     ],
 )
 def test_extract_game_mode(
     analyzer: FrameAnalyzer,
     load_image: Callable[[str], np.ndarray],
     filename: str,
-    expected: GameMode,
+    expected: GameMode | None,
 ) -> None:
     """ゲームモードの抽出結果を確認する。"""
     frame = load_image(filename)
     result = analyzer.extract_game_mode(frame)
+    assert result == expected
+
+
+@pytest.mark.parametrize(
+    "filename, expected",
+    [
+        ("match_select_regular.png", Match.REGULAR),
+        ("match_select_anarchy_battle.png", Match.ANARCHY),
+        ("match_select_x_battle.png", Match.X),
+        ("match_select_challenge.png", Match.CHALLENGE),
+        ("match_select_splatfest_battle.png", Match.SPLATFEST),
+        # トリカラマッチ画像なし
+    ],
+)
+def test_extract_match_select(
+    analyzer: FrameAnalyzer,
+    load_image: Callable[[str], np.ndarray],
+    filename: str,
+    expected: GameMode,
+) -> None:
+    """マッチの抽出結果を確認する。"""
+    frame = load_image(filename)
+    result = analyzer.extract_match_select(frame, GameMode.BATTLE)
     assert result == expected
 
 
@@ -402,9 +429,9 @@ def test_detect_battle_result(
 
 if __name__ == "__main__":
     analyzer_ = create_analyzer()
-    filename = "battle_judgement_3.png"
-    expected = True
+    filename = "match_select_splatfest_battle.png"
+    expected = Match.SPLATFEST
     image_path = TEMPLATE_DIR / filename
     frame = as_frame(cv2.imread(str(image_path)))
-    result = analyzer_.detect_session_judgement(frame, GameMode.BATTLE)
+    result = analyzer_.extract_match_select(frame, GameMode.BATTLE)
     print(result == expected)

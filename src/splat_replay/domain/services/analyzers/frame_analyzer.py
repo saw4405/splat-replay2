@@ -7,6 +7,7 @@ from typing import Optional
 from splat_replay.domain.models import (
     Frame,
     GameMode,
+    Match,
     RateBase,
     Result,
 )
@@ -42,13 +43,16 @@ class FrameAnalyzer:
     def extract_game_mode(self, frame: Frame) -> Optional[GameMode]:
         """ゲームモードを抽出する。"""
         for mode in GameMode:
-            plugin = self.plugins.get(mode)
-            if plugin is None:
-                continue
-            match = plugin.extract_match_select(frame)
+            match = self.extract_match_select(frame, mode)
             if match:
                 return mode
         return None
+
+    def extract_match_select(self, frame: Frame, mode: GameMode) -> Optional[Match]:
+        plugin = self.plugins.get(mode)
+        if plugin is None:
+            return None
+        return plugin.extract_match_select(frame)
 
     def extract_rate(self, frame: Frame, mode: GameMode) -> Optional[RateBase]:
         plugin = self.plugins.get(mode)
