@@ -204,9 +204,9 @@ class YouTubeClient(UploadPort):
             return
 
         except google.auth.exceptions.GoogleAuthError as e:
-            logger.error(f"認証に失敗しました: {e}")
+            self.logger.error(f"認証に失敗しました: {e}")
         except Exception as e:
-            logger.error(f"アップロードに失敗しました: {e}")
+            self.logger.error(f"アップロードに失敗しました: {e}")
         finally:
             if media_file:
                 del media_file
@@ -220,7 +220,7 @@ class YouTubeClient(UploadPort):
         language: str = "ja",
     ):
         """字幕ファイルをアップロードする。"""
-        logger.info(
+        self.logger.info(
             "字幕アップロード実行", video_id=video_id, subtitle=str(subtitle)
         )
         self._ensure_credentials()
@@ -243,9 +243,9 @@ class YouTubeClient(UploadPort):
             return
 
         except google.auth.exceptions.GoogleAuthError as e:
-            logger.error(f"認証に失敗しました: {e}")
+            self.logger.error(f"認証に失敗しました: {e}")
         except Exception as e:
-            logger.error(f"アップロードに失敗しました: {e}")
+            self.logger.error(f"アップロードに失敗しました: {e}")
         finally:
             if media_file:
                 del media_file
@@ -253,7 +253,7 @@ class YouTubeClient(UploadPort):
 
     def add_to_playlist(self, video_id: str, playlist_id: str):
         """動画をプレイリストに追加する。"""
-        logger.info(
+        self.logger.info(
             "プレイリスト追加実行", video_id=video_id, playlist_id=playlist_id
         )
         self._ensure_credentials()
@@ -275,6 +275,6 @@ class YouTubeClient(UploadPort):
             return
 
         except google.auth.exceptions.GoogleAuthError as e:
-            logger.error(f"認証に失敗しました: {e}")
+            self.logger.error(f"認証に失敗しました: {e}")
         except Exception as e:
-            logger.error(f"アップロードに失敗しました: {e}")
+            self.logger.error(f"アップロードに失敗しました: {e}")

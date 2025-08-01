@@ -5,10 +5,9 @@ from __future__ import annotations
 from pathlib import Path
 
 import punq
-import structlog
 from structlog.stdlib import BoundLogger
-from splat_replay.shared.logger import initialize_logger
 
+from splat_replay.shared.logger import get_logger
 from splat_replay.shared.config import (
     AppSettings,
     CaptureDeviceSettings,
@@ -148,8 +147,7 @@ def configure_container() -> punq.Container:
     """アプリで利用する依存関係を登録する。"""
     container = punq.Container()
 
-    initialize_logger()
-    logger = structlog.get_logger()
+    logger = get_logger()
     container.register(BoundLogger, instance=logger)
     state_machine = StateMachine(logger)
     container.register(StateMachine, instance=state_machine)

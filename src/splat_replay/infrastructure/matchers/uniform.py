@@ -1,11 +1,10 @@
 from pathlib import Path
 from typing import Optional, Tuple
+
 import numpy as np
 import cv2
-from .base import BaseMatcher
-from splat_replay.shared.logger import get_logger
 
-logger = get_logger()
+from .base import BaseMatcher
 
 
 class UniformColorMatcher(BaseMatcher):
@@ -36,8 +35,4 @@ class UniformColorMatcher(BaseMatcher):
 
         std_hue = np.std(values.astype(np.float32))
         result = bool(std_hue <= self._hue_threshold)
-        if not result:
-            logger.debug(
-                "色相分散大", std=float(std_hue), threshold=self._hue_threshold
-            )
         return result

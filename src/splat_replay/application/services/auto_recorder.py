@@ -157,9 +157,10 @@ class AutoRecorder:
             if self.analyzer.detect_match_select(frame):
                 if self.game_mode is None:
                     self.game_mode = self.analyzer.extract_game_mode(frame)
-                    self.logger.info(
-                        "ゲームモード取得", mode=str(self.game_mode)
-                    )
+                    if self.game_mode is not None:
+                        self.logger.info(
+                            "ゲームモード取得", mode=str(self.game_mode)
+                        )
 
                 if self.game_mode is not None:
                     rate = self.analyzer.extract_rate(frame, self.game_mode)

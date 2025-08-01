@@ -18,10 +18,8 @@ class HSVMatcher(BaseMatcher):
         roi: Optional[Tuple[int, int, int, int]] = None,
         *,
         name: str | None = None,
-        logger: BoundLogger,
     ) -> None:
         super().__init__(mask_path, roi, name)
-        self.logger = logger
         self._lower_bound = np.array(lower_bound, dtype=np.uint8)
         self._upper_bound = np.array(upper_bound, dtype=np.uint8)
         self._threshold = threshold
@@ -46,10 +44,4 @@ class HSVMatcher(BaseMatcher):
 
         ratio = count / total if total > 0 else 0
         result = ratio >= self._threshold
-        if not result:
-            self.logger.debug(
-                "HSV 比率不足",
-                ratio=float(ratio),
-                threshold=self._threshold,
-            )
         return result

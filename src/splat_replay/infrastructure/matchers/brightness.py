@@ -17,10 +17,8 @@ class BrightnessMatcher(BaseMatcher):
         roi: Optional[Tuple[int, int, int, int]] = None,
         *,
         name: str | None = None,
-        logger: BoundLogger,
     ) -> None:
         super().__init__(mask_path, roi, name)
-        self.logger = logger
         self._max_value = max_value
         self._min_value = min_value
 
@@ -40,13 +38,7 @@ class BrightnessMatcher(BaseMatcher):
         img = self._apply_roi(image)
         level = self._calculate_brightness(img, self._mask)
         if self._max_value is not None and level > self._max_value:
-            self.logger.debug(
-                "明度上限超過", level=float(level), max=self._max_value
-            )
             return False
         if self._min_value is not None and level < self._min_value:
-            self.logger.debug(
-                "明度下限未満", level=float(level), min=self._min_value
-            )
             return False
         return True
