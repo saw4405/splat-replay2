@@ -200,6 +200,8 @@ class SubtitleEditorPort(Protocol):
 class UploadPort(Protocol):
     """動画アップロード処理を提供するポート。"""
 
+    def ensure_credentials(self): ...
+
     def upload(
         self,
         path: Path,

@@ -95,7 +95,7 @@ class YouTubeClient(UploadPort):
         self._save_credentials(credentials)
         return credentials
 
-    def _ensure_credentials(self):
+    def ensure_credentials(self):
         """認証情報が有効であることを確認する"""
         if self._credentials.expired:
             self._credentials = self._get_credentials()
@@ -153,7 +153,7 @@ class YouTubeClient(UploadPort):
     ) -> Optional[str]:
         """動画をアップロードし ID を返す。"""
         self.logger.info("動画アップロード実行", path=str(path))
-        self._ensure_credentials()
+        self.ensure_credentials()
 
         media_file = None
         try:
@@ -192,7 +192,7 @@ class YouTubeClient(UploadPort):
         self.logger.info(
             "サムネイルアップロード実行", video_id=video_id, thumb=str(thumb)
         )
-        self._ensure_credentials()
+        self.ensure_credentials()
 
         media_file = None
         try:
@@ -223,7 +223,7 @@ class YouTubeClient(UploadPort):
         self.logger.info(
             "字幕アップロード実行", video_id=video_id, subtitle=str(subtitle)
         )
-        self._ensure_credentials()
+        self.ensure_credentials()
 
         media_file = None
         try:
@@ -256,7 +256,7 @@ class YouTubeClient(UploadPort):
         self.logger.info(
             "プレイリスト追加実行", video_id=video_id, playlist_id=playlist_id
         )
-        self._ensure_credentials()
+        self.ensure_credentials()
 
         try:
             request = self._youtube.playlistItems().insert(
