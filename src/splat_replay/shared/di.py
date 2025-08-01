@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Optional
 
 import punq
 from structlog.stdlib import BoundLogger
@@ -112,7 +113,11 @@ def register_adapters(container: punq.Container):
     container.register(OCRPort, TesseractOCR)
     container.register(UploadPort, YouTubeClient)
     container.register(IntegratedSpeechRecognizer, IntegratedSpeechRecognizer)
-    container.register(SpeechTranscriberPort, SpeechTranscriber)
+    try:
+        container.register(Optional[SpeechTranscriberPort], SpeechTranscriber)
+        container.resolve(SpeechTranscriberPort)
+    except Exception as e:
+        container.register(Optional[SpeechTranscriberPort], instance=None)
     container.register(ImageMatcherPort, MatcherRegistry)
     container.register(SubtitleEditorPort, SubtitleEditor)
     container.register(

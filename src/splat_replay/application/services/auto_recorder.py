@@ -31,7 +31,7 @@ class AutoRecorder:
         self,
         recorder: VideoRecorder,
         analyzer: FrameAnalyzer,
-        transcriber: SpeechTranscriberPort,
+        transcriber: Optional[SpeechTranscriberPort],
         state_machine: StateMachine,
         asset_repo: VideoAssetRepository,
         capture: CapturePort,
@@ -56,12 +56,13 @@ class AutoRecorder:
 
     def _start(self) -> None:
         self.recorder.start()
-        self.transcriber.start()
+        if self.transcriber is not None:
+            self.transcriber.start()
         self.battle_started_at = time.time()
 
     def _stop(self, frame: Optional[Frame] = None, save: bool = True) -> None:
         video = self.recorder.stop()
-        subtitle = self.transcriber.stop()
+        subtitle = self.transcriber.stop() if self.transcriber is not None else ""
 
         if frame is not None and self.game_mode:
             self.result = self.analyzer.extract_session_result(
@@ -103,12 +104,14 @@ class AutoRecorder:
 
     def _pause(self, resume_trigger: Callable[[Frame], bool]) -> None:
         self.recorder.pause()
-        self.transcriber.pause()
+        if self.transcriber is not None:
+            self.transcriber.pause()
         self._resume_trigger = resume_trigger
 
     def _resume(self) -> None:
         self.recorder.resume()
-        self.transcriber.resume()
+        if self.transcriber is not None:
+            self.transcriber.resume()
 
     def manual_start(self) -> None:
         """手動で録画を開始する。"""
