@@ -200,8 +200,6 @@ class SubtitleEditorPort(Protocol):
 class UploadPort(Protocol):
     """動画アップロード処理を提供するポート。"""
 
-    def ensure_credentials(self): ...
-
     def upload(
         self,
         path: Path,
@@ -213,6 +211,12 @@ class UploadPort(Protocol):
         caption: Optional[Caption] = None,
         playlist_id: Optional[str] = None,
     ): ...
+
+
+class AuthenticatedClientPort(Protocol):
+    """認証済みのクライアントを提供するポート。"""
+
+    def authenticate(self) -> None: ...
 
 
 class PowerPort(Protocol):

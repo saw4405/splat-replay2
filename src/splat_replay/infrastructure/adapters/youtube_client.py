@@ -19,6 +19,7 @@ import google.oauth2.credentials
 from structlog.stdlib import BoundLogger
 from splat_replay.application.interfaces import (
     UploadPort,
+    AuthenticatedClientPort,
     PrivacyStatus,
     Caption,
 )
@@ -30,7 +31,7 @@ Credentials = Union[
 ]
 
 
-class YouTubeClient(UploadPort):
+class YouTubeClient(UploadPort, AuthenticatedClientPort):
     """YouTube Data API を利用する。"""
 
     def __init__(self, logger: BoundLogger):
@@ -95,13 +96,18 @@ class YouTubeClient(UploadPort):
         self._save_credentials(credentials)
         return credentials
 
-    def ensure_credentials(self):
+    def _ensure_credentials(self):
         """認証情報が有効であることを確認する"""
         if self._credentials.expired:
             self._credentials = self._get_credentials()
             self._youtube = build(
                 self.API_NAME, self.API_VERSION, credentials=self._credentials
             )
+
+    def authenticate(self):
+        """認証を行う。"""
+        self._ensure_credentials()
+        self.logger.info("YouTube API 認証完了")
 
     def upload(
         self,
@@ -153,7 +159,7 @@ class YouTubeClient(UploadPort):
     ) -> Optional[str]:
         """動画をアップロードし ID を返す。"""
         self.logger.info("動画アップロード実行", path=str(path))
-        self.ensure_credentials()
+        self._ensure_credentials()
 
         media_file = None
         try:
@@ -192,7 +198,7 @@ class YouTubeClient(UploadPort):
         self.logger.info(
             "サムネイルアップロード実行", video_id=video_id, thumb=str(thumb)
         )
-        self.ensure_credentials()
+        self._ensure_credentials()
 
         media_file = None
         try:
@@ -223,7 +229,7 @@ class YouTubeClient(UploadPort):
         self.logger.info(
             "字幕アップロード実行", video_id=video_id, subtitle=str(subtitle)
         )
-        self.ensure_credentials()
+        self._ensure_credentials()
 
         media_file = None
         try:
@@ -256,7 +262,7 @@ class YouTubeClient(UploadPort):
         self.logger.info(
             "プレイリスト追加実行", video_id=video_id, playlist_id=playlist_id
         )
-        self.ensure_credentials()
+        self._ensure_credentials()
 
         try:
             request = self._youtube.playlistItems().insert(

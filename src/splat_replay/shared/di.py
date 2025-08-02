@@ -50,6 +50,7 @@ from splat_replay.application.interfaces import (
     SubtitleEditorPort,
     ImageSelector,
     UploadPort,
+    AuthenticatedClientPort,
     PowerPort,
 )
 from splat_replay.infrastructure import (
@@ -112,6 +113,7 @@ def register_adapters(container: punq.Container):
     container.register(PowerPort, SystemPower)
     container.register(OCRPort, TesseractOCR)
     container.register(UploadPort, YouTubeClient)
+    container.register(AuthenticatedClientPort, YouTubeClient)
     container.register(IntegratedSpeechRecognizer, IntegratedSpeechRecognizer)
     try:
         container.register(Optional[SpeechTranscriberPort], SpeechTranscriber)

@@ -10,7 +10,7 @@ from splat_replay.domain.services.state_machine import Event, StateMachine
 from splat_replay.application.interfaces import (
     CaptureDevicePort,
     OBSControlPort,
-    UploadPort
+    AuthenticatedClientPort
 )
 
 
@@ -19,13 +19,13 @@ class EnvironmentInitializer:
 
     def __init__(
         self,
-        upload: UploadPort,
+        auth_client: AuthenticatedClientPort,
         device: CaptureDevicePort,
         obs: OBSControlPort,
         sm: StateMachine,
         logger: BoundLogger,
     ) -> None:
-        self.upload = upload
+        self.auth_client = auth_client
         self.device = device
         self.obs = obs
         self.sm = sm
@@ -47,7 +47,7 @@ class EnvironmentInitializer:
 
         self.logger.info("環境初期化開始")
 
-        self.upload.ensure_credentials()
+        self.auth_client.authenticate()
 
         if not await self.wait_for_device(timeout):
             self.logger.error("キャプチャデバイスが見つかりません (timeout)")
