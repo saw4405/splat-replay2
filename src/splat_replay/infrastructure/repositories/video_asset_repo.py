@@ -8,10 +8,10 @@ from pathlib import Path
 
 import cv2
 import numpy as np
+from structlog.stdlib import BoundLogger
 
 from splat_replay.shared.config import VideoStorageSettings
-from structlog.stdlib import BoundLogger
-from splat_replay.domain.models import RecordingMetadata, VideoAsset
+from splat_replay.domain.models import RecordingMetadata, VideoAsset, BattleResult
 from splat_replay.application.interfaces import VideoAssetRepository
 
 
@@ -35,14 +35,27 @@ class FileVideoAssetRepository(VideoAssetRepository):
     ) -> VideoAsset:
         dest = self.settings.recorded_dir
         dest.mkdir(parents=True, exist_ok=True)
-        name_root = metadata.started_at.strftime("%Y%m%d_%H%M%S")
+        if isinstance(metadata.result, BattleResult):
+            name_root = "_".join([
+                metadata.started_at.strftime("%Y%m%d_%H%M%S"),
+                metadata.result.match.value,
+                metadata.result.rule.value,
+                metadata.judgement or "",
+                metadata.result.stage.value,
+            ])
+        else:
+            name_root = metadata.started_at.strftime("%Y%m%d_%H%M%S")
         target = dest / f"{name_root}{video.suffix}"
         try:
             shutil.move(str(video), target)
         except Exception:
             target = video
         if screenshot is not None:
-            cv2.imwrite(str(dest / f"{name_root}.png"), screenshot)
+            png_path = dest / f"{name_root}.png"
+            success, buf = cv2.imencode(".png", screenshot)
+            if success:
+                with open(png_path, "wb") as f:
+                    f.write(buf.tobytes())
         (dest / f"{name_root}.srt").write_text(subtitle, encoding="utf-8")
         (dest / f"{name_root}.json").write_text(
             json.dumps(metadata.to_dict(), ensure_ascii=False),

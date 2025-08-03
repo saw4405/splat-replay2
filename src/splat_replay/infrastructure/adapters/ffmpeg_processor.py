@@ -24,10 +24,11 @@ class FFmpegProcessor(VideoEditorPort):
         if not abs_clips:
             raise ValueError("clips is empty")
         filelist = abs_clips[0].parent / "concat.txt"
-        filelist.write_text("\n".join([f"file '{str(c)}'" for c in abs_clips]))
+        filelist.write_text(
+            "\n".join([f"file '{str(c)}'" for c in abs_clips]), encoding="utf-8")
         abs_output = output.resolve()
 
-        subprocess.run(
+        result = subprocess.run(
             [
                 "ffmpeg",
                 "-y",
@@ -43,8 +44,17 @@ class FFmpegProcessor(VideoEditorPort):
             ],
             check=False,
             cwd=str(abs_clips[0].parent),
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
         )
         filelist.unlink()
+        if result.returncode != 0:
+            self.logger.error(
+                "動画結合に失敗",
+                error=result.stderr,
+                output=result.stdout,
+            )
         return output
 
     def embed_metadata(self, path: Path, metadata: dict[str, str]):
@@ -57,7 +67,7 @@ class FFmpegProcessor(VideoEditorPort):
         )
 
         temp = abs_path.with_name(f"temp{abs_path.suffix}")
-        subprocess.run(
+        result = subprocess.run(
             [
                 "ffmpeg",
                 "-y",
@@ -80,6 +90,12 @@ class FFmpegProcessor(VideoEditorPort):
         if temp.exists():
             abs_path.unlink(missing_ok=True)
             temp.rename(abs_path)
+        if result.returncode != 0:
+            self.logger.error(
+                "メタデータの埋め込みに失敗",
+                error=result.stderr,
+                output=result.stdout,
+            )
 
     def get_metadata(self, path: Path) -> dict[str, str]:
         """動画のメタデータを取得する."""
@@ -102,6 +118,11 @@ class FFmpegProcessor(VideoEditorPort):
             check=False,
         )
         if result.returncode != 0 or not result.stdout:
+            self.logger.error(
+                "メタデータの取得に失敗",
+                error=result.stderr,
+                output=result.stdout,
+            )
             return {}
 
         data = json.loads(result.stdout)
@@ -115,7 +136,7 @@ class FFmpegProcessor(VideoEditorPort):
         self.logger.info("FFmpeg 字幕追加", path=str(abs_path))
 
         temp = abs_path.with_name(f"temp{abs_path.suffix}")
-        subprocess.run(
+        result = subprocess.run(
             [
                 "ffmpeg",
                 "-y",
@@ -145,6 +166,12 @@ class FFmpegProcessor(VideoEditorPort):
         if temp.exists():
             abs_path.unlink(missing_ok=True)
             temp.rename(abs_path)
+        if result.returncode != 0:
+            self.logger.error(
+                "字幕の追加に失敗",
+                error=result.stderr,
+                output=result.stdout,
+            )
 
     def get_subtitle(self, path: Path) -> Optional[str]:
         result = self._find_streams(path, "subtitle", "subrip")
@@ -153,23 +180,29 @@ class FFmpegProcessor(VideoEditorPort):
             return None
         index = result[0]
 
-        command = [
-            "ffmpeg",
-            "-i",
-            str(path),
-            "-map",
-            f"0:s:{index}",
-            "-c",
-            "copy",
-            "-f",
-            "srt",
-            "pipe:1",
-        ]
         result = subprocess.run(
-            command, capture_output=True, text=True, encoding="utf-8"
+            [
+                "ffmpeg",
+                "-i",
+                str(path),
+                "-map",
+                f"0:s:{index}",
+                "-c",
+                "copy",
+                "-f",
+                "srt",
+                "pipe:1",
+            ],
+            capture_output=True,
+            text=True,
+            encoding="utf-8"
         )
         if result.returncode != 0:
-            self.logger.error("字幕の取得に失敗しました")
+            self.logger.error(
+                "字幕の取得に失敗",
+                error=result.stderr,
+                output=result.stdout,
+            )
             return None
 
         return result.stdout
@@ -180,7 +213,7 @@ class FFmpegProcessor(VideoEditorPort):
         self.logger.info("FFmpeg サムネイル追加", path=str(abs_path))
 
         temp = abs_path.with_name(f"temp{abs_path.suffix}")
-        subprocess.run(
+        result = subprocess.run(
             [
                 "ffmpeg",
                 "-y",
@@ -202,6 +235,12 @@ class FFmpegProcessor(VideoEditorPort):
         if temp.exists():
             abs_path.unlink(missing_ok=True)
             temp.rename(abs_path)
+        if result.returncode != 0:
+            self.logger.error(
+                "サムネイルの追加に失敗",
+                error=result.stderr,
+                output=result.stdout,
+            )
 
     def get_thumbnail(self, path: Path) -> Optional[bytes]:
         result = self._find_streams(path, "video", "png")
@@ -209,19 +248,21 @@ class FFmpegProcessor(VideoEditorPort):
             self.logger.error("サムネイルが見つかりませんでした")
             return None
         index = result[0]
-        command = [
-            "ffmpeg",
-            "-i",
-            str(path),
-            "-map",
-            f"0:v:{index}",
-            "-f",
-            "image2",
-            "-c",
-            "copy",
-            "pipe:1",
-        ]
-        result = subprocess.run(command, capture_output=True)
+        result = subprocess.run(
+            [
+                "ffmpeg",
+                "-i",
+                str(path),
+                "-map",
+                f"0:v:{index}",
+                "-f",
+                "image2",
+                "-c",
+                "copy",
+                "pipe:1",
+            ],
+            capture_output=True
+        )
         if result.returncode != 0:
             self.logger.error(
                 f"サムネイルの取得に失敗しました: {result.stderr.decode('utf-8')}"
@@ -240,7 +281,7 @@ class FFmpegProcessor(VideoEditorPort):
             return
 
         temp = abs_path.with_name(f"temp{abs_path.suffix}")
-        subprocess.run(
+        result = subprocess.run(
             [
                 "ffmpeg",
                 "-y",
@@ -257,10 +298,18 @@ class FFmpegProcessor(VideoEditorPort):
                 str(temp),
             ],
             check=False,
+            text=True,
+            encoding="utf-8",
         )
         if temp.exists():
             abs_path.unlink(missing_ok=True)
             temp.rename(abs_path)
+        if result.returncode != 0:
+            self.logger.error(
+                "音量の変更に失敗",
+                error=result.stderr,
+                output=result.stdout,
+            )
 
     def get_video_length(self, path: Path) -> Optional[float]:
         """動画の長さを取得する."""
@@ -283,7 +332,11 @@ class FFmpegProcessor(VideoEditorPort):
             encoding="utf-8",
         )
         if result.returncode != 0:
-            self.logger.error("動画の長さの取得に失敗しました")
+            self.logger.error(
+                "動画の長さの取得に失敗",
+                error=result.stderr,
+                output=result.stdout,
+            )
             return None
 
         try:
