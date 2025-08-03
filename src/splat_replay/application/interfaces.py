@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Protocol, Optional, List, Literal, Tuple, Callable, Union
+from typing import Protocol, Optional, List, Literal, Tuple, Callable, Union, Iterable, TypeVar
 from dataclasses import dataclass
 
 from splat_replay.domain.models import (
@@ -142,6 +142,14 @@ class ImageDrawerPort(Protocol):
              *args,
              **kwargs) -> ImageDrawerPort: ...
 
+    T = TypeVar("T")
+
+    def for_each(
+        self,
+        iterable: Iterable[T],
+        fn: Callable[[T, ImageDrawerPort], ImageDrawerPort],
+    ) -> ImageDrawerPort: ...
+
     def save(self, path: Path): ...
 
     def draw_rounded_rectangle(
@@ -178,6 +186,7 @@ class ImageDrawerPort(Protocol):
         self,
         path: Path,
         position: Tuple[int, int],
+        crop: Optional[Tuple[int, int, int, int]] = None,
         size: Optional[Tuple[int, int]] = None,
     ) -> ImageDrawerPort: ...
 

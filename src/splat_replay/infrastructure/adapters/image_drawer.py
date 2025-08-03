@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Tuple, List, Optional, Callable
+from typing import Tuple, List, Optional, Callable, Iterable, TypeVar
 
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont
@@ -69,6 +69,17 @@ class ImageDrawer(ImageDrawerPort):
              *args,
              **kwargs) -> ImageDrawer:
         return fn(self, *args, **kwargs) if flag else self
+
+    T = TypeVar("T")
+
+    def for_each(
+        self,
+        iterable: Iterable[T],
+        fn: Callable[[T, ImageDrawerPort], ImageDrawerPort],
+    ) -> ImageDrawerPort:
+        for item in iterable:
+            fn(item, self)
+        return self
 
     def save(self, path: Path):
         self._image.save(path)
@@ -148,9 +159,12 @@ class ImageDrawer(ImageDrawerPort):
         self,
         path: Path,
         position: Tuple[int, int],
+        crop: Optional[Tuple[int, int, int, int]] = None,
         size: Optional[Tuple[int, int]] = None,
     ) -> ImageDrawer:
         img = Image.open(path).convert("RGBA")
+        if crop:
+            img = img.crop(crop)
         if size:
             img = img.resize(size)
         self._image.paste(img, position, img)

@@ -60,6 +60,7 @@ class Editor:
             self._embed_thumbnail(target, group)
             self._change_volume(target, self.settings.volume_multiplier)
 
+            self.logger.info("動画編集完了", path=str(target))
             outputs.append(target)
             edited_assets.extend(group)
         return outputs, edited_assets
@@ -407,11 +408,30 @@ class Editor:
         font_paintball = str(self._get_asset_path("Paintball_Beta.otf"))
         font_ikamodoki = str(self._get_asset_path("ikamodoki1.ttf"))
 
+        # 高スコア(キルレがいい)のサムネイルをスコアが高い順に格納
+        high_score_thumbnails: list[tuple[float, Path]] = []
+        for asset in assets:
+            if (
+                asset.metadata is None
+                or not isinstance(asset.metadata.result, BattleResult)
+                or asset.thumbnail is None
+            ):
+                continue
+            kill = asset.metadata.result.kill
+            death = asset.metadata.result.death
+            score = kill - death * 1.25
+            if score > 5:
+                high_score_thumbnails.append((score, asset.thumbnail))
+                self.logger.info("高スコアの動画を検出", score=score,
+                                 kill=kill, death=death)
+        high_score_thumbnails.sort(reverse=True, key=lambda x: x[0])
+        high_score_thumbnails = high_score_thumbnails[:3]
+
         out = assets[0].video.with_suffix(".thumb.png")
         (
             self.image_selector(thumbnails, (0, 0, 750, 1.0))
             .draw_rounded_rectangle(
-                (777, 21, 1849, 750),
+                (777, 20, 1850, 750),
                 radius=40,
                 fill_color=(28, 28, 28),
                 outline_color=(28, 28, 28),
@@ -443,8 +463,22 @@ class Editor:
                   lambda d: d.draw_image(
                 stage2_image_path, (860, 540), size=(960, 168)
             ))
-            .when(overlay_image_path.exists(),
-                  lambda d: d.overlay_image(overlay_image_path))
+            .for_each(
+                list(enumerate(high_score_thumbnails)),
+                lambda item, d: d.draw_image(
+                    item[1][1],
+                    (
+                        0 + (item[0] // 3) * (146 * 2 + 30),
+                        620 + (item[0] % 3) * (60 * 2 + 30)
+                    ),
+                    crop=(1467, 259, 1661, 319),
+                    size=(146 * 2, 60 * 2),
+                ) if item[1][1].exists() else d
+            )
+            .when(
+                overlay_image_path.exists(),
+                lambda d: d.overlay_image(overlay_image_path)
+            )
             .save(out)
         )
         return out
