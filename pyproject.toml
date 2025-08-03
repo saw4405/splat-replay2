@@ -26,6 +26,9 @@ dependencies = [
     "srt>=3.5.3",
 ]
 
+[tool.setuptools.packages.find]
+where = ["src"]
+
 [dependency-groups]
 dev = [
     "mypy>=1.16.0",
