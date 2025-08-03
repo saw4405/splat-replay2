@@ -287,7 +287,8 @@ def test_detect_battle_abort(
         ("battle_finish_8.png", True),
         ("battle_finish_9.png", True),
         ("battle_finish_10.png", True),
-        ("battle_finish_11.png", False),
+        ("battle_finish_11.png", True),
+        ("battle_finish_12.png", False),
         ("loading_1.png", False),
     ],
 )
