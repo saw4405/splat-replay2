@@ -431,13 +431,7 @@ class Editor:
         out = assets[0].video.with_suffix(".thumb.png")
         (
             self.image_selector(thumbnails, (0, 0, 750, 1.0))
-            .draw_rounded_rectangle(
-                (777, 20, 1850, 750),
-                radius=40,
-                fill_color=(28, 28, 28),
-                outline_color=(28, 28, 28),
-                outline_width=1,
-            )
+            # 勝敗を記載
             .draw_text_with_outline(
                 win_lose,
                 (458, 100),
@@ -448,11 +442,22 @@ class Editor:
                 outline_width=5,
                 center=True,
             )
+            # マッチ・ルール・レート・ステージを描画するベース
+            .draw_rounded_rectangle(
+                (777, 20, 1850, 750),
+                radius=40,
+                fill_color=(28, 28, 28),
+                outline_color=(28, 28, 28),
+                outline_width=1,
+            )
+            # マッチを描画
             .draw_image(match_image_path, (800, 40), size=(300, 300))
+            # ルールを記載・描画
             .draw_text(
                 rule_name, (1120, 50), font_ikamodoki, 140, fill_color="white"
             )
             .draw_image(rule_image_path, (1660, 70), size=(150, 150))
+            # レートを記載
             .when(
                 rate is not None,
                 lambda d: d.draw_text(
@@ -463,6 +468,7 @@ class Editor:
                     fill_color=rate_text_color,
                 ),
             )
+            # ステージ画像を描画
             .when(
                 stage1_image_path is not None and stage1_image_path.exists(),
                 lambda d: d.draw_image(
@@ -475,6 +481,7 @@ class Editor:
                     stage2_image_path, (860, 540), size=(960, 168)
                 ),
             )
+            # いいキルレ画像を左下に描画
             .for_each(
                 list(enumerate(high_score_thumbnails)),
                 lambda item, d: d.draw_image(
@@ -485,6 +492,23 @@ class Editor:
                     ),
                     crop=(1467, 259, 1661, 319),
                     size=(146 * 2, 60 * 2),
+                )
+                if item[1][1].exists()
+                else d,
+            )
+            # キルレを白枠で囲う
+            .for_each(
+                list(enumerate(high_score_thumbnails)),
+                lambda item, d: d.draw_rectangle(
+                    (
+                        int(0 + (item[0] // 3) * (146 * 2 + 30)),
+                        int(620 + (item[0] % 3) * (60 * 2 + 30)),
+                        int(0 + (item[0] // 3) * (146 * 2 + 30) + 146 * 2),
+                        int(620 + (item[0] % 3) * (60 * 2 + 30) + 60 * 2),
+                    ),
+                    fill_color=None,
+                    outline_color="white",
+                    outline_width=3,
                 )
                 if item[1][1].exists()
                 else d,

@@ -134,7 +134,7 @@ class VideoEditorPort(Protocol):
     def get_video_length(self, path: Path) -> Optional[float]: ...
 
 
-Color = Union[str, Tuple[int, int, int]]
+Color = Union[str, Tuple[int, ...]]
 
 
 class ImageDrawerPort(Protocol):
@@ -164,12 +164,20 @@ class ImageDrawerPort(Protocol):
 
     def save(self, path: Path): ...
 
+    def draw_rectangle(
+        self,
+        rect: Tuple[int, int, int, int],
+        fill_color: Color | None,
+        outline_color: Color | None,
+        outline_width: int,
+    ) -> ImageDrawerPort: ...
+
     def draw_rounded_rectangle(
         self,
         rect: Tuple[int, int, int, int],
         radius: int,
-        fill_color: Color,
-        outline_color: Color,
+        fill_color: Color | None,
+        outline_color: Color | None,
         outline_width: int,
     ) -> ImageDrawerPort: ...
 

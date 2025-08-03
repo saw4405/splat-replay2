@@ -81,12 +81,27 @@ class ImageDrawer(ImageDrawerPort):
     def save(self, path: Path):
         self._image.save(path)
 
+    def draw_rectangle(
+        self,
+        rect: Tuple[int, int, int, int],
+        fill_color: Color | None,
+        outline_color: Color | None,
+        outline_width: int,
+    ) -> ImageDrawerPort:
+        self._draw.rectangle(
+            rect,
+            fill=fill_color,
+            outline=outline_color,
+            width=outline_width,
+        )
+        return self
+
     def draw_rounded_rectangle(
         self,
         rect: Tuple[int, int, int, int],
         radius: int,
-        fill_color: Color,
-        outline_color: Color,
+        fill_color: Color | None,
+        outline_color: Color | None,
         outline_width: int,
     ) -> ImageDrawer:
         self._draw.rounded_rectangle(
