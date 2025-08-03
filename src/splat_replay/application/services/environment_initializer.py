@@ -10,7 +10,7 @@ from splat_replay.domain.services.state_machine import Event, StateMachine
 from splat_replay.application.interfaces import (
     CaptureDevicePort,
     OBSControlPort,
-    AuthenticatedClientPort
+    AuthenticatedClientPort,
 )
 
 

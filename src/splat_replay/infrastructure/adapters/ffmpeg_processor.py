@@ -25,7 +25,9 @@ class FFmpegProcessor(VideoEditorPort):
             raise ValueError("clips is empty")
         filelist = abs_clips[0].parent / "concat.txt"
         filelist.write_text(
-            "\n".join([f"file '{str(c)}'" for c in abs_clips]), encoding="utf-8")
+            "\n".join([f"file '{str(c)}'" for c in abs_clips]),
+            encoding="utf-8",
+        )
         abs_output = output.resolve()
 
         result = subprocess.run(
@@ -195,7 +197,7 @@ class FFmpegProcessor(VideoEditorPort):
             ],
             capture_output=True,
             text=True,
-            encoding="utf-8"
+            encoding="utf-8",
         )
         if result.returncode != 0:
             self.logger.error(
@@ -261,7 +263,7 @@ class FFmpegProcessor(VideoEditorPort):
                 "copy",
                 "pipe:1",
             ],
-            capture_output=True
+            capture_output=True,
         )
         if result.returncode != 0:
             self.logger.error(

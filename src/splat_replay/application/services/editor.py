@@ -422,8 +422,9 @@ class Editor:
             score = kill - death * 1.25
             if score > 5:
                 high_score_thumbnails.append((score, asset.thumbnail))
-                self.logger.info("高スコアの動画を検出", score=score,
-                                 kill=kill, death=death)
+                self.logger.info(
+                    "高スコアの動画を検出", score=score, kill=kill, death=death
+                )
         high_score_thumbnails.sort(reverse=True, key=lambda x: x[0])
         high_score_thumbnails = high_score_thumbnails[:3]
 
@@ -452,32 +453,45 @@ class Editor:
                 rule_name, (1120, 50), font_ikamodoki, 140, fill_color="white"
             )
             .draw_image(rule_image_path, (1660, 70), size=(150, 150))
-            .when(rate is not None, lambda d: d.draw_text(
-                rate, (1125, 230), font_paintball, 70, fill_color=rate_text_color
-            ))
-            .when(stage1_image_path is not None and stage1_image_path.exists(),
-                  lambda d: d.draw_image(
-                stage1_image_path, (860, 360), size=(960, 168)
-            ))
-            .when(stage2_image_path is not None and stage2_image_path.exists(),
-                  lambda d: d.draw_image(
-                stage2_image_path, (860, 540), size=(960, 168)
-            ))
+            .when(
+                rate is not None,
+                lambda d: d.draw_text(
+                    rate,
+                    (1125, 230),
+                    font_paintball,
+                    70,
+                    fill_color=rate_text_color,
+                ),
+            )
+            .when(
+                stage1_image_path is not None and stage1_image_path.exists(),
+                lambda d: d.draw_image(
+                    stage1_image_path, (860, 360), size=(960, 168)
+                ),
+            )
+            .when(
+                stage2_image_path is not None and stage2_image_path.exists(),
+                lambda d: d.draw_image(
+                    stage2_image_path, (860, 540), size=(960, 168)
+                ),
+            )
             .for_each(
                 list(enumerate(high_score_thumbnails)),
                 lambda item, d: d.draw_image(
                     item[1][1],
                     (
                         0 + (item[0] // 3) * (146 * 2 + 30),
-                        620 + (item[0] % 3) * (60 * 2 + 30)
+                        620 + (item[0] % 3) * (60 * 2 + 30),
                     ),
                     crop=(1467, 259, 1661, 319),
                     size=(146 * 2, 60 * 2),
-                ) if item[1][1].exists() else d
+                )
+                if item[1][1].exists()
+                else d,
             )
             .when(
                 overlay_image_path.exists(),
-                lambda d: d.overlay_image(overlay_image_path)
+                lambda d: d.overlay_image(overlay_image_path),
             )
             .save(out)
         )

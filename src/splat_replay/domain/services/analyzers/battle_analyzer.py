@@ -150,8 +150,8 @@ class BattleFrameAnalyzer(AnalyzerPlugin):
         records: Dict[str, int] = {}
         for name, position in record_positions.items():
             count_image = frame[
-                position["y1"]: position["y2"],
-                position["x1"]: position["x2"],
+                position["y1"] : position["y2"],
+                position["x1"] : position["x2"],
             ]
 
             count_image = (

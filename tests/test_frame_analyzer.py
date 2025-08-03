@@ -57,7 +57,8 @@ def create_analyzer() -> FrameAnalyzer:
 
     logger = get_logger()
     battle = BattleFrameAnalyzer(
-        matcher_registry, ocr, image_editor_factory, logger)
+        matcher_registry, ocr, image_editor_factory, logger
+    )
     salmon = SalmonFrameAnalyzer(matcher_registry)
     analyzer = FrameAnalyzer(battle, salmon, matcher_registry)
     return analyzer
@@ -133,7 +134,7 @@ def test_detect_match_select(
         ("match_select_x_battle.png", GameMode.BATTLE),
         ("match_select_challenge.png", GameMode.BATTLE),
         ("match_select_splatfest_battle.png", GameMode.BATTLE),
-        ("power_off.png", None)
+        ("power_off.png", None),
     ],
 )
 def test_extract_game_mode(

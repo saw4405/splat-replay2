@@ -1,7 +1,17 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Protocol, Optional, List, Literal, Tuple, Callable, Union, Iterable, TypeVar
+from typing import (
+    Protocol,
+    Optional,
+    List,
+    Literal,
+    Tuple,
+    Callable,
+    Union,
+    Iterable,
+    TypeVar,
+)
 from dataclasses import dataclass
 
 from splat_replay.domain.models import (
@@ -135,12 +145,14 @@ class ImageDrawerPort(Protocol):
         paths: List[Path], target_rect: Tuple[float, float, float, float]
     ) -> Optional[ImageDrawerPort]: ...
 
-    def when(self,
-             flag: bool,
-             fn: Callable[..., ImageDrawerPort],
-             /,
-             *args,
-             **kwargs) -> ImageDrawerPort: ...
+    def when(
+        self,
+        flag: bool,
+        fn: Callable[..., ImageDrawerPort],
+        /,
+        *args,
+        **kwargs,
+    ) -> ImageDrawerPort: ...
 
     T = TypeVar("T")
 

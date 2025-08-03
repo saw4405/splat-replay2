@@ -62,12 +62,9 @@ class ImageDrawer(ImageDrawerPort):
         self._image = image
         self._draw = ImageDraw.Draw(image)
 
-    def when(self,
-             flag: bool,
-             fn: Callable[..., ImageDrawer],
-             /,
-             *args,
-             **kwargs) -> ImageDrawer:
+    def when(
+        self, flag: bool, fn: Callable[..., ImageDrawer], /, *args, **kwargs
+    ) -> ImageDrawer:
         return fn(self, *args, **kwargs) if flag else self
 
     T = TypeVar("T")

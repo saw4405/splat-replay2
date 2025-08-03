@@ -11,7 +11,11 @@ import numpy as np
 from structlog.stdlib import BoundLogger
 
 from splat_replay.shared.config import VideoStorageSettings
-from splat_replay.domain.models import RecordingMetadata, VideoAsset, BattleResult
+from splat_replay.domain.models import (
+    RecordingMetadata,
+    VideoAsset,
+    BattleResult,
+)
 from splat_replay.application.interfaces import VideoAssetRepository
 
 
@@ -36,13 +40,15 @@ class FileVideoAssetRepository(VideoAssetRepository):
         dest = self.settings.recorded_dir
         dest.mkdir(parents=True, exist_ok=True)
         if isinstance(metadata.result, BattleResult):
-            name_root = "_".join([
-                metadata.started_at.strftime("%Y%m%d_%H%M%S"),
-                metadata.result.match.value,
-                metadata.result.rule.value,
-                metadata.judgement or "",
-                metadata.result.stage.value,
-            ])
+            name_root = "_".join(
+                [
+                    metadata.started_at.strftime("%Y%m%d_%H%M%S"),
+                    metadata.result.match.value,
+                    metadata.result.rule.value,
+                    metadata.judgement or "",
+                    metadata.result.stage.value,
+                ]
+            )
         else:
             name_root = metadata.started_at.strftime("%Y%m%d_%H%M%S")
         target = dest / f"{name_root}{video.suffix}"

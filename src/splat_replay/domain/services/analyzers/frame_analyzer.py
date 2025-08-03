@@ -48,7 +48,9 @@ class FrameAnalyzer:
                 return mode
         return None
 
-    def extract_match_select(self, frame: Frame, mode: GameMode) -> Optional[Match]:
+    def extract_match_select(
+        self, frame: Frame, mode: GameMode
+    ) -> Optional[Match]:
         plugin = self.plugins.get(mode)
         if plugin is None:
             return None
