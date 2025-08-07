@@ -117,7 +117,7 @@ def register_adapters(container: punq.Container):
     container.register(IntegratedSpeechRecognizer, IntegratedSpeechRecognizer)
     try:
         container.register(Optional[SpeechTranscriberPort], SpeechTranscriber)
-        container.resolve(SpeechTranscriberPort)
+        container.resolve(Optional[SpeechTranscriberPort])
     except Exception as e:
         container.register(Optional[SpeechTranscriberPort], instance=None)
     container.register(ImageMatcherPort, MatcherRegistry)
