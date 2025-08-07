@@ -1,6 +1,8 @@
 import datetime
 import time
-from typing import Callable, Optional
+from typing import Callable, Optional, Tuple
+from concurrent.futures import ThreadPoolExecutor
+from pathlib import Path
 
 from structlog.stdlib import BoundLogger
 from splat_replay.domain.models import (
@@ -51,8 +53,15 @@ class AutoRecorder:
         self.battle_started_at = 0.0
         self.finish: bool = False
         self.judgement: str | None = None
-        self.result: Result | None = None
-        self.result_screenshot: Frame | None = None
+
+    def _reset(self) -> None:
+        """録画の状態をリセットする。"""
+        # 続けてプレイすることがあるので、ゲームモードはここでリセットせず、ゲームモード取得時に更新するのみ
+        self.rate = None
+        self.matching_started_at = None
+        self.battle_started_at = 0.0
+        self.finish = False
+        self.judgement = None
 
     def _start(self) -> None:
         self.recorder.start()
@@ -60,47 +69,61 @@ class AutoRecorder:
             self.transcriber.start()
         self.battle_started_at = time.time()
 
-    def _stop(self, frame: Optional[Frame] = None, save: bool = True) -> None:
-        video = self.recorder.stop()
-        subtitle = self.transcriber.stop() if self.transcriber is not None else ""
-
-        if frame is not None and self.game_mode:
-            self.result = self.analyzer.extract_session_result(
-                frame, self.game_mode
+    def _stop(self, frame: Optional[Frame] = None) -> None:
+        def stop_record() -> Tuple[Path, str]:
+            time.sleep(1.5)
+            video = self.recorder.stop()
+            subtitle = (
+                self.transcriber.stop() if self.transcriber is not None else ""
             )
-            self.result_screenshot = frame
-            self.logger.info("バトル結果を検出", result=str(self.result))
+            self.logger.info("録画を停止", video=str(video))
+            return video, subtitle
 
-        if save:
-            if self.matching_started_at is None:
-                raise RuntimeError("マッチング開始時刻が設定されていません。")
+        def extract_result(
+            frame: Optional[Frame], game_mode: Optional[GameMode]
+        ) -> Tuple[Optional[Result], Optional[Frame]]:
+            if frame is None or game_mode is None:
+                return None, None
 
-            metadata = RecordingMetadata(
-                started_at=self.matching_started_at,
-                rate=self.rate,
-                judgement=self.judgement,
-                result=self.result,
-            )
-            asset = self.asset_repo.save_recording(
-                video, subtitle, self.result_screenshot, metadata
-            )
-            self.logger.info(
-                "録画終了",
-                video=str(asset.video),
-                start_at=self.matching_started_at,
-            )
+            result = self.analyzer.extract_session_result(frame, game_mode)
+            if result is None:
+                return None, None
 
-        # 続けてプレイすることがあるので、ゲームモードはここでリセットしない
-        self.rate = None
-        self.matching_started_at = None
-        self.battle_started_at = 0.0
-        self.finish = False
-        self.judgement = None
-        self.result = None
-        self.result_screenshot = None
+            self.logger.info("バトル結果を検出", result=str(result))
+            return result, frame
+
+        with ThreadPoolExecutor() as executor:
+            future_record = executor.submit(stop_record)
+            future_result = executor.submit(
+                extract_result, frame, game_mode=self.game_mode
+            )
+            video, subtitle = future_record.result()
+            result, result_screenshot = future_result.result()
+
+        if self.matching_started_at is None:
+            raise RuntimeError("マッチング開始時刻が設定されていません。")
+
+        metadata = RecordingMetadata(
+            started_at=self.matching_started_at,
+            rate=self.rate,
+            judgement=self.judgement,
+            result=result,
+        )
+        asset = self.asset_repo.save_recording(
+            video, subtitle, result_screenshot, metadata
+        )
+        self.logger.info(
+            "録画終了",
+            video=str(asset.video),
+            start_at=self.matching_started_at,
+        )
+
+        self._reset()
 
     def _cancel(self) -> None:
-        self._stop(save=False)
+        self.recorder.stop()
+        self.transcriber.stop() if self.transcriber is not None else ""
+        self._reset()
 
     def _pause(self, resume_trigger: Callable[[Frame], bool]) -> None:
         self.recorder.pause()
