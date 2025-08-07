@@ -8,6 +8,7 @@ class SpeechTranscriberSettings(BaseModel):
 
     mic_device_name: str = "マイク (USB Audio Device)"
     groq_api_key: str = ""
+    model: str = ""
     language: str = "ja-JP"
     phrase_time_limit: float = 3.0
     custom_dictionary: List[str] = ["ナイス", "キル", "デス"]

@@ -20,6 +20,7 @@ class IntegratedSpeechRecognizer:
         logger: BoundLogger,
     ):
         os.environ["GROQ_API_KEY"] = settings.groq_api_key
+        self.model = settings.model
         self.language = settings.language
         self.primary_language = settings.language.split("-")[0]
         self.custom_dictionary = settings.custom_dictionary
@@ -77,7 +78,7 @@ class IntegratedSpeechRecognizer:
                     "content": results,
                 },
             ],
-            model="llama-3.3-70b-versatile",
+            model=self.model,
             temperature=0,
             stream=False,
             response_format={"type": "json_object"},

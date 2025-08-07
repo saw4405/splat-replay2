@@ -20,6 +20,7 @@ capture_index = 0
 [speech_transcriber]
 mic_device_name = "マイク (USB Audio Device)"
 groq_api_key = ""
+model = "openai/gpt-oss-120b"
 language = "ja-JP"
 phrase_time_limit = 3.0
 custom_dictionary = ["ナイス", "キル", "デス"]
