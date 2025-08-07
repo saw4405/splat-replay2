@@ -1,11 +1,10 @@
 from pathlib import Path
 from typing import Optional, Tuple
+
 import cv2
 import numpy as np
-from .base import BaseMatcher
-from splat_replay.shared.logger import get_logger
 
-logger = get_logger()
+from .base import BaseMatcher
 
 
 class TemplateMatcher(BaseMatcher):
@@ -40,12 +39,6 @@ class TemplateMatcher(BaseMatcher):
             result = cv2.matchTemplate(
                 gray, self._template, cv2.TM_CCOEFF_NORMED
             )
+
         _, max_val, _, _ = cv2.minMaxLoc(result)
-        result_flag = max_val >= self._threshold
-        if not result_flag:
-            logger.debug(
-                "テンプレート不一致",
-                score=float(max_val),
-                threshold=self._threshold,
-            )
-        return result_flag
+        return  max_val >= self._threshold

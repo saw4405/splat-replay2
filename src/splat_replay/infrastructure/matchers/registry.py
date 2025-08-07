@@ -12,6 +12,14 @@ from splat_replay.shared.logger import get_logger
 from splat_replay.domain.services import ImageMatcherPort
 from .base import BaseMatcher
 from .composite import CompositeMatcher
+from .hash import HashMatcher
+from .hsv import HSVMatcher
+from .hsv_ratio import HSVRatioMatcher
+from .rgb import RGBMatcher
+from .uniform import UniformColorMatcher
+from .brightness import BrightnessMatcher
+from .template import TemplateMatcher
+from .edge import EdgeMatcher
 
 logger = get_logger()
 
@@ -37,13 +45,6 @@ class MatcherRegistry(ImageMatcherPort):
         self.groups: Dict[str, list[str]] = settings.matcher_groups
 
     def _build_matcher(self, config: MatcherConfig) -> Optional[BaseMatcher]:
-        from .hash import HashMatcher
-        from .hsv import HSVMatcher
-        from .hsv_ratio import HSVRatioMatcher
-        from .rgb import RGBMatcher
-        from .uniform import UniformColorMatcher
-        from .brightness import BrightnessMatcher
-        from .template import TemplateMatcher
 
         if not config:
             return None
@@ -127,6 +128,18 @@ class MatcherRegistry(ImageMatcherPort):
                 return TemplateMatcher(
                     Path(config.template_path),
                     mask_path,
+                    config.threshold,
+                    roi,
+                    name=name,
+                )
+            else:
+                raise ValueError(
+                    "テンプレートマッチャーには template_path が必要です"
+                )
+        if config.type == "edge":
+            if config.template_path:
+                return EdgeMatcher(
+                    Path(config.template_path),
                     config.threshold,
                     roi,
                     name=name,

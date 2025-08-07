@@ -228,10 +228,14 @@ simple_matchers:
 
   match_select_splatfest_battle:
     name: "フェスマッチ"
-    type: "template"
+    type: "edge"
+    roi:
+      x: 520
+      y: 480
+      width: 290
+      height: 120
     template_path: "assets/matching/match_select_splatfest_battle.png"
-    mask_path: "assets/matching/match_select_splatfest_battle_mask.png"
-    threshold: 0.9
+    threshold: 1000
     description: "マッチ選択画面でフェスマッチ選択を検出する"
 
   matching_start_hsv:

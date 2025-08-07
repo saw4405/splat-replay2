@@ -53,7 +53,7 @@ class MatcherConfig(BaseModel):
 
     name: Optional[str] = None
     type: Literal[
-        "template", "hsv", "hsv_ratio", "rgb", "hash", "uniform", "brightness"
+        "template", "hsv", "hsv_ratio", "rgb", "hash", "uniform", "brightness", "edge"
     ]
     threshold: float = 0.8
     template_path: Optional[str] = None

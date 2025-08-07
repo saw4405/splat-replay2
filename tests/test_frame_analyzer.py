@@ -111,7 +111,8 @@ def test_detect_power_off(
         ("match_select_challenge.png", True),
         ("match_select_anarchy_battle.png", True),
         ("match_select_x_battle.png", True),
-        ("match_select_splatfest_battle.png", True),
+        ("match_select_splatfest_battle_1.png", True),
+        ("match_select_splatfest_battle_2.png", True),
     ],
 )
 def test_detect_match_select(
@@ -133,7 +134,8 @@ def test_detect_match_select(
         ("match_select_anarchy_battle.png", GameMode.BATTLE),
         ("match_select_x_battle.png", GameMode.BATTLE),
         ("match_select_challenge.png", GameMode.BATTLE),
-        ("match_select_splatfest_battle.png", GameMode.BATTLE),
+        ("match_select_splatfest_battle_1.png", GameMode.BATTLE),
+        ("match_select_splatfest_battle_2.png", GameMode.BATTLE),
         ("power_off.png", None),
     ],
 )
@@ -156,7 +158,8 @@ def test_extract_game_mode(
         ("match_select_anarchy_battle.png", Match.ANARCHY),
         ("match_select_x_battle.png", Match.X),
         ("match_select_challenge.png", Match.CHALLENGE),
-        ("match_select_splatfest_battle.png", Match.SPLATFEST),
+        ("match_select_splatfest_battle_1.png", Match.SPLATFEST),
+        ("match_select_splatfest_battle_2.png", Match.SPLATFEST),
         # トリカラマッチ画像なし
     ],
 )
@@ -431,9 +434,10 @@ def test_detect_battle_result(
 
 if __name__ == "__main__":
     analyzer_ = create_analyzer()
-    filename = "match_select_splatfest_battle.png"
+    filename = "match_select_splatfest_battle_1.png"
     expected = Match.SPLATFEST
     image_path = TEMPLATE_DIR / filename
     frame = as_frame(cv2.imread(str(image_path)))
     result = analyzer_.extract_match_select(frame, GameMode.BATTLE)
     print(result == expected)
+    print(result)
