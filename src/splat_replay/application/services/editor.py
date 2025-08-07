@@ -410,6 +410,7 @@ class Editor:
 
         # 高スコア(キルレがいい)のサムネイルをスコアが高い順に格納
         high_score_thumbnails: list[tuple[float, Path]] = []
+        seen_kd: set[tuple[int, int]] = set()
         for asset in assets:
             if (
                 asset.metadata is None
@@ -419,8 +420,12 @@ class Editor:
                 continue
             kill = asset.metadata.result.kill
             death = asset.metadata.result.death
+            kd_pair = (kill, death)
+            if kd_pair in seen_kd:
+                continue
             score = kill - death * 1.25
-            if score > 5:
+            if score > 5.5:
+                seen_kd.add(kd_pair)
                 high_score_thumbnails.append((score, asset.thumbnail))
                 self.logger.info(
                     "高スコアの動画を検出", score=score, kill=kill, death=death
