@@ -5,6 +5,7 @@ __all__ = [
     "CaptureDeviceChecker",
     "Capture",
     "OBSController",
+    "RecorderWithTranscription",
     "FFmpegProcessor",
     "YouTubeClient",
     "SystemPower",
@@ -17,19 +18,20 @@ __all__ = [
     "FileVideoAssetRepository",
 ]
 
-from .matchers import MatcherRegistry
 from .adapters import (
-    CaptureDeviceChecker,
     Capture,
-    OBSController,
+    CaptureDeviceChecker,
     FFmpegProcessor,
-    YouTubeClient,
+    ImageDrawer,
+    ImageEditor,
+    IntegratedSpeechRecognizer,
+    OBSController,
+    RecorderWithTranscription,
+    SpeechTranscriber,
+    SubtitleEditor,
     SystemPower,
     TesseractOCR,
-    ImageEditor,
-    SubtitleEditor,
-    ImageDrawer,
-    IntegratedSpeechRecognizer,
-    SpeechTranscriber,
+    YouTubeClient,
 )
+from .matchers import MatcherRegistry
 from .repositories import FileVideoAssetRepository

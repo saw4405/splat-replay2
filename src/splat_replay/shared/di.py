@@ -3,72 +3,72 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Optional
+from typing import Optional, cast
 
 import punq
 from structlog.stdlib import BoundLogger
 
-from splat_replay.shared.logger import get_logger
-from splat_replay.shared.config import (
-    AppSettings,
-    CaptureDeviceSettings,
-    OBSSettings,
-    RecordSettings,
-    SpeechTranscriberSettings,
-    VideoStorageSettings,
-    VideoEditSettings,
-    UploadSettings,
-    PCSettings,
-    ImageMatchingSettings,
-)
-from splat_replay.domain.services import (
-    StateMachine,
-    ImageMatcherPort,
-    OCRPort,
-    ImageEditorFactory,
-    FrameAnalyzer,
-    AnalyzerPlugin,
-    BattleFrameAnalyzer,
-    SalmonFrameAnalyzer,
+from splat_replay.application.interfaces import (
+    AuthenticatedClientPort,
+    CaptureDevicePort,
+    CapturePort,
+    ImageSelector,
+    PowerPort,
+    RecorderWithTranscriptionPort,
+    SpeechTranscriberPort,
+    SubtitleEditorPort,
+    UploadPort,
+    VideoAssetRepository,
+    VideoEditorPort,
+    VideoRecorderPort,
 )
 from splat_replay.application.services import (
-    EnvironmentInitializer,
-    AutoRecorder,
     AutoEditor,
+    AutoRecorder,
     AutoUploader,
+    DeviceWaiter,
     PowerManager,
 )
 from splat_replay.application.use_cases import AutoUseCase, UploadUseCase
-from splat_replay.application.interfaces import (
-    CaptureDevicePort,
-    CapturePort,
-    VideoRecorder,
-    OBSControlPort,
-    SpeechTranscriberPort,
-    VideoAssetRepository,
-    VideoEditorPort,
-    SubtitleEditorPort,
-    ImageSelector,
-    UploadPort,
-    AuthenticatedClientPort,
-    PowerPort,
+from splat_replay.domain.services import (
+    BattleFrameAnalyzer,
+    FrameAnalyzer,
+    ImageEditorFactory,
+    ImageMatcherPort,
+    OCRPort,
+    SalmonFrameAnalyzer,
+    StateMachine,
 )
 from splat_replay.infrastructure import (
-    CaptureDeviceChecker,
     Capture,
-    MatcherRegistry,
+    CaptureDeviceChecker,
     FFmpegProcessor,
     FileVideoAssetRepository,
-    OBSController,
-    SystemPower,
-    YouTubeClient,
-    TesseractOCR,
-    ImageEditor,
-    SubtitleEditor,
     ImageDrawer,
+    ImageEditor,
     IntegratedSpeechRecognizer,
+    MatcherRegistry,
+    OBSController,
+    RecorderWithTranscription,
     SpeechTranscriber,
+    SubtitleEditor,
+    SystemPower,
+    TesseractOCR,
+    YouTubeClient,
 )
+from splat_replay.shared.config import (
+    AppSettings,
+    CaptureDeviceSettings,
+    ImageMatchingSettings,
+    OBSSettings,
+    PCSettings,
+    RecordSettings,
+    SpeechTranscriberSettings,
+    UploadSettings,
+    VideoEditSettings,
+    VideoStorageSettings,
+)
+from splat_replay.shared.logger import get_logger
 
 
 def register_config(container: punq.Container, path: Path) -> AppSettings:
@@ -106,10 +106,9 @@ def register_adapters(container: punq.Container):
     """アダプターを DI コンテナに登録する。"""
     container.register(CaptureDevicePort, CaptureDeviceChecker)
     container.register(CapturePort, Capture)
+    container.register(VideoRecorderPort, OBSController)
     container.register(VideoEditorPort, FFmpegProcessor)
     container.register(ImageEditorFactory, instance=ImageEditor)
-    container.register(VideoRecorder, OBSController)
-    container.register(OBSControlPort, OBSController)
     container.register(PowerPort, SystemPower)
     container.register(OCRPort, TesseractOCR)
     container.register(UploadPort, YouTubeClient)
@@ -118,7 +117,7 @@ def register_adapters(container: punq.Container):
     try:
         container.register(Optional[SpeechTranscriberPort], SpeechTranscriber)
         container.resolve(Optional[SpeechTranscriberPort])
-    except Exception as e:
+    except Exception:
         container.register(Optional[SpeechTranscriberPort], instance=None)
     container.register(ImageMatcherPort, MatcherRegistry)
     container.register(SubtitleEditorPort, SubtitleEditor)
@@ -126,6 +125,19 @@ def register_adapters(container: punq.Container):
         ImageSelector, instance=ImageDrawer.select_brightest_image
     )
     container.register(VideoAssetRepository, FileVideoAssetRepository)
+    recorder_with_transcription_instance = RecorderWithTranscription(
+        cast(VideoRecorderPort, container.resolve(VideoRecorderPort)),
+        cast(
+            Optional[SpeechTranscriberPort],
+            container.resolve(Optional[SpeechTranscriberPort]),
+        ),
+        cast(VideoAssetRepository, container.resolve(VideoAssetRepository)),
+        cast(BoundLogger, container.resolve(BoundLogger)),
+    )
+    container.register(
+        RecorderWithTranscriptionPort,
+        instance=recorder_with_transcription_instance,
+    )
 
 
 def register_domain_services(container: punq.Container):
@@ -137,7 +149,7 @@ def register_domain_services(container: punq.Container):
 
 def register_app_services(container: punq.Container):
     """アプリケーションサービスを DI コンテナに登録する。"""
-    container.register(EnvironmentInitializer, EnvironmentInitializer)
+    container.register(DeviceWaiter, DeviceWaiter)
     container.register(AutoRecorder, AutoRecorder)
     container.register(AutoEditor, AutoEditor)
     container.register(AutoUploader, AutoUploader)
@@ -167,4 +179,5 @@ def configure_container() -> punq.Container:
     register_domain_services(container)
     register_app_services(container)
     register_app_usecases(container)
+
     return container

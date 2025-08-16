@@ -2,19 +2,21 @@
 
 from __future__ import annotations
 
-from typing import Optional, List, cast, Tuple
+import asyncio
 import queue
 import threading
 import time
+from typing import List, Optional, Tuple, cast
 
 import speech_recognition as sr
-
 from structlog.stdlib import BoundLogger
-from splat_replay.shared.config import SpeechTranscriberSettings
+
 from splat_replay.application.interfaces import SpeechTranscriberPort
-from .stopwatch import StopWatch
-from .segment import Segment
+from splat_replay.shared.config import SpeechTranscriberSettings
+
 from .integrated_speech_recognition import IntegratedSpeechRecognizer
+from .segment import Segment
+from .stopwatch import StopWatch
 
 
 class SpeechTranscriber(SpeechTranscriberPort):
@@ -94,7 +96,7 @@ class SpeechTranscriber(SpeechTranscriberPort):
                 continue
 
             audio, start, end = self._audio_queue.get(timeout=1)
-            result = self._speech_recognizer.recognize(audio)
+            result = asyncio.run(self._speech_recognizer.recognize(audio))
             if result is None:
                 continue
 

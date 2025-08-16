@@ -10,13 +10,13 @@ import cv2
 import numpy as np
 from structlog.stdlib import BoundLogger
 
-from splat_replay.shared.config import VideoStorageSettings
+from splat_replay.application.interfaces import VideoAssetRepository
 from splat_replay.domain.models import (
+    BattleResult,
     RecordingMetadata,
     VideoAsset,
-    BattleResult,
 )
-from splat_replay.application.interfaces import VideoAssetRepository
+from splat_replay.shared.config import VideoStorageSettings
 
 
 class FileVideoAssetRepository(VideoAssetRepository):
@@ -33,7 +33,7 @@ class FileVideoAssetRepository(VideoAssetRepository):
     def save_recording(
         self,
         video: Path,
-        subtitle: str,
+        srt: Path | None,
         screenshot: np.ndarray | None,
         metadata: RecordingMetadata,
     ) -> VideoAsset:
@@ -51,6 +51,11 @@ class FileVideoAssetRepository(VideoAssetRepository):
             )
         else:
             name_root = metadata.started_at.strftime("%Y%m%d_%H%M%S")
+
+        if srt is not None:
+            srt = srt.resolve()
+            srt.rename(dest / f"{name_root}.srt")
+
         target = dest / f"{name_root}{video.suffix}"
         try:
             shutil.move(str(video), target)
@@ -62,7 +67,7 @@ class FileVideoAssetRepository(VideoAssetRepository):
             if success:
                 with open(png_path, "wb") as f:
                     f.write(buf.tobytes())
-        (dest / f"{name_root}.srt").write_text(subtitle, encoding="utf-8")
+
         (dest / f"{name_root}.json").write_text(
             json.dumps(metadata.to_dict(), ensure_ascii=False),
             encoding="utf-8",

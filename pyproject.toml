@@ -10,7 +10,6 @@ dependencies = [
     "pydantic>=1.10,<2",
     "punq>=0.7",
     "structlog>=24.1",
-    "obs-websocket-py>=1.0",
     "psutil>=5.9",
     "pywin32>=306; platform_system == 'Windows'",
     "pyyaml>=6.0",
@@ -24,6 +23,7 @@ dependencies = [
     "google-auth-oauthlib>=1.2.2",
     "google-api-python-client>=2.176.0",
     "srt>=3.5.3",
+    "obs-ws-client>=0.1.0",
 ]
 
 [tool.setuptools.packages.find]

@@ -2,13 +2,11 @@
 
 from __future__ import annotations
 
-import asyncio
-
 from splat_replay.application.services import (
-    EnvironmentInitializer,
-    AutoRecorder,
     AutoEditor,
+    AutoRecorder,
     AutoUploader,
+    DeviceWaiter,
     PowerManager,
 )
 
@@ -18,22 +16,30 @@ class AutoUseCase:
 
     def __init__(
         self,
-        initializer: EnvironmentInitializer,
+        device_waiter: DeviceWaiter,
         recorder: AutoRecorder,
         editor: AutoEditor,
         uploader: AutoUploader,
         power: PowerManager,
     ) -> None:
-        self.initializer = initializer
+        self.device_waiter = device_waiter
         self.recorder = recorder
         self.editor = editor
         self.uploader = uploader
         self.power = power
 
-    async def execute(self, timeout: float | None = None) -> None:
-        """録画準備からスリープまでを実行する。"""
-        await self.initializer.execute(timeout)
-        await asyncio.to_thread(self.recorder.execute)
-        await asyncio.to_thread(self.editor.execute)
-        await asyncio.to_thread(self.uploader.execute)
-        await asyncio.to_thread(self.power.sleep)
+    async def wait_for_device(self, timeout: float | None = None) -> bool:
+        """キャプチャデバイスの接続を待機する。"""
+        return await self.device_waiter.execute(timeout)
+
+    async def record(self) -> None:
+        await self.recorder.execute()
+
+    async def edit(self) -> None:
+        await self.editor.execute()
+
+    async def update(self) -> None:
+        await self.uploader.execute()
+
+    async def sleep(self) -> None:
+        await self.power.sleep()

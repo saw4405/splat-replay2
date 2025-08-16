@@ -1,8 +1,9 @@
+import asyncio
 from pathlib import Path
 from typing import Optional, Tuple
 
-import numpy as np
 import cv2
+import numpy as np
 
 from .base import BaseMatcher
 
@@ -21,7 +22,10 @@ class UniformColorMatcher(BaseMatcher):
         super().__init__(mask_path, roi, name)
         self._hue_threshold = hue_threshold
 
-    def match(self, image: np.ndarray) -> bool:
+    async def match(self, image: np.ndarray) -> bool:
+        return await asyncio.to_thread(self._match, image)
+
+    def _match(self, image: np.ndarray) -> bool:
         img = self._apply_roi(image)
         hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
         hue = hsv[:, :, 0]

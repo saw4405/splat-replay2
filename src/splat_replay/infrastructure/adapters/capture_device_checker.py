@@ -4,9 +4,10 @@ from __future__ import annotations
 
 import sys
 
-from splat_replay.shared.config import CaptureDeviceSettings
 from structlog.stdlib import BoundLogger
+
 from splat_replay.application.interfaces import CaptureDevicePort
+from splat_replay.shared.config import CaptureDeviceSettings
 
 
 class CaptureDeviceChecker(CaptureDevicePort):

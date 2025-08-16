@@ -9,8 +9,8 @@ from logging.handlers import TimedRotatingFileHandler
 from pathlib import Path
 
 import structlog
+from structlog.processors import CallsiteParameter, CallsiteParameterAdder
 from structlog.stdlib import BoundLogger
-from structlog.processors import CallsiteParameterAdder, CallsiteParameter
 
 _initialized = False
 
@@ -122,7 +122,7 @@ def buffer_console_logs():
     root_logger = logging.getLogger()
     orig_handlers = list(root_logger.handlers)
     stream_handlers = [
-        h for h in orig_handlers if isinstance(h, logging.StreamHandler)
+        h for h in orig_handlers if type(h) is logging.StreamHandler
     ]
     log_buffer = io.StringIO()
     buffer_handlers = []

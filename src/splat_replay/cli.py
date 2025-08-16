@@ -2,22 +2,21 @@
 
 from __future__ import annotations
 
-import typer
-from typing import Type, TypeVar, cast
 import asyncio
 import threading
 import time
+from typing import Type, TypeVar, cast
 
+import typer
 from structlog.stdlib import BoundLogger
+
+from splat_replay.application.use_cases import AutoUseCase, UploadUseCase
 from splat_replay.shared.di import configure_container
 from splat_replay.shared.logger import buffer_console_logs
-from splat_replay.application.use_cases import AutoUseCase, UploadUseCase
-from splat_replay.domain.services.state_machine import StateMachine, State
 
 app = typer.Typer(help="Splat Replay ツール群")
 
 container = configure_container()
-logger = container.resolve(BoundLogger)
 
 T = TypeVar("T")
 
@@ -25,6 +24,9 @@ T = TypeVar("T")
 def resolve(cls: Type[T]) -> T:
     """DI コンテナから依存を取得する。"""
     return cast(T, container.resolve(cls))
+
+
+logger = resolve(BoundLogger)
 
 
 @app.command()
@@ -39,20 +41,8 @@ def auto(
 
 async def _auto(timeout: float | None = None) -> None:
     logger.info("auto コマンド開始", timeout=timeout)
-    try:
-        uc = resolve(AutoUseCase)
-        sm = resolve(StateMachine)
-    except Exception as e:  # pragma: no cover - 環境依存エラーを無視
-        logger.error("依存関係の解決に失敗しました: %s", e)
-        return
 
-    ready = asyncio.Event()
-
-    def _on_state_change(state: State) -> None:
-        if state not in {State.WAITING_DEVICE, State.OBS_STARTING}:
-            ready.set()
-
-    def _animate(stop_event: threading.Event) -> None:
+    def animate(stop_event: threading.Event) -> None:
         """キャプチャデバイス接続待ちアニメーション."""
         animation = [
             "(●´・ω・)    ",
@@ -65,29 +55,28 @@ async def _auto(timeout: float | None = None) -> None:
         idx = 0
         try:
             while not stop_event.is_set():
-                message = f"\r初期化中... {animation[idx % len(animation)]}"
+                message = f"\rキャプチャボード接続待ち... {animation[idx % len(animation)]}"
                 print(message, end="", flush=True)
                 idx += 1
                 time.sleep(0.5)
         finally:
             print("\033[?25h", end="")
 
-    sm.add_listener(_on_state_change)
-    try:
-        task = asyncio.create_task(uc.execute(timeout))
-        stop_event = threading.Event()
-        thread = threading.Thread(
-            target=_animate, args=(stop_event,), daemon=True
-        )
-        thread.start()
-        with buffer_console_logs():
-            await ready.wait()
-        stop_event.set()
-        thread.join()
-        print()
-        await task
-    finally:
-        sm.remove_listener(_on_state_change)
+    uc = resolve(AutoUseCase)
+
+    stop_event = threading.Event()
+    thread = threading.Thread(target=animate, args=(stop_event,), daemon=True)
+    thread.start()
+    with buffer_console_logs():
+        await uc.wait_for_device(timeout)
+        print("キャプチャボード接続された！ ヽ(*ﾟ▽ﾟ)ﾉ")
+    stop_event.set()
+    thread.join()
+
+    await uc.record()
+    await uc.edit()
+    await uc.update()
+    await uc.sleep()
 
 
 @app.command()

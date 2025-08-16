@@ -1,27 +1,36 @@
 from typing import Optional
 
 import cv2
-
 from structlog.stdlib import BoundLogger
-from splat_replay.shared.config import RecordSettings
-from splat_replay.domain.models import Frame, as_frame
+
 from splat_replay.application.interfaces import CapturePort
+from splat_replay.domain.models import Frame, as_frame
+from splat_replay.shared.config import RecordSettings
 
 
 class Capture(CapturePort):
     def __init__(self, settings: RecordSettings, logger: BoundLogger):
+        self.capture_index = settings.capture_index
+        self.frame_width = settings.width
+        self.frame_height = settings.height
         self.logger = logger
-        self.video_capture = cv2.VideoCapture(settings.capture_index)
+        self.video_capture: Optional[cv2.VideoCapture] = None
+
+    def init(self) -> None:
+        self.video_capture = cv2.VideoCapture(self.capture_index)
         if not self.video_capture.isOpened():
             self.logger.error(
                 "キャプチャデバイスを開けません",
-                index=settings.capture_index,
+                index=self.capture_index,
             )
-            raise RuntimeError("キャプチャデバイスの取得に失敗しました")
-        self.video_capture.set(cv2.CAP_PROP_FRAME_WIDTH, settings.width)
-        self.video_capture.set(cv2.CAP_PROP_FRAME_HEIGHT, settings.height)
+            return
+        self.video_capture.set(cv2.CAP_PROP_FRAME_WIDTH, self.frame_width)
+        self.video_capture.set(cv2.CAP_PROP_FRAME_HEIGHT, self.frame_height)
 
     def capture(self) -> Optional[Frame]:
+        if self.video_capture is None:
+            raise RuntimeError("キャプチャデバイスが初期化されていません")
+
         success, frame = self.video_capture.read()
         if not success:
             self.logger.warning("フレーム取得に失敗")
@@ -30,6 +39,6 @@ class Capture(CapturePort):
 
     def close(self):
         """キャプチャデバイスを閉じる。"""
-        if self.video_capture.isOpened():
+        if self.video_capture is not None and self.video_capture.isOpened():
             self.video_capture.release()
             self.logger.info("キャプチャデバイスを閉じました")

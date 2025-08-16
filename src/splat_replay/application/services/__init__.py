@@ -1,15 +1,15 @@
 """アプリケーションサービス群。"""
 
 __all__ = [
-    "EnvironmentInitializer",
+    "DeviceWaiter",
     "AutoRecorder",
     "AutoEditor",
     "AutoUploader",
     "PowerManager",
 ]
 
-from .environment_initializer import EnvironmentInitializer
-from .auto_recorder import AutoRecorder
 from .auto_editor import AutoEditor
+from .auto_recorder import AutoRecorder
 from .auto_uploader import AutoUploader
+from .device_water import DeviceWaiter
 from .power_manager import PowerManager

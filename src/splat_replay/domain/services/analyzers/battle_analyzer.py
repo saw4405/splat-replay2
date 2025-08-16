@@ -2,23 +2,25 @@
 
 from __future__ import annotations
 
-from typing import Tuple, Dict, Optional
+from typing import Dict, Optional, Tuple
 
 from structlog.stdlib import BoundLogger
+
 from splat_replay.domain.models import (
+    XP,
+    BattleResult,
     Frame,
     Match,
     RateBase,
-    Udemae,
-    XP,
     Rule,
     Stage,
-    BattleResult,
+    Udemae,
 )
-from .image_matcher import ImageMatcherPort
-from .ocr import OCRPort
+
 from .analyzer_plugin import AnalyzerPlugin
 from .image_editor import ImageEditorFactory
+from .image_matcher import ImageMatcherPort
+from .ocr import OCRPort
 
 
 class BattleFrameAnalyzer(AnalyzerPlugin):
@@ -36,22 +38,26 @@ class BattleFrameAnalyzer(AnalyzerPlugin):
         self.ocr = ocr
         self.image_editor_factory = image_editor_factory
 
-    def extract_match_select(self, frame: Frame) -> Optional[Match]:
-        match = self.matcher.matched_name("battle_select", frame)
+    async def extract_match_select(self, frame: Frame) -> Optional[Match]:
+        match = await self.matcher.matched_name("battle_select", frame)
         return Match(match) if match else None
 
-    def extract_rate(self, frame: Frame, match: Match) -> Optional[RateBase]:
+    async def extract_rate(
+        self, frame: Frame, match: Match
+    ) -> Optional[RateBase]:
         """レートを取得する。"""
         if match.is_anarchy():
-            udemae = self.matcher.matched_name("battle_rate_udemae", frame)
+            udemae = await self.matcher.matched_name(
+                "battle_rate_udemae", frame
+            )
             return Udemae(udemae) if udemae else None
 
         if match is Match.X:
-            return self.extract_xp(frame)
+            return await self.extract_xp(frame)
 
         return None
 
-    def extract_xp(self, frame: Frame) -> Optional[XP]:
+    async def extract_xp(self, frame: Frame) -> Optional[XP]:
         """XPを取得する。"""
         xp_image = frame[190:240, 1730:1880]
         xp_image = self.image_editor_factory(xp_image).rotate(-4).image
@@ -69,42 +75,44 @@ class BattleFrameAnalyzer(AnalyzerPlugin):
 
         return XP(xp)
 
-    def detect_session_start(self, frame: Frame) -> bool:
-        return self.matcher.match("battle_start", frame)
+    async def detect_session_start(self, frame: Frame) -> bool:
+        return await self.matcher.match("battle_start", frame)
 
-    def detect_session_abort(self, frame: Frame) -> bool:
-        return self.matcher.match("battle_abort", frame)
+    async def detect_session_abort(self, frame: Frame) -> bool:
+        return await self.matcher.match("battle_abort", frame)
 
-    def detect_session_finish(self, frame: Frame) -> bool:
-        return self.matcher.match("battle_finish", frame)
+    async def detect_session_finish(self, frame: Frame) -> bool:
+        return await self.matcher.match("battle_finish", frame)
 
-    def detect_session_finish_end(self, frame: Frame) -> bool:
-        return self.detect_session_judgement(frame)
+    async def detect_session_finish_end(self, frame: Frame) -> bool:
+        return await self.detect_session_judgement(frame)
 
-    def detect_session_judgement(self, frame: Frame) -> bool:
-        return self.matcher.match("battle_judgement_latter_half", frame)
+    async def detect_session_judgement(self, frame: Frame) -> bool:
+        return await self.matcher.match("battle_judgement_latter_half", frame)
 
-    def extract_session_judgement(self, frame: Frame) -> Optional[str]:
+    async def extract_session_judgement(self, frame: Frame) -> Optional[str]:
         """勝敗画面から勝敗を取得する。"""
-        return self.matcher.matched_name("battle_judgements", frame)
+        return await self.matcher.matched_name("battle_judgements", frame)
 
-    def detect_session_result(self, frame: Frame) -> bool:
-        return self.matcher.match("battle_result", frame)
+    async def detect_session_result(self, frame: Frame) -> bool:
+        return await self.matcher.match("battle_result", frame)
 
-    def extract_session_result(self, frame: Frame) -> Optional[BattleResult]:
-        match = self.extract_battle_match(frame)
+    async def extract_session_result(
+        self, frame: Frame
+    ) -> Optional[BattleResult]:
+        match = await self.extract_battle_match(frame)
         if match is None:
             self._logger.warning("バトルマッチが抽出できません")
             return None
-        rule = self.extract_battle_rule(frame)
+        rule = await self.extract_battle_rule(frame)
         if rule is None:
             self._logger.warning("バトルルールが抽出できません")
             return None
-        stage = self.extract_battle_stage(frame)
+        stage = await self.extract_battle_stage(frame)
         if stage is None:
             self._logger.warning("バトルステージが抽出できません")
             return None
-        kill_record = self.extract_battle_kill_record(frame, match)
+        kill_record = await self.extract_battle_kill_record(frame, match)
         if kill_record is None:
             self._logger.warning("キルレコードが抽出できません")
             return None
@@ -118,19 +126,19 @@ class BattleFrameAnalyzer(AnalyzerPlugin):
             special=kill_record[2],
         )
 
-    def extract_battle_match(self, frame: Frame) -> Optional[Match]:
+    async def extract_battle_match(self, frame: Frame) -> Optional[Match]:
         """バトルマッチの種類を取得する。"""
-        return Match(self.matcher.matched_name("battle_matches", frame))
+        return Match(await self.matcher.matched_name("battle_matches", frame))
 
-    def extract_battle_rule(self, frame: Frame) -> Optional[Rule]:
+    async def extract_battle_rule(self, frame: Frame) -> Optional[Rule]:
         """バトルルールを取得する。"""
-        return Rule(self.matcher.matched_name("battle_rules", frame))
+        return Rule(await self.matcher.matched_name("battle_rules", frame))
 
-    def extract_battle_stage(self, frame: Frame) -> Optional[Stage]:
+    async def extract_battle_stage(self, frame: Frame) -> Optional[Stage]:
         """バトルステージを取得する。"""
-        return Stage(self.matcher.matched_name("battle_stages", frame))
+        return Stage(await self.matcher.matched_name("battle_stages", frame))
 
-    def extract_battle_kill_record(
+    async def extract_battle_kill_record(
         self, frame: Frame, match: Match
     ) -> Optional[Tuple[int, int, int]]:
         """キルレコードを取得する。"""

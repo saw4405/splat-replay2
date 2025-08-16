@@ -1,11 +1,10 @@
+import asyncio
 from pathlib import Path
 from typing import Optional, Tuple
-import numpy as np
-import cv2
-from .base import BaseMatcher
-from splat_replay.shared.logger import get_logger
 
-logger = get_logger()
+import numpy as np
+
+from .base import BaseMatcher
 
 
 class RGBMatcher(BaseMatcher):
@@ -24,7 +23,10 @@ class RGBMatcher(BaseMatcher):
         self._rgb = rgb
         self._threshold = threshold
 
-    def match(self, image: np.ndarray) -> bool:
+    async def match(self, image: np.ndarray) -> bool:
+        return await asyncio.to_thread(self._match, image)
+
+    def _match(self, image: np.ndarray) -> bool:
         img = self._apply_roi(image)
         if self._mask is not None:
             mask = self._mask == 255
@@ -40,8 +42,4 @@ class RGBMatcher(BaseMatcher):
             return False
         ratio = match_count / total
         result = ratio >= self._threshold
-        if not result:
-            logger.debug(
-                "RGB 比率不足", ratio=float(ratio), threshold=self._threshold
-            )
         return result

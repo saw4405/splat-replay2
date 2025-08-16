@@ -1,9 +1,11 @@
+import asyncio
 from pathlib import Path
 from typing import Optional, Tuple
-import numpy as np
+
 import cv2
+import numpy as np
+
 from .base import BaseMatcher
-from structlog.stdlib import BoundLogger
 
 
 class BrightnessMatcher(BaseMatcher):
@@ -34,7 +36,10 @@ class BrightnessMatcher(BaseMatcher):
             return 0.0
         return float(np.max(pixels))
 
-    def match(self, image: np.ndarray) -> bool:
+    async def match(self, image: np.ndarray) -> bool:
+        return await asyncio.to_thread(self._match, image)
+
+    def _match(self, image: np.ndarray) -> bool:
         img = self._apply_roi(image)
         level = self._calculate_brightness(img, self._mask)
         if self._max_value is not None and level > self._max_value:

@@ -2,219 +2,324 @@
 
 from __future__ import annotations
 
-import subprocess
+import asyncio
 from pathlib import Path
-import time
+from typing import Awaitable, Callable, List, Optional, Tuple, Union, cast
 
 import psutil
-from obswebsocket import obsws, requests
+from obswsc.client import ObsWsClient
+from obswsc.data import Event, Request, Response1, Response2
+from structlog.stdlib import BoundLogger
 
 try:  # Windows 以外では win32gui がないため安全に import
     import win32gui
-except Exception:  # pragma: no cover - OS 依存
+except Exception:
     win32gui = None
 
-from splat_replay.application.interfaces import OBSControlPort
+from splat_replay.application.interfaces import (
+    RecorderStatus,
+    VideoRecorderPort,
+)
 from splat_replay.shared.config import OBSSettings
-from structlog.stdlib import BoundLogger
+
+Response = Union[Response1, Response2]
 
 
-class OBSController(OBSControlPort):
+class OBSController(VideoRecorderPort):
     """OBS Studio と連携するアダプタ。"""
 
     def __init__(self, settings: OBSSettings, logger: BoundLogger) -> None:
         """設定を受け取って初期化する。"""
 
-        self._settings = settings
-        self._ws = obsws(
-            settings.websocket_host,
-            settings.websocket_port,
-            settings.websocket_password,
-            on_disconnect=self._on_disconnect,
-        )
-        self._process: subprocess.Popen[bytes] | None = None
-        self.logger = logger
+        self.obs_path = settings.executable_path
+        self._logger = logger
 
-    def is_running(self) -> bool:
+        url = f"ws://{settings.websocket_host}:{settings.websocket_port}"
+        self._client = ObsWsClient(
+            url=url, password=settings.websocket_password
+        )
+        self._client.reg_event_cb(self.event_listener, "RecordStateChanged")  # type: ignore
+        self._is_connected = False
+        self._process: Optional[asyncio.subprocess.Process] = None
+        self._status_listeners: List[
+            Callable[[RecorderStatus], Awaitable[None]]
+        ] = []
+
+    async def is_running(self) -> bool:
         """OBS が起動しているかどうかを返す。"""
 
-        def exists_process(file_name: str) -> bool:
-            for proc in psutil.process_iter(["name"]):
-                if proc.info["name"] == file_name:
-                    return True
-            return False
+        file_name = self.obs_path.name.lower()
 
-        def exists_window(title: str) -> bool:
-            if win32gui is None:  # pragma: no cover - OS 依存
-                self.logger.warning("win32gui が利用できません")
+        async def exists_process_async() -> bool:
+            def _impl() -> bool:
+                for proc in psutil.process_iter(["name"]):
+                    try:
+                        name = (proc.info.get("name") or "").lower()
+                        if name == file_name:
+                            return True
+                    except (psutil.NoSuchProcess, psutil.AccessDenied):
+                        continue
                 return False
 
-            def enum_window(hwnd, result):
-                if win32gui is None:  # pragma: no cover - OS 依存
-                    self.logger.warning("win32gui が利用できません")
+            return await asyncio.to_thread(_impl)
+
+        async def exists_window_async() -> bool:
+            if win32gui is None:
+                self._logger.warning("win32gui が利用できません")
+                return False
+
+            def _impl() -> bool:
+                if win32gui is None:
                     return False
-                if win32gui.IsWindowVisible(hwnd):
-                    window_title = win32gui.GetWindowText(hwnd)
-                    if title in window_title:
-                        result.append(hwnd)
 
-            windows = []
-            win32gui.EnumWindows(enum_window, windows)
-            return bool(windows)
+                handles: list[int] = []
 
-        return exists_process(
-            self._settings.executable_path.name
-        ) and exists_window("OBS")
+                def enum_window(hwnd, _):
+                    if win32gui is None:
+                        return False
+                    try:
+                        if win32gui.IsWindowVisible(hwnd):
+                            title = win32gui.GetWindowText(hwnd)
+                            if "OBS" in title:
+                                handles.append(hwnd)
+                    except Exception:
+                        pass  # 見えない/権限系は無視
 
-    def launch(self) -> None:
+                try:
+                    win32gui.EnumWindows(enum_window, None)
+                except Exception:
+                    return False
+                return bool(handles)
+
+            return await asyncio.to_thread(_impl)
+
+        proc_ok, win_ok = await asyncio.gather(
+            exists_process_async(),
+            exists_window_async(),
+        )
+        return proc_ok and win_ok
+
+    async def launch(self) -> None:
         """OBS を起動する。"""
 
-        self.logger.info("OBS 起動指示")
-        if self.is_running():
+        self._logger.info("OBS 起動指示")
+        if await self.is_running():
             return
 
         try:
-            file_name = self._settings.executable_path.name
-            directory = self._settings.executable_path.parent
-            self._process = subprocess.Popen(
-                file_name, cwd=directory, shell=True
+            self._process = await asyncio.create_subprocess_exec(
+                self.obs_path,
+                cwd=self.obs_path.parent,
             )
-        except Exception as e:  # pragma: no cover - 実機依存
-            self.logger.error("OBS 起動失敗", error=str(e))
+        except Exception as e:
+            self._logger.error("OBS 起動失敗", error=str(e))
             raise RuntimeError("OBS 起動に失敗しました") from e
 
         # 起動直後はWebSocket接続に失敗するので起動待ちする
-        while not self.is_running():
-            time.sleep(1)
+        while not await self.is_running():
+            await asyncio.sleep(1)
 
-    def terminate(self) -> None:
+    async def close(self) -> None:
         """OBS を終了する。"""
 
-        self.logger.info("OBS 終了指示")
+        self._logger.info("OBS 終了指示")
 
-        if self.is_connected():
-            active, _ = self._get_record_status()
+        if self._is_connected:
+            active, _ = await self._get_record_status()
             if active:
-                self.stop()
-            if self.is_virtual_camera_active():
-                self.stop_virtual_camera()
+                await self.stop()
+            if await self.is_virtual_camera_active():
+                await self.stop_virtual_camera()
 
-        if self.is_running():
+        if await self.is_running():
             try:
                 if self._process is not None:
                     self._process.terminate()
-                    self._process.wait(timeout=5)
+                    await self._process.wait()
                     self._process = None
             except Exception as e:
-                self.logger.error("OBS 終了失敗", error=str(e))
+                self._logger.error("OBS 終了失敗", error=str(e))
 
-    def close(self) -> None:
-        self.terminate()
-
-    def is_connected(self) -> bool:
-        """WebSocket が接続済みか確認する。"""
-
-        return self._ws.ws is not None and self._ws.ws.connected
-
-    def connect(self) -> None:
+    async def connect(self):
         """OBS WebSocket に接続する。"""
 
-        self.logger.info("OBS WebSocket 接続試行")
-
-        if not self.is_running():
-            self.logger.error("OBS が起動していません")
+        if not await self.is_running():
+            self._logger.error("OBS が起動していません")
             raise RuntimeError("OBS が起動していません")
-
-        if self.is_connected():
-            return
 
         for _ in range(5):
             try:
-                self._ws.connect()
+                await self._client.connect()
+                self._is_connected = True
                 return
-            except Exception as e:  # pragma: no cover - 実機依存
-                self.logger.warning("OBS へ接続できません", error=str(e))
-                time.sleep(1)
+            except Exception as e:
+                self._logger.warning("OBS へ接続できません", error=str(e))
+                await asyncio.sleep(1)
 
-        self.logger.error("OBS へ接続できませんでした")
+        self._logger.error("OBS へ接続できませんでした")
 
-    def _on_disconnect(self, ws) -> None:
-        """切断時に再接続を試みる。"""
+    async def _request(self, request: str) -> Response1:
+        """OBS WebSocket へリクエストを送信する。"""
 
-        self.logger.warning("OBS から切断されました")
-        self.connect()
+        if not self._is_connected:
+            await self.connect()
 
-    def start_virtual_camera(self) -> None:
-        """OBS の仮想カメラを開始する。"""
+        try:
+            response = cast(
+                Response, await self._client.request(Request(request))
+            )
+            if isinstance(response, Response2):
+                response = response.results[0]
+            return response
+        except Exception as e:
+            self._logger.error(
+                "OBS リクエスト失敗", request=request, error=str(e)
+            )
+            raise RuntimeError(
+                f"OBS リクエストに失敗しました: {request}"
+            ) from e
 
-        self.logger.info("OBS 仮想カメラ開始指示")
-        if not self.is_connected():
-            self.connect()
-        status = self._ws.call(requests.GetVirtualCamStatus())
-        if not status.datain.get("outputActive", False):
-            self._ws.call(requests.StartVirtualCam())
-
-    def stop_virtual_camera(self) -> None:
-        """OBS の仮想カメラを停止する。"""
-
-        self.logger.info("OBS 仮想カメラ停止指示")
-        if not self.is_connected():
-            self.connect()
-        status = self._ws.call(requests.GetVirtualCamStatus())
-        if status.datain.get("outputActive", False):
-            self._ws.call(requests.StopVirtualCam())
-
-    def is_virtual_camera_active(self) -> bool:
+    async def is_virtual_camera_active(self) -> bool:
         """仮想カメラが有効かどうかを返す。"""
 
-        if not self.is_connected():
-            self.connect()
-        status = self._ws.call(requests.GetVirtualCamStatus())
-        return status.datain.get("outputActive", False)
+        response = await self._request("GetVirtualCamStatus")
+        return response.res_data.get("outputActive", False)
 
-    def _get_record_status(self) -> tuple[bool, bool]:
+    async def start_virtual_camera(self):
+        """OBS の仮想カメラを開始する。"""
+
+        self._logger.info("OBS 仮想カメラ開始指示")
+
+        if await self.is_virtual_camera_active():
+            self._logger.info("仮想カメラは既に開始されています")
+            return
+
+        await self._request("StartVirtualCam")
+
+    async def stop_virtual_camera(self):
+        """OBS の仮想カメラを停止する。"""
+
+        self._logger.info("OBS 仮想カメラ停止指示")
+
+        if not await self.is_virtual_camera_active():
+            self._logger.info("仮想カメラは既に停止されています")
+            return
+
+        await self._request("StopVirtualCam")
+
+    async def _get_record_status(self) -> Tuple[bool, bool]:
         """録画状態を取得する。"""
 
-        if not self.is_connected():
-            self.connect()
-        status = self._ws.call(requests.GetRecordStatus())
-        active = status.datain.get("outputActive", False)
-        paused = status.datain.get("outputPaused", False)
+        await self.connect()
+        response = await self._request("GetRecordStatus")
+        active = response.res_data.get("outputActive", False)
+        paused = response.res_data.get("outputPaused", False)
         return active, paused
 
-    def start(self) -> None:
+    async def init(self) -> None:
+        """OBS の初期化処理を行う。"""
+
+        self._logger.info("OBS 初期化")
+        if not await self.is_running():
+            self._logger.info("OBS 起動")
+            await self.launch()
+        await self.connect()
+        self._logger.info("仮想カメラ開始")
+        await self.start_virtual_camera()
+
+    async def start(self) -> None:
         """録画開始指示を送る。"""
 
-        self.logger.info("OBS 録画開始指示")
-        active, _ = self._get_record_status()
-        if not active:
-            self._ws.call(requests.StartRecord())
+        self._logger.info("OBS 録画開始指示")
 
-    def stop(self) -> Path:
+        active, _ = await self._get_record_status()
+        if active:
+            self._logger.warning("録画は既に開始されています")
+            return
+
+        await self._request("StartRecord")
+
+    async def stop(self) -> Optional[Path]:
         """録画停止指示を送る。"""
 
-        self.logger.info("OBS 録画停止指示")
-        active, _ = self._get_record_status()
+        self._logger.info("OBS 録画停止指示")
+
+        active, _ = await self._get_record_status()
         if not active:
-            raise RuntimeError("録画は開始されていません")
-        res = self._ws.call(requests.StopRecord())
-        output = res.datain.get("outputPath")
+            self._logger.warning("録画が開始されていません")
+            return None
+
+        res = await self._request("StopRecord")
+        output = res.res_data.get("outputPath")
         if not output:
-            raise RuntimeError("録画ファイル取得失敗")
+            self._logger.warning("録画ファイル取得失敗")
+            return None
         return Path(output)
 
-    def pause(self) -> None:
+    async def pause(self) -> None:
         """録画を一時停止する。"""
 
-        self.logger.info("OBS 録画一時停止指示")
-        active, paused = self._get_record_status()
-        if active and not paused:
-            self._ws.call(requests.PauseRecord())
+        self._logger.info("OBS 録画一時停止指示")
 
-    def resume(self) -> None:
+        active, paused = await self._get_record_status()
+        if not active:
+            self._logger.warning("録画が開始されていません")
+        if paused:
+            self._logger.warning("録画は既に一時停止されています")
+            return
+
+        await self._request("PauseRecord")
+
+    async def resume(self) -> None:
         """録画を再開する。"""
 
-        self.logger.info("OBS 録画再開指示")
-        _, paused = self._get_record_status()
-        if paused:
-            self._ws.call(requests.ResumeRecord())
+        self._logger.info("OBS 録画再開指示")
+
+        _, paused = await self._get_record_status()
+        if not paused:
+            self._logger.warning("録画が一時停止されていません")
+            return
+
+        await self._request("ResumeRecord")
+
+    def add_status_listener(
+        self, listener: Callable[[RecorderStatus], Awaitable[None]]
+    ) -> None:
+        """録画状態変化リスナーを登録する。"""
+        self._status_listeners.append(listener)
+
+    def remove_status_listener(
+        self, listener: Callable[[RecorderStatus], Awaitable[None]]
+    ) -> None:
+        """録画状態変化リスナーを解除する。"""
+        if listener in self._status_listeners:
+            self._status_listeners.remove(listener)
+
+    async def event_listener(self, event: Event):
+        if event.event_type != "RecordStateChanged":
+            return
+
+        state = event.event_data["outputState"]
+        if state == "OBS_WEBSOCKET_OUTPUT_STARTED":
+            status = "started"
+        elif state == "OBS_WEBSOCKET_OUTPUT_PAUSED":
+            status = "paused"
+        elif state == "OBS_WEBSOCKET_OUTPUT_RESUMED":
+            status = "resumed"
+        elif state == "OBS_WEBSOCKET_OUTPUT_STOPPED":
+            status = "stopped"
+        elif state == "OBS_WEBSOCKET_OUTPUT_STARTING":
+            return
+        elif state == "OBS_WEBSOCKET_OUTPUT_STOPPING":
+            return
+        else:
+            self._logger.warning("不明な録画状態", state=state)
+            return
+
+        for listener in self._status_listeners:
+            try:
+                await listener(status)
+            except Exception as e:
+                self._logger.error(
+                    "状態リスナーの呼び出しに失敗", error=str(e)
+                )

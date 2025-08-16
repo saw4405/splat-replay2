@@ -1,27 +1,25 @@
-from typing import Dict, Optional
 from pathlib import Path
+from typing import Dict, Optional
 
 import numpy as np
 
+from splat_replay.domain.services import ImageMatcherPort
 from splat_replay.shared.config import (
+    CompositeMatcherConfig,
     ImageMatchingSettings,
     MatcherConfig,
-    CompositeMatcherConfig,
 )
-from splat_replay.shared.logger import get_logger
-from splat_replay.domain.services import ImageMatcherPort
+
 from .base import BaseMatcher
+from .brightness import BrightnessMatcher
 from .composite import CompositeMatcher
+from .edge import EdgeMatcher
 from .hash import HashMatcher
 from .hsv import HSVMatcher
 from .hsv_ratio import HSVRatioMatcher
 from .rgb import RGBMatcher
-from .uniform import UniformColorMatcher
-from .brightness import BrightnessMatcher
 from .template import TemplateMatcher
-from .edge import EdgeMatcher
-
-logger = get_logger()
+from .uniform import UniformColorMatcher
 
 
 class MatcherRegistry(ImageMatcherPort):
@@ -45,7 +43,6 @@ class MatcherRegistry(ImageMatcherPort):
         self.groups: Dict[str, list[str]] = settings.matcher_groups
 
     def _build_matcher(self, config: MatcherConfig) -> Optional[BaseMatcher]:
-
         if not config:
             return None
 
@@ -160,23 +157,25 @@ class MatcherRegistry(ImageMatcherPort):
             return None
         return CompositeMatcher(config.rule, lookup, name=name)
 
-    def match(self, key: str, image: np.ndarray) -> bool:
+    async def match(self, key: str, image: np.ndarray) -> bool:
         matcher = self.composites.get(key)
         if matcher is None:
             matcher = self.matchers.get(key)
-        return matcher.match(image) if matcher else False
+        return await matcher.match(image) if matcher else False
 
-    def match_first(self, keys: list[str], image: np.ndarray) -> str | None:
+    async def match_first(
+        self, keys: list[str], image: np.ndarray
+    ) -> str | None:
         for key in keys:
             matcher = self.composites.get(key)
             if matcher is None:
                 matcher = self.matchers.get(key)
-            if matcher and matcher.match(image):
+            if matcher and await matcher.match(image):
                 return matcher.name or key
         return None
 
-    def matched_name(self, group: str, image: np.ndarray) -> str | None:
+    async def matched_name(self, group: str, image: np.ndarray) -> str | None:
         keys = self.groups.get(group)
         if not keys:
             return None
-        return self.match_first(keys, image)
+        return await self.match_first(keys, image)

@@ -1,10 +1,10 @@
+import asyncio
 from typing import Optional, Tuple
-import numpy as np
-import cv2
-from .base import BaseMatcher
-from splat_replay.shared.logger import get_logger
 
-logger = get_logger()
+import cv2
+import numpy as np
+
+from .base import BaseMatcher
 
 
 class HSVRatioMatcher(BaseMatcher):
@@ -24,7 +24,10 @@ class HSVRatioMatcher(BaseMatcher):
         self._upper_bound = np.array(upper_bound, dtype=np.uint8)
         self._threshold = threshold
 
-    def match(self, image: np.ndarray) -> bool:
+    async def match(self, image: np.ndarray) -> bool:
+        return await asyncio.to_thread(self._match, image)
+
+    def _match(self, image: np.ndarray) -> bool:
         img = self._apply_roi(image)
         hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
         color_mask = cv2.inRange(hsv, self._lower_bound, self._upper_bound)
@@ -32,10 +35,4 @@ class HSVRatioMatcher(BaseMatcher):
         count = cv2.countNonZero(color_mask)
         ratio = count / total if total > 0 else 0
         result = ratio >= self._threshold
-        if not result:
-            logger.debug(
-                "HSV占有率不足",
-                ratio=float(ratio),
-                threshold=self._threshold,
-            )
         return result

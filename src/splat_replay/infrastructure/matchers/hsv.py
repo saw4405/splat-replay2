@@ -1,9 +1,11 @@
+import asyncio
 from pathlib import Path
 from typing import Optional, Tuple
+
 import cv2
 import numpy as np
+
 from .base import BaseMatcher
-from structlog.stdlib import BoundLogger
 
 
 class HSVMatcher(BaseMatcher):
@@ -24,7 +26,10 @@ class HSVMatcher(BaseMatcher):
         self._upper_bound = np.array(upper_bound, dtype=np.uint8)
         self._threshold = threshold
 
-    def match(self, image: np.ndarray) -> bool:
+    async def match(self, image: np.ndarray) -> bool:
+        return await asyncio.to_thread(self._match, image)
+
+    def _match(self, image: np.ndarray) -> bool:
         img = self._apply_roi(image)
         if self._mask is not None:
             masked = cv2.bitwise_and(img, img, mask=self._mask)

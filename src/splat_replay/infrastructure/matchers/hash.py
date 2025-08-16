@@ -1,12 +1,12 @@
+import asyncio
+import hashlib
 from pathlib import Path
 from typing import Optional, Tuple
-import hashlib
+
 import cv2
 import numpy as np
-from .base import BaseMatcher
-from splat_replay.shared.logger import get_logger
 
-logger = get_logger()
+from .base import BaseMatcher
 
 
 class HashMatcher(BaseMatcher):
@@ -25,14 +25,11 @@ class HashMatcher(BaseMatcher):
     def _compute_hash(self, image: np.ndarray) -> str:
         return hashlib.sha1(image).hexdigest()
 
-    def match(self, image: np.ndarray) -> bool:
+    async def match(self, image: np.ndarray) -> bool:
+        return await asyncio.to_thread(self._match, image)
+
+    def _match(self, image: np.ndarray) -> bool:
         img = self._apply_roi(image)
         image_hash = self._compute_hash(img)
         result = image_hash == self._hash_value
-        if not result:
-            logger.debug(
-                "ハッシュ不一致",
-                expected=self._hash_value,
-                actual=image_hash,
-            )
         return result

@@ -1,3 +1,4 @@
+import asyncio
 from pathlib import Path
 from typing import Optional, Tuple
 
@@ -28,7 +29,10 @@ class TemplateMatcher(BaseMatcher):
         self._template = cv2.cvtColor(template, cv2.COLOR_BGR2GRAY)
         self._threshold = threshold
 
-    def match(self, image: np.ndarray) -> bool:
+    async def match(self, image: np.ndarray) -> bool:
+        return await asyncio.to_thread(self._match, image)
+
+    def _match(self, image: np.ndarray) -> bool:
         img = self._apply_roi(image)
         gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
         if self._mask is not None:
@@ -41,4 +45,4 @@ class TemplateMatcher(BaseMatcher):
             )
 
         _, max_val, _, _ = cv2.minMaxLoc(result)
-        return  max_val >= self._threshold
+        return max_val >= self._threshold

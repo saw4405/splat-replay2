@@ -1,5 +1,5 @@
-from typing import Dict, List, Optional, Literal, Tuple, Callable
 from pathlib import Path
+from typing import Awaitable, Callable, Dict, List, Literal, Optional, Tuple
 
 from pydantic import BaseModel, Field, validator
 
@@ -32,16 +32,26 @@ class MatchExpression(BaseModel):
             ]
         return v
 
-    def evaluate(self, fn: Callable[[str], bool]) -> bool:
+    async def evaluate(self, fn: Callable[[str], Awaitable[bool]]) -> bool:
         """与えられた評価関数を用いて式を判定する。"""
         if self.matcher is not None:
-            return fn(self.matcher)
+            return await fn(self.matcher)
+
         if self.not_ is not None:
-            return not self.not_.evaluate(fn)
+            return not await self.not_.evaluate(fn)
+
         if self.and_ is not None:
-            return all(expr.evaluate(fn) for expr in self.and_)
+            for expr in self.and_:
+                if not await expr.evaluate(fn):
+                    return False
+            return True
+
         if self.or_ is not None:
-            return any(expr.evaluate(fn) for expr in self.or_)
+            for expr in self.or_:
+                if await expr.evaluate(fn):
+                    return True
+            return False
+
         return False
 
 
@@ -53,7 +63,14 @@ class MatcherConfig(BaseModel):
 
     name: Optional[str] = None
     type: Literal[
-        "template", "hsv", "hsv_ratio", "rgb", "hash", "uniform", "brightness", "edge"
+        "template",
+        "hsv",
+        "hsv_ratio",
+        "rgb",
+        "hash",
+        "uniform",
+        "brightness",
+        "edge",
     ]
     threshold: float = 0.8
     template_path: Optional[str] = None

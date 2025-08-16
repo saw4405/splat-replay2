@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import Optional, Tuple
-from abc import ABC, abstractmethod
+
 import cv2
 import numpy as np
 
@@ -31,5 +32,5 @@ class BaseMatcher(ABC):
         return image[y : y + h, x : x + w]
 
     @abstractmethod
-    def match(self, image: np.ndarray) -> bool:
+    async def match(self, image: np.ndarray) -> bool:
         """画像が条件に一致するか判定する。"""

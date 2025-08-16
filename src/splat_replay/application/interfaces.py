@@ -1,26 +1,25 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
 from pathlib import Path
 from typing import (
-    Protocol,
-    Optional,
+    Awaitable,
+    Callable,
+    Iterable,
     List,
     Literal,
+    Optional,
+    Protocol,
     Tuple,
-    Callable,
-    Union,
-    Iterable,
     TypeVar,
+    Union,
 )
-from dataclasses import dataclass
 
-from splat_replay.domain.models import (
-    Frame,
-    RecordingMetadata,
-    VideoAsset,
-)
+from splat_replay.domain.models import Frame, RecordingMetadata, VideoAsset
 
 PrivacyStatus = Literal["public", "private", "unlisted"]
+
+RecorderStatus = Literal["started", "paused", "resumed", "stopped"]
 
 
 @dataclass
@@ -39,43 +38,61 @@ class CaptureDevicePort(Protocol):
 class CapturePort(Protocol):
     """キャプチャデバイスからの映像を取得するポート。"""
 
+    def init(self) -> None: ...
+
     def capture(self) -> Optional[Frame]: ...
-
-    def close(self): ...
-
-
-class VideoRecorder(Protocol):
-    """録画を制御するアウトバウンドポート。"""
-
-    def start(self) -> None: ...
-
-    def stop(self) -> Path: ...
-
-    def pause(self) -> None: ...
-
-    def resume(self) -> None: ...
 
     def close(self) -> None: ...
 
 
-class OBSControlPort(VideoRecorder, Protocol):
-    """OBS Studio の状態を制御するポート。"""
+class RecorderWithTranscriptionPort(Protocol):
+    """録画を制御するアウトバウンドポート。"""
 
-    def is_running(self) -> bool: ...
+    async def init(self) -> None: ...
 
-    def launch(self) -> None: ...
+    async def start(self) -> None: ...
 
-    def terminate(self) -> None: ...
+    async def stop(self) -> Tuple[Optional[Path], Optional[Path]]: ...
 
-    def is_connected(self) -> bool: ...
+    async def pause(self) -> None: ...
 
-    def connect(self) -> None: ...
+    async def resume(self) -> None: ...
 
-    def is_virtual_camera_active(self) -> bool: ...
+    async def cancel(self) -> None: ...
 
-    def start_virtual_camera(self) -> None: ...
+    async def close(self) -> None: ...
 
-    def stop_virtual_camera(self) -> None: ...
+    def add_status_listener(
+        self, listener: Callable[[RecorderStatus], Awaitable[None]]
+    ) -> None: ...
+
+    def remove_status_listener(
+        self, listener: Callable[[RecorderStatus], Awaitable[None]]
+    ) -> None: ...
+
+
+class VideoRecorderPort(Protocol):
+    """録画を制御するアウトバウンドポート。"""
+
+    async def init(self) -> None: ...
+
+    async def start(self) -> None: ...
+
+    async def stop(self) -> Optional[Path]: ...
+
+    async def pause(self) -> None: ...
+
+    async def resume(self) -> None: ...
+
+    async def close(self) -> None: ...
+
+    def add_status_listener(
+        self, listener: Callable[[RecorderStatus], Awaitable[None]]
+    ) -> None: ...
+
+    def remove_status_listener(
+        self, listener: Callable[[RecorderStatus], Awaitable[None]]
+    ) -> None: ...
 
 
 class SpeechTranscriberPort(Protocol):
@@ -96,7 +113,7 @@ class VideoAssetRepository(Protocol):
     def save_recording(
         self,
         video: Path,
-        subtitle: str,
+        srt: Path | None,
         screenshot: Frame | None,
         metadata: RecordingMetadata,
     ) -> VideoAsset: ...
@@ -251,4 +268,4 @@ class AuthenticatedClientPort(Protocol):
 class PowerPort(Protocol):
     """電源制御を行うポート。"""
 
-    def sleep(self) -> None: ...
+    async def sleep(self) -> None: ...

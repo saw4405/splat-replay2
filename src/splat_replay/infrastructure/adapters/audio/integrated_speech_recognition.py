@@ -1,10 +1,12 @@
+import asyncio
 import os
+from typing import Optional
 
 import speech_recognition as sr
-from groq import Groq
+from groq import AsyncGroq
 from pydantic import BaseModel
-
 from structlog.stdlib import BoundLogger
+
 from splat_replay.shared.config import SpeechTranscriberSettings
 
 
@@ -26,38 +28,56 @@ class IntegratedSpeechRecognizer:
         self.custom_dictionary = settings.custom_dictionary
         self._logger = logger
         self._recognizer = sr.Recognizer()
-        self._groq = Groq()
+        self._groq = AsyncGroq()
 
-    def recognize(self, audio: sr.AudioData) -> str | None:
-        try:
-            google: str = self._recognizer.recognize_google(  # type: ignore
-                audio, language=self.language
-            )
-            self._logger.info(f"google: {google}")
-            groq: str = self._recognizer.recognize_groq(  # type: ignore
-                audio, model="whisper-large-v3", language=self.primary_language
-            )
-            self._logger.info(f"groq: {groq}")
-            result = self._estimate_speech(f"google: {google}\ngroq: {groq}")
-            self._logger.info(
-                f"推定: {result.estimated_text} 理由: {result.reason}"
-            )
-            return result.estimated_text
+    async def recognize(self, audio: sr.AudioData) -> Optional[str]:
+        google, groq = await asyncio.gather(
+            self.recognize_google(audio, self.language),
+            self.recognize_groq(audio, self.primary_language),
+        )
+        result = await self._estimate_speech(f"google: {google}\ngroq: {groq}")
+        self._logger.info(
+            f"推定: {result.estimated_text} 理由: {result.reason}"
+        )
+        return result.estimated_text
 
-        except sr.UnknownValueError as e:
-            return None
+    async def recognize_google(
+        self, audio: sr.AudioData, language: str
+    ) -> Optional[str]:
+        def _recognize_google() -> Optional[str]:
+            try:
+                result = self._recognizer.recognize_google(  # type: ignore
+                    audio, language=language
+                )
+                self._logger.info(f"google: {result}")
+                return result
+            except sr.UnknownValueError:
+                return None
+            except sr.RequestError as e:
+                self._logger.error(f"Google音声認識エラー: {e}")
+                return None
 
-        except sr.RequestError as e:
-            self._logger.error(
-                f"音声認識エンジンへのリクエストが失敗しました: {e}"
-            )
-            return None
+        return await asyncio.to_thread(_recognize_google)
 
-        except Exception as e:
-            self._logger.error(f"音声認識エラー: {e}")
-            return None
+    async def recognize_groq(
+        self, audio: sr.AudioData, language: str
+    ) -> Optional[str]:
+        def _recognize_groq() -> Optional[str]:
+            try:
+                result = self._recognizer.recognize_groq(  # type: ignore
+                    audio, model="whisper-large-v3", language=language
+                )
+                self._logger.info(f"groq: {result}")
+                return result
+            except sr.UnknownValueError:
+                return None
+            except sr.RequestError as e:
+                self._logger.error(f"Groq音声認識エラー: {e}")
+                return None
 
-    def _estimate_speech(self, results: str) -> RecognitionResult:
+        return await asyncio.to_thread(_recognize_groq)
+
+    async def _estimate_speech(self, results: str) -> RecognitionResult:
         system_message = (
             "あなたは複数の音声認識エンジンから得られた認識結果をもとに、オリジナルの発言を推定する役割を担います。"
             "入力された認識結果に対して、不要な置き換えや意訳は一切行わず、可能な限り入力内容に忠実に出力してください。"
@@ -67,7 +87,7 @@ class IntegratedSpeechRecognizer:
             f" The JSON object must use the schema: {RecognitionResult.schema_json(indent=2)}"
         )
 
-        chat_completion = self._groq.chat.completions.create(
+        chat_completion = await self._groq.chat.completions.create(
             messages=[
                 {
                     "role": "system",
