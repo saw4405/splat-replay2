@@ -142,19 +142,32 @@ class BattleFrameAnalyzer(AnalyzerPlugin):
         self, frame: Frame, match: Match
     ) -> Optional[Tuple[int, int, int]]:
         """キルレコードを取得する。"""
-        if match == Match.TRICOLOR:
+        record_positions: Dict[str, Dict[str, int]] = {
+            "kill": {"x1": 1519, "y1": 293, "x2": 1548, "y2": 316},
+            "death": {"x1": 1597, "y1": 293, "x2": 1626, "y2": 316},
+            "special": {"x1": 1674, "y1": 293, "x2": 1703, "y2": 316},
+        }
+
+        kill_record = await self._extract_battle_kill_record(
+            frame, record_positions
+        )
+
+        # トリカラの攻撃側のときはキルレ表示の位置が異なるため、再度抽出する
+        if not kill_record and match == Match.TRICOLOR:
             record_positions: Dict[str, Dict[str, int]] = {
                 "kill": {"x1": 1556, "y1": 293, "x2": 1585, "y2": 316},
                 "death": {"x1": 1616, "y1": 293, "x2": 1644, "y2": 316},
                 "special": {"x1": 1674, "y1": 293, "x2": 1703, "y2": 316},
             }
-        else:
-            record_positions: Dict[str, Dict[str, int]] = {
-                "kill": {"x1": 1519, "y1": 293, "x2": 1548, "y2": 316},
-                "death": {"x1": 1597, "y1": 293, "x2": 1626, "y2": 316},
-                "special": {"x1": 1674, "y1": 293, "x2": 1703, "y2": 316},
-            }
+            kill_record = await self._extract_battle_kill_record(
+                frame, record_positions
+            )
 
+        return kill_record
+
+    async def _extract_battle_kill_record(
+        self, frame: Frame, record_positions: Dict[str, Dict[str, int]]
+    ) -> Optional[Tuple[int, int, int]]:
         records: Dict[str, int] = {}
         for name, position in record_positions.items():
             count_image = frame[
@@ -164,15 +177,15 @@ class BattleFrameAnalyzer(AnalyzerPlugin):
 
             count_image = (
                 self.image_editor_factory(count_image)
-                .resize(3.5, 3.5)
+                .resize(3, 3)
                 .padding(50, 50, 50, 50, (0, 0, 0))
                 .binarize()
-                .erode((2, 2), 5)
+                .erode((2, 2), 2)
                 .invert()
                 .image
             )
 
-            count_str = self.ocr.recognize_text(
+            count_str = await self.ocr.recognize_text(
                 count_image, ps_mode="SINGLE_LINE", whitelist="0123456789"
             )
             if count_str is None:
