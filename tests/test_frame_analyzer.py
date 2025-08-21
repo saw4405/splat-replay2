@@ -1,10 +1,9 @@
 from __future__ import annotations
 
 # ruff: noqa: E402
-
 import sys
 from pathlib import Path
-from typing import Callable, Optional, Tuple
+from typing import Callable, Optional
 
 import cv2
 import numpy as np
@@ -14,28 +13,29 @@ import pytest
 BASE = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(BASE / "src"))  # noqa: E402
 
-from splat_replay.shared.logger import get_logger  # noqa: E402
-from splat_replay.shared.config import ImageMatchingSettings  # noqa: E402
 from splat_replay.domain.models import (
-    Frame,
-    as_frame,
-    GameMode,
-    RateBase,
-    Udemae,
     XP,
+    BattleResult,
+    GameMode,
     Match,
+    RateBase,
+    Rule,
+    Stage,
+    Udemae,
+    as_frame,
 )  # noqa: E402
 from splat_replay.domain.services.analyzers import (
-    FrameAnalyzer,
     BattleFrameAnalyzer,
+    FrameAnalyzer,
     SalmonFrameAnalyzer,
 )  # noqa: E402
 from splat_replay.infrastructure import (
+    ImageEditor,
     MatcherRegistry,
     TesseractOCR,
-    ImageEditor,
 )  # noqa: E402
-
+from splat_replay.shared.config import ImageMatchingSettings  # noqa: E402
+from splat_replay.shared.logger import get_logger  # noqa: E402
 
 # config の YAML を読み込み、必要なパスをテスト用に上書きする
 BASE_DIR = Path(__file__).resolve().parent
@@ -85,6 +85,7 @@ def load_image() -> Callable[[str], np.ndarray]:
     return _load
 
 
+@pytest.mark.asyncio
 @pytest.mark.parametrize(
     "filename, expected",
     [
@@ -92,7 +93,7 @@ def load_image() -> Callable[[str], np.ndarray]:
         ("loading_1.png", False),
     ],
 )
-def test_detect_power_off(
+async def test_detect_power_off(
     analyzer: FrameAnalyzer,
     load_image: Callable[[str], np.ndarray],
     filename: str,
@@ -100,10 +101,11 @@ def test_detect_power_off(
 ) -> None:
     """電源OFF 判定の結果を確認する。"""
     frame = load_image(filename)
-    result = analyzer.detect_power_off(frame)
+    result = await analyzer.detect_power_off(frame)
     assert result == expected
 
 
+@pytest.mark.asyncio
 @pytest.mark.parametrize(
     "filename, expected",
     [
@@ -115,7 +117,7 @@ def test_detect_power_off(
         ("match_select_splatfest_battle_2.png", True),
     ],
 )
-def test_detect_match_select(
+async def test_detect_match_select(
     analyzer: FrameAnalyzer,
     load_image: Callable[[str], np.ndarray],
     filename: str,
@@ -123,10 +125,11 @@ def test_detect_match_select(
 ) -> None:
     """マッチ選択画面の判定結果を確認する。"""
     frame = load_image(filename)
-    result = analyzer.detect_match_select(frame)
+    result = await analyzer.detect_match_select(frame)
     assert result == expected
 
 
+@pytest.mark.asyncio
 @pytest.mark.parametrize(
     "filename, expected",
     [
@@ -139,7 +142,7 @@ def test_detect_match_select(
         ("power_off.png", None),
     ],
 )
-def test_extract_game_mode(
+async def test_extract_game_mode(
     analyzer: FrameAnalyzer,
     load_image: Callable[[str], np.ndarray],
     filename: str,
@@ -147,10 +150,11 @@ def test_extract_game_mode(
 ) -> None:
     """ゲームモードの抽出結果を確認する。"""
     frame = load_image(filename)
-    result = analyzer.extract_game_mode(frame)
+    result = await analyzer.extract_game_mode(frame)
     assert result == expected
 
 
+@pytest.mark.asyncio
 @pytest.mark.parametrize(
     "filename, expected",
     [
@@ -163,7 +167,7 @@ def test_extract_game_mode(
         # トリカラマッチ画像なし
     ],
 )
-def test_extract_match_select(
+async def test_extract_match_select(
     analyzer: FrameAnalyzer,
     load_image: Callable[[str], np.ndarray],
     filename: str,
@@ -171,10 +175,11 @@ def test_extract_match_select(
 ) -> None:
     """マッチの抽出結果を確認する。"""
     frame = load_image(filename)
-    result = analyzer.extract_match_select(frame, GameMode.BATTLE)
+    result = await analyzer.extract_match_select(frame, GameMode.BATTLE)
     assert result == expected
 
 
+@pytest.mark.asyncio
 @pytest.mark.parametrize(
     "filename, expected",
     [
@@ -185,7 +190,7 @@ def test_extract_match_select(
         ("rate_None.png", None),
     ],
 )
-def test_extract_rate(
+async def test_extract_rate(
     analyzer: FrameAnalyzer,
     load_image: Callable[[str], np.ndarray],
     filename: str,
@@ -193,15 +198,17 @@ def test_extract_rate(
 ) -> None:
     """レート取得の結果を確認する。"""
     frame = load_image(filename)
-    if not analyzer.detect_match_select(frame):
+    if not await analyzer.detect_match_select(frame):
         pytest.fail("マッチ選択画面ではない")
-    mode = analyzer.extract_game_mode(frame)
+    mode = await analyzer.extract_game_mode(frame)
     if mode is None:
         pytest.fail("モードが抽出できない")
-    result = analyzer.extract_rate(frame, mode)
+        return
+    result = await analyzer.extract_rate(frame, mode)
     assert result == expected
 
 
+@pytest.mark.asyncio
 @pytest.mark.parametrize(
     "filename, expected",
     [
@@ -209,7 +216,7 @@ def test_extract_rate(
         ("battle_result_1.png", False),
     ],
 )
-def test_detect_matching_start(
+async def test_detect_matching_start(
     analyzer: FrameAnalyzer,
     load_image: Callable[[str], np.ndarray],
     filename: str,
@@ -217,10 +224,11 @@ def test_detect_matching_start(
 ) -> None:
     """マッチング開始 判定の結果を確認する。"""
     frame = load_image(filename)
-    result = analyzer.detect_matching_start(frame)
+    result = await analyzer.detect_matching_start(frame)
     assert result == expected
 
 
+@pytest.mark.asyncio
 @pytest.mark.parametrize(
     "filename, expected",
     [
@@ -228,7 +236,7 @@ def test_detect_matching_start(
         ("loading_1.png", False),
     ],
 )
-def test_detect_schedule_change(
+async def test_detect_schedule_change(
     analyzer: FrameAnalyzer,
     load_image: Callable[[str], np.ndarray],
     filename: str,
@@ -236,10 +244,11 @@ def test_detect_schedule_change(
 ) -> None:
     """スケジュール変更 判定の結果を確認する。"""
     frame = load_image(filename)
-    result = analyzer.detect_schedule_change(frame)
+    result = await analyzer.detect_schedule_change(frame)
     assert result == expected
 
 
+@pytest.mark.asyncio
 @pytest.mark.parametrize(
     "filename, expected",
     [
@@ -250,7 +259,7 @@ def test_detect_schedule_change(
         ("matching_1.png", False),
     ],
 )
-def test_detect_battle_start(
+async def test_detect_battle_start(
     analyzer: FrameAnalyzer,
     load_image: Callable[[str], np.ndarray],
     filename: str,
@@ -258,15 +267,16 @@ def test_detect_battle_start(
 ) -> None:
     """バトル開始 判定の結果を確認する。"""
     frame = load_image(filename)
-    result = analyzer.detect_session_start(frame, GameMode.BATTLE)
+    result = await analyzer.detect_session_start(frame, GameMode.BATTLE)
     assert result == expected
 
 
+@pytest.mark.asyncio
 @pytest.mark.parametrize(
     "filename, expected",
     [("battle_abort_1.png", True), ("battle_result_1.png", False)],
 )
-def test_detect_battle_abort(
+async def test_detect_battle_abort(
     analyzer: FrameAnalyzer,
     load_image: Callable[[str], np.ndarray],
     filename: str,
@@ -274,10 +284,11 @@ def test_detect_battle_abort(
 ) -> None:
     """バトル中断 判定の結果を確認する。"""
     frame = load_image(filename)
-    result = analyzer.detect_session_abort(frame, GameMode.BATTLE)
+    result = await analyzer.detect_session_abort(frame, GameMode.BATTLE)
     assert result == expected
 
 
+@pytest.mark.asyncio
 @pytest.mark.parametrize(
     "filename, expected",
     [
@@ -296,7 +307,7 @@ def test_detect_battle_abort(
         ("loading_1.png", False),
     ],
 )
-def test_detect_battle_finish(
+async def test_detect_battle_finish(
     analyzer: FrameAnalyzer,
     load_image: Callable[[str], np.ndarray],
     filename: str,
@@ -304,10 +315,11 @@ def test_detect_battle_finish(
 ) -> None:
     """FINISH 表示判定の結果を確認する。"""
     frame = load_image(filename)
-    result = analyzer.detect_session_finish(frame, GameMode.BATTLE)
+    result = await analyzer.detect_session_finish(frame, GameMode.BATTLE)
     assert result == expected
 
 
+@pytest.mark.asyncio
 @pytest.mark.parametrize(
     "filename, expected",
     [
@@ -318,7 +330,7 @@ def test_detect_battle_finish(
         ("battle_judgement_5.png", False),
     ],
 )
-def test_detect_battle_finish_end(
+async def test_detect_battle_finish_end(
     analyzer: FrameAnalyzer,
     load_image: Callable[[str], np.ndarray],
     filename: str,
@@ -326,10 +338,11 @@ def test_detect_battle_finish_end(
 ) -> None:
     """FINISH 表示判定の結果を確認する。"""
     frame = load_image(filename)
-    result = analyzer.detect_session_finish_end(frame, GameMode.BATTLE)
+    result = await analyzer.detect_session_finish_end(frame, GameMode.BATTLE)
     assert result == expected
 
 
+@pytest.mark.asyncio
 @pytest.mark.parametrize(
     "filename, expected",
     [
@@ -341,7 +354,7 @@ def test_detect_battle_finish_end(
         ("loading_1.png", False),
     ],
 )
-def test_detect_battle_judgement(
+async def test_detect_battle_judgement(
     analyzer: FrameAnalyzer,
     load_image: Callable[[str], np.ndarray],
     filename: str,
@@ -349,10 +362,11 @@ def test_detect_battle_judgement(
 ) -> None:
     """バトル判定の結果を確認する。"""
     frame = load_image(filename)
-    result = analyzer.detect_session_judgement(frame, GameMode.BATTLE)
+    result = await analyzer.detect_session_judgement(frame, GameMode.BATTLE)
     assert result == expected
 
 
+@pytest.mark.asyncio
 @pytest.mark.parametrize(
     "filename, expected",
     [
@@ -363,7 +377,7 @@ def test_detect_battle_judgement(
         ("battle_judgement_5.png", None),
     ],
 )
-def test_extract_battle_judgement(
+async def test_extract_battle_judgement(
     analyzer: FrameAnalyzer,
     load_image: Callable[[str], np.ndarray],
     filename: str,
@@ -371,15 +385,16 @@ def test_extract_battle_judgement(
 ) -> None:
     """FINISH 表示判定の結果を確認する。"""
     frame = load_image(filename)
-    result = analyzer.extract_session_judgement(frame, GameMode.BATTLE)
+    result = await analyzer.extract_session_judgement(frame, GameMode.BATTLE)
     assert result == expected
 
 
+@pytest.mark.asyncio
 @pytest.mark.parametrize(
     "filename, expected",
     [("loading_1.png", True), ("power_off.png", False)],
 )
-def test_detect_loading(
+async def test_detect_loading(
     analyzer: FrameAnalyzer,
     load_image: Callable[[str], np.ndarray],
     filename: str,
@@ -387,10 +402,11 @@ def test_detect_loading(
 ) -> None:
     """ローディング判定の結果を確認する。"""
     frame = load_image(filename)
-    result = analyzer.detect_loading(frame)
+    result = await analyzer.detect_loading(frame)
     assert result == expected
 
 
+@pytest.mark.asyncio
 @pytest.mark.parametrize(
     "filename, expected",
     [
@@ -399,7 +415,7 @@ def test_detect_loading(
         ("battle_result_1.png", True),
     ],
 )
-def test_detect_loading_end(
+async def test_detect_loading_end(
     analyzer: FrameAnalyzer,
     load_image: Callable[[str], np.ndarray],
     filename: str,
@@ -407,10 +423,11 @@ def test_detect_loading_end(
 ) -> None:
     """ローディング判定の結果を確認する。"""
     frame = load_image(filename)
-    result = analyzer.detect_loading_end(frame)
+    result = await analyzer.detect_loading_end(frame)
     assert result == expected
 
 
+@pytest.mark.asyncio
 @pytest.mark.parametrize(
     "filename, expected",
     [
@@ -420,7 +437,7 @@ def test_detect_loading_end(
         ("battle_result_4.png", False),
     ],
 )
-def test_detect_battle_result(
+async def test_detect_battle_result(
     analyzer: FrameAnalyzer,
     load_image: Callable[[str], np.ndarray],
     filename: str,
@@ -428,16 +445,123 @@ def test_detect_battle_result(
 ) -> None:
     """バトル終了画面判定の結果を確認する。"""
     frame = load_image(filename)
-    result = analyzer.detect_session_result(frame, GameMode.BATTLE)
+    result = await analyzer.detect_session_result(frame, GameMode.BATTLE)
+    assert result == expected
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "filename, expected",
+    [
+        (
+            "battle_result_1.png",
+            BattleResult(
+                Match("Xマッチ"),
+                Rule("ガチホコ"),
+                Stage("デカライン高架下"),
+                3,
+                2,
+                1,
+            ),
+        ),
+        # (     # 表彰なしは未対応
+        #     "battle_result_2.png",
+        #     BattleResult(
+        #         Match("Xマッチ"),
+        #         Rule("ガチホコ"),
+        #         Stage("マサバ海峡大橋"),
+        #         0,
+        #         3,
+        #         0,
+        #     ),
+        # ),
+        (
+            "battle_result_3.png",
+            BattleResult(
+                Match("Xマッチ"),
+                Rule("ガチホコ"),
+                Stage("マサバ海峡大橋"),
+                5,
+                6,
+                1,
+            ),
+        ),
+        (
+            "battle_result_4.png",
+            BattleResult(
+                Match("Xマッチ"),
+                Rule("ガチホコ"),
+                Stage("マサバ海峡大橋"),
+                10,
+                6,
+                3,
+            ),
+        ),
+        (
+            "battle_result_5.png",
+            BattleResult(
+                Match("レギュラーマッチ"),
+                Rule("ナワバリ"),
+                Stage("コンブトラック"),
+                4,
+                4,
+                1,
+            ),
+        ),
+        (
+            "battle_result_6.png",
+            BattleResult(
+                Match("トリカラマッチ"),
+                Rule("トリカラ"),
+                Stage("マンタマリア号"),
+                6,
+                2,
+                3,
+            ),
+        ),
+        (
+            "battle_result_7.png",
+            BattleResult(
+                Match("Xマッチ"),
+                Rule("ガチホコ"),
+                Stage("ナンプラー遺跡"),
+                11,
+                7,
+                3,
+            ),
+        ),
+    ],
+)
+async def test_extract_session_result(
+    analyzer: FrameAnalyzer,
+    load_image: Callable[[str], np.ndarray],
+    filename: str,
+    expected: bool,
+) -> None:
+    """バトル終了画面判定の結果を確認する。"""
+    frame = load_image(filename)
+    result = await analyzer.extract_session_result(frame, GameMode.BATTLE)
     assert result == expected
 
 
 if __name__ == "__main__":
+    import asyncio
+
     analyzer_ = create_analyzer()
-    filename = "match_select_splatfest_battle_1.png"
-    expected = Match.SPLATFEST
+    filename = "battle_result_3.png"
+    expected = BattleResult(
+        Match("Xマッチ"),
+        Rule("ガチホコ"),
+        Stage("マサバ海峡大橋"),
+        5,
+        6,
+        1,
+    )
     image_path = TEMPLATE_DIR / filename
     frame = as_frame(cv2.imread(str(image_path)))
-    result = analyzer_.extract_match_select(frame, GameMode.BATTLE)
+    asyncio.run(analyzer_.detect_session_result(frame, GameMode.BATTLE))
+    result = asyncio.run(
+        analyzer_.extract_session_result(frame, GameMode.BATTLE)
+    )
     print(result == expected)
     print(result)
