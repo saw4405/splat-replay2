@@ -16,7 +16,7 @@ class Capture(CapturePort):
         self.logger = logger
         self.video_capture: Optional[cv2.VideoCapture] = None
 
-    def init(self) -> None:
+    def setup(self) -> None:
         self.video_capture = cv2.VideoCapture(self.capture_index)
         if not self.video_capture.isOpened():
             self.logger.error(
@@ -37,7 +37,7 @@ class Capture(CapturePort):
             return None
         return as_frame(frame)
 
-    def close(self):
+    def teardown(self):
         """キャプチャデバイスを閉じる。"""
         if self.video_capture is not None and self.video_capture.isOpened():
             self.video_capture.release()

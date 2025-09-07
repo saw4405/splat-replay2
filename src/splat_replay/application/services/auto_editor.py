@@ -14,15 +14,18 @@ from splat_replay.application.interfaces import (
 from splat_replay.domain.models import (
     TIME_RANGES,
     BattleResult,
+    Judgement,
     RateBase,
     SalmonResult,
     VideoAsset,
 )
 from splat_replay.shared.config import VideoEditSettings
 
+from .progress import ProgressReporter
+
 
 class AutoEditor:
-    """録画済み動画の編集を行うサービス。"""
+    """録画済み動画の編集を行うサービス、"""
 
     THUMBNAIL_ASSETS_DIR = Path("assets/thumbnail")
 
@@ -34,6 +37,7 @@ class AutoEditor:
         settings: VideoEditSettings,
         repo: VideoAssetRepository,
         logger: BoundLogger,
+        progress: ProgressReporter,
     ):
         self.repo = repo
         self.logger = logger
@@ -41,44 +45,136 @@ class AutoEditor:
         self.subtitle_editor = subtitle_editor
         self.image_selector = image_selector
         self.settings = settings
+        self.progress = progress
+        self._cancelled: bool = False
+
+    def request_cancel(self) -> None:
+        """Request cancellation; takes effect between groups/steps."""
+        self._cancelled = True
 
     async def execute(self) -> list[Path]:
-        self.logger.info("自動編集開始")
+        self.logger.info("自動編集を開始します")
         edited: list[Path] = []
 
         assets = self.repo.list_recordings()
         groups = self._group_assets(assets)
-        for key, group in groups.items():
+
+        task_id = "auto_edit"
+        items: list[str] = []
+        for idx, (key, group) in enumerate(groups.items()):
             if not group:
                 continue
             day, time_slot, match_name, rule_name = key
-            target = self._edit(day, time_slot, match_name, rule_name, group)
+            items.append(
+                f"{day.strftime('%m/%d')} {time_slot.strftime('%H')}時～ {match_name} {rule_name}"
+            )
+        self.progress.start_task(task_id, "自動編集", len(items), items=items)
 
-            self.logger.info("動画編集完了", path=str(target))
+        for idx, (key, group) in enumerate(groups.items()):
+            if self._cancelled:
+                self.progress.finish(
+                    task_id, False, "自動編集をキャンセルしました"
+                )
+                self.logger.info("自動編集をキャンセルしました")
+                return edited
+            if not group:
+                continue
+            day, time_slot, match_name, rule_name = key
+            label = f"{day.strftime('%m/%d')} {time_slot.strftime('%H')}時～ {match_name} {rule_name}"
+            # 現在処理中のアイテムを明示 (GUI のタスクリスト更新用)
+            self.progress.item_stage(
+                task_id,
+                idx,
+                "edit_group",
+                "グループ編集",
+                message=label,
+            )
+
+            target = self._edit(
+                idx, day, time_slot, match_name, rule_name, group
+            )
+            self.logger.info("動画編集を開始します", path=str(target))
             target = self.repo.save_edited(Path(target))
-            edited.append(target)
             for asset in group:
+                self.logger.info(
+                    "録画済み動画を削除します", path=str(asset.video)
+                )
                 self.repo.delete_recording(asset.video)
+            # 保存ステップを通知し、全体の進捗を 1 進める
+            self.progress.item_stage(
+                task_id,
+                idx,
+                "save",
+                "録画済動画削除・編集済動画保存",
+                message=target.name,
+            )
+            self.progress.advance(task_id)
+            edited.append(target)
 
-        self.logger.info("自動編集終了")
+        if self._cancelled:
+            self.progress.finish(
+                task_id, False, "自動編集をキャンセルしました"
+            )
+            self.logger.info("自動編集をキャンセルしました")
+        else:
+            self.progress.finish(task_id, True, "自動編集を完了しました")
+        self.logger.info("自動編集を完了しました", edited=edited)
         return edited
 
     def _edit(
         self,
+        idx: int,
         day: datetime.date,
         time_slot: datetime.time,
         match_name: str,
         rule_name: str,
         group: List[VideoAsset],
     ) -> Path:
-        """動画を編集し、保存する。"""
         target = self._make_filename(
             group, day, time_slot, match_name, rule_name
         )
+        task_id = "auto_edit"
+        self.progress.item_stage(
+            task_id,
+            idx,
+            "concat",
+            "動画結合",
+            message=f"{len(group)}本の動画を結合",
+        )
         self._merge_videos(target, group)
+
+        self.progress.item_stage(
+            task_id,
+            idx,
+            "subtitle",
+            "字幕編集",
+        )
         self._embed_subtitle(target, group)
+
+        self.progress.item_stage(
+            task_id,
+            idx,
+            "metadata",
+            "メタデータ編集",
+        )
         self._embed_metadata(target, group, day, time_slot)
+
+        self.progress.item_stage(
+            task_id,
+            idx,
+            "thumbnail",
+            "サムネイル編集",
+        )
         self._embed_thumbnail(target, group)
+
+        if self.settings.volume_multiplier != 1.0:
+            self.progress.item_stage(
+                task_id,
+                idx,
+                "volume",
+                "音量調整",
+                message=f"x{self.settings.volume_multiplier}",
+            )
         self._change_volume(target, self.settings.volume_multiplier)
         return target
 
@@ -131,8 +227,8 @@ class AutoEditor:
             day,
             time_slot,
         )
-        self.logger.info("タイトル生成", title=title)
-        self.logger.debug("説明生成", description=description)
+        self.logger.info("タイトル編集", title=title)
+        self.logger.debug("説明編集", description=description)
         metadata = {
             "title": title,
             "comment": description,
@@ -161,14 +257,21 @@ class AutoEditor:
     def _group_assets(
         self, assets: List[VideoAsset]
     ) -> Dict[Tuple[datetime.date, datetime.time, str, str], List[VideoAsset]]:
-        """録画済み動画を時刻帯ごとにグループ化する。"""
+        """録画済み動画を時刻帯ごとにグループ化する"""
         groups: Dict[
             Tuple[datetime.date, datetime.time, str, str], List[VideoAsset]
         ] = defaultdict(list)
         for asset in assets:
             if asset.metadata is None:
                 self.logger.warning(
-                    "メタデータ未設定の動画を検出", video=str(asset.video)
+                    "メタデータ未設定の動画を検出しました",
+                    video=str(asset.video),
+                )
+                continue
+            if not asset.metadata.started_at:
+                self.logger.warning(
+                    "録画開始時刻が未設定の動画を検出しました",
+                    video=str(asset.video),
                 )
                 continue
 
@@ -211,7 +314,7 @@ class AutoEditor:
         day: datetime.date,
         time_slot: datetime.time,
     ) -> Tuple[str, str]:
-        """テンプレートに基づきタイトルと説明を生成する。"""
+        """タイトルと説明を生成する"""
         first = next(
             (
                 a.metadata.result
@@ -270,10 +373,10 @@ class AutoEditor:
                 and (res := asset.metadata.result)
                 and isinstance(res, BattleResult)
             ):
-                win += 1 if asset.metadata.judgement == "win" else 0
-                lose += 1 if asset.metadata.judgement == "lose" else 0
+                win += 1 if asset.metadata.judgement == Judgement.WIN else 0
+                lose += 1 if asset.metadata.judgement == Judgement.LOSE else 0
                 tokens = {
-                    "RESULT": asset.metadata.judgement.upper()
+                    "RESULT": asset.metadata.judgement.value
                     if asset.metadata.judgement
                     else "UNKNOWN",
                     "KILL": res.kill,
@@ -347,7 +450,7 @@ class AutoEditor:
         return title, description
 
     def _create_thumbnail(self, assets: List[VideoAsset]) -> Path | None:
-        """明るいサムネイルを選び文字を描画する。"""
+        """明るいサムネイルを選び描画する、"""
         # サーモンランは未対応
         result = assets[0].metadata.result if assets[0].metadata else None
         if result is None or isinstance(result, SalmonResult):
@@ -364,14 +467,14 @@ class AutoEditor:
             for a in assets
             if a.metadata
             and isinstance(a.metadata.result, BattleResult)
-            and a.metadata.judgement == "win"
+            and a.metadata.judgement == Judgement.WIN
         )
         lose_count = sum(
             1
             for a in assets
             if a.metadata
             and isinstance(a.metadata.result, BattleResult)
-            and a.metadata.judgement == "lose"
+            and a.metadata.judgement == Judgement.LOSE
         )
         win_lose = f"{win_count} - {lose_count}"
 
@@ -425,7 +528,7 @@ class AutoEditor:
         font_paintball = str(self._get_asset_path("Paintball_Beta.otf"))
         font_ikamodoki = str(self._get_asset_path("ikamodoki1.ttf"))
 
-        # 高スコア(キルレがいい)のサムネイルをスコアが高い順に格納
+        # 高スコア(キルレが高い)のサムネイルをスコアが高い順に格納する
         high_score_thumbnails: list[tuple[float, Path]] = []
         seen_kd: set[tuple[int, int]] = set()
         for asset in assets:
@@ -445,7 +548,10 @@ class AutoEditor:
                 seen_kd.add(kd_pair)
                 high_score_thumbnails.append((score, asset.thumbnail))
                 self.logger.info(
-                    "高スコアの動画を検出", score=score, kill=kill, death=death
+                    "高スコアの動画を検出しました",
+                    score=score,
+                    kill=kill,
+                    death=death,
                 )
         high_score_thumbnails.sort(reverse=True, key=lambda x: x[0])
         high_score_thumbnails = high_score_thumbnails[:3]
@@ -464,7 +570,7 @@ class AutoEditor:
                 outline_width=5,
                 center=True,
             )
-            # マッチ・ルール・レート・ステージを描画するベース
+            # マッチルール・レート・ステージを描画するベース
             .draw_rounded_rectangle(
                 (777, 20, 1850, 750),
                 radius=40,
@@ -474,12 +580,12 @@ class AutoEditor:
             )
             # マッチを描画
             .draw_image(match_image_path, (800, 40), size=(300, 300))
-            # ルールを記載・描画
+            # ルールを記載し描画
             .draw_text(
                 rule_name, (1120, 50), font_ikamodoki, 140, fill_color="white"
             )
             .draw_image(rule_image_path, (1660, 70), size=(150, 150))
-            # レートを記載
+            # レートを記載し描画
             .when(
                 rate is not None,
                 lambda d: d.draw_text(
@@ -503,7 +609,7 @@ class AutoEditor:
                     stage2_image_path, (860, 540), size=(960, 168)
                 ),
             )
-            # いいキルレ画像を左下に描画
+            # 高キルレ画像を左下に描画
             .for_each(
                 list(enumerate(high_score_thumbnails)),
                 lambda item, d: d.draw_image(

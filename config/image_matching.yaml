@@ -5,7 +5,7 @@ composite_detection:
   power_off:
     or:
       - matcher: black_screen
-      - matcher: power_off_template
+      - matcher: poswer_off_template
         
   match_select:
     or:
@@ -14,25 +14,30 @@ composite_detection:
 
   matching_start:
     and:
-      - matcher: matching_start_hsv
+      # - matcher: matching_start_hsv
       - matcher: matching_start_template
 
   schedule_change:
     and:
-      - matcher: schedule_change_bright
+      # - matcher: schedule_change_bright
       - matcher: schedule_change_template
 
   battle_start:
     and:
-      - or:
-        - matcher: battle_start_bright
-        - matcher: battle_start_fes_bright
+      # - or:
+      #   - matcher: battle_start_bright
+      #   - matcher: battle_start_fes_bright
       - matcher: battle_start_template
         
   battle_abort:
     and:
       - matcher: battle_abort_hsv
       - matcher: battle_abort_template
+        
+  battle_communication_error:
+    and:
+      - matcher: battle_communication_error_hsv
+      - matcher: battle_communication_error_template
 
   battle_finish:
     and:
@@ -249,6 +254,11 @@ simple_matchers:
   matching_start_template:
     type: "template"
     template_path: "assets/matching/matching_start.png"
+    roi:
+      x: 10
+      y: 30
+      width: 300
+      height: 80
     threshold: 0.9
     description: "マッチング開始を検出する"
 
@@ -265,6 +275,11 @@ simple_matchers:
   schedule_change_template:
     type: "template"
     template_path: "assets/matching/schedule_change.png"
+    roi:
+      x: 700
+      y: 500
+      width: 500
+      height: 100
     threshold: 0.9
     description: "スケジュール変更を検出する"
 
@@ -291,6 +306,11 @@ simple_matchers:
   battle_start_template:
     type: "template"
     template_path: "assets/matching/battle_start.png"
+    roi:
+      x: 820
+      y: 180
+      width: 270
+      height: 170
     threshold: 0.9
     description: "バトル開始を検出する"
 
@@ -309,8 +329,38 @@ simple_matchers:
   battle_abort_template:
     type: "template"
     template_path: "assets/matching/battle_abort.png"
+    roi:
+      x: 1170
+      y: 200
+      width: 300
+      height: 150
     threshold: 0.9
     description: "バトル中止を検出する"
+
+  battle_communication_error_hsv:
+    type: "brightness"
+    max_value: 20
+    min_value: null
+    roi:
+      x: 560
+      y: 420
+      width: 100
+      height: 70
+    lower_bound: [0, 0, 25]
+    upper_bound: [0, 0, 35]
+    threshold: 0.9
+    description: "バトル通信エラーを素早く検出する"
+
+  battle_communication_error_template:
+    type: "template"
+    template_path: "assets/matching/battle_communication_error.png"
+    roi:
+      x: 700
+      y: 410
+      width: 500
+      height: 100
+    threshold: 0.9
+    description: "バトル通信エラーを検出する"
 
   battle_finish_uniform:
     type: "uniform"
@@ -366,16 +416,26 @@ simple_matchers:
     description: "ジャッジ画面(後半)は黒い箇所が多い"
 
   battle_judgement_win:
-    name: "win"
+    name: "WIN"
     type: "template"
     template_path: "assets/matching/battle_judgement_win.png"
+    roi:
+      x: 0
+      y: 0
+      width: 340
+      height: 200
     threshold: 0.9
     description: "勝利表示を検出する"
 
   battle_judgement_lose:
-    name: "lose"
+    name: "LOSE"
     type: "template"
     template_path: "assets/matching/battle_judgement_lose.png"
+    roi:
+      x: 0
+      y: 0
+      width: 340
+      height: 200
     threshold: 0.9
     description: "敗北表示を検出する"
 

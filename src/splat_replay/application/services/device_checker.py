@@ -12,14 +12,20 @@ from splat_replay.application.interfaces import (
 )
 
 
-class DeviceWaiter:
+class DeviceChecker:
     """キャプチャデバイスの接続待機を担当するサービス。"""
 
     def __init__(self, device: CaptureDevicePort, logger: BoundLogger) -> None:
         self.device = device
         self.logger = logger
 
-    async def execute(self, timeout: float | None = None) -> bool:
+    def is_connected(self) -> bool:
+        """キャプチャデバイスが接続されているか確認する。"""
+        return self.device.is_connected()
+
+    async def wait_for_device_connection(
+        self, timeout: float | None = None
+    ) -> bool:
         """キャプチャデバイスの接続を待機する。"""
         start_time = time.time()
         while not await asyncio.to_thread(self.device.is_connected):

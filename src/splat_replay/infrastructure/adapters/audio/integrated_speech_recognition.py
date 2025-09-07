@@ -21,7 +21,7 @@ class IntegratedSpeechRecognizer:
         settings: SpeechTranscriberSettings,
         logger: BoundLogger,
     ):
-        os.environ["GROQ_API_KEY"] = settings.groq_api_key
+        os.environ["GROQ_API_KEY"] = settings.groq_api_key.get_secret_value()
         self.model = settings.model
         self.language = settings.language
         self.primary_language = settings.language.split("-")[0]

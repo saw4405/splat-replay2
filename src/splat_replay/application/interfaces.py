@@ -3,11 +3,13 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 from typing import (
+    Any,
     Awaitable,
     Callable,
     Iterable,
     List,
     Literal,
+    Mapping,
     Optional,
     Protocol,
     Tuple,
@@ -38,17 +40,17 @@ class CaptureDevicePort(Protocol):
 class CapturePort(Protocol):
     """キャプチャデバイスからの映像を取得するポート。"""
 
-    def init(self) -> None: ...
+    def setup(self) -> None: ...
 
     def capture(self) -> Optional[Frame]: ...
 
-    def close(self) -> None: ...
+    def teardown(self) -> None: ...
 
 
 class RecorderWithTranscriptionPort(Protocol):
     """録画を制御するアウトバウンドポート。"""
 
-    async def init(self) -> None: ...
+    async def setup(self) -> None: ...
 
     async def start(self) -> None: ...
 
@@ -60,7 +62,7 @@ class RecorderWithTranscriptionPort(Protocol):
 
     async def cancel(self) -> None: ...
 
-    async def close(self) -> None: ...
+    async def teardown(self) -> None: ...
 
     def add_status_listener(
         self, listener: Callable[[RecorderStatus], Awaitable[None]]
@@ -74,7 +76,7 @@ class RecorderWithTranscriptionPort(Protocol):
 class VideoRecorderPort(Protocol):
     """録画を制御するアウトバウンドポート。"""
 
-    async def init(self) -> None: ...
+    async def setup(self) -> None: ...
 
     async def start(self) -> None: ...
 
@@ -84,7 +86,7 @@ class VideoRecorderPort(Protocol):
 
     async def resume(self) -> None: ...
 
-    async def close(self) -> None: ...
+    async def teardown(self) -> None: ...
 
     def add_status_listener(
         self, listener: Callable[[RecorderStatus], Awaitable[None]]
@@ -110,6 +112,10 @@ class SpeechTranscriberPort(Protocol):
 class VideoAssetRepository(Protocol):
     """動画ファイルを保存・管理するポート."""
 
+    def get_recorded_dir(self) -> Path: ...
+
+    def get_edited_dir(self) -> Path: ...
+
     def save_recording(
         self,
         video: Path,
@@ -117,6 +123,12 @@ class VideoAssetRepository(Protocol):
         screenshot: Frame | None,
         metadata: RecordingMetadata,
     ) -> VideoAsset: ...
+
+    def get_asset(self, video: Path) -> VideoAsset | None: ...
+
+    def save_edited_metadata(
+        self, video: Path, metadata: RecordingMetadata
+    ) -> None: ...
 
     def list_recordings(self) -> list[VideoAsset]: ...
 
@@ -255,7 +267,7 @@ class UploadPort(Protocol):
         privacy_status: PrivacyStatus = "private",
         thumb: Optional[Path] = None,
         caption: Optional[Caption] = None,
-        playlist_id: Optional[str] = None,
+        playlist_id: str = "",
     ): ...
 
 
@@ -269,3 +281,49 @@ class PowerPort(Protocol):
     """電源制御を行うポート。"""
 
     async def sleep(self) -> None: ...
+
+
+class EventPublisher(Protocol):
+    def publish(
+        self, event_type: str, payload: Mapping[str, Any] | None = None
+    ) -> None: ...
+
+
+class FramePublisher(Protocol):
+    def publish_frame(self, frame: "Frame") -> None: ...
+
+
+class FramePacketLike(Protocol):
+    """Lightweight packet interface for preview frames.
+
+    Infrastructure may provide a richer implementation, but GUI/app only rely
+    on these members.
+    """
+
+    frame: "Frame"
+    ts: float
+
+
+class CommandDispatcher(Protocol):
+    def submit(
+        self, name: str, **payload: Any
+    ) -> Any: ...  # returns Future-like
+
+
+class EventSubscription(Protocol):
+    def poll(self, max_items: int = 100) -> Any: ...  # returns list[Event]
+    def close(self) -> None: ...
+
+
+class EventSubscriber(Protocol):
+    def subscribe(
+        self, event_types: Optional[set[str]] = None
+    ) -> EventSubscription: ...
+
+
+class FrameSource(Protocol):
+    def add_listener(self, cb: Callable[[FramePacketLike], None]) -> None: ...
+    def remove_listener(
+        self, cb: Callable[[FramePacketLike], None]
+    ) -> None: ...
+    def get_latest(self) -> Optional[FramePacketLike]: ...

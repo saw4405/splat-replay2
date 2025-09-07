@@ -1,5 +1,8 @@
+from __future__ import annotations
+
+import asyncio
 from pathlib import Path
-from typing import Dict, Optional
+from typing import Dict, Optional, Tuple
 
 import numpy as np
 
@@ -41,6 +44,20 @@ class MatcherRegistry(ImageMatcherPort):
                 self.composites[name] = composite
 
         self.groups: Dict[str, list[str]] = settings.matcher_groups
+
+        # 軽量キャッシュ: (キー/グループ, フィンガープリント) -> 結果
+        self._match_cache: Dict[Tuple[str, int], bool] = {}
+        self._matched_name_cache: Dict[Tuple[str, int], Optional[str]] = {}
+
+    def _fingerprint(self, image: np.ndarray) -> int:
+        """高速な簡易フィンガープリント。
+
+        画素を粗くサンプリングし、単純合計で 32bit に収める。
+        同一フレームの反復照合を高速化するための近似キーとして利用。
+        """
+        # BGR の B チャネルのみサンプリングして軽量化
+        sample = image[::64, ::64, 0]
+        return int(sample.sum()) & 0xFFFFFFFF
 
     def _build_matcher(self, config: MatcherConfig) -> Optional[BaseMatcher]:
         if not config:
@@ -158,14 +175,42 @@ class MatcherRegistry(ImageMatcherPort):
         return CompositeMatcher(config.rule, lookup, name=name)
 
     async def match(self, key: str, image: np.ndarray) -> bool:
+        fp = self._fingerprint(image)
+        cached = self._match_cache.get((key, fp))
+        if cached is not None:
+            return cached
+
         matcher = self.composites.get(key)
         if matcher is None:
             matcher = self.matchers.get(key)
-        return await matcher.match(image) if matcher else False
+        result = await matcher.match(image) if matcher else False
+        self._match_cache[(key, fp)] = result
+        return result
 
     async def match_first(
         self, keys: list[str], image: np.ndarray
     ) -> str | None:
+        # For small groups, evaluate in parallel to reduce wall time.
+        if len(keys) <= 4:
+            tasks: list[asyncio.Task[bool]] = []
+            matchers: list[Optional[BaseMatcher]] = []
+            for key in keys:
+                matcher = self.composites.get(key) or self.matchers.get(key)
+                matchers.append(matcher)
+                if matcher is not None:
+                    tasks.append(asyncio.create_task(matcher.match(image)))
+                else:
+                    tasks.append(
+                        asyncio.create_task(asyncio.sleep(0, result=False))
+                    )
+
+            results = await asyncio.gather(*tasks)
+            for key, matcher, ok in zip(keys, matchers, results):
+                if matcher is not None and ok:
+                    return matcher.name or key
+            return None
+
+        # Fallback: sequential evaluation to avoid spawning many tasks.
         for key in keys:
             matcher = self.composites.get(key)
             if matcher is None:
@@ -175,7 +220,15 @@ class MatcherRegistry(ImageMatcherPort):
         return None
 
     async def matched_name(self, group: str, image: np.ndarray) -> str | None:
+        fp = self._fingerprint(image)
+        cached = self._matched_name_cache.get((group, fp))
+        if cached is not None:
+            return cached
+
         keys = self.groups.get(group)
         if not keys:
+            self._matched_name_cache[(group, fp)] = None
             return None
-        return await self.match_first(keys, image)
+        result = await self.match_first(keys, image)
+        self._matched_name_cache[(group, fp)] = result
+        return result

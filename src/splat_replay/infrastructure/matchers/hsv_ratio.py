@@ -28,11 +28,14 @@ class HSVRatioMatcher(BaseMatcher):
         return await asyncio.to_thread(self._match, image)
 
     def _match(self, image: np.ndarray) -> bool:
+        # Apply ROI first
         img = self._apply_roi(image)
-        hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
+        # Lightweight downsampling to reduce work (~4x fewer pixels)
+        # Keeps ratio characteristics stable for thresholding use-cases.
+        img_small = img[::2, ::2]
+        hsv = cv2.cvtColor(img_small, cv2.COLOR_BGR2HSV)
         color_mask = cv2.inRange(hsv, self._lower_bound, self._upper_bound)
-        total = img.shape[0] * img.shape[1]
+        total = img_small.shape[0] * img_small.shape[1]
         count = cv2.countNonZero(color_mask)
-        ratio = count / total if total > 0 else 0
-        result = ratio >= self._threshold
-        return result
+        ratio = count / total if total > 0 else 0.0
+        return bool(ratio >= self._threshold)

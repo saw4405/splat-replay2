@@ -10,13 +10,17 @@ import cv2
 import numpy as np
 from structlog.stdlib import BoundLogger
 
-from splat_replay.application.interfaces import VideoAssetRepository
+from splat_replay.application.interfaces import (
+    EventPublisher,
+    VideoAssetRepository,
+)
 from splat_replay.domain.models import (
     BattleResult,
     RecordingMetadata,
     VideoAsset,
 )
 from splat_replay.shared.config import VideoStorageSettings
+from splat_replay.shared.event_types import EventTypes
 
 
 class FileVideoAssetRepository(VideoAssetRepository):
@@ -26,9 +30,17 @@ class FileVideoAssetRepository(VideoAssetRepository):
         self,
         settings: VideoStorageSettings,
         logger: BoundLogger,
+        publisher: EventPublisher,
     ) -> None:
         self.settings = settings
         self.logger = logger
+        self._publisher = publisher
+
+    def get_recorded_dir(self) -> Path:
+        return self.settings.recorded_dir
+
+    def get_edited_dir(self) -> Path:
+        return self.settings.edited_dir
 
     def save_recording(
         self,
@@ -37,6 +49,9 @@ class FileVideoAssetRepository(VideoAssetRepository):
         screenshot: np.ndarray | None,
         metadata: RecordingMetadata,
     ) -> VideoAsset:
+        if metadata.started_at is None:
+            raise ValueError("Metadata must have a started_at timestamp")
+
         dest = self.settings.recorded_dir
         dest.mkdir(parents=True, exist_ok=True)
         if isinstance(metadata.result, BattleResult):
@@ -45,7 +60,7 @@ class FileVideoAssetRepository(VideoAssetRepository):
                     metadata.started_at.strftime("%Y%m%d_%H%M%S"),
                     metadata.result.match.value,
                     metadata.result.rule.value,
-                    metadata.judgement or "",
+                    metadata.judgement.value if metadata.judgement else "",
                     metadata.result.stage.value,
                 ]
             )
@@ -73,6 +88,19 @@ class FileVideoAssetRepository(VideoAssetRepository):
             encoding="utf-8",
         )
         self.logger.info("録画ファイル保存", path=str(target))
+
+        self._publisher.publish(
+            EventTypes.ASSET_RECORDED_SAVED,
+            {
+                "video": str(target),
+                "has_subtitle": (dest / f"{name_root}.srt").exists(),
+                "has_thumbnail": (dest / f"{name_root}.png").exists(),
+                "started_at": metadata.started_at.isoformat()
+                if metadata.started_at
+                else None,
+            },
+        )
+
         return VideoAsset(
             video=target,
             subtitle=dest / f"{name_root}.srt",
@@ -80,10 +108,45 @@ class FileVideoAssetRepository(VideoAssetRepository):
             metadata=metadata,
         )
 
+    def get_asset(self, video: Path) -> VideoAsset | None:
+        metadata_path = video.with_suffix(".json")
+        if not metadata_path.exists():
+            return None
+        metadata = RecordingMetadata.from_dict(
+            json.loads(metadata_path.read_text(encoding="utf-8"))
+        )
+        return VideoAsset(
+            video=video,
+            subtitle=video.with_suffix(".srt"),
+            thumbnail=video.with_suffix(".png"),
+            metadata=metadata,
+        )
+
+    def save_edited_metadata(
+        self, video: Path, metadata: RecordingMetadata
+    ) -> None:
+        metadata_path = video.with_suffix(".json")
+        metadata_path.write_text(
+            json.dumps(metadata.to_dict(), ensure_ascii=False),
+            encoding="utf-8",
+        )
+        if self._publisher:
+            try:
+                from splat_replay.shared.event_types import EventTypes
+
+                self._publisher.publish(
+                    EventTypes.ASSET_RECORDED_METADATA_UPDATED,
+                    {"video": str(video)},
+                )
+            except Exception:
+                pass
+
     def list_recordings(self) -> list[VideoAsset]:
         assets: list[VideoAsset] = []
-        for video in self.settings.recorded_dir.glob("*.mkv"):
-            assets.append(VideoAsset.load(video))
+        # Support common containers produced by OBS (mkv/mp4)
+        for pattern in ("*.mkv", "*.mp4"):
+            for video in self.settings.recorded_dir.glob(pattern):
+                assets.append(VideoAsset.load(video))
         return assets
 
     def delete_recording(self, video: Path) -> None:
@@ -99,6 +162,16 @@ class FileVideoAssetRepository(VideoAssetRepository):
         metadata = video.with_suffix(".json")
         if metadata.exists():
             metadata.unlink(missing_ok=True)
+        if self._publisher:
+            try:
+                from splat_replay.shared.event_types import EventTypes
+
+                self._publisher.publish(
+                    EventTypes.ASSET_RECORDED_DELETED,
+                    {"video": str(video)},
+                )
+            except Exception:
+                pass
 
     def save_edited(self, video: Path) -> Path:
         dest = self.settings.edited_dir
@@ -109,12 +182,34 @@ class FileVideoAssetRepository(VideoAssetRepository):
         except Exception:
             target = video
         self.logger.info("編集後ファイル保存", path=str(target))
+        if self._publisher:
+            try:
+                from splat_replay.shared.event_types import EventTypes
+
+                self._publisher.publish(
+                    EventTypes.ASSET_EDITED_SAVED, {"video": str(target)}
+                )
+            except Exception:
+                pass
         return target
 
     def list_edited(self) -> list[Path]:
-        return list(self.settings.edited_dir.glob("*.mkv"))
+        # Support common containers for edited outputs as well
+        videos: list[Path] = []
+        for pattern in ("*.mkv", "*.mp4"):
+            videos.extend(self.settings.edited_dir.glob(pattern))
+        return videos
 
     def delete_edited(self, video: Path) -> None:
         video = video.resolve()
         if video.exists():
             video.unlink(missing_ok=True)
+        if self._publisher:
+            try:
+                from splat_replay.shared.event_types import EventTypes
+
+                self._publisher.publish(
+                    EventTypes.ASSET_EDITED_DELETED, {"video": str(video)}
+                )
+            except Exception:
+                pass

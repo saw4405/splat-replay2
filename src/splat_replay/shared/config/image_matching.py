@@ -1,6 +1,7 @@
 from pathlib import Path
 from typing import Awaitable, Callable, Dict, List, Literal, Optional, Tuple
 
+import asyncio
 from pydantic import BaseModel, Field, validator
 
 
@@ -33,7 +34,13 @@ class MatchExpression(BaseModel):
         return v
 
     async def evaluate(self, fn: Callable[[str], Awaitable[bool]]) -> bool:
-        """与えられた評価関数を用いて式を判定する。"""
+        """与えられた評価関数を用いて式を判定する。
+
+        - matcher: 直接評価
+        - not: 否定を評価（再帰）
+        - and: 並列に評価して全て True か
+        - or: 並列に評価していずれか True か
+        """
         if self.matcher is not None:
             return await fn(self.matcher)
 
@@ -41,16 +48,18 @@ class MatchExpression(BaseModel):
             return not await self.not_.evaluate(fn)
 
         if self.and_ is not None:
-            for expr in self.and_:
-                if not await expr.evaluate(fn):
-                    return False
-            return True
+            # Evaluate all branches concurrently to minimize wall time.
+            results = await asyncio.gather(
+                *(expr.evaluate(fn) for expr in self.and_)
+            )
+            return all(results)
 
         if self.or_ is not None:
-            for expr in self.or_:
-                if await expr.evaluate(fn):
-                    return True
-            return False
+            # Evaluate in parallel and check if any passes.
+            results = await asyncio.gather(
+                *(expr.evaluate(fn) for expr in self.or_)
+            )
+            return any(results)
 
         return False
 

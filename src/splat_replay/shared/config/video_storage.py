@@ -1,12 +1,17 @@
 from pathlib import Path
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class VideoStorageSettings(BaseModel):
-    """動画ファイルを保存するフォルダ設定。"""
+    """動画保存"""
 
-    base_dir: Path = Path("videos")
+    base_dir: Path = Field(
+        default=Path("videos"),
+        title="動画保存先フォルダ",
+        description="動画・字幕・サムネイル・メタデータを保存するフォルダ",
+        recommended=False,
+    )
 
     @property
     def recorded_dir(self) -> Path:

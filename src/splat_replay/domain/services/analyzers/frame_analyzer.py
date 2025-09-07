@@ -7,6 +7,7 @@ from typing import Optional
 from splat_replay.domain.models import (
     Frame,
     GameMode,
+    Judgement,
     Match,
     RateBase,
     Result,
@@ -87,6 +88,14 @@ class FrameAnalyzer:
             return False
         return await plugin.detect_session_abort(frame)
 
+    async def detect_communication_error(
+        self, frame: Frame, mode: GameMode
+    ) -> bool:
+        plugin = self.plugins.get(mode)
+        if plugin is None:
+            return False
+        return await plugin.detect_communication_error(frame)
+
     async def detect_session_finish(
         self, frame: Frame, mode: GameMode
     ) -> bool:
@@ -113,7 +122,7 @@ class FrameAnalyzer:
 
     async def extract_session_judgement(
         self, frame: Frame, mode: GameMode
-    ) -> Optional[str]:
+    ) -> Optional[Judgement]:
         """バトルの結果を抽出する。"""
         plugin = self.plugins.get(mode)
         if plugin is None:

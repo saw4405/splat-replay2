@@ -1,10 +1,15 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class CaptureDeviceSettings(BaseModel):
-    """OBS のキャプチャデバイス設定。"""
+    """キャプチャボード"""
 
-    name: str = "Capture Device"
+    name: str = Field(
+        default="Capture Device",
+        title="キャプチャボード名",
+        description="OSが認識しているキャプチャボードの名称",
+        recommended=True,
+    )
 
     class Config:
         pass

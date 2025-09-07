@@ -16,15 +16,17 @@ __all__ = [
     "RecordingMetadata",
     "VideoAsset",
     "TIME_RANGES",
+    "Judgement",
 ]
 
 from .aliases import Frame, as_frame
+from .game_mode import GameMode
+from .judgement import Judgement
+from .match import Match
+from .rate import XP, RateBase, Udemae
+from .recording_metadata import RecordingMetadata
+from .result import BattleResult, Result, SalmonResult
 from .rule import Rule
 from .stage import Stage
-from .game_mode import GameMode
-from .match import Match
-from .rate import RateBase, XP, Udemae
-from .result import Result, BattleResult, SalmonResult
-from .recording_metadata import RecordingMetadata
-from .video_asset import VideoAsset
 from .time_schedule import TIME_RANGES
+from .video_asset import VideoAsset

@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
 from pathlib import Path
-import json
 
 from .recording_metadata import RecordingMetadata
 
@@ -30,7 +30,7 @@ class VideoAsset:
         meta_file = video.with_suffix(".json")
         metadata = None
         if meta_file.exists():
-            data = json.loads(meta_file.read_text())
+            data = json.loads(meta_file.read_text(encoding="utf-8"))
             metadata = RecordingMetadata.from_dict(data)
         return cls(
             video=video,

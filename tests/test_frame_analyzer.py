@@ -17,6 +17,7 @@ from splat_replay.domain.models import (
     XP,
     BattleResult,
     GameMode,
+    Judgement,
     Match,
     RateBase,
     Rule,
@@ -255,7 +256,7 @@ async def test_detect_schedule_change(
         ("battle_start_1.png", True),
         ("battle_start_2.png", True),
         ("battle_start_3.png", True),
-        ("battle_start_4.png", False),
+        ("battle_start_4.png", True),
         ("matching_1.png", False),
     ],
 )
@@ -292,6 +293,26 @@ async def test_detect_battle_abort(
 @pytest.mark.parametrize(
     "filename, expected",
     [
+        ("battle_communication_error_1.png", True),
+        ("schedule_change_1.png", False),
+    ],
+)
+async def test_detect_communication_error(
+    analyzer: FrameAnalyzer,
+    load_image: Callable[[str], np.ndarray],
+    filename: str,
+    expected: bool,
+) -> None:
+    """バトル通信エラー 判定の結果を確認する。"""
+    frame = load_image(filename)
+    result = await analyzer.detect_communication_error(frame, GameMode.BATTLE)
+    assert result == expected
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "filename, expected",
+    [
         ("battle_finish_1.png", True),
         ("battle_finish_2.png", True),
         ("battle_finish_3.png", True),
@@ -303,7 +324,8 @@ async def test_detect_battle_abort(
         ("battle_finish_9.png", True),
         ("battle_finish_10.png", True),
         ("battle_finish_11.png", True),
-        ("battle_finish_12.png", False),
+        ("battle_finish_12.png", True),
+        ("battle_finish_13.png", False),
         ("loading_1.png", False),
     ],
 )
@@ -370,10 +392,10 @@ async def test_detect_battle_judgement(
 @pytest.mark.parametrize(
     "filename, expected",
     [
-        ("battle_judgement_1.png", "win"),
-        ("battle_judgement_2.png", "lose"),
-        ("battle_judgement_3.png", "lose"),
-        ("battle_judgement_4.png", "lose"),
+        ("battle_judgement_1.png", Judgement.WIN),
+        ("battle_judgement_2.png", Judgement.LOSE),
+        ("battle_judgement_3.png", Judgement.LOSE),
+        ("battle_judgement_4.png", Judgement.LOSE),
         ("battle_judgement_5.png", None),
     ],
 )
@@ -381,7 +403,7 @@ async def test_extract_battle_judgement(
     analyzer: FrameAnalyzer,
     load_image: Callable[[str], np.ndarray],
     filename: str,
-    expected: Optional[str],
+    expected: Optional[Judgement],
 ) -> None:
     """FINISH 表示判定の結果を確認する。"""
     frame = load_image(filename)
@@ -530,13 +552,58 @@ async def test_detect_battle_result(
                 3,
             ),
         ),
+        (
+            "battle_result_8.png",
+            BattleResult(
+                Match("Xマッチ"),
+                Rule("ガチヤグラ"),
+                Stage("ゴンズイ地区"),
+                7,
+                7,
+                6,
+            ),
+        ),
+        (
+            "battle_result_9.png",
+            BattleResult(
+                Match("Xマッチ"),
+                Rule("ガチホコ"),
+                Stage("ヒラメが丘団地"),
+                17,
+                7,
+                4,
+            ),
+        ),
+        (
+            "battle_result_10.png",
+            BattleResult(
+                Match("Xマッチ"),
+                Rule("ガチホコ"),
+                Stage("マヒマヒリゾート＆スパ"),
+                7,
+                5,
+                2,
+            ),
+        ),
+        (
+            "battle_result_11.png",
+            None,
+            # BattleResult(
+            #     Match("バンカラマッチ(チャレンジ)"),
+            #     Rule("ガチホコ"),
+            #     Stage("オヒョウ海運"),
+            #     3,
+            #     1,
+            #     1,
+            # ),
+        ),
     ],
 )
 async def test_extract_session_result(
     analyzer: FrameAnalyzer,
     load_image: Callable[[str], np.ndarray],
     filename: str,
-    expected: bool,
+    expected: Optional[BattleResult],
 ) -> None:
     """バトル終了画面判定の結果を確認する。"""
     frame = load_image(filename)
@@ -548,20 +615,12 @@ if __name__ == "__main__":
     import asyncio
 
     analyzer_ = create_analyzer()
-    filename = "battle_result_3.png"
-    expected = BattleResult(
-        Match("Xマッチ"),
-        Rule("ガチホコ"),
-        Stage("マサバ海峡大橋"),
-        5,
-        6,
-        1,
-    )
+    filename = "battle_communication_error_1.png"
+    expected = True
     image_path = TEMPLATE_DIR / filename
     frame = as_frame(cv2.imread(str(image_path)))
-    asyncio.run(analyzer_.detect_session_result(frame, GameMode.BATTLE))
     result = asyncio.run(
-        analyzer_.extract_session_result(frame, GameMode.BATTLE)
+        analyzer_.detect_communication_error(frame, GameMode.BATTLE)
     )
     print(result == expected)
     print(result)

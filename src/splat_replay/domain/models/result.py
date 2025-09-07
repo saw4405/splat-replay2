@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Dict
 
 from .match import Match
 from .rule import Rule
@@ -18,30 +19,25 @@ class BattleResult:
     death: int
     special: int
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> Dict[str, str]:
         return {
-            "type": "battle",
-            "match": self.match.name,
-            "rule": self.rule.name,
-            "stage": self.stage.name,
-            "kill": self.kill,
-            "death": self.death,
-            "special": self.special,
+            "match": self.match.value,
+            "rule": self.rule.value,
+            "stage": self.stage.value,
+            "kill": str(self.kill),
+            "death": str(self.death),
+            "special": str(self.special),
         }
 
     @classmethod
-    def from_dict(cls, data: dict) -> "BattleResult":
-        from .match import Match
-        from .rule import Rule
-        from .stage import Stage
-
+    def from_dict(cls, data: Dict[str, str]) -> "BattleResult":
         return cls(
-            match=Match[data["match"]],
-            rule=Rule[data["rule"]],
-            stage=Stage[data["stage"]],
-            kill=data["kill"],
-            death=data["death"],
-            special=data["special"],
+            match=Match(data["match"]),
+            rule=Rule(data["rule"]),
+            stage=Stage(data["stage"]),
+            kill=int(data["kill"]),
+            death=int(data["death"]),
+            special=int(data["special"]),
         )
 
 
@@ -58,7 +54,6 @@ class SalmonResult:
 
     def to_dict(self) -> dict:
         return {
-            "type": "salmon",
             "hazard": self.hazard,
             "stage": self.stage.name,
             "golden_egg": self.golden_egg,

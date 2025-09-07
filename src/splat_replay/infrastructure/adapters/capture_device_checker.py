@@ -31,12 +31,12 @@ class CaptureDeviceChecker(CaptureDevicePort):
             self.logger.warning("Windowsでないため、チェックをスキップします")
             return True
 
-        try:  # pragma: no cover - OS 依存
+        try:
             import win32com.client
 
             wmi = win32com.client.GetObject("winmgmts:")
             devices = wmi.InstancesOf("Win32_PnPEntity")
-        except Exception as e:  # pragma: no cover - 実機依存
+        except Exception as e:
             self.logger.warning("キャプチャデバイス確認失敗", error=str(e))
             return False
 

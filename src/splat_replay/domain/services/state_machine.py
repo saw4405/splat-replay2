@@ -11,9 +11,9 @@ from structlog.stdlib import BoundLogger
 class RecordState(Enum):
     """録画状態を表す列挙型。"""
 
-    STOPPED = auto()
-    RECORDING = auto()
-    PAUSED = auto()
+    STOPPED = "stopped"
+    RECORDING = "recording"
+    PAUSED = "paused"
 
 
 class RecordEvent(Enum):

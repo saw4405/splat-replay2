@@ -5,6 +5,14 @@
   "version": "0.2.0",
   "configurations": [
     {
+      "name": "Python デバッガー: 現在のファイル",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${file}",
+      "console": "integratedTerminal",
+      "justMyCode": false
+    },
+    {
       "name": "Auto",
       "type": "debugpy",
       "request": "launch",
@@ -29,6 +37,20 @@
       "env": {
         "PYTHONPATH": "${workspaceFolder}/src"
       }
+    },
+    {
+      "name": "GUI",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/src/splat_replay/cli.py",
+      "args": ["gui"],
+      "console": "integratedTerminal",
+      "cwd": "${workspaceFolder}",
+      "justMyCode": false,
+      "env": {
+        "PYTHONPATH": "${workspaceFolder}/src"
+      },
+      "purpose": ["debug-in-terminal"]
     }
   ]
 }

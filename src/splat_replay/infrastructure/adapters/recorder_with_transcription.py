@@ -31,8 +31,8 @@ class RecorderWithTranscription(RecorderWithTranscriptionPort):
             Callable[[RecorderStatus], Awaitable[None]]
         ] = []
 
-    async def init(self) -> None:
-        await self.recorder.init()
+    async def setup(self) -> None:
+        await self.recorder.setup()
         self.recorder.add_status_listener(self._notify_status_change)
 
     async def start(self):
@@ -67,9 +67,9 @@ class RecorderWithTranscription(RecorderWithTranscriptionPort):
         if self.transcriber is not None:
             self.transcriber.resume()
 
-    async def close(self) -> None:
+    async def teardown(self) -> None:
         self.recorder.remove_status_listener(self._notify_status_change)
-        await self.recorder.close()
+        await self.recorder.teardown()
 
     async def _notify_status_change(self, status: RecorderStatus) -> None:
         """録画状態変化をリスナーに通知する。"""

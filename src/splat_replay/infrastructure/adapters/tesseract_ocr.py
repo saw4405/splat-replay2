@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-
-from typing import Optional, Literal
+import asyncio
+from typing import Literal, Optional
 
 import numpy as np
 import pytesseract
@@ -33,7 +33,10 @@ class TesseractOCR(OCRPort):
         "SINGLE_CHAR": 10,
     }
 
-    def recognize_text(
+    # Note: ウォームアップは呼び出し側（ドメイン層）で実施し、
+    # ここでは初期化時に重い処理を行わない。
+
+    def recognize_text_sync(
         self,
         image: np.ndarray,
         ps_mode: Optional[str] = None,
@@ -53,3 +56,16 @@ class TesseractOCR(OCRPort):
             return None
         except Exception:
             return None
+
+    async def recognize_text(
+        self,
+        image: np.ndarray,
+        ps_mode: Optional[str] = None,
+        whitelist: Optional[str] = None,
+    ) -> str | None:
+        return await asyncio.to_thread(
+            self.recognize_text_sync,
+            image,
+            ps_mode=ps_mode,
+            whitelist=whitelist,
+        )

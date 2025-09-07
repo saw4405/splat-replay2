@@ -5,13 +5,14 @@ from __future__ import annotations
 import asyncio
 import threading
 import time
-from typing import Type, TypeVar, cast
+from typing import TypeVar
 
 import typer
 from structlog.stdlib import BoundLogger
 
 from splat_replay.application.use_cases import AutoUseCase, UploadUseCase
-from splat_replay.shared.di import configure_container
+from splat_replay.gui.app import SplatReplayGUI
+from splat_replay.shared.di import configure_container, resolve
 from splat_replay.shared.logger import buffer_console_logs
 
 app = typer.Typer(help="Splat Replay ツール群")
@@ -21,12 +22,7 @@ container = configure_container()
 T = TypeVar("T")
 
 
-def resolve(cls: Type[T]) -> T:
-    """DI コンテナから依存を取得する。"""
-    return cast(T, container.resolve(cls))
-
-
-logger = resolve(BoundLogger)
+logger = resolve(container, BoundLogger)
 
 
 @app.command()
@@ -62,7 +58,7 @@ async def _auto(timeout: float | None = None) -> None:
         finally:
             print("\033[?25h", end="")
 
-    uc = resolve(AutoUseCase)
+    uc = resolve(container, AutoUseCase)
 
     stop_event = threading.Event()
     thread = threading.Thread(target=animate, args=(stop_event,), daemon=True)
@@ -73,10 +69,7 @@ async def _auto(timeout: float | None = None) -> None:
     stop_event.set()
     thread.join()
 
-    await uc.record()
-    await uc.edit()
-    await uc.update()
-    await uc.sleep()
+    await uc.execute()
 
 
 @app.command()
@@ -87,8 +80,26 @@ def upload() -> None:
 
 async def _upload() -> None:
     logger.info("upload コマンド開始")
-    uc = resolve(UploadUseCase)
+    uc = resolve(container, UploadUseCase)
     await uc.execute()
+
+
+@app.command()
+def gui() -> None:
+    """GUI アプリケーションを起動する。"""
+    logger.info("GUI アプリケーション開始")
+
+    try:
+        app = SplatReplayGUI()
+        app.run()
+    except ImportError as e:
+        logger.error(f"GUI の依存関係が不足しています: {e}")
+        typer.echo("GUI を使用するには追加の依存関係が必要です。")
+        raise typer.Exit(1)
+    except Exception as e:
+        logger.error(f"GUI アプリケーションでエラーが発生: {e}")
+        typer.echo(f"GUI アプリケーションの起動に失敗しました: {e}")
+        raise typer.Exit(1)
 
 
 if __name__ == "__main__":

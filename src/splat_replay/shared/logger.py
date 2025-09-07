@@ -38,7 +38,6 @@ def initialize_logger(
                 ),
                 structlog.stdlib.add_log_level,
                 structlog.processors.StackInfoRenderer(),
-                structlog.processors.format_exc_info,
             ],
         )
         file_formatter = structlog.stdlib.ProcessorFormatter(
@@ -56,7 +55,6 @@ def initialize_logger(
                 ),
                 structlog.stdlib.add_log_level,
                 structlog.processors.StackInfoRenderer(),
-                structlog.processors.format_exc_info,
             ],
         )
 
@@ -65,10 +63,26 @@ def initialize_logger(
         root_logger.setLevel(logging.INFO)
         root_logger.handlers.clear()
 
+        # 3rd-party noisy logs を抑制するフィルタ
+        class _NoiseFilter(logging.Filter):
+            def filter(self, record: logging.LogRecord) -> bool:
+                msg = str(record.getMessage())
+                path = str(getattr(record, "pathname", ""))
+                module = str(getattr(record, "module", ""))
+                # Drop obswsc websocket abnormal close stacktraces
+                if (
+                    "connection closed (" in msg
+                    and module == "client"
+                    and path.replace("/", "\\").endswith("obswsc\\client.py")
+                ):
+                    return False
+                return True
+
         # コンソール用ハンドラー（色付き）
         console_handler = logging.StreamHandler()
         console_handler.setLevel(logging.INFO)
         console_handler.setFormatter(console_formatter)
+        console_handler.addFilter(_NoiseFilter())
         root_logger.addHandler(console_handler)
 
         # ファイル出力用ハンドラー（JSON）
@@ -81,6 +95,7 @@ def initialize_logger(
         )
         file_handler.setLevel(logging.INFO)
         file_handler.setFormatter(file_formatter)
+        file_handler.addFilter(_NoiseFilter())
         root_logger.addHandler(file_handler)
 
         # structlog のグローバル設定
@@ -99,7 +114,6 @@ def initialize_logger(
                     fmt="%Y-%m-%d %H:%M:%S", utc=False
                 ),
                 structlog.processors.StackInfoRenderer(),
-                structlog.processors.format_exc_info,
                 structlog.stdlib.ProcessorFormatter.wrap_for_formatter,
             ],
             logger_factory=structlog.stdlib.LoggerFactory(),

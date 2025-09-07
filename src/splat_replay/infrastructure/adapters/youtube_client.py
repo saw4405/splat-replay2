@@ -3,27 +3,26 @@
 from __future__ import annotations
 
 import gc
-from pathlib import Path
 import pickle
-from typing import Optional, Union, Literal, List
+from pathlib import Path
+from typing import List, Optional, Union
 
 import google.auth
-from google_auth_oauthlib.flow import InstalledAppFlow
-from google.auth.transport.requests import Request
-from googleapiclient.discovery import build
-from googleapiclient.http import MediaFileUpload
 import google.auth.exceptions
 import google.auth.external_account_authorized_user
 import google.oauth2.credentials
-
+from google.auth.transport.requests import Request
+from google_auth_oauthlib.flow import InstalledAppFlow
+from googleapiclient.discovery import build
+from googleapiclient.http import MediaFileUpload
 from structlog.stdlib import BoundLogger
-from splat_replay.application.interfaces import (
-    UploadPort,
-    AuthenticatedClientPort,
-    PrivacyStatus,
-    Caption,
-)
 
+from splat_replay.application.interfaces import (
+    AuthenticatedClientPort,
+    Caption,
+    PrivacyStatus,
+    UploadPort,
+)
 
 Credentials = Union[
     google.auth.external_account_authorized_user.Credentials,
@@ -118,7 +117,7 @@ class YouTubeClient(UploadPort, AuthenticatedClientPort):
         privacy_status: PrivacyStatus = "private",
         thumb: Optional[Path] = None,
         caption: Optional[Caption] = None,
-        playlist_id: Optional[str] = None,
+        playlist_id: str = "",
     ):
         video_id = self.upload_video(
             path, title, description, tags, privacy_status=privacy_status

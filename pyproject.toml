@@ -17,13 +17,19 @@ dependencies = [
     "pytesseract>=0.3.13",
     "speechrecognition>=3.14.3",
     "groq>=0.29.0",
-    "pyaudio>=0.2.14",
+    "pyaudio>=0.2.14; platform_system == 'Windows'",
     "google-auth>=2.40.3",
     "google-auth-httplib2>=0.2.0",
     "google-auth-oauthlib>=1.2.2",
     "google-api-python-client>=2.176.0",
     "srt>=3.5.3",
     "obs-ws-client>=0.1.0",
+    "tomli-w>=1.0.0",
+    "pillow>=10.0.0",
+    "darkdetect>=0.8.0",
+    "ttkbootstrap>=1.14.2",
+    "comtypes>=1.4.11",
+    "dateparser>=1.2.2",
     "pytest-asyncio>=1.1.0",
 ]
 
@@ -39,3 +45,11 @@ splat-replay = "splat_replay.cli:app"
 [tool.ruff]
 line-length = 79
 exclude = [".venv"]
+indent-width = 4
+
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[tool.uv]
+package = true

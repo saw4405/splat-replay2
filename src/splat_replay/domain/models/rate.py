@@ -42,11 +42,11 @@ class RateBase(ABC):
         return self.compare_rate(other) == -1
 
     @abstractmethod
-    def __str__(self) -> str:  # pragma: no cover - 具象で実装
+    def __str__(self) -> str:
         raise NotImplementedError
 
     @abstractmethod
-    def short_str(self) -> str:  # pragma: no cover - 具象で実装
+    def short_str(self) -> str:
         raise NotImplementedError
 
     @classmethod

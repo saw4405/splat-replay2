@@ -1,9 +1,6 @@
-[logging]
-level = "INFO"
-format = "json"
-file_path = "logs/splat_replay.log"
-max_file_size_mb = 10
-backup_count = 5
+[behavior]
+edit_after_power_off = true
+sleep_after_upload = false
 
 [capture_device]
 name = "Capture Device"
@@ -39,6 +36,3 @@ privacy_status = "private"
 tags = ["Splatoon3"]
 playlist_id = ""
 caption_name = "ひとりごと"
-
-[pc]
-sleep_after_finish = false

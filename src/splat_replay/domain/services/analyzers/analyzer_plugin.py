@@ -4,7 +4,13 @@ from __future__ import annotations
 
 from typing import Optional, Protocol
 
-from splat_replay.domain.models import Frame, Match, RateBase, Result
+from splat_replay.domain.models import (
+    Frame,
+    Judgement,
+    Match,
+    RateBase,
+    Result,
+)
 
 
 class AnalyzerPlugin(Protocol):
@@ -20,6 +26,8 @@ class AnalyzerPlugin(Protocol):
 
     async def detect_session_abort(self, frame: Frame) -> bool: ...
 
+    async def detect_communication_error(self, frame: Frame) -> bool: ...
+
     async def detect_session_finish(self, frame: Frame) -> bool: ...
 
     async def detect_session_finish_end(self, frame: Frame) -> bool: ...
@@ -28,7 +36,7 @@ class AnalyzerPlugin(Protocol):
 
     async def extract_session_judgement(
         self, frame: Frame
-    ) -> Optional[str]: ...
+    ) -> Optional[Judgement]: ...
 
     async def detect_session_result(self, frame: Frame) -> bool: ...
 

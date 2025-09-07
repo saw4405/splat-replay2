@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+from contextlib import suppress
 from pathlib import Path
 from typing import Awaitable, Callable, List, Optional, Tuple, Union, cast
 
@@ -36,10 +37,24 @@ class OBSController(VideoRecorderPort):
 
         url = f"ws://{settings.websocket_host}:{settings.websocket_port}"
         self._client = ObsWsClient(
-            url=url, password=settings.websocket_password
+            url=url, password=settings.websocket_password.get_secret_value()
         )
-        self._client.reg_event_cb(self.event_listener, "RecordStateChanged")  # type: ignore
+
+        # obswsc の registry は asyncio.iscoroutinefunction で判定するため
+        # 素直に async 関数を登録する。
+        async def _event_callback(ev: Event) -> None:
+            try:
+                await self.event_listener(ev)
+            except Exception as e:
+                self._logger.warning("event listener error", error=str(e))
+
+        # obswsc の型ヒントが "Awaitable" を受け取る形になっており、
+        # 実際の実装 (コールバックを関数として登録) と食い違うため Pylance が
+        # "Awaitable" ではないとの警告を出す。ライブラリ側の型問題なので
+        # 明示的に無視する。
+        self._client.reg_event_cb(_event_callback, "RecordStateChanged")  # type: ignore[arg-type]
         self._is_connected = False
+        self._monitor_task: Optional[asyncio.Task[None]] = None
         self._process: Optional[asyncio.subprocess.Process] = None
         self._status_listeners: List[
             Callable[[RecorderStatus], Awaitable[None]]
@@ -119,11 +134,17 @@ class OBSController(VideoRecorderPort):
         while not await self.is_running():
             await asyncio.sleep(1)
 
-    async def close(self) -> None:
+    async def teardown(self) -> None:
         """OBS を終了する。"""
 
         self._logger.info("OBS 終了指示")
 
+        # 受信ループ監視タスクがあれば停止
+        if self._monitor_task is not None:
+            self._monitor_task.cancel()
+            with suppress(Exception):
+                await self._monitor_task
+            self._monitor_task = None
         if self._is_connected:
             active, _ = await self._get_record_status()
             if active:
@@ -151,6 +172,10 @@ class OBSController(VideoRecorderPort):
             try:
                 await self._client.connect()
                 self._is_connected = True
+                if self._monitor_task is None or self._monitor_task.done():
+                    self._monitor_task = asyncio.create_task(
+                        self._monitor_connection()
+                    )
                 return
             except Exception as e:
                 self._logger.warning("OBS へ接続できません", error=str(e))
@@ -158,26 +183,86 @@ class OBSController(VideoRecorderPort):
 
         self._logger.error("OBS へ接続できませんでした")
 
-    async def _request(self, request: str) -> Response1:
-        """OBS WebSocket へリクエストを送信する。"""
+    async def setup(self) -> None:
+        if not await self.is_running():
+            await self.launch()
 
         if not self._is_connected:
             await self.connect()
 
-        try:
-            response = cast(
-                Response, await self._client.request(Request(request))
-            )
-            if isinstance(response, Response2):
-                response = response.results[0]
-            return response
-        except Exception as e:
-            self._logger.error(
-                "OBS リクエスト失敗", request=request, error=str(e)
-            )
-            raise RuntimeError(
-                f"OBS リクエストに失敗しました: {request}"
-            ) from e
+        await self.start_virtual_camera()
+
+    async def _monitor_connection(self) -> None:
+        """obswsc の受信ループ終了を検知し、自動再接続する。"""
+        backoff: float = 1.0
+        max_backoff: float = 10.0
+        while True:
+            task = getattr(self._client, "task", None)
+            if task is None:
+                await asyncio.sleep(0.5)
+                continue
+            try:
+                await task
+            except asyncio.CancelledError:
+                return
+            except Exception as e:
+                self._logger.warning("OBS 受信ループ異常終了", error=str(e))
+
+            # 受信ループが終了（切断）
+            self._is_connected = False
+            with suppress(Exception):
+                await self._client.disconnect()
+            self._logger.warning("OBS WebSocket 切断検知。自動再接続を試行")
+
+            # 指数バックオフで再接続
+            while True:
+                try:
+                    await self._client.connect()
+                    self._is_connected = True
+                    self._logger.info("OBS WebSocket 再接続完了")
+                    backoff = 1.0
+                    break
+                except Exception as e:
+                    self._logger.warning(
+                        "OBS 再接続失敗", error=str(e), delay=f"{backoff:.1f}s"
+                    )
+                    await asyncio.sleep(backoff)
+                    backoff = min(max_backoff, backoff * 1.5)
+
+    async def _request(self, request: str) -> Response1:
+        """OBS WebSocket へリクエスト送信 (1回再接続リトライ)。"""
+
+        IDEMPOTENT = {"GetRecordStatus", "GetVirtualCamStatus"}
+
+        for attempt in (0, 1):
+            if not self._is_connected:
+                await self.connect()
+            try:
+                response = cast(
+                    Response, await self._client.request(Request(request))
+                )
+                if isinstance(response, Response2):
+                    response = response.results[0]
+                return response
+            except Exception as e:
+                self._logger.warning(
+                    "OBS リクエスト失敗",
+                    request=request,
+                    error=str(e),
+                    attempt=attempt,
+                )
+                # 切断扱いにして再接続 (冪等のみ)
+                self._is_connected = False
+                with suppress(Exception):
+                    await asyncio.to_thread(self._client.disconnect)
+                if attempt == 0 and request in IDEMPOTENT:
+                    await asyncio.sleep(0.5)
+                    continue
+                raise RuntimeError(
+                    f"OBS リクエストに失敗しました: {request}"
+                ) from e
+
+        raise RuntimeError(f"OBS リクエスト反復失敗: {request}")
 
     async def is_virtual_camera_active(self) -> bool:
         """仮想カメラが有効かどうかを返す。"""
@@ -215,17 +300,6 @@ class OBSController(VideoRecorderPort):
         active = response.res_data.get("outputActive", False)
         paused = response.res_data.get("outputPaused", False)
         return active, paused
-
-    async def init(self) -> None:
-        """OBS の初期化処理を行う。"""
-
-        self._logger.info("OBS 初期化")
-        if not await self.is_running():
-            self._logger.info("OBS 起動")
-            await self.launch()
-        await self.connect()
-        self._logger.info("仮想カメラ開始")
-        await self.start_virtual_camera()
 
     async def start(self) -> None:
         """録画開始指示を送る。"""

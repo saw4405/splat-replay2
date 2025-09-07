@@ -2,12 +2,11 @@
 
 from __future__ import annotations
 
-from enum import Enum, auto
+from enum import Enum
 
 
 class GameMode(Enum):
     """ゲームモードを表す列挙型。"""
 
-    UNKNOWN = auto()
-    BATTLE = auto()
-    SALMON = auto()
+    BATTLE = "バトルモード"
+    SALMON = "バイトモード"
