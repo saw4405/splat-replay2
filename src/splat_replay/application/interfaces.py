@@ -109,7 +109,7 @@ class SpeechTranscriberPort(Protocol):
     def resume(self) -> None: ...
 
 
-class VideoAssetRepository(Protocol):
+class VideoAssetRepositoryPort(Protocol):
     """動画ファイルを保存・管理するポート."""
 
     def get_recorded_dir(self) -> Path: ...
@@ -132,13 +132,13 @@ class VideoAssetRepository(Protocol):
 
     def list_recordings(self) -> list[VideoAsset]: ...
 
-    def delete_recording(self, video: Path) -> None: ...
+    def delete_recording(self, video: Path) -> bool: ...
 
     def save_edited(self, video: Path) -> Path: ...
 
     def list_edited(self) -> list[Path]: ...
 
-    def delete_edited(self, video: Path) -> None: ...
+    def delete_edited(self, video: Path) -> bool: ...
 
 
 class VideoEditorPort(Protocol):
@@ -293,17 +293,6 @@ class FramePublisher(Protocol):
     def publish_frame(self, frame: "Frame") -> None: ...
 
 
-class FramePacketLike(Protocol):
-    """Lightweight packet interface for preview frames.
-
-    Infrastructure may provide a richer implementation, but GUI/app only rely
-    on these members.
-    """
-
-    frame: "Frame"
-    ts: float
-
-
 class CommandDispatcher(Protocol):
     def submit(
         self, name: str, **payload: Any
@@ -322,8 +311,6 @@ class EventSubscriber(Protocol):
 
 
 class FrameSource(Protocol):
-    def add_listener(self, cb: Callable[[FramePacketLike], None]) -> None: ...
-    def remove_listener(
-        self, cb: Callable[[FramePacketLike], None]
-    ) -> None: ...
-    def get_latest(self) -> Optional[FramePacketLike]: ...
+    def add_listener(self, cb: Callable[[Frame], None]) -> None: ...
+    def remove_listener(self, cb: Callable[[Frame], None]) -> None: ...
+    def get_latest(self) -> Optional[Frame]: ...

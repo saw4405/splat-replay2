@@ -6,7 +6,7 @@ from structlog.stdlib import BoundLogger
 from splat_replay.application.interfaces import (
     Caption,
     UploadPort,
-    VideoAssetRepository,
+    VideoAssetRepositoryPort,
     VideoEditorPort,
 )
 from splat_replay.shared.config import UploadSettings
@@ -22,7 +22,7 @@ class AutoUploader:
         uploader: UploadPort,
         video_editor: VideoEditorPort,
         settings: UploadSettings,
-        repo: VideoAssetRepository,
+        repo: VideoAssetRepositoryPort,
         logger: BoundLogger,
         progress: ProgressReporter,
     ) -> None:

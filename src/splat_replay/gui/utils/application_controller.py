@@ -3,12 +3,12 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Callable, List, Optional, Tuple, cast
+from typing import Callable, Dict, List, Optional, Tuple
 
 import ttkbootstrap as ttk
 
 from splat_replay.application.interfaces import (
-    VideoAssetRepository,
+    VideoAssetRepositoryPort,
     VideoEditorPort,
 )
 from splat_replay.application.services import (
@@ -20,10 +20,9 @@ from splat_replay.application.services import (
 )
 from splat_replay.domain.models import Frame, VideoAsset
 from splat_replay.domain.services import RecordState, StateMachine
-from splat_replay.gui.runtime_adapter import GuiRuntimeAdapter
+from splat_replay.gui.utils.runtime_adapter import GuiRuntimeAdapter
 from splat_replay.infrastructure import GuiRuntimePortAdapter
 from splat_replay.infrastructure.runtime.events import Event
-from splat_replay.infrastructure.runtime.frames import FramePacket
 from splat_replay.infrastructure.runtime.runtime import AppRuntime
 from splat_replay.shared.config import BehaviorSettings
 from splat_replay.shared.di import configure_container, resolve
@@ -32,29 +31,26 @@ from splat_replay.shared.logger import get_logger
 
 
 class GUIApplicationController:
-    def __init__(self) -> None:
+    def __init__(self, root: ttk.Window) -> None:
         self.logger = get_logger()
+
         self.container = configure_container()
         self.runtime = resolve(self.container, AppRuntime)
         self._gui_ports = resolve(self.container, GuiRuntimePortAdapter)
-        self.adapter: GuiRuntimeAdapter | None = None
-
-        # core components
         self.behavior_settings = resolve(self.container, BehaviorSettings)
         self._device_checker = resolve(self.container, DeviceChecker)
         self._auto_recorder = resolve(self.container, AutoRecorder)
         self._auto_editor = resolve(self.container, AutoEditor)
         self._auto_uploader = resolve(self.container, AutoUploader)
         self._progress = resolve(self.container, ProgressReporter)
-        self._asset_repo = resolve(self.container, VideoAssetRepository)
+        self._asset_repo = resolve(self.container, VideoAssetRepositoryPort)
         self._video_editor = resolve(self.container, VideoEditorPort)
         self._state_machine = resolve(self.container, StateMachine)
-        # listeners
+
         self._record_state_listeners: List[Callable[[RecordState], None]] = []
         self._operation_msg_listeners: List[Callable[[str], None]] = []
         self._power_off_listeners: List[Callable[[], None]] = []
         self._progress_listeners: List[Callable[[dict], None]] = []
-        # video asset change listeners
         self._asset_event_listeners: List[Callable[[str, dict], None]] = []
         self._asset_events = {
             EventTypes.ASSET_RECORDED_SAVED,
@@ -63,16 +59,13 @@ class GUIApplicationController:
             EventTypes.ASSET_EDITED_SAVED,
             EventTypes.ASSET_EDITED_DELETED,
         }
-
-    def attach_gui_root(self, root: ttk.Window) -> None:  # type: ignore[no-untyped-def]
-        # adapter now uses abstract ports (dispatcher/subscriber/frame_source)
         self.adapter = GuiRuntimeAdapter(
             dispatcher=self._gui_ports,
             subscriber=self._gui_ports,
             frame_source=self._gui_ports,
             tk_root=root,
         )
-        self.adapter.on_event(self._on_event)
+        self.adapter.add_event_handler(self._on_event)
 
     def _on_event(self, ev: Event) -> None:
         if ev.type == EventTypes.RECORDER_STATE:
@@ -142,25 +135,13 @@ class GUIApplicationController:
         self._auto_recorder.force_stop_loop()
 
     # Frame delivery (GUI 用ラッパ): Widget からは Adapter を意識せず購読できる
-    def on_preview_frame(self, handler: Callable[["Frame"], None]) -> bool:
+    def on_preview_frame(self, handler: Callable[[Frame], None]) -> None:
         """
         プレビュー用のフレームハンドラを登録。
 
-        GUI スレッドで呼び出される。Adapter 未接続時は False を返す。
+        GUI スレッドで呼び出される。
         """
-        adp = self.adapter
-        if adp is None:
-            return False
-
-        # FramePacket -> Frame に変換して渡す
-        def _wrap(pkt: FramePacket) -> None:
-            try:
-                handler(pkt.frame)
-            except Exception:
-                pass
-
-        adp.on_frame(_wrap)
-        return True
+        self.adapter.add_frame_handler(handler)
 
     def start_auto_editor_and_uploader(self) -> None:
         """自動編集→アップロードを順次非同期で実行する。GUI スレッドをブロックしない。"""
@@ -227,72 +208,58 @@ class GUIApplicationController:
         return self._state_machine.state
 
     # Commands
+    def get_current_metadata(
+        self, cb: Callable[[Optional[Dict[str, str | None]]], None]
+    ) -> None:
+        fut = self._gui_ports.submit("recorder.get_metadata")
+        metadata = fut.result().value
+        metadata = metadata.to_dict() if metadata else None
+        fut.add_done_callback(
+            lambda f: self.adapter.call_soon(lambda: cb(metadata))
+        )
+
     def start_manual_recording(self, cb: Callable[[bool], None]) -> None:
         fut = self._gui_ports.submit("recorder.start")
-        adapter = self.adapter
-        if adapter is not None:
-            fut.add_done_callback(
-                lambda f: adapter.call_soon(lambda: cb(f.result().ok))
-            )
-        else:
-            fut.add_done_callback(lambda f: cb(f.result().ok))
+        fut.add_done_callback(
+            lambda f: self.adapter.call_soon(lambda: cb(f.result().ok))
+        )
 
     def stop_manual_recording(self, cb: Callable[[bool], None]) -> None:
         fut = self._gui_ports.submit("recorder.stop")
-        adapter = self.adapter
-        if adapter is not None:
-            fut.add_done_callback(
-                lambda f: adapter.call_soon(lambda: cb(f.result().ok))
-            )
-        else:
-            fut.add_done_callback(lambda f: cb(f.result().ok))
+        fut.add_done_callback(
+            lambda f: self.adapter.call_soon(lambda: cb(f.result().ok))
+        )
 
     def pause_manual_recording(self, cb: Callable[[bool], None]) -> None:
         fut = self._gui_ports.submit("recorder.pause")
-        adapter = self.adapter
-        if adapter is not None:
-            fut.add_done_callback(
-                lambda f: adapter.call_soon(lambda: cb(f.result().ok))
-            )
-        else:
-            fut.add_done_callback(lambda f: cb(f.result().ok))
+        fut.add_done_callback(
+            lambda f: self.adapter.call_soon(lambda: cb(f.result().ok))
+        )
 
     def resume_manual_recording(self, cb: Callable[[bool], None]) -> None:
         fut = self._gui_ports.submit("recorder.resume")
-        adapter = self.adapter
-        if adapter is not None:
-            fut.add_done_callback(
-                lambda f: adapter.call_soon(lambda: cb(f.result().ok))
-            )
-        else:
-            fut.add_done_callback(lambda f: cb(f.result().ok))
+        fut.add_done_callback(
+            lambda f: self.adapter.call_soon(lambda: cb(f.result().ok))
+        )
 
     # Asset / metadata (synchronous simplified)
     def get_video_list(self, cb: Callable[[List[VideoAsset]], None]) -> None:
         fut = self._gui_ports.submit("asset.list")
-        adapter = self.adapter
-        if adapter is not None:
-            fut.add_done_callback(
-                lambda f: adapter.call_soon(
-                    lambda: cb((f.result().value or []))
-                )
+        fut.add_done_callback(
+            lambda f: self.adapter.call_soon(
+                lambda: cb((f.result().value or []))
             )
-        else:
-            fut.add_done_callback(lambda f: cb(f.result().value or []))
+        )
 
     def get_video_assets_with_length(
         self, cb: Callable[[List[Tuple[VideoAsset, float | None]]], None]
     ) -> None:
         fut = self._gui_ports.submit("asset.list_with_length")
-        adapter = self.adapter
-        if adapter is not None:
-            fut.add_done_callback(
-                lambda f: adapter.call_soon(
-                    lambda: cb((f.result().value or []))
-                )
+        fut.add_done_callback(
+            lambda f: self.adapter.call_soon(
+                lambda: cb((f.result().value or []))
             )
-        else:
-            fut.add_done_callback(lambda f: cb(f.result().value or []))
+        )
 
     def get_edited_assets_with_length(
         self,
@@ -301,29 +268,23 @@ class GUIApplicationController:
         ],
     ) -> None:
         fut = self._gui_ports.submit("asset.list_edited_with_length")
-        adapter = self.adapter
-        if adapter is not None:
-            fut.add_done_callback(
-                lambda f: adapter.call_soon(
-                    lambda: cb((f.result().value or []))
-                )
+        fut.add_done_callback(
+            lambda f: self.adapter.call_soon(
+                lambda: cb((f.result().value or []))
             )
-        else:
-            fut.add_done_callback(lambda f: cb(f.result().value or []))
+        )
 
     def get_metadata(
-        self, video_path: Path, cb: Callable[[Optional[dict]], None]
+        self,
+        video_path: Path,
+        cb: Callable[[Optional[Dict[str, str | None]]], None],
     ) -> None:
         fut = self._gui_ports.submit(
             "asset.get_metadata", video_path=video_path
         )
-        adapter = self.adapter
-        if adapter is not None:
-            fut.add_done_callback(
-                lambda f: adapter.call_soon(lambda: cb(f.result().value))
-            )
-        else:
-            fut.add_done_callback(lambda f: cb(f.result().value))
+        fut.add_done_callback(
+            lambda f: self.adapter.call_soon(lambda: cb(f.result().value))
+        )
 
     def save_metadata(
         self, video_path: Path, metadata_dict: dict, cb: Callable[[bool], None]
@@ -333,71 +294,37 @@ class GUIApplicationController:
             video_path=video_path,
             metadata_dict=metadata_dict,
         )
-        adapter = self.adapter
-        if adapter is not None:
-            fut.add_done_callback(
-                lambda f: adapter.call_soon(
-                    lambda: cb(
-                        bool(f.result().value) if f.result().ok else False
-                    )
-                )
+        fut.add_done_callback(
+            lambda f: self.adapter.call_soon(
+                lambda: cb(bool(f.result().value) if f.result().ok else False)
             )
-        else:
-            fut.add_done_callback(
-                lambda f: cb(
-                    bool(f.result().value) if f.result().ok else False
-                )
-            )
-
-    def get_current_metadata(
-        self, cb: Callable[[Optional[dict]], None]
-    ) -> None:
-        try:
-            cb(self._auto_recorder.metadata.to_dict())
-        except Exception:
-            cb(None)
+        )
 
     def get_video_length(
         self, video_path: Path, cb: Callable[[float | None], None]
     ) -> None:
         fut = self._gui_ports.submit("asset.get_length", video_path=video_path)
-        adapter = self.adapter
-        if adapter is not None:
-            fut.add_done_callback(
-                lambda f: adapter.call_soon(lambda: cb(f.result().value))
-            )
-        else:
-            fut.add_done_callback(lambda f: cb(f.result().value))
+        fut.add_done_callback(
+            lambda f: self.adapter.call_soon(lambda: cb(f.result().value))
+        )
 
     def delete_video_assets(
         self, video_path: Path, cb: Callable[[], None]
     ) -> None:
         fut = self._gui_ports.submit("asset.delete", video_path=video_path)
-        adapter = self.adapter
-        if adapter is not None:
-            fut.add_done_callback(lambda _f: adapter.call_soon(cb))
-        else:
-            fut.add_done_callback(lambda _f: cb())
+        fut.add_done_callback(lambda _f: self.adapter.call_soon(cb))
 
     def get_recorded_dir(self, cb: Callable[[Path | None], None]) -> None:
         fut = self._gui_ports.submit("asset.get_recorded_dir")
-        adapter = self.adapter
-        if adapter is not None:
-            fut.add_done_callback(
-                lambda f: adapter.call_soon(lambda: cb(f.result().value))
-            )
-        else:
-            fut.add_done_callback(lambda f: cb(cast(Path, f.result().value)))
+        fut.add_done_callback(
+            lambda f: self.adapter.call_soon(lambda: cb(f.result().value))
+        )
 
     def get_edited_dir(self, cb: Callable[[Path | None], None]) -> None:
         fut = self._gui_ports.submit("asset.get_edited_dir")
-        adapter = self.adapter
-        if adapter is not None:
-            fut.add_done_callback(
-                lambda f: adapter.call_soon(lambda: cb(f.result().value))
-            )
-        else:
-            fut.add_done_callback(lambda f: cb(cast(Path, f.result().value)))
+        fut.add_done_callback(
+            lambda f: self.adapter.call_soon(lambda: cb(f.result().value))
+        )
 
     def delete_edited_asset(
         self, video_path: Path, cb: Callable[[], None]
@@ -405,11 +332,7 @@ class GUIApplicationController:
         fut = self._gui_ports.submit(
             "asset.delete_edited", video_path=video_path
         )
-        adapter = self.adapter
-        if adapter is not None:
-            fut.add_done_callback(lambda _f: adapter.call_soon(cb))
-        else:
-            fut.add_done_callback(lambda _f: cb())
+        fut.add_done_callback(lambda _f: self.adapter.call_soon(cb))
 
     def close(self) -> None:
         """GUI 終了時のクリーンアップ。"""
@@ -417,11 +340,7 @@ class GUIApplicationController:
             # 進捗購読など GUI リスナーコレクションをクリア
             self._stop_auto_recorder()
             # detach GUI runtime adapter
-            if self.adapter is not None:
-                try:
-                    self.adapter.close()
-                except Exception:
-                    pass
+            self.adapter.close()
             self._record_state_listeners.clear()
             self._operation_msg_listeners.clear()
             self._power_off_listeners.clear()

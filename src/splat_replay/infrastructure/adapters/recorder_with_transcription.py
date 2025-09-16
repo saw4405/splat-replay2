@@ -8,7 +8,7 @@ from splat_replay.application.interfaces import (
     RecorderStatus,
     RecorderWithTranscriptionPort,
     SpeechTranscriberPort,
-    VideoAssetRepository,
+    VideoAssetRepositoryPort,
     VideoRecorderPort,
 )
 
@@ -20,7 +20,7 @@ class RecorderWithTranscription(RecorderWithTranscriptionPort):
         self,
         recorder: VideoRecorderPort,
         transcriber: Optional[SpeechTranscriberPort],
-        asset_repo: VideoAssetRepository,
+        asset_repo: VideoAssetRepositoryPort,
         logger: BoundLogger,
     ) -> None:
         self.recorder = recorder

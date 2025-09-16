@@ -10,7 +10,7 @@ from typing import List, Optional, Tuple, Union, cast
 import ttkbootstrap as ttk
 from pydantic import SecretStr
 
-from splat_replay.gui.controllers.settings_controller import SettingItemType
+from splat_replay.gui.utils.settings_controller import SettingItemType
 
 
 class ExtendedFrame(ttk.Frame):
@@ -19,7 +19,7 @@ class ExtendedFrame(ttk.Frame):
     _entry: tk.Entry | None
     _listbox: tk.Listbox | None
 
-    def __init__(self, *args, **kwargs) -> None:  # noqa: D401
+    def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
         self._entry = None
         self._listbox = None

@@ -10,7 +10,7 @@ from ttkbootstrap.dialogs import Messagebox
 from splat_replay.domain.services import RecordState
 from splat_replay.gui.components.fade_label import FadeLabel
 from splat_replay.gui.components.toggle_tooltip import ToggleToolTip
-from splat_replay.gui.controllers.application_controller import (
+from splat_replay.gui.utils.application_controller import (
     GUIApplicationController,
 )
 from splat_replay.shared.logger import get_logger

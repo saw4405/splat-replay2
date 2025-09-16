@@ -16,7 +16,7 @@ from ttkbootstrap.tooltip import ToolTip
 
 from splat_replay.domain.models import Frame
 from splat_replay.domain.services import RecordState
-from splat_replay.gui.controllers.application_controller import (
+from splat_replay.gui.utils.application_controller import (
     GUIApplicationController,
 )
 from splat_replay.gui.widgets.card_widget import CardWidget
@@ -112,10 +112,7 @@ class VideoPreviewCard(CardWidget):
         # 初期化ログ（UTF-8）
         self.logger.info("VideoPreviewCard を初期化しました")
         # Controller 経由でフレーム購読（GUI スレッドで呼び出し）
-        if not self.controller.on_preview_frame(self._on_frame_push):
-            self.logger.warning("ランタイム未接続のためプレビューは無効です")
-            # ランタイム未接続時は明示的にメッセージ表示
-            self._show_center_message("キャプチャボードが接続されていません")
+        self.controller.on_preview_frame(self._on_frame_push)
         self.logger.info("VideoPreviewWidget が初期化されました")
         # デバイス未接続の監視を開始（フレーム未受信が一定時間続いたら表示）
         self._schedule_no_signal_watch()

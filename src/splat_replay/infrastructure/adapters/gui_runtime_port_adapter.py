@@ -3,31 +3,27 @@
 from __future__ import annotations
 
 from concurrent.futures import Future as ThreadFuture
+from pathlib import Path
 from typing import (
-    TYPE_CHECKING,
     Any,
+    Callable,
+    Dict,
     List,
     Literal,
     Optional,
     Tuple,
     overload,
-    Callable,
 )
 
 from splat_replay.application.interfaces import (
     CommandDispatcher,
     EventSubscriber,
-    FrameSource,
     EventSubscription,
+    FrameSource,
 )
+from splat_replay.domain.models import Frame, RecordingMetadata, VideoAsset
 from splat_replay.infrastructure.runtime.commands import CommandResult
-from splat_replay.infrastructure.runtime.frames import FramePacket
 from splat_replay.infrastructure.runtime.runtime import AppRuntime
-
-if TYPE_CHECKING:
-    from pathlib import Path
-
-    from splat_replay.domain.models import VideoAsset
 
 
 class GuiRuntimePortAdapter(CommandDispatcher, EventSubscriber, FrameSource):
@@ -36,6 +32,11 @@ class GuiRuntimePortAdapter(CommandDispatcher, EventSubscriber, FrameSource):
 
     # CommandDispatcher
     # typed overloads (static typing aid only)
+    @overload
+    def submit(
+        self, name: Literal["recorder.get_metadata"], **payload: Any
+    ) -> ThreadFuture[CommandResult[Optional[RecordingMetadata]]]: ...
+
     @overload
     def submit(
         self, name: Literal["recorder.start"], **payload: Any
@@ -76,7 +77,7 @@ class GuiRuntimePortAdapter(CommandDispatcher, EventSubscriber, FrameSource):
     @overload
     def submit(
         self, name: Literal["asset.get_metadata"], *, video_path: Path
-    ) -> ThreadFuture[CommandResult[Optional[dict]]]: ...
+    ) -> ThreadFuture[CommandResult[Optional[Dict[str, str | None]]]]: ...
 
     @overload
     def submit(
@@ -84,7 +85,7 @@ class GuiRuntimePortAdapter(CommandDispatcher, EventSubscriber, FrameSource):
         name: Literal["asset.save_metadata"],
         *,
         video_path: Path,
-        metadata_dict: dict,
+        metadata_dict: Dict[str, str],
     ) -> ThreadFuture[CommandResult[bool]]: ...
 
     @overload
@@ -134,13 +135,13 @@ class GuiRuntimePortAdapter(CommandDispatcher, EventSubscriber, FrameSource):
         return self._rt.event_bus.subscribe(event_types=event_types)
 
     # FrameSource proxy
-    def add_listener(self, cb: Callable[[FramePacket], None]) -> None:
+    def add_listener(self, cb: Callable[[Frame], None]) -> None:
         self._rt.frame_hub.add_listener(cb)
 
-    def remove_listener(self, cb: Callable[[FramePacket], None]) -> None:
+    def remove_listener(self, cb: Callable[[Frame], None]) -> None:
         self._rt.frame_hub.remove_listener(cb)
 
-    def get_latest(self) -> Optional[FramePacket]:
+    def get_latest(self) -> Optional[Frame]:
         return self._rt.frame_hub.get_latest()
 
 

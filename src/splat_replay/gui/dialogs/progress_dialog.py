@@ -14,10 +14,11 @@ import ttkbootstrap as ttk
 from ttkbootstrap.dialogs import Dialog
 from ttkbootstrap.widgets import Meter
 
-from splat_replay.gui.controllers.application_controller import (
+from splat_replay.gui.utils.application_controller import (
     GUIApplicationController,
 )
 from splat_replay.gui.widgets.card_widget import CardWidget
+from splat_replay.shared.logger import get_logger
 
 
 class ProgressDialog(Dialog):
@@ -46,13 +47,11 @@ class ProgressDialog(Dialog):
         self,
         window: ttk.Window,
         controller: GUIApplicationController,
-        *,
-        size: Tuple[int, int] | None = (1200, 1200),
     ) -> None:
         super().__init__(window, title="進捗ダイアログ")
+        self.logger = get_logger()
         self.window = window
         self.controller = controller
-        self._req_size = size
 
         # task states
         self._totals: Dict[str, int] = {"auto_edit": 0, "auto_upload": 0}
@@ -79,18 +78,11 @@ class ProgressDialog(Dialog):
         # listen early
         self.controller.add_progress_listener(self._on_progress)
 
-    # Dialog content
-    def create_body(self, master: tk.Widget) -> None:  # type: ignore[override]
+        self.logger.info("進捗ダイアログが初期化されました。")
+
+    def create_body(self, master: tk.Widget) -> None:
         container = ttk.Frame(master, padding=10)
         container.pack(fill="both", expand=True)
-
-        try:
-            if self._req_size:
-                master.winfo_toplevel().geometry(
-                    f"{self._req_size[0]}x{self._req_size[1]}"
-                )
-        except Exception:
-            pass
 
         grid = ttk.Frame(container)
         grid.pack(fill="both", expand=True)
@@ -115,8 +107,13 @@ class ProgressDialog(Dialog):
     def create_buttonbox(self, master: tk.Widget) -> None:
         buttonbox = ttk.Frame(master)
         buttonbox.pack(side="bottom", fill="x", pady=10)
+
         self.close_button = ttk.Button(
-            buttonbox, text="閉じる", command=self._on_close, state=tk.DISABLED
+            buttonbox,
+            text="閉じる",
+            command=self._on_close,
+            bootstyle="secondary-outline",  # type: ignore[arg-type]
+            state=tk.DISABLED,
         )
         self.close_button.pack(side="right", padx=10)
         self.cancel_button = ttk.Button(
@@ -133,11 +130,12 @@ class ProgressDialog(Dialog):
     def close(self) -> None:
         if self._closed:
             return
-        try:
-            assert self._toplevel is not None, "Dialog is not initialized"
-            self._toplevel.after_idle(self._toplevel.destroy)
-        finally:
-            self._closed = True
+
+        if not self._toplevel:
+            raise Exception("Dialog is not initialized")
+
+        self._toplevel.after_idle(self._toplevel.destroy)
+        self._closed = True
 
     # ---- Event handling ----
     def _on_progress(self, event: dict) -> None:

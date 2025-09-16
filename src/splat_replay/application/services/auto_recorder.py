@@ -12,7 +12,7 @@ from splat_replay.application.interfaces import (
     FramePublisher,
     RecorderStatus,
     RecorderWithTranscriptionPort,
-    VideoAssetRepository,
+    VideoAssetRepositoryPort,
 )
 from splat_replay.application.services.frame_capture_producer import (
     FrameCaptureProducer,
@@ -57,7 +57,7 @@ class AutoRecorder:
         capture: CapturePort,
         analyzer: FrameAnalyzer,
         recorder: RecorderWithTranscriptionPort,
-        asset_repository: VideoAssetRepository,
+        asset_repository: VideoAssetRepositoryPort,
         logger: BoundLogger,
         publisher: EventPublisher,
         frame_publisher: FramePublisher,
@@ -313,12 +313,15 @@ class AutoRecorder:
     def force_stop_loop(self) -> None:
         self._stop_event.set()
 
-    def command_handlers(self) -> dict[str, Callable[[], Awaitable[None]]]:
+    def command_handlers(self) -> dict[str, Callable[[], Awaitable[object]]]:
         """コマンド名 -> 非同期ハンドラ のマッピングを返す。
 
         インフラ層 (DI) が CommandBus へ登録するために利用し、
         アプリ層はバス実装に依存しない。
         """
+
+        async def _get_metadata() -> RecordingMetadata:
+            return self.metadata
 
         async def _start():
             await self.start()
@@ -336,6 +339,7 @@ class AutoRecorder:
             await self.cancel()
 
         return {
+            "recorder.get_metadata": _get_metadata,
             "recorder.start": _start,
             "recorder.pause": _pause,
             "recorder.resume": _resume,

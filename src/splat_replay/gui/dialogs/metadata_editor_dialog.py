@@ -30,36 +30,46 @@ class MetadataEditorDialog(Dialog):
         self.logger = get_logger()
         self.window = window
         self.metadata = metadata
+        self._closed = False
 
-        self.logger.info("MetadataEditorDialog が初期化されました")
+        self.logger.info("メタデータ編集ダイアログが初期化されました")
 
     def create_body(self, master: tk.Widget):
-        container = ttk.Frame(master)
-        container.pack(fill="x", expand=True)
+        container = ttk.Frame(master, padding=10)
+        container.pack(fill="both", expand=True)
         self.form = MetadataEditorForm(container, self.metadata)
 
     def create_buttonbox(self, master: tk.Widget):
-        container = ttk.Frame(master)
-        container.pack(fill="x", expand=True)
+        buttonbox = ttk.Frame(master)
+        buttonbox.pack(side="bottom", fill="x", pady=10)
 
         ttk.Button(
-            container,
+            buttonbox,
             text="保存",
-            command=self.save,
-            bootstyle="primary",  # type: ignore
-        ).pack(side="right", padx=5, pady=5)
+            command=self._on_save,
+            bootstyle="primary-outline",  # type: ignore[arg-type]
+        ).pack(side="right", padx=10)
 
         ttk.Button(
-            container,
+            buttonbox,
             text="閉じる",
-            command=self.close,
-            bootstyle="secondary",  # type: ignore
-        ).pack(side="right", padx=5, pady=5)
+            command=self._on_close,
+            bootstyle="secondary-outline",  # type: ignore[arg-type]
+        ).pack(side="right", padx=10)
 
-    def save(self) -> None:
+    def _on_save(self) -> None:
         self._result = self.form.get_metadata()
         self.close()
 
+    def _on_close(self) -> None:
+        self.close()
+
     def close(self) -> None:
-        if self._toplevel:
-            self._toplevel.after_idle(self._toplevel.destroy)
+        if self._closed:
+            return
+
+        if not self._toplevel:
+            raise Exception("Dialog is not initialized")
+
+        self._toplevel.after_idle(self._toplevel.destroy)
+        self._closed = True

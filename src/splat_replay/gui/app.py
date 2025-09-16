@@ -4,7 +4,7 @@ Splat Replay GUI メインアプリケーション
 tkinter ベースの GUI アプリケーションのエントリーポイント
 """
 
-from splat_replay.gui.windows.main_window import MainWindow
+from splat_replay.gui.main_window import MainWindow
 from splat_replay.shared.logger import get_logger
 
 

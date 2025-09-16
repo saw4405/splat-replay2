@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import queue
 import threading
+import time
 from typing import Callable, Optional
 
 import ttkbootstrap as ttk
@@ -13,8 +14,8 @@ from splat_replay.application.interfaces import (
     EventSubscriber,
     FrameSource,
 )
+from splat_replay.domain.models import Frame
 from splat_replay.infrastructure.runtime.events import Event
-from splat_replay.infrastructure.runtime.frames import FramePacket
 
 
 class GuiRuntimeAdapter:
@@ -29,9 +30,10 @@ class GuiRuntimeAdapter:
         self._subscriber = subscriber
         self._frame_source = frame_source
         self.tk = tk_root
+
         self._event_queue: queue.SimpleQueue[Event] = queue.SimpleQueue()
         self._event_handlers: list[Callable[[Event], None]] = []
-        self._frame_handler: Optional[Callable[[FramePacket], None]] = None
+        self._frame_handler: Optional[Callable[[Frame], None]] = None
         self._pump_scheduled = False
         self._closed = False
         # subscriptions
@@ -45,10 +47,10 @@ class GuiRuntimeAdapter:
         self._frame_source.add_listener(self._on_frame)
 
     # -------- public API -------------------------------------------------
-    def on_event(self, handler: Callable[[Event], None]) -> None:
+    def add_event_handler(self, handler: Callable[[Event], None]) -> None:
         self._event_handlers.append(handler)
 
-    def on_frame(self, handler: Callable[[FramePacket], None]) -> None:
+    def add_frame_handler(self, handler: Callable[[Frame], None]) -> None:
         self._frame_handler = handler
 
     def send_command(self, name: str, **payload):  # fire & forget
@@ -76,9 +78,6 @@ class GuiRuntimeAdapter:
                     self._event_queue.put(ev)
                 self._schedule_pump()
             else:
-                # simple sleep to avoid busy loop
-                import time
-
                 time.sleep(0.05)
 
     def _schedule_pump(self) -> None:
@@ -100,18 +99,20 @@ class GuiRuntimeAdapter:
                 except Exception:
                     pass
 
-    def _on_frame(self, pkt: FramePacket) -> None:
+    def _on_frame(self, pkt: Frame) -> None:
         if self._frame_handler is None:
             return
-        # marshal to GUI thread
-        self.tk.after(0, lambda p=pkt: self._safe_call_frame(p))
 
-    def _safe_call_frame(self, pkt: FramePacket) -> None:
-        if self._frame_handler:
+        frame_handler = self._frame_handler
+
+        def safe_call_frame(pkt: Frame) -> None:
             try:
-                self._frame_handler(pkt)
+                frame_handler(pkt)
             except Exception:
                 pass
+
+        # marshal to GUI thread
+        self.tk.after(0, lambda p=pkt: safe_call_frame(p))
 
     def close(self) -> None:
         self._closed = True
@@ -120,7 +121,7 @@ class GuiRuntimeAdapter:
         except Exception:
             pass
         try:
-            self._event_sub.close()  # type: ignore[attr-defined]
+            self._event_sub.close()
         except Exception:
             pass
 

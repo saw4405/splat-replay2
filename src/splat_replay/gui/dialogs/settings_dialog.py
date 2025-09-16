@@ -13,16 +13,16 @@ import ttkbootstrap as ttk
 from ttkbootstrap.dialogs import Dialog, Messagebox
 from ttkbootstrap.tooltip import ToolTip
 
-from splat_replay.gui.controllers.application_controller import (
-    GUIApplicationController,
-)
-from splat_replay.gui.controllers.settings_controller import (
-    GUISettingsController,
-    SettingItemType,
-)
-from splat_replay.gui.utils.settings_field_factory import (
+from splat_replay.gui.dialogs.settings_field_factory import (
     FieldWidgetReturn,
     SettingsFieldFactory,
+)
+from splat_replay.gui.utils.application_controller import (
+    GUIApplicationController,
+)
+from splat_replay.gui.utils.settings_controller import (
+    GUISettingsController,
+    SettingItemType,
 )
 from splat_replay.shared.logger import get_logger
 
@@ -45,13 +45,13 @@ class SettingsDialog(Dialog):
         self.settings_controller = GUISettingsController()
         self.field_widgets = {}
         self._closed = False
-        self.logger.info("設定画面が初期化されました")
+        self.logger.info("設定ダイアログが初期化されました")
 
     def create_body(self, master: tk.Widget):
-        main_frame = ttk.Frame(master)
-        main_frame.pack(fill="x", expand=True, padx=10, pady=10)
+        container = ttk.Frame(master, padding=10)
+        container.pack(fill="both", expand=True)
 
-        self.notebook = ttk.Notebook(main_frame)
+        self.notebook = ttk.Notebook(container)
         self.notebook.pack(side="top", fill="both", expand=True)
         self._create_tabs()
 
@@ -60,20 +60,20 @@ class SettingsDialog(Dialog):
         toplevel.protocol("WM_DELETE_WINDOW", self._on_closing)
 
     def create_buttonbox(self, master: tk.Widget):
-        button_frame = ttk.Frame(master)
-        button_frame.pack(side="bottom", fill="x", pady=10)
+        buttonbox = ttk.Frame(master)
+        buttonbox.pack(side="bottom", fill="x", pady=10)
 
         ttk.Button(
-            button_frame,
+            buttonbox,
             text="保存",
-            command=self._save_settings,
+            command=self._on_save,
             bootstyle="primary-outline",  # type: ignore[arg-type]
         ).pack(side="right", padx=10)
 
         ttk.Button(
-            button_frame,
+            buttonbox,
             text="閉じる",
-            command=self._cancel_changes,
+            command=self._on_close,
             bootstyle="secondary-outline",  # type: ignore[arg-type]
         ).pack(side="right", padx=10)
 
@@ -101,19 +101,12 @@ class SettingsDialog(Dialog):
                 borderwidth=0,
                 relief="flat",
             )
-            # scrollbar = ttk.Scrollbar(
-            #     parent,
-            #     orient="vertical",
-            #     command=canvas.yview,
-            #     bootstyle="round",  # type:ignore
-            # )
             scrollable_frame = ttk.Frame(canvas)
             scrollable_frame.bind(
                 "<Configure>",
                 lambda e: canvas.configure(scrollregion=canvas.bbox("all")),
             )
             canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
-            # canvas.configure(yscrollcommand=scrollbar.set)
 
             self.field_widgets[section_id] = {}
             row = 0
@@ -123,7 +116,6 @@ class SettingsDialog(Dialog):
                 type = str(field_data["type"])
                 choices = field_data["choices"]
                 choices = choices if isinstance(choices, list) else None
-                # default = field_data["default"]
                 value = field_data["value"]
                 recommended = bool(field_data["recommended"])
                 label = ttk.Label(
@@ -166,7 +158,7 @@ class SettingsDialog(Dialog):
                 f"セクション '{section_id}' のフィールド作成でエラー: {e}"
             )
 
-    def _save_settings(self) -> None:
+    def _on_save(self) -> None:
         success, error_message = self._apply_settings()
         if not success:
             Messagebox.show_error(
@@ -203,7 +195,7 @@ class SettingsDialog(Dialog):
             )
         return True, None
 
-    def _cancel_changes(self) -> None:
+    def _on_close(self) -> None:
         try:
             if self.has_unsaved_changes():
                 result = Messagebox.yesno(
@@ -226,14 +218,15 @@ class SettingsDialog(Dialog):
         return self.settings_controller.has_changes()
 
     def _on_closing(self) -> None:
-        self._cancel_changes()
+        self._on_close()
 
     def close(self) -> None:
         if self._closed:
             return
-        try:
-            assert self._toplevel is not None, "Dialog is not initialized"
-            self._toplevel.after_idle(self._toplevel.destroy)
-        finally:
-            self.field_widgets.clear()
-            self._closed = True
+
+        if not self._toplevel:
+            raise Exception("Dialog is not initialized")
+
+        self._toplevel.after_idle(self._toplevel.destroy)
+        self.field_widgets.clear()
+        self._closed = True

@@ -11,7 +11,7 @@ from ttkbootstrap.tableview import Tableview
 
 from splat_replay.domain.models import BattleResult, VideoAsset
 from splat_replay.gui.components.toggle_tooltip import ToggleToolTip
-from splat_replay.gui.controllers.application_controller import (
+from splat_replay.gui.utils.application_controller import (
     GUIApplicationController,
 )
 from splat_replay.gui.widgets.card_widget import CardWidget

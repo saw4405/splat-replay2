@@ -8,7 +8,7 @@ from structlog.stdlib import BoundLogger
 from splat_replay.application.interfaces import (
     ImageSelector,
     SubtitleEditorPort,
-    VideoAssetRepository,
+    VideoAssetRepositoryPort,
     VideoEditorPort,
 )
 from splat_replay.domain.models import (
@@ -35,7 +35,7 @@ class AutoEditor:
         subtitle_editor: SubtitleEditorPort,
         image_selector: ImageSelector,
         settings: VideoEditSettings,
-        repo: VideoAssetRepository,
+        repo: VideoAssetRepositoryPort,
         logger: BoundLogger,
         progress: ProgressReporter,
     ):

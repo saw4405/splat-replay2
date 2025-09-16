@@ -17,18 +17,17 @@ from ttkbootstrap.style import ThemeDefinition
 from ttkbootstrap.utility import enable_high_dpi_awareness
 
 from splat_replay.domain.services import RecordState
-from splat_replay.gui.controllers.application_controller import (
-    GUIApplicationController,
-)
-from splat_replay.gui.utils.taskbar_badge import TaskbarBadge
-from splat_replay.gui.widgets.metadata_editor_card import MetadataEditorCard
-from splat_replay.gui.widgets.metadata_editor_dialog import (
+from splat_replay.gui.dialogs.metadata_editor_dialog import (
     MetadataEditorDialog,
 )
+from splat_replay.gui.dialogs.progress_dialog import ProgressDialog
+from splat_replay.gui.dialogs.settings_dialog import SettingsDialog
+from splat_replay.gui.utils.application_controller import (
+    GUIApplicationController,
+)
+from splat_replay.gui.widgets.metadata_editor_card import MetadataEditorCard
 from splat_replay.gui.widgets.video_list_card import VideoListCard
 from splat_replay.gui.widgets.video_preview_card import VideoPreviewCard
-from splat_replay.gui.windows.progress_dialog import ProgressDialog
-from splat_replay.gui.windows.settings_dialog import SettingsDialog
 from splat_replay.shared.logger import get_logger
 
 
@@ -43,7 +42,6 @@ class MainWindow:
             controller: アプリケーションのコントローラー
         """
         self.logger = get_logger()
-        self.controller = GUIApplicationController()
         self.settings_dialog = None
         self._closing = False
 
@@ -65,9 +63,7 @@ class MainWindow:
             size=(1600, 1100),
             minsize=(1200, 1100),
         )
-        self.taskbar_badge = TaskbarBadge(self.window.winfo_id())
-        # GUI root を controller に関連付け (早期に行い progress pump を開始)
-        self.controller.attach_gui_root(self.window)
+        self.controller = GUIApplicationController(self.window)
         self.window.protocol("WM_DELETE_WINDOW", self._on_close_request)
 
         self._setup_style()

@@ -20,7 +20,7 @@ from splat_replay.application.interfaces import (
     SpeechTranscriberPort,
     SubtitleEditorPort,
     UploadPort,
-    VideoAssetRepository,
+    VideoAssetRepositoryPort,
     VideoEditorPort,
     VideoRecorderPort,
 )
@@ -162,14 +162,19 @@ def register_adapters(container: punq.Container):
             publisher,
         )
 
-    container.register(VideoAssetRepository, factory=_video_asset_repo_factory)
+    container.register(
+        VideoAssetRepositoryPort, factory=_video_asset_repo_factory
+    )
     recorder_with_transcription_instance = RecorderWithTranscription(
         cast(VideoRecorderPort, container.resolve(VideoRecorderPort)),
         cast(
             Optional[SpeechTranscriberPort],
             container.resolve(Optional[SpeechTranscriberPort]),
         ),
-        cast(VideoAssetRepository, container.resolve(VideoAssetRepository)),
+        cast(
+            VideoAssetRepositoryPort,
+            container.resolve(VideoAssetRepositoryPort),
+        ),
         cast(BoundLogger, container.resolve(BoundLogger)),
     )
     container.register(

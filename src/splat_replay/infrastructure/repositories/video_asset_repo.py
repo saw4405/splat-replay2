@@ -12,7 +12,7 @@ from structlog.stdlib import BoundLogger
 
 from splat_replay.application.interfaces import (
     EventPublisher,
-    VideoAssetRepository,
+    VideoAssetRepositoryPort,
 )
 from splat_replay.domain.models import (
     BattleResult,
@@ -23,7 +23,7 @@ from splat_replay.shared.config import VideoStorageSettings
 from splat_replay.shared.event_types import EventTypes
 
 
-class FileVideoAssetRepository(VideoAssetRepository):
+class FileVideoAssetRepository(VideoAssetRepositoryPort):
     """ファイルシステム上で VideoAsset を管理する実装."""
 
     def __init__(
@@ -130,16 +130,11 @@ class FileVideoAssetRepository(VideoAssetRepository):
             json.dumps(metadata.to_dict(), ensure_ascii=False),
             encoding="utf-8",
         )
-        if self._publisher:
-            try:
-                from splat_replay.shared.event_types import EventTypes
 
-                self._publisher.publish(
-                    EventTypes.ASSET_RECORDED_METADATA_UPDATED,
-                    {"video": str(video)},
-                )
-            except Exception:
-                pass
+        self._publisher.publish(
+            EventTypes.ASSET_RECORDED_METADATA_UPDATED,
+            {"video": str(video)},
+        )
 
     def list_recordings(self) -> list[VideoAsset]:
         assets: list[VideoAsset] = []
@@ -149,7 +144,7 @@ class FileVideoAssetRepository(VideoAssetRepository):
                 assets.append(VideoAsset.load(video))
         return assets
 
-    def delete_recording(self, video: Path) -> None:
+    def delete_recording(self, video: Path) -> bool:
         video = video.resolve()
         if video.exists():
             video.unlink(missing_ok=True)
@@ -162,16 +157,18 @@ class FileVideoAssetRepository(VideoAssetRepository):
         metadata = video.with_suffix(".json")
         if metadata.exists():
             metadata.unlink(missing_ok=True)
-        if self._publisher:
-            try:
-                from splat_replay.shared.event_types import EventTypes
 
-                self._publisher.publish(
-                    EventTypes.ASSET_RECORDED_DELETED,
-                    {"video": str(video)},
-                )
-            except Exception:
-                pass
+        self._publisher.publish(
+            EventTypes.ASSET_RECORDED_DELETED,
+            {"video": str(video)},
+        )
+
+        return (
+            not video.exists()
+            and not subtitle.exists()
+            and not thumbnail.exists()
+            and not metadata.exists()
+        )
 
     def save_edited(self, video: Path) -> Path:
         dest = self.settings.edited_dir
@@ -182,15 +179,10 @@ class FileVideoAssetRepository(VideoAssetRepository):
         except Exception:
             target = video
         self.logger.info("編集後ファイル保存", path=str(target))
-        if self._publisher:
-            try:
-                from splat_replay.shared.event_types import EventTypes
 
-                self._publisher.publish(
-                    EventTypes.ASSET_EDITED_SAVED, {"video": str(target)}
-                )
-            except Exception:
-                pass
+        self._publisher.publish(
+            EventTypes.ASSET_EDITED_SAVED, {"video": str(target)}
+        )
         return target
 
     def list_edited(self) -> list[Path]:
@@ -200,16 +192,13 @@ class FileVideoAssetRepository(VideoAssetRepository):
             videos.extend(self.settings.edited_dir.glob(pattern))
         return videos
 
-    def delete_edited(self, video: Path) -> None:
+    def delete_edited(self, video: Path) -> bool:
         video = video.resolve()
         if video.exists():
             video.unlink(missing_ok=True)
-        if self._publisher:
-            try:
-                from splat_replay.shared.event_types import EventTypes
 
-                self._publisher.publish(
-                    EventTypes.ASSET_EDITED_DELETED, {"video": str(video)}
-                )
-            except Exception:
-                pass
+        self._publisher.publish(
+            EventTypes.ASSET_EDITED_DELETED, {"video": str(video)}
+        )
+
+        return not video.exists()

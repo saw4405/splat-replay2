@@ -14,24 +14,22 @@ from __future__ import annotations
 import asyncio
 from concurrent.futures import Future as ThreadFuture
 from dataclasses import dataclass
+from pathlib import Path
 from typing import (
-    TYPE_CHECKING,
     Any,
     Awaitable,
     Callable,
     Dict,
     Generic,
+    List,
+    Literal,
     Optional,
+    Tuple,
     TypeVar,
     overload,
-    Literal,
-    List,
-    Tuple,
 )
 
-if TYPE_CHECKING:  # type-only imports to avoid runtime coupling
-    from pathlib import Path
-    from splat_replay.domain.models import VideoAsset
+from splat_replay.domain.models import RecordingMetadata, VideoAsset
 
 T = TypeVar("T")
 
@@ -54,19 +52,24 @@ class CommandBus:
     """
 
     def __init__(self) -> None:
-        self._handlers: Dict[str, Callable[..., Awaitable[Any]]] = {}
+        self._handlers: Dict[str, Callable[..., Awaitable[object]]] = {}
         self._loop: asyncio.AbstractEventLoop | None = None
 
     def set_loop(self, loop: asyncio.AbstractEventLoop) -> None:
         self._loop = loop
 
     def register(
-        self, name: str, handler: Callable[..., Awaitable[Any]]
+        self, name: str, handler: Callable[..., Awaitable[object]]
     ) -> None:
         self._handlers[name] = handler
 
     # ---- typed overloads (for static checkers) ----
     # recorder controls (no payload, no return)
+    @overload
+    def submit(
+        self, name: Literal["recorder.get_metadata"], **payload: Any
+    ) -> ThreadFuture[CommandResult[Optional[RecordingMetadata]]]: ...
+
     @overload
     def submit(
         self, name: Literal["recorder.start"], **payload: Any
@@ -108,7 +111,7 @@ class CommandBus:
     @overload
     def submit(
         self, name: Literal["asset.get_metadata"], *, video_path: "Path"
-    ) -> ThreadFuture[CommandResult[Optional[dict]]]: ...
+    ) -> ThreadFuture[CommandResult[Optional[Dict[str, str | None]]]]: ...
 
     @overload
     def submit(
@@ -116,7 +119,7 @@ class CommandBus:
         name: Literal["asset.save_metadata"],
         *,
         video_path: "Path",
-        metadata_dict: dict,
+        metadata_dict: Dict[str, str],
     ) -> ThreadFuture[CommandResult[bool]]: ...
 
     @overload

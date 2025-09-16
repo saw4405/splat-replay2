@@ -10,7 +10,7 @@ from typing import Dict, Optional
 import ttkbootstrap as ttk
 
 from splat_replay.domain.services import RecordState
-from splat_replay.gui.controllers.application_controller import (
+from splat_replay.gui.utils.application_controller import (
     GUIApplicationController,
 )
 from splat_replay.gui.widgets.card_widget import CardWidget
