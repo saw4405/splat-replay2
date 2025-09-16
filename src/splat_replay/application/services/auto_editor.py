@@ -54,6 +54,7 @@ class AutoEditor:
 
     async def execute(self) -> list[Path]:
         self.logger.info("自動編集を開始します")
+        self._cancelled = False
         edited: list[Path] = []
 
         assets = self.repo.list_recordings()

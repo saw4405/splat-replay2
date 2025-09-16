@@ -50,7 +50,6 @@ from splat_replay.infrastructure import (
     FFmpegProcessor,
     FileVideoAssetRepository,
     FramePublisherAdapter,
-    GuiRuntimePortAdapter,
     ImageDrawer,
     ImageEditor,
     IntegratedSpeechRecognizer,
@@ -82,6 +81,7 @@ from splat_replay.shared.logger import get_logger
 def register_config(container: punq.Container) -> AppSettings:
     """設定を DI コンテナに登録する。"""
     settings = AppSettings.load_from_toml()
+    container.register(AppSettings, instance=settings)
     container.register(BehaviorSettings, instance=settings.behavior)
     container.register(CaptureDeviceSettings, instance=settings.capture_device)
     container.register(OBSSettings, instance=settings.obs)
@@ -135,11 +135,6 @@ def register_adapters(container: punq.Container):
     container.register(IntegratedSpeechRecognizer, IntegratedSpeechRecognizer)
 
     # Aggregated GUI runtime ports (command/event/frame)
-    def _gui_runtime_factory():
-        rt = resolve(container, AppRuntime)
-        return GuiRuntimePortAdapter(rt)
-
-    container.register(GuiRuntimePortAdapter, factory=_gui_runtime_factory)  # type: ignore[arg-type]
     try:
         container.register(Optional[SpeechTranscriberPort], SpeechTranscriber)
         container.resolve(Optional[SpeechTranscriberPort])
@@ -152,17 +147,13 @@ def register_adapters(container: punq.Container):
     )
 
     # VideoAssetRepository は EventPublisher を利用するため factory で注入
-    def _video_asset_repo_factory():
-        publisher = resolve(container, EventPublisher)
-        return FileVideoAssetRepository(
-            cast(
-                VideoStorageSettings, container.resolve(VideoStorageSettings)
-            ),
-            cast(BoundLogger, container.resolve(BoundLogger)),
-            publisher,
-        )
-
-    container.register(VideoAssetRepository, factory=_video_asset_repo_factory)
+    publisher = resolve(container, EventPublisher)
+    repo_instance = FileVideoAssetRepository(
+        cast(VideoStorageSettings, container.resolve(VideoStorageSettings)),
+        cast(BoundLogger, container.resolve(BoundLogger)),
+        publisher,
+    )
+    container.register(VideoAssetRepository, instance=repo_instance)
     recorder_with_transcription_instance = RecorderWithTranscription(
         cast(VideoRecorderPort, container.resolve(VideoRecorderPort)),
         cast(
@@ -225,6 +216,20 @@ def configure_container() -> punq.Container:
     register_domain_services(container)
     register_app_services(container)
     register_app_usecases(container)
+
+    # 長寿命サービスをシングルトンとして扱う
+    asset_query = resolve(container, AssetQueryService)
+    container.register(AssetQueryService, instance=asset_query)
+    auto_recorder = resolve(container, AutoRecorder)
+    container.register(AutoRecorder, instance=auto_recorder)
+    auto_editor = resolve(container, AutoEditor)
+    container.register(AutoEditor, instance=auto_editor)
+    auto_uploader = resolve(container, AutoUploader)
+    container.register(AutoUploader, instance=auto_uploader)
+    progress_reporter = resolve(container, ProgressReporter)
+    container.register(ProgressReporter, instance=progress_reporter)
+    device_checker = resolve(container, DeviceChecker)
+    container.register(DeviceChecker, instance=device_checker)
 
     try:
         ar = resolve(container, AutoRecorder)

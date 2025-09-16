@@ -26,10 +26,8 @@ dependencies = [
     "obs-ws-client>=0.1.0",
     "tomli-w>=1.0.0",
     "pillow>=10.0.0",
-    "darkdetect>=0.8.0",
-    "ttkbootstrap>=1.14.2",
-    "comtypes>=1.4.11",
-    "dateparser>=1.2.2",
+    "fastapi>=0.115.0",
+    "uvicorn>=0.30.0",
     "pytest-asyncio>=1.1.0",
 ]
 

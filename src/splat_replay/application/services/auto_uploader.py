@@ -40,6 +40,7 @@ class AutoUploader:
 
     async def execute(self):
         self.logger.info("自動アップロードを開始します")
+        self._cancelled = False
 
         videos = self.repo.list_edited()
 

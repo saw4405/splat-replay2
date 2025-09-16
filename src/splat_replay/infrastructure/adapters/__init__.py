@@ -16,7 +16,6 @@ __all__ = [
     "SpeechTranscriber",
     "EventPublisherAdapter",
     "FramePublisherAdapter",
-    "GuiRuntimePortAdapter",
 ]
 
 from .audio import (
@@ -28,7 +27,6 @@ from .capture_device_checker import CaptureDeviceChecker
 from .event_publisher_adapter import EventPublisherAdapter
 from .ffmpeg_processor import FFmpegProcessor
 from .frame_publisher_adapter import FramePublisherAdapter
-from .gui_runtime_port_adapter import GuiRuntimePortAdapter
 from .image_drawer import ImageDrawer
 from .image_editor import ImageEditor
 from .obs_controller import OBSController
