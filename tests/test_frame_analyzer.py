@@ -326,6 +326,7 @@ async def test_detect_communication_error(
         ("battle_finish_11.png", True),
         ("battle_finish_12.png", True),
         ("battle_finish_13.png", False),
+        ("vlcsnap-2025-09-23-11h35m04s375.png", True),
         ("loading_1.png", False),
     ],
 )

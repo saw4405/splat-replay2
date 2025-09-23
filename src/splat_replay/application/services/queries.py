@@ -68,19 +68,23 @@ class AssetQueryService:
 
         async def _get_metadata(
             video_path: Path,
-        ) -> Optional[Dict[str, str | None]]:
-            def work() -> Optional[dict]:
+        ) -> Optional[dict[str, str | None]]:
+            def work() -> Optional[dict[str, str | None]]:
                 asset = self._repo.get_asset(video_path)
-                return (
-                    asset.metadata.to_dict()
-                    if asset and asset.metadata
-                    else None
-                )
+                if not asset or not asset.metadata:
+                    return None
+                raw = asset.metadata.to_dict()
+                return {
+                    key: value
+                    if isinstance(value, str) or value is None
+                    else str(value)
+                    for key, value in raw.items()
+                }
 
             return await asyncio.to_thread(work)
 
         async def _save_metadata(
-            video_path: Path, metadata_dict: Dict[str, str]
+            video_path: Path, metadata_dict: dict[str, str]
         ) -> bool:
             def work() -> bool:
                 try:

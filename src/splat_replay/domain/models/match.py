@@ -21,14 +21,18 @@ class Match(Enum):
 
     def is_anarchy(self) -> bool:
         """バンカラマッチかどうかを返す。"""
-        return self in {self.ANARCHY, self.ANARCHY_OPEN, self.ANARCHY_SERIES}
+        return self in {
+            Match.ANARCHY,
+            Match.ANARCHY_OPEN,
+            Match.ANARCHY_SERIES,
+        }
 
     def is_fest(self) -> bool:
         """フェスマッチかどうかを返す。"""
         return self in {
-            self.SPLATFEST,
-            self.SPLATFEST_OPEN,
-            self.SPLATFEST_PRO,
+            Match.SPLATFEST,
+            Match.SPLATFEST_OPEN,
+            Match.SPLATFEST_PRO,
         }
 
     def equal(self, other: Match, ignore_open_challenge: bool = False) -> bool:

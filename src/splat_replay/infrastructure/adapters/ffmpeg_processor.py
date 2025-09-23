@@ -1,36 +1,94 @@
-"""FFmpeg 実行アダプタ。"""
+"""FFmpeg adapter utilities."""
 
 from __future__ import annotations
 
 import json
 import subprocess
 from pathlib import Path
-from typing import List, Literal, Optional
+from subprocess import CompletedProcess
+from typing import Dict, List, Literal, Optional, Sequence, TypeVar
 
 from structlog.stdlib import BoundLogger
+
 from splat_replay.application.interfaces import VideoEditorPort
+
+ResultT = TypeVar("ResultT", str, bytes)
 
 
 class FFmpegProcessor(VideoEditorPort):
-    """FFmpeg を呼び出して動画加工を行うアダプタ."""
+    """Provides high-level helpers around ffmpeg/ffprobe commands."""
 
     def __init__(self, logger: BoundLogger) -> None:
         self.logger = logger
 
+    # ------------------------------------------------------------------
+    # Helpers
+    # ------------------------------------------------------------------
+    def _run_text(
+        self,
+        command: Sequence[str],
+        *,
+        cwd: Path | None = None,
+        input_text: str | None = None,
+    ) -> CompletedProcess[str]:
+        return subprocess.run(
+            list(command),
+            check=False,
+            cwd=str(cwd) if cwd else None,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            input=input_text,
+        )
+
+    def _run_binary(
+        self,
+        command: Sequence[str],
+        *,
+        input_bytes: bytes | None = None,
+    ) -> CompletedProcess[bytes]:
+        return subprocess.run(
+            list(command),
+            check=False,
+            capture_output=True,
+            input=input_bytes,
+        )
+
+    def _log_failure(
+        self,
+        message: str,
+        result: CompletedProcess[ResultT],
+    ) -> None:
+        stderr_raw = result.stderr
+        if isinstance(stderr_raw, bytes):
+            stderr = stderr_raw.decode("utf-8", errors="ignore")
+        else:
+            stderr = stderr_raw or ""
+        stdout_raw = result.stdout
+        if isinstance(stdout_raw, bytes):
+            stdout = stdout_raw.decode("utf-8", errors="ignore")
+        else:
+            stdout = stdout_raw or ""
+        self.logger.error(message, error=stderr, output=stdout)
+
+    # ------------------------------------------------------------------
+    # VideoEditorPort implementation
+    # ------------------------------------------------------------------
     def merge(self, clips: list[Path], output: Path) -> Path:
-        """動画を結合する."""
-        abs_clips = [c.resolve() for c in clips]
-        self.logger.info("FFmpeg 動画結合", clips=[str(c) for c in abs_clips])
+        abs_clips = [clip.resolve() for clip in clips]
+        self.logger.info(
+            "FFmpeg 蜍慕判邨仙粋", clips=[str(c) for c in abs_clips]
+        )
         if not abs_clips:
             raise ValueError("clips is empty")
+
         filelist = abs_clips[0].parent / "concat.txt"
         filelist.write_text(
-            "\n".join([f"file '{str(c)}'" for c in abs_clips]),
+            "\n".join(f"file '{clip}'" for clip in abs_clips),
             encoding="utf-8",
         )
-        abs_output = output.resolve()
 
-        result = subprocess.run(
+        result = self._run_text(
             [
                 "ffmpeg",
                 "-y",
@@ -42,69 +100,54 @@ class FFmpegProcessor(VideoEditorPort):
                 str(filelist),
                 "-c",
                 "copy",
-                str(abs_output),
+                str(output.resolve()),
             ],
-            check=False,
-            cwd=str(abs_clips[0].parent),
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
+            cwd=abs_clips[0].parent,
         )
-        filelist.unlink()
+        filelist.unlink(missing_ok=True)
         if result.returncode != 0:
-            self.logger.error(
-                "動画結合に失敗",
-                error=result.stderr,
-                output=result.stdout,
-            )
+            self._log_failure("蜍慕判邨仙粋縺ｫ螟ｱ謨・", result)
         return output
 
-    def embed_metadata(self, path: Path, metadata: dict[str, str]):
-        """タイトルと説明を動画へ埋め込む."""
+    def embed_metadata(self, path: Path, metadata: Dict[str, str]) -> None:
         abs_path = path.resolve()
         self.logger.info(
-            "FFmpeg メタデータ埋め込み",
+            "FFmpeg 繝｡繧ｿ繝・・繧ｿ蝓九ａ霎ｼ縺ｿ",
             path=str(abs_path),
             metadata=metadata,
         )
 
         temp = abs_path.with_name(f"temp{abs_path.suffix}")
-        result = subprocess.run(
+        metadata_args: list[str] = []
+        for key, value in metadata.items():
+            if value:
+                metadata_args.extend(["-metadata", f"{key}={value}"])
+
+        result = self._run_text(
             [
                 "ffmpeg",
                 "-y",
                 "-i",
                 str(abs_path),
-                *[
-                    item
-                    for key, value in metadata.items()
-                    if value
-                    for item in ("-metadata", f"{key}={value}")
-                ],
+                *metadata_args,
                 "-c",
                 "copy",
                 str(temp),
-            ],
-            check=False,
-            text=True,
-            encoding="utf-8",
+            ]
         )
         if temp.exists():
             abs_path.unlink(missing_ok=True)
             temp.rename(abs_path)
         if result.returncode != 0:
-            self.logger.error(
-                "メタデータの埋め込みに失敗",
-                error=result.stderr,
-                output=result.stdout,
+            self._log_failure(
+                "繝｡繧ｿ繝・・繧ｿ縺ｮ蝓九ａ霎ｼ縺ｿ縺ｫ螟ｱ謨・", result
             )
 
-    def get_metadata(self, path: Path) -> dict[str, str]:
-        """動画のメタデータを取得する."""
+    def get_metadata(self, path: Path) -> Dict[str, str]:
         abs_path = path.resolve()
-        self.logger.info("FFmpeg メタデータ取得", path=str(abs_path))
+        self.logger.info("FFmpeg 繝｡繧ｿ繝・・繧ｿ蜿門ｾ・", path=str(abs_path))
 
-        result = subprocess.run(
+        result = self._run_text(
             [
                 "ffprobe",
                 "-v",
@@ -113,32 +156,39 @@ class FFmpegProcessor(VideoEditorPort):
                 "-print_format",
                 "json",
                 str(abs_path),
-            ],
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            check=False,
+            ]
         )
         if result.returncode != 0 or not result.stdout:
-            self.logger.error(
-                "メタデータの取得に失敗",
-                error=result.stderr,
-                output=result.stdout,
-            )
+            self._log_failure("繝｡繧ｿ繝・・繧ｿ縺ｮ蜿門ｾ励↓螟ｱ謨・", result)
             return {}
 
-        data = json.loads(result.stdout)
-        tags = data["format"].get("tags", {})
-        metadata = {k.lower(): v for k, v in tags.items()}
+        try:
+            data = json.loads(result.stdout)
+        except json.JSONDecodeError:
+            self.logger.error("JSON隗｣譫蝉ｸｭ縺ｫ繧ｨ繝ｩ繝ｼ縺檎匱逕溘＠縺ｾ縺励◆")
+            return {}
+
+        if not isinstance(data, dict):
+            return {}
+        format_section = data.get("format")
+        if not isinstance(format_section, dict):
+            return {}
+        tags = format_section.get("tags")
+        if not isinstance(tags, dict):
+            return {}
+
+        metadata: Dict[str, str] = {}
+        for key, value in tags.items():
+            if isinstance(key, str) and isinstance(value, str):
+                metadata[key.lower()] = value
         return metadata
 
-    def embed_subtitle(self, path: Path, srt: str):
-        """字幕を動画へ追加する."""
+    def embed_subtitle(self, path: Path, srt: str) -> None:
         abs_path = path.resolve()
-        self.logger.info("FFmpeg 字幕追加", path=str(abs_path))
+        self.logger.info("FFmpeg �����ǉ�", path=str(abs_path))
 
         temp = abs_path.with_name(f"temp{abs_path.suffix}")
-        result = subprocess.run(
+        result = self._run_text(
             [
                 "ffmpeg",
                 "-y",
@@ -160,29 +210,22 @@ class FFmpegProcessor(VideoEditorPort):
                 "title=Subtitles",
                 str(temp),
             ],
-            check=False,
-            input=srt,
-            text=True,
-            encoding="utf-8",
+            input_text=srt,
         )
         if temp.exists():
             abs_path.unlink(missing_ok=True)
             temp.rename(abs_path)
         if result.returncode != 0:
-            self.logger.error(
-                "字幕の追加に失敗",
-                error=result.stderr,
-                output=result.stdout,
-            )
+            self._log_failure("�����̒ǉ��Ɏ��s", result)
 
     def get_subtitle(self, path: Path) -> Optional[str]:
-        result = self._find_streams(path, "subtitle", "subrip")
-        if len(result) == 0:
-            self.logger.error("字幕が見つかりませんでした")
+        indices = self._find_streams(path, "subtitle", "subrip")
+        if not indices:
+            self.logger.error("������������܂���ł���")
             return None
-        index = result[0]
+        index = indices[0]
 
-        result = subprocess.run(
+        result = self._run_text(
             [
                 "ffmpeg",
                 "-i",
@@ -194,28 +237,19 @@ class FFmpegProcessor(VideoEditorPort):
                 "-f",
                 "srt",
                 "pipe:1",
-            ],
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
+            ]
         )
         if result.returncode != 0:
-            self.logger.error(
-                "字幕の取得に失敗",
-                error=result.stderr,
-                output=result.stdout,
-            )
+            self._log_failure("�����̎擾�Ɏ��s", result)
             return None
-
         return result.stdout
 
-    def embed_thumbnail(self, path: Path, thumbnail: bytes):
-        """サムネイル画像を動画へ埋め込む."""
+    def embed_thumbnail(self, path: Path, thumbnail: bytes) -> None:
         abs_path = path.resolve()
-        self.logger.info("FFmpeg サムネイル追加", path=str(abs_path))
+        self.logger.info("FFmpeg �T���l�C���ǉ�", path=str(abs_path))
 
         temp = abs_path.with_name(f"temp{abs_path.suffix}")
-        result = subprocess.run(
+        result = self._run_binary(
             [
                 "ffmpeg",
                 "-y",
@@ -231,26 +265,22 @@ class FFmpegProcessor(VideoEditorPort):
                 "copy",
                 str(temp),
             ],
-            check=False,
-            input=thumbnail,
+            input_bytes=thumbnail,
         )
         if temp.exists():
             abs_path.unlink(missing_ok=True)
             temp.rename(abs_path)
         if result.returncode != 0:
-            self.logger.error(
-                "サムネイルの追加に失敗",
-                error=result.stderr,
-                output=result.stdout,
-            )
+            self._log_failure("�T���l�C���̒ǉ��Ɏ��s", result)
 
     def get_thumbnail(self, path: Path) -> Optional[bytes]:
-        result = self._find_streams(path, "video", "png")
-        if len(result) == 0:
-            self.logger.error("サムネイルが見つかりませんでした")
+        indices = self._find_streams(path, "video", "png")
+        if not indices:
+            self.logger.error("�T���l�C����������܂���ł���")
             return None
-        index = result[0]
-        result = subprocess.run(
+        index = indices[0]
+
+        result = self._run_binary(
             [
                 "ffmpeg",
                 "-i",
@@ -262,28 +292,25 @@ class FFmpegProcessor(VideoEditorPort):
                 "-c",
                 "copy",
                 "pipe:1",
-            ],
-            capture_output=True,
+            ]
         )
         if result.returncode != 0:
             self.logger.error(
-                f"サムネイルの取得に失敗しました: {result.stderr.decode('utf-8')}"
+                f"�T���l�C���̎擾�Ɏ��s���܂���: {result.stderr.decode('utf-8', errors='ignore')}"
             )
             return None
-
         return result.stdout
 
-    def change_volume(self, path: Path, multiplier: float):
-        """動画の音量を変更する."""
+    def change_volume(self, path: Path, multiplier: float) -> None:
         abs_path = path.resolve()
         self.logger.info(
-            "FFmpeg 音量変更", path=str(abs_path), multiplier=multiplier
+            "FFmpeg ���ʕύX", path=str(abs_path), multiplier=multiplier
         )
         if multiplier == 1.0:
             return
 
         temp = abs_path.with_name(f"temp{abs_path.suffix}")
-        result = subprocess.run(
+        result = self._run_text(
             [
                 "ffmpeg",
                 "-y",
@@ -298,27 +325,19 @@ class FFmpegProcessor(VideoEditorPort):
                 "-c:s",
                 "copy",
                 str(temp),
-            ],
-            check=False,
-            text=True,
-            encoding="utf-8",
+            ]
         )
         if temp.exists():
             abs_path.unlink(missing_ok=True)
             temp.rename(abs_path)
         if result.returncode != 0:
-            self.logger.error(
-                "音量の変更に失敗",
-                error=result.stderr,
-                output=result.stdout,
-            )
+            self._log_failure("���ʂ̕ύX�Ɏ��s", result)
 
     def get_video_length(self, path: Path) -> Optional[float]:
-        """動画の長さを取得する."""
         abs_path = path.resolve()
-        self.logger.info("FFmpeg 動画長さ取得", path=str(abs_path))
+        self.logger.info("FFmpeg ���撷���擾", path=str(abs_path))
 
-        result = subprocess.run(
+        result = self._run_text(
             [
                 "ffprobe",
                 "-v",
@@ -328,62 +347,64 @@ class FFmpegProcessor(VideoEditorPort):
                 "-of",
                 "default=noprint_wrappers=1:nokey=1",
                 str(abs_path),
-            ],
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
+            ]
         )
         if result.returncode != 0:
-            self.logger.error(
-                "動画の長さの取得に失敗",
-                error=result.stderr,
-                output=result.stdout,
-            )
+            self._log_failure("����̒����̎擾�Ɏ��s", result)
             return None
 
         try:
             return float(result.stdout.strip())
         except ValueError:
-            self.logger.error("動画の長さの解析に失敗しました")
+            self.logger.error("����̒����̉�͂Ɏ��s���܂���")
             return None
 
+    # ------------------------------------------------------------------
+    # Internal utilities
+    # ------------------------------------------------------------------
     def _find_streams(
         self,
         path: Path,
         codec_type: Literal["video", "audio", "subtitle"],
         codec_name: str,
     ) -> List[int]:
-        command = [
-            "ffprobe",
-            "-v",
-            "error",
-            "-show_streams",
-            "-of",
-            "json",
-            str(path),
-        ]
-        result = subprocess.run(
-            command, capture_output=True, text=True, encoding="utf-8"
+        result = self._run_text(
+            [
+                "ffprobe",
+                "-v",
+                "error",
+                "-show_streams",
+                "-of",
+                "json",
+                str(path),
+            ]
         )
-        if result.returncode != 0:
-            self.logger.error("ストリーム情報の取得に失敗しました")
+        if result.returncode != 0 or not result.stdout:
+            self.logger.error(
+                "繧ｹ繝医Μ繝ｼ繝諠・ｱ縺ｮ蜿門ｾ励↓螟ｱ謨励＠縺ｾ縺励◆"
+            )
             return []
 
         try:
-            info = json.loads(result.stdout)
-        except Exception:
-            self.logger.error("JSON解析中にエラーが発生しました")
+            data = json.loads(result.stdout)
+        except json.JSONDecodeError:
+            self.logger.error("JSON隗｣譫蝉ｸｭ縺ｫ繧ｨ繝ｩ繝ｼ縺檎匱逕溘＠縺ｾ縺励◆")
+            return []
+        if not isinstance(data, dict):
+            return []
+        streams = data.get("streams")
+        if not isinstance(streams, list):
             return []
 
-        target_streams = [
-            stream
-            for stream in info["streams"]
-            if stream.get("codec_type") == codec_type
-        ]
-        relative_indices = [
-            i
-            for i, stream in enumerate(target_streams)
-            if stream.get("codec_name") == codec_name
-        ]
-
-        return relative_indices
+        matching: list[int] = []
+        for stream in streams:
+            if not isinstance(stream, dict):
+                continue
+            if stream.get("codec_type") != codec_type:
+                continue
+            if stream.get("codec_name") != codec_name:
+                continue
+            index_value = stream.get("index")
+            if isinstance(index_value, int):
+                matching.append(index_value)
+        return matching

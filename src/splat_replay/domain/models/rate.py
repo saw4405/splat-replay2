@@ -1,34 +1,41 @@
-"""レート関連クラス。"""
+"""Rate models and helpers."""
 
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Literal, Union
+from collections.abc import Mapping
+from typing import ClassVar, Literal, cast
 
 
 class RateBase(ABC):
     @classmethod
-    def from_dict(cls, data: dict) -> "RateBase":
-        """to_dictで出力した辞書からRateBaseインスタンスを復元する。"""
+    def from_dict(cls, data: Mapping[str, object]) -> "RateBase":
+        """Rehydrate a rate from a serialized dictionary."""
         type_ = data.get("type")
         value = data.get("value")
         if value is None:
-            raise ValueError("valueがNoneです")
+            raise ValueError("valueがNoneではいけません")
+        if not isinstance(type_, str):
+            raise ValueError(f"未知のtype: {type_}")
         if type_ == "XP":
-            return XP(float(value))
+            if isinstance(value, (int, float, str)):
+                return XP(float(value))
+            raise ValueError("XP のvalueは数値として解釈できません")
         if type_ == "Udemae":
-            return Udemae(value)
+            if isinstance(value, str):
+                return Udemae(value)
+            raise ValueError("Udemae のvalueは文字列で指定してください")
         raise ValueError(f"未知のtype: {type_}")
 
     @property
     @abstractmethod
     def label(self) -> str:
-        """表示用ラベルを返す。"""
+        """Return label text for UI/logging."""
         raise NotImplementedError
 
     @abstractmethod
     def compare_rate(self, other: "RateBase") -> int:
-        """レートを比較する。"""
+        """Compare two rate objects."""
         raise NotImplementedError
 
     def __eq__(self, other: object) -> bool:
@@ -50,32 +57,32 @@ class RateBase(ABC):
         raise NotImplementedError
 
     @classmethod
-    def create(cls, value: Union[float, int, str]) -> "RateBase":
-        """値から適切なレートオブジェクトを生成する。"""
+    def create(cls, value: float | int | str) -> "RateBase":
+        """Create a rate from mixed representation."""
         if isinstance(value, (int, float)):
             return XP(float(value))
         if isinstance(value, str):
             try:
                 xp = float(value)
-                return XP(xp)
             except ValueError:
                 return Udemae(value)
-        raise ValueError("XP または Udemae のインスタンスを生成できません")
+            return XP(xp)
+        raise ValueError("XP か Udemae の形式で指定してください")
 
     @abstractmethod
-    def to_dict(self) -> dict:
-        """JSONシリアライズ可能な辞書を返す。"""
+    def to_dict(self) -> dict[str, object]:
+        """Serialize into a JSON-friendly dictionary."""
         raise NotImplementedError
 
 
 class XP(RateBase):
-    MIN_XP = 500.0
-    MAX_XP = 5500.0
+    MIN_XP: ClassVar[float] = 500.0
+    MAX_XP: ClassVar[float] = 5500.0
 
     def __init__(self, xp: float) -> None:
         if not (self.MIN_XP <= xp <= self.MAX_XP):
             raise ValueError(
-                f"XP は {self.MIN_XP} から {self.MAX_XP} の範囲でなければなりません"
+                f"XP は {self.MIN_XP} 以上 {self.MAX_XP} 以下で指定してください"
             )
         self.xp = xp
 
@@ -89,7 +96,7 @@ class XP(RateBase):
 
     def compare_rate(self, other: RateBase) -> int:
         if not isinstance(other, XP):
-            raise TypeError("XP 同士でのみ比較可能です")
+            raise TypeError("XP 同士で比較してください")
         if self.xp < other.xp:
             return -1
         if self.xp > other.xp:
@@ -102,7 +109,7 @@ class XP(RateBase):
     def short_str(self) -> str:
         return str(int(self.xp) // 100)
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, object]:
         return {"type": "XP", "value": self.xp}
 
 
@@ -121,7 +128,7 @@ class Udemae(RateBase):
         "S+",
     ]
 
-    RANK_ORDER = {
+    RANK_ORDER: ClassVar[dict[Rank, int]] = {
         "C-": 0,
         "C": 1,
         "C+": 2,
@@ -135,26 +142,26 @@ class Udemae(RateBase):
         "S+": 10,
     }
 
-    def __init__(self, udemae: Union[Rank, str]) -> None:
+    def __init__(self, udemae: str) -> None:
         if udemae not in self.RANK_ORDER:
-            raise ValueError("無効な評価ランクが指定されています")
-        self.udemae = udemae
+            raise ValueError("有効なウデマエを指定してください")
+        self.udemae: Udemae.Rank = cast(Udemae.Rank, udemae)
 
     @property
     def label(self) -> str:
         return "ウデマエ"
 
     @property
-    def value(self) -> str:
+    def value(self) -> Udemae.Rank:
         return self.udemae
 
     def compare_rate(self, other: RateBase) -> int:
         if not isinstance(other, Udemae):
-            raise TypeError("Udemae 同士でのみ比較可能です")
+            raise TypeError("Udemae 同士で比較してください")
         self_rank = self.RANK_ORDER.get(self.udemae)
         other_rank = self.RANK_ORDER.get(other.udemae)
         if self_rank is None or other_rank is None:
-            raise ValueError("無効な評価ランクが指定されています")
+            raise ValueError("有効なウデマエを指定してください")
         if self_rank < other_rank:
             return -1
         if self_rank > other_rank:
@@ -167,5 +174,5 @@ class Udemae(RateBase):
     def short_str(self) -> str:
         return self.udemae
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, object]:
         return {"type": "Udemae", "value": self.udemae}

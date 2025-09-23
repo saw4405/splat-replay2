@@ -51,6 +51,10 @@ WELCOME_MESSAGE = "🎮🎮🎮 Let's play! 🎮🎮🎮"
 
 
 class AutoRecorder:
+    EventTypes = EventTypes
+    EARLY_ABORT_WINDOW_SECONDS = EARLY_ABORT_WINDOW_SECONDS
+    MAX_RECORDING_SECONDS = MAX_RECORDING_SECONDS
+
     def __init__(
         self,
         state_machine: StateMachine,
@@ -74,8 +78,8 @@ class AutoRecorder:
         self.metadata = RecordingMetadata()  # backward compat reference
         self._ctx = RecordingContext(self.metadata)
         self._stop_event = asyncio.Event()
-        self._control_queue: asyncio.Queue[tuple[str, dict]] = asyncio.Queue(
-            maxsize=100
+        self._control_queue: asyncio.Queue[tuple[str, dict[str, object]]] = (
+            asyncio.Queue(maxsize=100)
         )  # 制御は多くても 100
         # サブコンポーネントへ委譲
         self._capture_producer = FrameCaptureProducer(
@@ -94,7 +98,7 @@ class AutoRecorder:
         # フレーム単位解析キャッシュ (name, args) -> result
         self._analysis_cache: dict[tuple[str, tuple[object, ...]], object] = {}
 
-        self.last_phase = None
+        self.last_phase: str | None = None
 
     # ================================================================
     # 内部: 解析結果キャッシュユーティリティ (フレーム単位)
@@ -323,19 +327,19 @@ class AutoRecorder:
         async def _get_metadata() -> RecordingMetadata:
             return self.metadata
 
-        async def _start():
+        async def _start() -> None:
             await self.start()
 
-        async def _pause():
+        async def _pause() -> None:
             await self.pause()
 
-        async def _resume():
+        async def _resume() -> None:
             await self.resume()
 
-        async def _stop():
+        async def _stop() -> None:
             await self.stop()
 
-        async def _cancel():
+        async def _cancel() -> None:
             await self.cancel()
 
         return {

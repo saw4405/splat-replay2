@@ -191,13 +191,13 @@ class AutoEditor:
         target = group[0].video.with_name(filename)
         return target
 
-    def _merge_videos(self, target: Path, group: List[VideoAsset]):
+    def _merge_videos(self, target: Path, group: List[VideoAsset]) -> None:
         if len(group) > 1:
             self.video_editor.merge([a.video for a in group], target)
         else:
             target.write_bytes(group[0].video.read_bytes())
 
-    def _embed_subtitle(self, target: Path, group: List[VideoAsset]):
+    def _embed_subtitle(self, target: Path, group: List[VideoAsset]) -> None:
         subtitles: List[Path] = []
         video_lengths: List[float] = []
         for asset in group:
@@ -221,7 +221,7 @@ class AutoEditor:
         group: List[VideoAsset],
         day: datetime.date,
         time_slot: datetime.time,
-    ):
+    ) -> None:
         title, description = self._generate_title_and_description(
             group,
             day,
@@ -235,7 +235,7 @@ class AutoEditor:
         }
         self.video_editor.embed_metadata(target, metadata)
 
-    def _embed_thumbnail(self, target: Path, group: List[VideoAsset]):
+    def _embed_thumbnail(self, target: Path, group: List[VideoAsset]) -> None:
         thumb = self._create_thumbnail(group)
         if not thumb or not thumb.exists():
             self.logger.warning("サムネイル生成に失敗しました")
@@ -248,7 +248,7 @@ class AutoEditor:
         finally:
             thumb.unlink(missing_ok=True)
 
-    def _change_volume(self, target: Path, multiplier: float):
+    def _change_volume(self, target: Path, multiplier: float) -> None:
         if self.settings.volume_multiplier == 1.0:
             return
 
@@ -403,14 +403,14 @@ class AutoEditor:
 
         match_name = first.match.value if first else "Unknown"
         rule_name = first.rule.value if first else "Unknown"
-        stages = [
+        stage_names = [
             a.metadata.result.stage.value
             for a in assets
             if a.metadata and isinstance(a.metadata.result, BattleResult)
         ]
-        stages = list(dict.fromkeys(stages))
+        unique_stages = list(dict.fromkeys(stage_names))
 
-        rates = [
+        rates: list[RateBase] = [
             asset.metadata.rate
             for asset in assets
             if asset.metadata and asset.metadata.rate
@@ -434,7 +434,7 @@ class AutoEditor:
             "LOSE": lose,
             "DAY": day,
             "SCHEDULE": time_slot,
-            "STAGES": ", ".join(stages),
+            "STAGES": ", ".join(unique_stages),
             "CHAPTERS": chapters,
         }
         title = (
@@ -508,17 +508,17 @@ class AutoEditor:
             else "white"
         )
 
-        stages = [
+        stage_names = [
             a.metadata.result.stage.value
             for a in assets
             if a.metadata and isinstance(a.metadata.result, BattleResult)
         ]
-        stages = list(dict.fromkeys(stages))
-        stage1 = stages[0] if len(stages) > 0 else None
+        unique_stage_names = list(dict.fromkeys(stage_names))
+        stage1 = unique_stage_names[0] if unique_stage_names else None
         stage1_image_path = (
             self._get_asset_path(f"{stage1}.png") if stage1 else None
         )
-        stage2 = stages[1] if len(stages) > 1 else None
+        stage2 = unique_stage_names[1] if len(unique_stage_names) > 1 else None
         stage2_image_path = (
             self._get_asset_path(f"{stage2}.png") if stage2 else None
         )

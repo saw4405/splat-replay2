@@ -1,10 +1,10 @@
-"""録画時に保存するメタデータクラス。"""
+"""Recording metadata aggregates."""
 
 from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Dict
+from typing import Mapping
 
 from splat_replay.shared.logger import get_logger
 
@@ -16,7 +16,7 @@ from .result import BattleResult, Result, SalmonResult
 
 @dataclass
 class RecordingMetadata:
-    """録画時点での簡易メタデータ。"""
+    """State captured during an automated recording session."""
 
     game_mode: GameMode = GameMode.BATTLE
     started_at: datetime | None = None
@@ -30,9 +30,9 @@ class RecordingMetadata:
         self.judgement = None
         self.result = None
 
-    def to_dict(self) -> Dict[str, str | None]:
-        """辞書へ変換する。"""
-        dict = {
+    def to_dict(self) -> dict[str, str | int | None]:
+        """Serialize into a JSON-friendly dictionary."""
+        payload: dict[str, str | int | None] = {
             "game_mode": self.game_mode.value,
             "started_at": self.started_at.isoformat()
             if self.started_at
@@ -41,54 +41,63 @@ class RecordingMetadata:
             "judgement": self.judgement.value if self.judgement else None,
         }
         if self.result:
-            dict.update(self.result.to_dict())
-        return dict
+            payload.update(self.result.to_dict())
+        return payload
 
     @classmethod
-    def from_dict(cls, data: Dict[str, str]) -> "RecordingMetadata":
-        """辞書からインスタンスを生成する。"""
+    def from_dict(cls, data: Mapping[str, object]) -> "RecordingMetadata":
+        """Rehydrate metadata from persisted data."""
         logger = get_logger()
 
-        game_mode_str = data.get("game_mode")
-        if game_mode_str is None:
+        game_mode_raw = data.get("game_mode")
+        if not isinstance(game_mode_raw, str):
             raise ValueError("game_mode is required")
         try:
-            game_mode = GameMode(game_mode_str)
+            game_mode = GameMode(game_mode_raw)
         except Exception as e:
             logger.error(
-                f"ゲームモードの変換に失敗しました({game_mode_str}): {e}"
+                f"ゲームモードの解釈に失敗しました({game_mode_raw}): {e}"
             )
             raise ValueError("game_mode is invalid")
 
-        started_at_str = data.get("started_at")
+        started_at_raw = data.get("started_at")
+        started_at: datetime | None
         try:
-            started_at = (
-                datetime.fromisoformat(started_at_str)
-                if started_at_str
-                else None
-            )
+            if isinstance(started_at_raw, str) and started_at_raw:
+                started_at = datetime.fromisoformat(started_at_raw)
+            else:
+                started_at = None
         except Exception as e:
             logger.error(
-                f"開始時刻の変換に失敗しました({started_at_str}): {e}"
+                f"開始時刻の解釈に失敗しました({started_at_raw}): {e}"
             )
             started_at = None
 
-        rate_str = data.get("rate")
+        rate_raw = data.get("rate")
+        rate: RateBase | None
         try:
-            rate = RateBase.create(rate_str) if rate_str else None
+            if isinstance(rate_raw, str) and rate_raw:
+                rate = RateBase.create(rate_raw)
+            else:
+                rate = None
         except Exception as e:
-            logger.error(f"レートの変換に失敗しました({rate_str}): {e}")
+            logger.error(f"レートの解釈に失敗しました({rate_raw}): {e}")
             rate = None
 
-        judgement_str = data.get("judgement")
+        judgement_raw = data.get("judgement")
+        judgement: Judgement | None
         try:
-            judgement = Judgement(judgement_str) if judgement_str else None
+            if isinstance(judgement_raw, str) and judgement_raw:
+                judgement = Judgement(judgement_raw)
+            else:
+                judgement = None
         except Exception as e:
             logger.error(
-                f"ジャッジメントの変換に失敗しました({judgement_str}): {e}"
+                f"ジャッジ結果の解釈に失敗しました({judgement_raw}): {e}"
             )
             judgement = None
 
+        result: Result | None
         try:
             if game_mode == GameMode.BATTLE:
                 result = BattleResult.from_dict(data)
@@ -97,7 +106,7 @@ class RecordingMetadata:
             else:
                 result = None
         except Exception as e:
-            logger.error(f"結果の変換に失敗しました{data}: {e}")
+            logger.error(f"リザルトの解釈に失敗しました{data}: {e}")
             result = None
 
         return cls(

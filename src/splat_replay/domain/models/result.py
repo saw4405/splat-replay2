@@ -1,16 +1,37 @@
+"""Battle and salmon result models."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Dict
+from typing import Mapping
 
 from .match import Match
 from .rule import Rule
 from .stage import Stage
 
 
+def _as_str(value: object, field: str) -> str:
+    if isinstance(value, str):
+        return value
+    raise TypeError(f"{field} must be str, got {type(value)!r}")
+
+
+def _as_int(value: object, field: str) -> int:
+    if isinstance(value, int):
+        return value
+    if isinstance(value, str):
+        try:
+            return int(value)
+        except ValueError as exc:
+            raise ValueError(
+                f"{field} must be an int-compatible string"
+            ) from exc
+    raise TypeError(f"{field} must be int or str, got {type(value)!r}")
+
+
 @dataclass
 class BattleResult:
-    """結果画面で取得したメタデータ。"""
+    """Result information for a battle."""
 
     match: Match
     rule: Rule
@@ -19,7 +40,7 @@ class BattleResult:
     death: int
     special: int
 
-    def to_dict(self) -> Dict[str, str]:
+    def to_dict(self) -> dict[str, str]:
         return {
             "match": self.match.value,
             "rule": self.rule.value,
@@ -30,20 +51,26 @@ class BattleResult:
         }
 
     @classmethod
-    def from_dict(cls, data: Dict[str, str]) -> "BattleResult":
+    def from_dict(cls, data: Mapping[str, object]) -> "BattleResult":
+        match_str = _as_str(data["match"], "match")
+        rule_str = _as_str(data["rule"], "rule")
+        stage_str = _as_str(data["stage"], "stage")
+        kill = _as_int(data["kill"], "kill")
+        death = _as_int(data["death"], "death")
+        special = _as_int(data["special"], "special")
         return cls(
-            match=Match(data["match"]),
-            rule=Rule(data["rule"]),
-            stage=Stage(data["stage"]),
-            kill=int(data["kill"]),
-            death=int(data["death"]),
-            special=int(data["special"]),
+            match=Match(match_str),
+            rule=Rule(rule_str),
+            stage=Stage(stage_str),
+            kill=kill,
+            death=death,
+            special=special,
         )
 
 
 @dataclass
 class SalmonResult:
-    """サーモンラン結果で取得したメタデータ。"""
+    """Result information for a salmon run."""
 
     hazard: int
     stage: Stage
@@ -52,7 +79,7 @@ class SalmonResult:
     rescue: int
     rescued: int
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, int | str]:
         return {
             "hazard": self.hazard,
             "stage": self.stage.name,
@@ -63,16 +90,20 @@ class SalmonResult:
         }
 
     @classmethod
-    def from_dict(cls, data: dict) -> "SalmonResult":
-        from .stage import Stage
-
+    def from_dict(cls, data: Mapping[str, object]) -> "SalmonResult":
+        hazard = _as_int(data["hazard"], "hazard")
+        stage_name = _as_str(data["stage"], "stage")
+        golden = _as_int(data["golden_egg"], "golden_egg")
+        power = _as_int(data["power_egg"], "power_egg")
+        rescue_value = _as_int(data["rescue"], "rescue")
+        rescued_value = _as_int(data["rescued"], "rescued")
         return cls(
-            hazard=data["hazard"],
-            stage=Stage[data["stage"]],
-            golden_egg=data["golden_egg"],
-            power_egg=data["power_egg"],
-            rescue=data["rescue"],
-            rescued=data["rescued"],
+            hazard=hazard,
+            stage=Stage[stage_name],
+            golden_egg=golden,
+            power_egg=power,
+            rescue=rescue_value,
+            rescued=rescued_value,
         )
 
 

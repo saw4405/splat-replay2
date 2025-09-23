@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import asyncio
 from pathlib import Path
-from typing import Dict, Optional, Tuple
+from typing import Dict, Optional, Protocol, Tuple
 
 import numpy as np
 
@@ -23,6 +23,12 @@ from .hsv_ratio import HSVRatioMatcher
 from .rgb import RGBMatcher
 from .template import TemplateMatcher
 from .uniform import UniformColorMatcher
+
+
+class MatcherLike(Protocol):
+    name: str | None
+
+    async def match(self, image: np.ndarray) -> bool: ...
 
 
 class MatcherRegistry(ImageMatcherPort):
@@ -48,6 +54,12 @@ class MatcherRegistry(ImageMatcherPort):
         # 軽量キャッシュ: (キー/グループ, フィンガープリント) -> 結果
         self._match_cache: Dict[Tuple[str, int], bool] = {}
         self._matched_name_cache: Dict[Tuple[str, int], Optional[str]] = {}
+
+    def _get_matcher(self, key: str) -> MatcherLike | None:
+        composite = self.composites.get(key)
+        if composite is not None:
+            return composite
+        return self.matchers.get(key)
 
     def _fingerprint(self, image: np.ndarray) -> int:
         """高速な簡易フィンガープリント。
@@ -180,9 +192,7 @@ class MatcherRegistry(ImageMatcherPort):
         if cached is not None:
             return cached
 
-        matcher = self.composites.get(key)
-        if matcher is None:
-            matcher = self.matchers.get(key)
+        matcher = self._get_matcher(key)
         result = await matcher.match(image) if matcher else False
         self._match_cache[(key, fp)] = result
         return result
@@ -193,9 +203,9 @@ class MatcherRegistry(ImageMatcherPort):
         # For small groups, evaluate in parallel to reduce wall time.
         if len(keys) <= 4:
             tasks: list[asyncio.Task[bool]] = []
-            matchers: list[Optional[BaseMatcher]] = []
+            matchers: list[MatcherLike | None] = []
             for key in keys:
-                matcher = self.composites.get(key) or self.matchers.get(key)
+                matcher = self._get_matcher(key)
                 matchers.append(matcher)
                 if matcher is not None:
                     tasks.append(asyncio.create_task(matcher.match(image)))
@@ -212,9 +222,7 @@ class MatcherRegistry(ImageMatcherPort):
 
         # Fallback: sequential evaluation to avoid spawning many tasks.
         for key in keys:
-            matcher = self.composites.get(key)
-            if matcher is None:
-                matcher = self.matchers.get(key)
+            matcher = self._get_matcher(key)
             if matcher and await matcher.match(image):
                 return matcher.name or key
         return None

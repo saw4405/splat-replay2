@@ -35,7 +35,7 @@ class RecorderWithTranscription(RecorderWithTranscriptionPort):
         await self.recorder.setup()
         self.recorder.add_status_listener(self._notify_status_change)
 
-    async def start(self):
+    async def start(self) -> None:
         await self.recorder.start()
         if self.transcriber is not None:
             self.transcriber.start()
@@ -52,17 +52,17 @@ class RecorderWithTranscription(RecorderWithTranscriptionPort):
                 )
         return video_path, srt_path
 
-    async def cancel(self):
+    async def cancel(self) -> None:
         await self.recorder.stop()
         if self.transcriber is not None:
             self.transcriber.stop()
 
-    async def pause(self):
+    async def pause(self) -> None:
         await self.recorder.pause()
         if self.transcriber is not None:
             self.transcriber.pause()
 
-    async def resume(self):
+    async def resume(self) -> None:
         await self.recorder.resume()
         if self.transcriber is not None:
             self.transcriber.resume()

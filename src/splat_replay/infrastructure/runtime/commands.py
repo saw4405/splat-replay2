@@ -174,7 +174,7 @@ class CommandBus:
 
         handler = self._handlers.get(name)
         if handler is None:
-            tf: ThreadFuture[CommandResult[Any]] = ThreadFuture()
+            tf = ThreadFuture()
             tf.set_result(CommandResult(False, error=KeyError(name)))
             return tf
 

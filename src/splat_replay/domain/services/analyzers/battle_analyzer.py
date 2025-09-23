@@ -214,7 +214,7 @@ class BattleFrameAnalyzer(AnalyzerPlugin):
 
         # トリカラの攻撃側のときはキルレ表示の位置が異なるため、再度抽出する
         if not kill_record and match == Match.TRICOLOR:
-            record_positions: Dict[str, Dict[str, int]] = {
+            record_positions = {
                 "kill": {"x1": 1556, "y1": 293, "x2": 1585, "y2": 316},
                 "death": {"x1": 1616, "y1": 293, "x2": 1644, "y2": 316},
                 "special": {"x1": 1674, "y1": 293, "x2": 1703, "y2": 316},
@@ -230,7 +230,7 @@ class BattleFrameAnalyzer(AnalyzerPlugin):
     ) -> Optional[Tuple[int, int, int]]:
         """キル/デス/スペシャルの値を各ROIでOCRして取得（安定版）。"""
         records: Dict[str, int] = {}
-        ocr_tasks: List[asyncio.Task] = []
+        ocr_tasks: List[asyncio.Task[Optional[str]]] = []
         names: List[str] = []
         for name, position in record_positions.items():
             raw = frame[
@@ -427,12 +427,12 @@ class BattleFrameAnalyzer(AnalyzerPlugin):
         if len(lines) < 3:
             return None
         vals: list[int] = []
-        for idx, ln in enumerate(lines[:3]):
+        for line_idx, ln in enumerate(lines[:3]):
             v = _parse_int(ln)
             # death/special は誤って2桁になるケースがあるため末尾1桁を優先
             if v is None:
                 return None
-            if idx in (1, 2) and v >= 10:
+            if line_idx in (1, 2) and v >= 10:
                 # 可能なら末尾桁を採用
                 m2 = re.search(r"(\d+)\D*$", ln)
                 d2 = m2.group(1) if m2 else ""

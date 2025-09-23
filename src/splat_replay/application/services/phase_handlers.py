@@ -1,18 +1,13 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Protocol
+from typing import TYPE_CHECKING
 
 from splat_replay.application.services.recording_context import SessionPhase
 from splat_replay.domain.models import Frame
 
 if TYPE_CHECKING:  # pragma: no cover - 型チェックのみ
     from .auto_recorder import AutoRecorder
-
-
-class SupportsAnalyzer(Protocol):  # 最小限インタフェース (型補助)
-    async def _cached_call(self, func, *args):  # type: ignore[override]
-        ...
 
 
 class PhaseHandler:

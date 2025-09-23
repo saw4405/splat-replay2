@@ -24,7 +24,7 @@ class AppRuntime:
         if self._thread and self._thread.is_alive():
             return
 
-        def runner():
+        def runner() -> None:
             self.loop = asyncio.new_event_loop()
             asyncio.set_event_loop(self.loop)
             # command_bus に loop を通知（GUI スレッドからの submit 用）
@@ -53,7 +53,7 @@ class AppRuntime:
         while self.loop is None:
             pass
 
-    async def _monitor(self):
+    async def _monitor(self) -> None:
         while not self._shutdown.is_set():
             await asyncio.sleep(0.2)
 

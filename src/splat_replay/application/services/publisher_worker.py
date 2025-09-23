@@ -1,10 +1,13 @@
 import queue
 import threading
 import time
-from typing import Any, Optional, cast
+from typing import Any, Optional, Tuple, cast
 
 from splat_replay.application.interfaces import EventPublisher, FramePublisher
 from splat_replay.domain.models import Frame
+
+EventPayload = Tuple[str, dict[str, Any]]
+QueueItem = Tuple[str, EventPayload | Frame]
 
 
 class PublisherWorker:
@@ -19,7 +22,7 @@ class PublisherWorker:
     ) -> None:
         self._event_publisher = event_publisher
         self._frame_publisher = frame_publisher
-        self._queue: queue.Queue[tuple[str, Any]] = queue.Queue(
+        self._queue: queue.Queue[QueueItem] = queue.Queue(
             maxsize=queue_maxsize
         )
         self._idle_sleep = idle_sleep
@@ -50,7 +53,7 @@ class PublisherWorker:
         self._thread.join(timeout=1.0)
         self._thread = None
 
-    def enqueue_event(self, type_: str, payload: dict) -> None:
+    def enqueue_event(self, type_: str, payload: dict[str, Any]) -> None:
         try:
             self._queue.put_nowait(("event", (type_, payload)))
         except queue.Full:
@@ -76,11 +79,11 @@ class PublisherWorker:
             except Exception:
                 time.sleep(self._idle_sleep)
 
-    def _process(self, kind: str, payload: Any) -> None:
+    def _process(self, kind: str, payload: EventPayload | Frame) -> None:
         if kind == "event":
             try:
-                t, p = cast(tuple, payload)
-                self._event_publisher.publish(t, p)
+                event_type, event_payload = cast(EventPayload, payload)
+                self._event_publisher.publish(event_type, event_payload)
             except Exception:
                 pass
         elif kind == "frame" and self._frame_publisher is not None:

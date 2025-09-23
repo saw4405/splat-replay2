@@ -145,7 +145,9 @@ CASES: list[SpeedCase] = [
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("case", CASES, ids=[c.name for c in CASES])
-async def test_speed_threshold(case: SpeedCase):
+async def test_speed_threshold(
+    case: SpeedCase, request: pytest.FixtureRequest, perf_recorder
+):
     if not case.enabled:
         pytest.skip("disabled")
 
@@ -166,15 +168,6 @@ async def test_speed_threshold(case: SpeedCase):
 
     method = getattr(analyzer, case.method)
 
-    # # ウォームアップ
-    # try:
-    #     if args:
-    #         await method(frame, *args)
-    #     else:
-    #         await method(frame)
-    # except Exception as e:  # noqa: BLE001
-    #     pytest.fail(f"ウォームアップ失敗 {case.name}: {e}")
-
     times: list[float] = []
     for _ in range(ITER):
         start = time.perf_counter()
@@ -190,6 +183,17 @@ async def test_speed_threshold(case: SpeedCase):
     thr = (
         case.threshold_sec if case.threshold_sec is not None else THRESHOLD_SEC
     )
+    # perf recorder への記録 (ms)
+    perf_recorder(
+        {
+            "name": case.name,
+            "nodeid": request.node.nodeid,
+            "avg_ms": avg * 1000.0,
+            "thr_ms": thr * 1000.0,
+            "runs_ms": [t * 1000.0 for t in times],
+        }
+    )
+
     if avg > thr:
         if case.xfail:
             pytest.xfail(

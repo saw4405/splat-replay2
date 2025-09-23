@@ -1,0 +1,13 @@
+from __future__ import annotations
+
+from typing import Dict, Iterator, Sequence
+
+class Process:
+    info: Dict[str, object]
+
+    def __iter__(self) -> Iterator[None]: ...
+
+def process_iter(attrs: Sequence[str] | None = ...) -> Iterator[Process]: ...
+
+class NoSuchProcess(Exception): ...
+class AccessDenied(Exception): ...

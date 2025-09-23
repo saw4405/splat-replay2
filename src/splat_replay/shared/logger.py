@@ -5,6 +5,7 @@ from __future__ import annotations
 import contextlib
 import io
 import logging
+from typing import Iterator, cast
 from logging.handlers import TimedRotatingFileHandler
 from pathlib import Path
 
@@ -127,11 +128,11 @@ def get_logger() -> BoundLogger:
     """初期化済みロガーを取得する。"""
     if not _initialized:
         initialize_logger()
-    return structlog.get_logger()
+    return cast(BoundLogger, structlog.get_logger())
 
 
 @contextlib.contextmanager
-def buffer_console_logs():
+def buffer_console_logs() -> Iterator[io.StringIO]:
     """コンソールログ出力を一時的にバッファし、終了時にまとめて出力する。"""
     root_logger = logging.getLogger()
     orig_handlers = list(root_logger.handlers)

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Optional, Type, TypeVar, cast
+from typing import Any, Optional, TypeVar, cast
 
 import punq
 from structlog.stdlib import BoundLogger
@@ -108,7 +108,7 @@ def register_image_matching_settings(
     return image_settings
 
 
-def register_adapters(container: punq.Container):
+def register_adapters(container: punq.Container) -> None:
     """アダプターを DI コンテナに登録する。"""
     container.register(CaptureDevicePort, CaptureDeviceChecker)
     container.register(CapturePort, Capture)
@@ -121,30 +121,30 @@ def register_adapters(container: punq.Container):
     container.register(AuthenticatedClientPort, YouTubeClient)
 
     # EventPublisherAdapter には AppRuntime の event_bus を注入する
-    def _event_publisher_factory():
-        rt = resolve(container, AppRuntime)
-        return EventPublisherAdapter(rt.event_bus)
+    def _event_publisher_factory() -> EventPublisher:
+        rt = cast(AppRuntime, resolve(container, AppRuntime))
+        return cast(EventPublisher, EventPublisherAdapter(rt.event_bus))
 
     container.register(EventPublisher, factory=_event_publisher_factory)
 
-    def _frame_publisher_factory():
-        rt = resolve(container, AppRuntime)
-        return FramePublisherAdapter(rt.frame_hub)
+    def _frame_publisher_factory() -> FramePublisher:
+        rt = cast(AppRuntime, resolve(container, AppRuntime))
+        return cast(FramePublisher, FramePublisherAdapter(rt.frame_hub))
 
-    container.register(FramePublisher, factory=_frame_publisher_factory)  # type: ignore[arg-type]
+    container.register(FramePublisher, factory=_frame_publisher_factory)
     container.register(IntegratedSpeechRecognizer, IntegratedSpeechRecognizer)
 
     # Aggregated GUI runtime ports (command/event/frame)
-    def _gui_runtime_factory():
-        rt = resolve(container, AppRuntime)
+    def _gui_runtime_factory() -> GuiRuntimePortAdapter:
+        rt = cast(AppRuntime, resolve(container, AppRuntime))
         return GuiRuntimePortAdapter(rt)
 
-    container.register(GuiRuntimePortAdapter, factory=_gui_runtime_factory)  # type: ignore[arg-type]
+    container.register(GuiRuntimePortAdapter, factory=_gui_runtime_factory)
     try:
-        container.register(Optional[SpeechTranscriberPort], SpeechTranscriber)
-        container.resolve(Optional[SpeechTranscriberPort])
+        container.register(SpeechTranscriberPort, SpeechTranscriber)
+        container.resolve(SpeechTranscriberPort)
     except Exception:
-        container.register(Optional[SpeechTranscriberPort], instance=None)
+        container.register(SpeechTranscriberPort, factory=lambda: None)
     container.register(ImageMatcherPort, MatcherRegistry)
     container.register(SubtitleEditorPort, SubtitleEditor)
     container.register(
@@ -152,8 +152,8 @@ def register_adapters(container: punq.Container):
     )
 
     # VideoAssetRepository は EventPublisher を利用するため factory で注入
-    def _video_asset_repo_factory():
-        publisher = resolve(container, EventPublisher)
+    def _video_asset_repo_factory() -> VideoAssetRepositoryPort:
+        publisher = cast(EventPublisher, resolve(container, EventPublisher))
         return FileVideoAssetRepository(
             cast(
                 VideoStorageSettings, container.resolve(VideoStorageSettings)
@@ -169,7 +169,7 @@ def register_adapters(container: punq.Container):
         cast(VideoRecorderPort, container.resolve(VideoRecorderPort)),
         cast(
             Optional[SpeechTranscriberPort],
-            container.resolve(Optional[SpeechTranscriberPort]),
+            container.resolve(SpeechTranscriberPort),
         ),
         cast(
             VideoAssetRepositoryPort,
@@ -183,14 +183,14 @@ def register_adapters(container: punq.Container):
     )
 
 
-def register_domain_services(container: punq.Container):
+def register_domain_services(container: punq.Container) -> None:
     """ドメインサービスを DI コンテナに登録する。"""
     container.register(FrameAnalyzer, FrameAnalyzer)
     container.register(BattleFrameAnalyzer, BattleFrameAnalyzer)
     container.register(SalmonFrameAnalyzer, SalmonFrameAnalyzer)
 
 
-def register_app_services(container: punq.Container):
+def register_app_services(container: punq.Container) -> None:
     """アプリケーションサービスを DI コンテナに登録する。"""
     container.register(DeviceChecker, DeviceChecker)
     # Inject runtime-aware services
@@ -202,7 +202,7 @@ def register_app_services(container: punq.Container):
     container.register(AssetQueryService, AssetQueryService)
 
 
-def register_app_usecases(container: punq.Container):
+def register_app_usecases(container: punq.Container) -> None:
     """アプリケーションのユースケースを DI コンテナに登録する。"""
     container.register(AutoUseCase, AutoUseCase)
     container.register(UploadUseCase, UploadUseCase)
@@ -232,8 +232,8 @@ def configure_container() -> punq.Container:
     register_app_usecases(container)
 
     try:
-        ar = resolve(container, AutoRecorder)
-        rt = resolve(container, AppRuntime)
+        ar = cast(AutoRecorder, resolve(container, AutoRecorder))
+        rt = cast(AppRuntime, resolve(container, AppRuntime))
         handlers = ar.command_handlers()
         for name, handler in handlers.items():
             rt.command_bus.register(name, handler)
@@ -242,8 +242,8 @@ def configure_container() -> punq.Container:
 
     # Register asset query commands
     try:
-        aq = resolve(container, AssetQueryService)
-        rt = resolve(container, AppRuntime)
+        aq = cast(AssetQueryService, resolve(container, AssetQueryService))
+        rt = cast(AppRuntime, resolve(container, AppRuntime))
         for name, handler in aq.command_handlers().items():
             rt.command_bus.register(name, handler)
     except Exception:
@@ -255,6 +255,6 @@ def configure_container() -> punq.Container:
 T = TypeVar("T")
 
 
-def resolve(container: punq.Container, cls: Type[T]) -> T:
-    """DI コンテナから依存を取得する。"""
-    return cast(T, container.resolve(cls))
+def resolve(container: punq.Container, cls: object) -> Any:
+    """DI コンテナから依存を解決する"""
+    return container.resolve(cls)

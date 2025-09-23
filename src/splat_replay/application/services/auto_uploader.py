@@ -38,7 +38,7 @@ class AutoUploader:
         """Request cancellation; effective between items/steps."""
         self._cancelled = True
 
-    async def execute(self):
+    async def execute(self) -> None:
         self.logger.info("自動アップロードを開始します")
 
         videos = self.repo.list_edited()
@@ -70,7 +70,7 @@ class AutoUploader:
         self.progress.finish(task_id, True, "自動アップロードを完了しました")
         self.logger.info("自動アップロードを完了しました")
 
-    def _upload(self, idx: int, path: Path):
+    def _upload(self, idx: int, path: Path) -> None:
         """動画をアップロードし、動画 ID を返す"""
         self.logger.info("動画アップロード中", clip=str(path))
 

@@ -6,7 +6,7 @@ import asyncio
 import queue
 import threading
 import time
-from typing import List, Optional, Tuple, cast
+from typing import List, Optional, Tuple
 
 import speech_recognition as sr
 from structlog.stdlib import BoundLogger
@@ -55,7 +55,9 @@ class SpeechTranscriber(SpeechTranscriberPort):
         self._recording_thread: Optional[threading.Thread] = None
         self._recognition_thread: Optional[threading.Thread] = None
 
-    def _listen_for_audio(self, source) -> Optional[sr.AudioData]:
+    def _listen_for_audio(
+        self, source: sr.Microphone
+    ) -> Optional[sr.AudioData]:
         try:
             audio = self._recognizer.listen(
                 source,
@@ -63,14 +65,14 @@ class SpeechTranscriber(SpeechTranscriberPort):
                 phrase_time_limit=self.phrase_time_limit,
             )
             # stream=Falseの場合、audioは常に sr.AudioDataとなる
-            return cast(sr.AudioData, audio)
+            return audio
         except sr.WaitTimeoutError:
             return None
         except Exception as e:
             self._logger.error(f"リスニングエラー: {e}")
             return None
 
-    def _recording_loop(self):
+    def _recording_loop(self) -> None:
         with self._microphone as source:
             self._recognizer.adjust_for_ambient_noise(source)
             while not self._recording_event.is_set():
@@ -89,7 +91,7 @@ class SpeechTranscriber(SpeechTranscriberPort):
 
                 self._audio_queue.put((audio, start, end))
 
-    def _recognition_loop(self):
+    def _recognition_loop(self) -> None:
         while not self._recording_event.is_set():
             if self._audio_queue.empty():
                 time.sleep(0.1)
@@ -102,7 +104,7 @@ class SpeechTranscriber(SpeechTranscriberPort):
 
             self._segments.append(Segment(start, end, result))
 
-    def start(self):
+    def start(self) -> None:
         self._stopwatch.reset()
         self._stopwatch.start()
         self._recording_event.clear()
@@ -116,12 +118,12 @@ class SpeechTranscriber(SpeechTranscriberPort):
         self._recording_thread.start()
         self._recognition_thread.start()
 
-    def pause(self):
+    def pause(self) -> None:
         if not self._is_paused:
             self._stopwatch.pause()
             self._is_paused = True
 
-    def resume(self):
+    def resume(self) -> None:
         if self._is_paused:
             self._stopwatch.resume()
             self._is_paused = False

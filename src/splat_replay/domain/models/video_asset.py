@@ -1,4 +1,4 @@
-"""動画ファイルと付随データをまとめて扱うクラス。"""
+"""Video asset metadata helpers."""
 
 from __future__ import annotations
 
@@ -11,7 +11,7 @@ from .recording_metadata import RecordingMetadata
 
 @dataclass
 class VideoAsset:
-    """動画・字幕・サムネイル・メタデータをまとめて保持する。"""
+    """Represents a recorded video and aligned sidecar files."""
 
     video: Path
     subtitle: Path | None = None
@@ -20,13 +20,15 @@ class VideoAsset:
 
     @classmethod
     def load(cls, video: Path) -> "VideoAsset":
-        """動画パスから関連ファイルを読み込む。"""
-        subtitle = video.with_suffix(".srt")
-        if not subtitle.exists():
-            subtitle = None
-        thumbnail = video.with_suffix(".png")
-        if not thumbnail.exists():
-            thumbnail = None
+        """Construct an asset from disk if sidecar files exist."""
+        subtitle_candidate = video.with_suffix(".srt")
+        subtitle: Path | None = (
+            subtitle_candidate if subtitle_candidate.exists() else None
+        )
+        thumbnail_candidate = video.with_suffix(".png")
+        thumbnail: Path | None = (
+            thumbnail_candidate if thumbnail_candidate.exists() else None
+        )
         meta_file = video.with_suffix(".json")
         metadata = None
         if meta_file.exists():

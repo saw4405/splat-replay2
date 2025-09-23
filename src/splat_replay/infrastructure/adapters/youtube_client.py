@@ -5,7 +5,7 @@ from __future__ import annotations
 import gc
 import pickle
 from pathlib import Path
-from typing import List, Optional, Union
+from typing import List, Optional, Union, cast
 
 import google.auth
 import google.auth.exceptions
@@ -13,7 +13,7 @@ import google.auth.external_account_authorized_user
 import google.oauth2.credentials
 from google.auth.transport.requests import Request
 from google_auth_oauthlib.flow import InstalledAppFlow
-from googleapiclient.discovery import build
+from googleapiclient.discovery import Resource, build
 from googleapiclient.http import MediaFileUpload
 from structlog.stdlib import BoundLogger
 
@@ -46,7 +46,7 @@ class YouTubeClient(UploadPort, AuthenticatedClientPort):
         ]
 
         self._credentials = self._get_credentials()
-        self._youtube = build(
+        self._youtube: Resource = build(
             self.API_NAME, self.API_VERSION, credentials=self._credentials
         )
 
@@ -60,9 +60,10 @@ class YouTubeClient(UploadPort, AuthenticatedClientPort):
             return None
 
         with open(self.TOKEN_FILE, "rb") as token_file:
-            return pickle.load(token_file)
+            data = pickle.load(token_file)
+        return cast(Optional[Credentials], data)
 
-    def _save_credentials(self, credentials: Credentials):
+    def _save_credentials(self, credentials: Credentials) -> None:
         """認証情報をファイルに保存する
 
         Args:
@@ -89,13 +90,13 @@ class YouTubeClient(UploadPort, AuthenticatedClientPort):
                 pass
 
         flow = InstalledAppFlow.from_client_secrets_file(
-            self.CLIENT_SECRET_FILE, self.SCOPES
+            str(self.CLIENT_SECRET_FILE), self.SCOPES
         )
-        credentials = flow.run_local_server(port=8080)
+        credentials = cast(Credentials, flow.run_local_server(port=8080))
         self._save_credentials(credentials)
         return credentials
 
-    def _ensure_credentials(self):
+    def _ensure_credentials(self) -> None:
         """認証情報が有効であることを確認する"""
         if self._credentials.expired:
             self._credentials = self._get_credentials()
@@ -103,7 +104,7 @@ class YouTubeClient(UploadPort, AuthenticatedClientPort):
                 self.API_NAME, self.API_VERSION, credentials=self._credentials
             )
 
-    def authenticate(self):
+    def authenticate(self) -> None:
         """認証を行う。"""
         self._ensure_credentials()
         self.logger.info("YouTube API 認証完了")
@@ -118,7 +119,7 @@ class YouTubeClient(UploadPort, AuthenticatedClientPort):
         thumb: Optional[Path] = None,
         caption: Optional[Caption] = None,
         playlist_id: str = "",
-    ):
+    ) -> None:
         video_id = self.upload_video(
             path, title, description, tags, privacy_status=privacy_status
         )
@@ -179,7 +180,10 @@ class YouTubeClient(UploadPort, AuthenticatedClientPort):
                 media_body=media_file,
             )
             response = request.execute()
-            return response["id"]
+            response_id = (
+                response.get("id") if isinstance(response, dict) else None
+            )
+            return cast(Optional[str], response_id)
 
         except google.auth.exceptions.GoogleAuthError as e:
             self.logger.error(f"認証に失敗しました: {e}")
@@ -192,7 +196,7 @@ class YouTubeClient(UploadPort, AuthenticatedClientPort):
                 del media_file
                 gc.collect()
 
-    def upload_thumbnail(self, video_id: str, thumb: Path):
+    def upload_thumbnail(self, video_id: str, thumb: Path) -> None:
         """サムネイルをアップロードする。"""
         self.logger.info(
             "サムネイルアップロード実行", video_id=video_id, thumb=str(thumb)
@@ -223,7 +227,7 @@ class YouTubeClient(UploadPort, AuthenticatedClientPort):
         subtitle: Path,
         caption_name: str,
         language: str = "ja",
-    ):
+    ) -> None:
         """字幕ファイルをアップロードする。"""
         self.logger.info(
             "字幕アップロード実行", video_id=video_id, subtitle=str(subtitle)
@@ -256,7 +260,7 @@ class YouTubeClient(UploadPort, AuthenticatedClientPort):
                 del media_file
                 gc.collect()
 
-    def add_to_playlist(self, video_id: str, playlist_id: str):
+    def add_to_playlist(self, video_id: str, playlist_id: str) -> None:
         """動画をプレイリストに追加する。"""
         self.logger.info(
             "プレイリスト追加実行", video_id=video_id, playlist_id=playlist_id

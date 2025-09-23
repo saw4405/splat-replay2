@@ -47,9 +47,18 @@ line-length = 79
 exclude = [".venv"]
 indent-width = 4
 
+[tool.mypy]
+python_version = "3.13"
+exclude = ["^src/splat_replay/gui/"]
+mypy_path = ["typings"]
+
+[[tool.mypy.overrides]]
+module = "splat_replay.gui.*"
+ignore_errors = true
 [build-system]
 requires = ["setuptools>=61"]
 build-backend = "setuptools.build_meta"
 
 [tool.uv]
 package = true
+

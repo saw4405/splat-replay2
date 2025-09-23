@@ -101,8 +101,8 @@ class AppSettings(BaseModel):
         else:
             return obj
 
-    def convert_to_serializable_dict(self) -> Dict[str, dict]:
-        toml_data: Dict[str, dict] = {}
+    def convert_to_serializable_dict(self) -> Dict[str, Dict[str, object]]:
+        toml_data: Dict[str, Dict[str, object]] = {}
 
         # 各セクションを辞書形式に変換し、SecretStrやPathをstrへ
         toml_data["behavior"] = self._convert_for_toml(self.behavior.dict())
@@ -135,13 +135,13 @@ class AppSettings(BaseModel):
         return get_origin(field_type) in (list, List)
 
     @staticmethod
-    def _literal_choices(field_type: Any):
+    def _literal_choices(field_type: Any) -> Optional[List[str]]:
         if get_origin(field_type) is Literal:
             return [str(v) for v in get_args(field_type)]
         return None
 
     @staticmethod
-    def _enum_choices(field_type: Any):
+    def _enum_choices(field_type: Any) -> Optional[List[str]]:
         try:
             if issubclass(field_type, Enum):
                 return [str(m.value) for m in field_type]

@@ -46,7 +46,7 @@ class IntegratedSpeechRecognizer:
     ) -> Optional[str]:
         def _recognize_google() -> Optional[str]:
             try:
-                result = self._recognizer.recognize_google(  # type: ignore
+                result = self._recognizer.recognize_google(
                     audio, language=language
                 )
                 self._logger.info(f"google: {result}")
@@ -64,7 +64,7 @@ class IntegratedSpeechRecognizer:
     ) -> Optional[str]:
         def _recognize_groq() -> Optional[str]:
             try:
-                result = self._recognizer.recognize_groq(  # type: ignore
+                result = self._recognizer.recognize_groq(
                     audio, model="whisper-large-v3", language=language
                 )
                 self._logger.info(f"groq: {result}")

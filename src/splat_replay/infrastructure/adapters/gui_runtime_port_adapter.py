@@ -131,7 +131,9 @@ class GuiRuntimePortAdapter(CommandDispatcher, EventSubscriber, FrameSource):
         return self._rt.command_bus.submit(name, **payload)
 
     # EventSubscriber
-    def subscribe(self, event_types=None) -> EventSubscription:
+    def subscribe(
+        self, event_types: Optional[set[str]] = None
+    ) -> EventSubscription:
         return self._rt.event_bus.subscribe(event_types=event_types)
 
     # FrameSource proxy

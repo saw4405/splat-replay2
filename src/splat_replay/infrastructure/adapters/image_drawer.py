@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Tuple, List, Optional, Callable, Iterable, TypeVar
+from typing import Callable, Iterable, List, Optional, Tuple, TypeVar, cast
 
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont
@@ -13,7 +13,7 @@ class ImageDrawer(ImageDrawerPort):
     @staticmethod
     def select_brightest_image(
         paths: List[Path], target_rect: Tuple[float, float, float, float]
-    ) -> Optional[ImageDrawer]:
+    ) -> Optional["ImageDrawer"]:
         """
         target_rect: (left, top, right, bottom)
         各値は 0.0〜1.0 なら比率、1.0より大きければピクセル値として扱う。
@@ -63,9 +63,17 @@ class ImageDrawer(ImageDrawerPort):
         self._draw = ImageDraw.Draw(image)
 
     def when(
-        self, flag: bool, fn: Callable[..., ImageDrawer], /, *args, **kwargs
-    ) -> ImageDrawer:
-        return fn(self, *args, **kwargs) if flag else self
+        self,
+        flag: bool,
+        fn: Callable[..., ImageDrawerPort],
+        /,
+        *args: object,
+        **kwargs: object,
+    ) -> "ImageDrawer":
+        if not flag:
+            return self
+        result = fn(self, *args, **kwargs)
+        return cast("ImageDrawer", result)
 
     T = TypeVar("T")
 
@@ -73,12 +81,12 @@ class ImageDrawer(ImageDrawerPort):
         self,
         iterable: Iterable[T],
         fn: Callable[[T, ImageDrawerPort], ImageDrawerPort],
-    ) -> ImageDrawerPort:
+    ) -> "ImageDrawer":
         for item in iterable:
             fn(item, self)
         return self
 
-    def save(self, path: Path):
+    def save(self, path: Path) -> None:
         self._image.save(path)
 
     def draw_rectangle(
@@ -87,7 +95,7 @@ class ImageDrawer(ImageDrawerPort):
         fill_color: Color | None,
         outline_color: Color | None,
         outline_width: int,
-    ) -> ImageDrawerPort:
+    ) -> "ImageDrawer":
         self._draw.rectangle(
             rect,
             fill=fill_color,
@@ -173,7 +181,7 @@ class ImageDrawer(ImageDrawerPort):
         position: Tuple[int, int],
         crop: Optional[Tuple[int, int, int, int]] = None,
         size: Optional[Tuple[int, int]] = None,
-    ) -> ImageDrawer:
+    ) -> "ImageDrawer":
         img = Image.open(path).convert("RGBA")
         if crop:
             img = img.crop(crop)
@@ -182,7 +190,8 @@ class ImageDrawer(ImageDrawerPort):
         self._image.paste(img, position, img)
         return self
 
-    def overlay_image(self, path: Path) -> ImageDrawer:
+    def overlay_image(self, path: Path) -> "ImageDrawer":
         overlay_image = Image.open(path).convert("RGBA")
         self._image = Image.alpha_composite(self._image, overlay_image)
+        self._draw = ImageDraw.Draw(self._image)
         return self

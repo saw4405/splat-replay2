@@ -5,7 +5,7 @@ from typing import Optional
 class StopWatch:
     """StopWatchクラスは、計測開始、停止、一時停止、再開機能を持つストップウォッチを提供します."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         """
         初期化メソッド.
         ストップウォッチの内部状態（開始時間、経過時間、一時停止状態など）を初期化します.
@@ -15,7 +15,7 @@ class StopWatch:
         self._is_running: bool = False
         self._is_paused: bool = False
 
-    def reset(self):
+    def reset(self) -> None:
         """
         ストップウォッチをリセットします.
         内部状態を初期化し、経過時間をゼロにします.
@@ -25,7 +25,7 @@ class StopWatch:
         self._is_running = False
         self._is_paused = False
 
-    def start(self):
+    def start(self) -> None:
         """
         ストップウォッチを開始します.
         まだ開始されていない場合、開始時刻を記録し、経過時間をリセットします.
@@ -36,7 +36,7 @@ class StopWatch:
             self._is_running = True
             self._is_paused = False
 
-    def pause(self):
+    def pause(self) -> None:
         """
         ストップウォッチを一時停止します.
         作動中でかつ一時停止中でない場合、現在の経過時間を加算し一時停止状態にします.
@@ -57,7 +57,7 @@ class StopWatch:
         """
         return self._is_paused
 
-    def resume(self):
+    def resume(self) -> None:
         """
         一時停止状態のストップウォッチを再開します.
         """
