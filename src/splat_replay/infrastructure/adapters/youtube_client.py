@@ -7,11 +7,12 @@ import pickle
 from pathlib import Path
 from typing import List, Optional, Union, cast
 
-import google.auth
 import google.auth.exceptions
-import google.auth.external_account_authorized_user
-import google.oauth2.credentials
+from google.auth.external_account_authorized_user import (
+    Credentials as Credentials1,
+)
 from google.auth.transport.requests import Request
+from google.oauth2.credentials import Credentials as Credentials2
 from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import Resource, build
 from googleapiclient.http import MediaFileUpload
@@ -23,10 +24,11 @@ from splat_replay.application.interfaces import (
     PrivacyStatus,
     UploadPort,
 )
+from splat_replay.shared import paths
 
 Credentials = Union[
-    google.auth.external_account_authorized_user.Credentials,
-    google.oauth2.credentials.Credentials,
+    Credentials1,
+    Credentials2,
 ]
 
 
@@ -35,9 +37,8 @@ class YouTubeClient(UploadPort, AuthenticatedClientPort):
 
     def __init__(self, logger: BoundLogger):
         self.logger = logger
-
-        self.TOKEN_FILE = Path("config/token.pickle")
-        self.CLIENT_SECRET_FILE = Path("config/client_secrets.json")
+        self.TOKEN_FILE = paths.config("token.pickle")
+        self.CLIENT_SECRET_FILE = paths.config("client_secret.json")
         self.API_NAME = "youtube"
         self.API_VERSION = "v3"
         self.SCOPES = [

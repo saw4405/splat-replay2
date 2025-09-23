@@ -7,7 +7,6 @@
 
 from __future__ import annotations
 
-from pathlib import Path
 from tkinter import font
 from typing import Callable, Dict, Optional
 
@@ -28,6 +27,7 @@ from splat_replay.gui.utils.application_controller import (
 from splat_replay.gui.widgets.metadata_editor_card import MetadataEditorCard
 from splat_replay.gui.widgets.video_list_card import VideoListCard
 from splat_replay.gui.widgets.video_preview_card import VideoPreviewCard
+from splat_replay.shared import paths
 from splat_replay.shared.logger import get_logger
 
 
@@ -45,14 +45,7 @@ class MainWindow:
         self.settings_dialog = None
         self._closing = False
 
-        self.icon_path = (
-            Path(__file__).parent.parent
-            / ".."
-            / ".."
-            / ".."
-            / "assets"
-            / "icon.png"
-        ).resolve()
+        self.icon_path = paths.asset("icon.png")
 
         # tkinter ルートウィンドウを作成
         enable_high_dpi_awareness()

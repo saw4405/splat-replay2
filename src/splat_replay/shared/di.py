@@ -64,6 +64,7 @@ from splat_replay.infrastructure import (
     YouTubeClient,
 )
 from splat_replay.infrastructure.runtime.runtime import AppRuntime
+from splat_replay.shared import paths
 from splat_replay.shared.config import (
     AppSettings,
     BehaviorSettings,
@@ -223,9 +224,7 @@ def configure_container() -> punq.Container:
     container.register(AppRuntime, instance=runtime)
 
     register_config(container)
-    register_image_matching_settings(
-        container, Path("config/image_matching.yaml")
-    )
+    register_image_matching_settings(container, paths.IMAGE_MATCHING_FILE)
     register_adapters(container)
     register_domain_services(container)
     register_app_services(container)

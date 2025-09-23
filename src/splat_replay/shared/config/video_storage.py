@@ -2,12 +2,14 @@ from pathlib import Path
 
 from pydantic import BaseModel, Field
 
+from splat_replay.shared import paths
+
 
 class VideoStorageSettings(BaseModel):
     """動画保存"""
 
     base_dir: Path = Field(
-        default=Path("videos"),
+        default=paths.VIDEOS_DIR,
         title="動画保存先フォルダ",
         description="動画・字幕・サムネイル・メタデータを保存するフォルダ",
         recommended=False,

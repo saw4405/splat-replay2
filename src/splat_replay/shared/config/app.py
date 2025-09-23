@@ -18,6 +18,7 @@ import tomli_w
 from pydantic import BaseModel, SecretStr
 from pydantic.fields import ModelField
 
+from splat_replay.shared import paths
 from splat_replay.shared.config.behavior import BehaviorSettings
 from splat_replay.shared.config.capture_device import CaptureDeviceSettings
 from splat_replay.shared.config.obs import OBSSettings
@@ -56,7 +57,7 @@ class AppSettings(BaseModel):
     @classmethod
     def load_from_toml(
         cls,
-        path: Path = Path("config/settings.toml"),
+        path: Path = paths.SETTINGS_FILE,
         create_if_missing: bool = True,
     ) -> "AppSettings":
         """
@@ -122,7 +123,7 @@ class AppSettings(BaseModel):
 
         return toml_data
 
-    def save_to_toml(self, path: Path = Path("config/settings.toml")) -> None:
+    def save_to_toml(self, path: Path = paths.SETTINGS_FILE) -> None:
         """設定を TOML ファイルに保存する。"""
         toml_data = self.convert_to_serializable_dict()
 

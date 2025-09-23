@@ -19,6 +19,7 @@ from splat_replay.domain.models import (
     SalmonResult,
     VideoAsset,
 )
+from splat_replay.shared import paths
 from splat_replay.shared.config import VideoEditSettings
 
 from .progress import ProgressReporter
@@ -26,8 +27,6 @@ from .progress import ProgressReporter
 
 class AutoEditor:
     """録画済み動画の編集を行うサービス、"""
-
-    THUMBNAIL_ASSETS_DIR = Path("assets/thumbnail")
 
     def __init__(
         self,
@@ -480,10 +479,10 @@ class AutoEditor:
 
         match_name = result.match.value
         match_name = match_name.split("(")[0]
-        match_image_path = self._get_asset_path(f"{match_name}.png")
+        match_image_path = paths.thumbnail_asset(f"{match_name}.png")
 
         rule_name = result.rule.value
-        rule_image_path = self._get_asset_path(f"{rule_name}.png")
+        rule_image_path = paths.thumbnail_asset(f"{rule_name}.png")
 
         rates = [
             a.metadata.rate for a in assets if a.metadata and a.metadata.rate
@@ -516,17 +515,17 @@ class AutoEditor:
         unique_stage_names = list(dict.fromkeys(stage_names))
         stage1 = unique_stage_names[0] if unique_stage_names else None
         stage1_image_path = (
-            self._get_asset_path(f"{stage1}.png") if stage1 else None
+            paths.thumbnail_asset(f"{stage1}.png") if stage1 else None
         )
         stage2 = unique_stage_names[1] if len(unique_stage_names) > 1 else None
         stage2_image_path = (
-            self._get_asset_path(f"{stage2}.png") if stage2 else None
+            paths.thumbnail_asset(f"{stage2}.png") if stage2 else None
         )
 
-        overlay_image_path = self._get_asset_path("thumbnail_overlay.png")
+        overlay_image_path = paths.thumbnail_asset("thumbnail_overlay.png")
 
-        font_paintball = str(self._get_asset_path("Paintball_Beta.otf"))
-        font_ikamodoki = str(self._get_asset_path("ikamodoki1.ttf"))
+        font_paintball = str(paths.thumbnail_asset("Paintball_Beta.otf"))
+        font_ikamodoki = str(paths.thumbnail_asset("ikamodoki1.ttf"))
 
         # 高スコア(キルレが高い)のサムネイルをスコアが高い順に格納する
         high_score_thumbnails: list[tuple[float, Path]] = []
@@ -648,6 +647,3 @@ class AutoEditor:
             .save(out)
         )
         return out
-
-    def _get_asset_path(self, name: str) -> Path:
-        return self.THUMBNAIL_ASSETS_DIR / name
