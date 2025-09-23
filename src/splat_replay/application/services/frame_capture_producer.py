@@ -54,6 +54,18 @@ class FrameCaptureProducer:
         except queue.Empty:
             return None
 
+    # 非ブロッキングで "最新" フレームを取得する。
+    # キューに複数たまっている場合は全て捨てて最後の1枚のみ返す。
+    def latest(self) -> Frame | None:
+        last: Frame | None = None
+        while True:
+            try:
+                item = self._queue.get_nowait()
+                last = item
+            except queue.Empty:
+                break
+        return last
+
     # Internal ------------------------------------------------------
     def _loop(self) -> None:
         while self._running.is_set():

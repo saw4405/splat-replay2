@@ -1,9 +1,8 @@
 import asyncio
 import datetime
 import time
-from typing import Awaitable, Callable, TypeVar, cast
+from typing import Awaitable, Callable, TypeVar
 
-import numpy as np
 from structlog.stdlib import BoundLogger
 
 from splat_replay.application.events.types import EventTypes
@@ -43,7 +42,6 @@ MAX_RECORDING_SECONDS = 600
 CONTROL_QUEUE_DRAIN_LIMIT = 20
 FRAME_QUEUE_MAXSIZE = 3
 PUBLISH_QUEUE_MAXSIZE = 200
-FRAME_GET_TIMEOUT = 0.1
 FRAME_DEVICE_RETRY_SLEEP = 0.005
 FRAME_QUEUE_PUT_TIMEOUT = 0.001
 PUBLISHER_LOOP_IDLE = 0.01
@@ -104,31 +102,6 @@ class AutoRecorder:
     # 内部: 解析結果キャッシュユーティリティ (フレーム単位)
     # ================================================================
 
-    async def _cached_call(
-        self, func: Callable[..., Awaitable[T]], *args: object
-    ) -> T:
-        """同一フレーム内での analyzer.* の重複呼び出しをキャッシュする。
-
-        フレーム毎に execute ループで cache をクリアするため、キーには
-        Frame オブジェクト自体を含めない (含める必要がない)。
-        """
-        key_parts: list[object] = []
-        for a in args:
-            # ndarray (Frame) はキャッシュキーに含めない (フレーム毎クリア)
-            if isinstance(a, np.ndarray):
-                continue
-            key_parts.append(a)
-        # qualname で衝突回避 (同名関数別実装対策)
-        key = (
-            getattr(func, "__qualname__", func.__name__),
-            tuple(key_parts),
-        )
-        if key in self._analysis_cache:
-            return cast(T, self._analysis_cache[key])
-        result = await func(*args)
-        self._analysis_cache[key] = result
-        return result
-
     # 小ユーティリティ
     def _game_mode(self) -> GameMode:
         return self._ctx.metadata.game_mode
@@ -165,7 +138,7 @@ class AutoRecorder:
                 await self._process_control_queue()
 
                 # 非同期にフレームをキューから取得（なければ短時間待機）
-                frame = await self._acquire_frame(timeout=FRAME_GET_TIMEOUT)
+                frame = await self._acquire_frame()
                 if frame is None:
                     # フレーム未到来。CPU スピン緩和のため譲歩。
                     await asyncio.sleep(0)
@@ -455,15 +428,9 @@ class AutoRecorder:
                     "制御コマンド処理エラー", cmd=cmd, error=str(e)
                 )
 
-    async def _acquire_frame(self, timeout: float) -> Frame | None:
-        """Captureスレッドから渡されたフレームを取得する。
-
-        - `queue.Queue` はスレッド間通信用（asyncio.Queue は未対応）
-        - ブロッキングは `to_thread` へ委譲し、イベントループを塞がない
-        """
-        return await asyncio.to_thread(
-            self._capture_producer.get_frame, timeout
-        )
+    async def _acquire_frame(self) -> Frame | None:
+        """最新フレームを非ブロッキングで取得する。"""
+        return self._capture_producer.latest()
 
     # ================================================================
     # 解析 / 状態遷移ハンドラ
@@ -490,24 +457,20 @@ class AutoRecorder:
     # ================================================================
     async def _process_standby(self, frame: Frame) -> None:
         md = self.metadata
-        if await self._cached_call(self.analyzer.detect_match_select, frame):
-            game_mode = await self._cached_call(
-                self.analyzer.extract_game_mode, frame
-            )
+        if await self.analyzer.detect_match_select(frame):
+            game_mode = await self.analyzer.extract_game_mode(frame)
             if game_mode is not None and game_mode != md.game_mode:
                 md.game_mode = game_mode
                 self.logger.info("ゲームモード取得", mode=str(md.game_mode))
 
-            rate = await self._cached_call(
-                self.analyzer.extract_rate, frame, md.game_mode
-            )
+            rate = await self.analyzer.extract_rate(frame, md.game_mode)
             if rate is not None and (
                 not isinstance(rate, type(md.rate)) or rate != md.rate
             ):
                 md.rate = rate
                 self.logger.info("レート取得", rate=str(rate))
 
-        if await self._cached_call(self.analyzer.detect_matching_start, frame):
+        if await self.analyzer.detect_matching_start(frame):
             self.logger.info("マッチング開始を検出")
             await self._publish_operation_status(
                 "マッチング開始を検出しました。"
@@ -516,18 +479,14 @@ class AutoRecorder:
 
     async def _process_matching(self, frame: Frame) -> None:
         md = self.metadata
-        if await self._cached_call(
-            self.analyzer.detect_schedule_change, frame
-        ):
+        if await self.analyzer.detect_schedule_change(frame):
             self.logger.info("スケジュール変更を検出、情報をリセット")
             await self._publish_operation_status(
                 "スケジュール変更を検出しました。"
             )
             await self._reset()
             return
-        if await self._cached_call(
-            self.analyzer.detect_session_start, frame, md.game_mode
-        ):
+        if await self.analyzer.detect_session_start(frame, md.game_mode):
             self.logger.info("バトル開始を検出")
             await self._publish_operation_status(
                 "バトル開始を検出したため、録画を開始します。"
@@ -542,9 +501,7 @@ class AutoRecorder:
         now = time.time()
         if (
             now - self._ctx.battle_started_at <= EARLY_ABORT_WINDOW_SECONDS
-            and await self._cached_call(
-                self.analyzer.detect_session_abort, frame, gm
-            )
+            and await self.analyzer.detect_session_abort(frame, gm)
         ):
             self.logger.info("バトル中断を検出したため録画を中止")
             await self._publish_operation_status(
@@ -559,9 +516,7 @@ class AutoRecorder:
             )
             await self.stop()
             return
-        if await self._cached_call(
-            self.analyzer.detect_session_finish, frame, gm
-        ):
+        if await self.analyzer.detect_session_finish(frame, gm):
             self.logger.info("バトル終了を検出、一時停止")
             await self._publish_operation_status(
                 "バトル終了を検出したため、録画を一時停止します。"
@@ -572,14 +527,12 @@ class AutoRecorder:
             )
             await self.pause()
             return
-        if await self._cached_call(
-            self.analyzer.detect_session_judgement, frame, gm
-        ):
+        if await self.analyzer.detect_session_judgement(frame, gm):
             self._ctx.finish = True
             self.logger.info("バトル終了より前にバトル判定を検出")
             await self._publish_operation_status("バトル判定を検出しました。")
-            judgement = await self._cached_call(
-                self.analyzer.extract_session_judgement, frame, gm
+            judgement = await self.analyzer.extract_session_judgement(
+                frame, gm
             )
             if judgement is not None and self._ctx.metadata.judgement is None:
                 self._ctx.metadata.judgement = judgement
@@ -587,9 +540,7 @@ class AutoRecorder:
                     "バトルジャッジメント取得", judgement=str(judgement)
                 )
             return
-        if await self._cached_call(
-            self.analyzer.detect_communication_error, frame, gm
-        ):
+        if await self.analyzer.detect_communication_error(frame, gm):
             self.logger.info("通信エラーを検出")
             await self._publish_operation_status(
                 "通信エラーを検出したため、録画を中止します。"
@@ -599,13 +550,14 @@ class AutoRecorder:
 
     async def _process_post_finish(self, frame: Frame) -> None:
         gm = self._game_mode()
-        if self._ctx.metadata.judgement is None and await self._cached_call(
-            self.analyzer.detect_session_judgement, frame, gm
+        if (
+            self._ctx.metadata.judgement is None
+            and await self.analyzer.detect_session_judgement(frame, gm)
         ):
             self.logger.info("バトル判定を検出")
             await self._publish_operation_status("バトル判定を検出しました。")
-            judgement = await self._cached_call(
-                self.analyzer.extract_session_judgement, frame, gm
+            judgement = await self.analyzer.extract_session_judgement(
+                frame, gm
             )
             if judgement is not None and self._ctx.metadata.judgement is None:
                 self._ctx.metadata.judgement = judgement
@@ -613,7 +565,7 @@ class AutoRecorder:
                     "バトルジャッジメント取得", judgement=str(judgement)
                 )
             return
-        if await self._cached_call(self.analyzer.detect_loading, frame):
+        if await self.analyzer.detect_loading(frame):
             self.logger.info("ローディング画面を検出、一時停止")
             await self._publish_operation_status(
                 "ローディング画面を検出したため、録画を一時停止します。"
@@ -621,18 +573,14 @@ class AutoRecorder:
             self._ctx.resume_trigger = self.analyzer.detect_loading_end
             await self.pause()
             return
-        if await self._cached_call(
-            self.analyzer.detect_session_result, frame, gm
-        ):
+        if await self.analyzer.detect_session_result(frame, gm):
             self.logger.info("結果画面を検出")
             await self._publish_operation_status("結果画面を検出しました。")
             self._ctx.result_frame = frame
 
     async def _process_result(self, frame: Frame) -> None:
         gm = self._game_mode()
-        still_result = await self._cached_call(
-            self.analyzer.detect_session_result, frame, gm
-        )
+        still_result = await self.analyzer.detect_session_result(frame, gm)
         if not still_result:
             self.logger.info("結果画面から遷移")
             await self._publish_operation_status(
