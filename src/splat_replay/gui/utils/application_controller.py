@@ -7,6 +7,7 @@ from typing import Callable, Dict, List, Optional, Tuple
 
 import ttkbootstrap as ttk
 
+from splat_replay.application.events.types import EventTypes
 from splat_replay.application.interfaces import (
     VideoAssetRepositoryPort,
     VideoEditorPort,
@@ -26,7 +27,6 @@ from splat_replay.infrastructure.runtime.events import Event
 from splat_replay.infrastructure.runtime.runtime import AppRuntime
 from splat_replay.shared.config import BehaviorSettings
 from splat_replay.shared.di import configure_container, resolve
-from splat_replay.shared.event_types import EventTypes
 from splat_replay.shared.logger import get_logger
 
 

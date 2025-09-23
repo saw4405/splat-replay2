@@ -1,10 +1,12 @@
-"""Central event type constants (infrastructure agnostic).
+"""Application-level event type constants.
 
-Placed in shared layer so domain/application can reference without depending
-on runtime/event bus implementation details.
+Clean Architecture: Exposed for interface/infrastructure and GUI layers.
+No infrastructure dependencies.
 """
 
 from __future__ import annotations
+
+__all__ = ["EventTypes"]
 
 
 class EventTypes:
@@ -31,6 +33,3 @@ class EventTypes:
     # Edited assets
     ASSET_EDITED_SAVED = "asset.edited.saved"
     ASSET_EDITED_DELETED = "asset.edited.deleted"
-
-
-__all__ = ["EventTypes"]

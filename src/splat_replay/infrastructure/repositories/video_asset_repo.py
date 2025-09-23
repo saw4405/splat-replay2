@@ -10,6 +10,7 @@ import cv2
 import numpy as np
 from structlog.stdlib import BoundLogger
 
+from splat_replay.application.events.types import EventTypes
 from splat_replay.application.interfaces import (
     EventPublisher,
     VideoAssetRepositoryPort,
@@ -20,7 +21,6 @@ from splat_replay.domain.models import (
     VideoAsset,
 )
 from splat_replay.shared.config import VideoStorageSettings
-from splat_replay.shared.event_types import EventTypes
 
 
 class FileVideoAssetRepository(VideoAssetRepositoryPort):
