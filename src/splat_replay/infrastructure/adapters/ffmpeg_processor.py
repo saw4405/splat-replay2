@@ -412,7 +412,6 @@ class FFmpegProcessor(VideoEditorPort):
             "aac",
             "-c:s",
             "copy",
-            "-shortest",
         ]
         if stream_title:
             command.extend(
