@@ -394,8 +394,9 @@ class SubtitleEditorDialog(Dialog):
             lines = block.strip().splitlines()
             if len(lines) < 2:
                 continue
-            timing_line = lines[1] if lines[0].strip().isdigit() else lines[0]
-            text_lines = lines[2:] if lines[0].strip().isdigit() else lines[1:]
+            has_index_line = lines[0].strip().isdigit()
+            timing_line = lines[1] if has_index_line else lines[0]
+            text_lines = lines[2:] if has_index_line else lines[1:]
             start, end = self._parse_timing_line(timing_line)
             if start is None or end is None:
                 continue
