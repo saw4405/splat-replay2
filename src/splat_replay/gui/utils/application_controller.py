@@ -353,7 +353,9 @@ class GUIApplicationController:
     def get_subtitle(
         self, video_path: Path, cb: Callable[[Optional[str]], None]
     ) -> None:
-        fut = self._gui_ports.submit("asset.get_subtitle", video_path=video_path)
+        fut = self._gui_ports.submit(
+            "asset.get_subtitle", video_path=video_path
+        )
         fut.add_done_callback(
             lambda f: self.adapter.call_soon(lambda: cb(f.result().value))
         )

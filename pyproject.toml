@@ -12,6 +12,7 @@ dependencies = [
     "structlog>=24.1",
     "psutil>=5.9",
     "pywin32>=306; platform_system == 'Windows'",
+    "types-pywin32>=306; platform_system == 'Windows'",
     "pyyaml>=6.0",
     "opencv-python>=4.11.0.86",
     "pytesseract>=0.3.13",
@@ -31,6 +32,8 @@ dependencies = [
     "comtypes>=1.4.11",
     "dateparser>=1.2.2",
     "pytest-asyncio>=1.1.0",
+    "webrtcvad>=2.0.10",
+    "setuptools>=80.9.0",
 ]
 
 [tool.setuptools.packages.find]
@@ -61,4 +64,6 @@ build-backend = "setuptools.build_meta"
 
 [tool.uv]
 package = true
+
+
 

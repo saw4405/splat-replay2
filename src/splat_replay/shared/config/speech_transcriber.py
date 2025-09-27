@@ -18,10 +18,16 @@ class SpeechTranscriberSettings(BaseModel):
         description="Grok API の認証に使用するキー",
         recommended=True,
     )
-    model: str = Field(
-        default="",
-        title="モデル",
-        description="使用する音声認識モデル",
+    groq_model: str = Field(
+        default="whisper-large-v3",
+        title="Grok音声認識モデル",
+        description="使用するGrok音声認識モデル",
+        recommended=False,
+    )
+    integrator_model: str = Field(
+        default="openai/gpt-oss-120b",
+        title="音声認識統合モデル",
+        description="複数の音声認識結果を統合するためのモデル",
         recommended=False,
     )
     language: str = Field(
@@ -41,6 +47,16 @@ class SpeechTranscriberSettings(BaseModel):
         title="カスタム辞書",
         description="音声認識に使用するカスタム辞書",
         recommended=True,
+    )
+    vad_aggressiveness: int = Field(
+        default=2,
+        title="VAD感度",
+        description=(
+            "0〜3の値でVADの厳しさを指定します。値が大きいほど無音を厳しく判定します"
+        ),
+        ge=0,
+        le=3,
+        recommended=False,
     )
 
     class Config:

@@ -12,11 +12,12 @@ import speech_recognition as sr
 from structlog.stdlib import BoundLogger
 
 from splat_replay.application.interfaces import SpeechTranscriberPort
+from splat_replay.infrastructure.adapters.audio.integrated_speech_recognition import (
+    IntegratedSpeechRecognizer,
+)
+from splat_replay.infrastructure.adapters.audio.segment import Segment
+from splat_replay.infrastructure.adapters.audio.stopwatch import StopWatch
 from splat_replay.shared.config import SpeechTranscriberSettings
-
-from .integrated_speech_recognition import IntegratedSpeechRecognizer
-from .segment import Segment
-from .stopwatch import StopWatch
 
 
 class SpeechTranscriber(SpeechTranscriberPort):

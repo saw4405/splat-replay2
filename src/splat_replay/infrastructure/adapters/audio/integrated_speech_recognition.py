@@ -3,6 +3,7 @@ import os
 from typing import Optional
 
 import speech_recognition as sr
+import webrtcvad
 from groq import AsyncGroq
 from pydantic import BaseModel
 from structlog.stdlib import BoundLogger
@@ -22,19 +23,61 @@ class IntegratedSpeechRecognizer:
         logger: BoundLogger,
     ):
         os.environ["GROQ_API_KEY"] = settings.groq_api_key.get_secret_value()
-        self.model = settings.model
+
+        self.groq_model = settings.groq_model
+        self.integrator_model = settings.integrator_model
         self.language = settings.language
         self.primary_language = settings.language.split("-")[0]
         self.custom_dictionary = settings.custom_dictionary
         self._logger = logger
         self._recognizer = sr.Recognizer()
         self._groq = AsyncGroq()
+        self._vad = webrtcvad.Vad(settings.vad_aggressiveness)
+
+    def _has_voice_activity(self, audio: sr.AudioData) -> bool:
+        """VAD を用いて音声活動を判定する。"""
+
+        try:
+            pcm16 = audio.get_raw_data(convert_rate=16000, convert_width=2)
+        except Exception as exc:
+            self._logger.error(
+                f"音声データの変換に失敗したためVADを実行できません: {exc}"
+            )
+            return True
+
+        frame_duration_ms = 30
+        bytes_per_frame = int(16000 * 2 * frame_duration_ms / 1000)
+        if len(pcm16) < bytes_per_frame:
+            self._logger.info(
+                "VAD判定に必要なフレーム長を満たしていないため無音と判定しました"
+            )
+            return False
+
+        for start in range(
+            0, len(pcm16) - bytes_per_frame + 1, bytes_per_frame
+        ):
+            frame = pcm16[start : start + bytes_per_frame]
+            if self._vad.is_speech(frame, 16000):
+                return True
+
+        self._logger.info(
+            "VADが音声活動を検出しなかったため無音と判定しました"
+        )
+        return False
 
     async def recognize(self, audio: sr.AudioData) -> Optional[str]:
+        if not self._has_voice_activity(audio):
+            return None
+
         google, groq = await asyncio.gather(
             self.recognize_google(audio, self.language),
             self.recognize_groq(audio, self.primary_language),
         )
+        if google is None:
+            self._logger.info(
+                "Google音声認識が無効なためスキップします (whisperは無音判定しないため)"
+            )
+            return None
         result = await self._estimate_speech(f"google: {google}\ngroq: {groq}")
         self._logger.info(
             f"推定: {result.estimated_text} 理由: {result.reason}"
@@ -49,7 +92,7 @@ class IntegratedSpeechRecognizer:
                 result = self._recognizer.recognize_google(
                     audio, language=language
                 )
-                self._logger.info(f"google: {result}")
+                self._logger.debug(f"google: {result}")
                 return result
             except sr.UnknownValueError:
                 return None
@@ -65,9 +108,9 @@ class IntegratedSpeechRecognizer:
         def _recognize_groq() -> Optional[str]:
             try:
                 result = self._recognizer.recognize_groq(
-                    audio, model="whisper-large-v3", language=language
+                    audio, model=self.groq_model, language=language
                 )
-                self._logger.info(f"groq: {result}")
+                self._logger.debug(f"groq: {result}")
                 return result
             except sr.UnknownValueError:
                 return None
@@ -98,7 +141,7 @@ class IntegratedSpeechRecognizer:
                     "content": results,
                 },
             ],
-            model=self.model,
+            model=self.integrator_model,
             temperature=0,
             stream=False,
             response_format={"type": "json_object"},

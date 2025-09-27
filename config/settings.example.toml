@@ -17,10 +17,12 @@ capture_index = 0
 [speech_transcriber]
 mic_device_name = "マイク (USB Audio Device)"
 groq_api_key = ""
-model = "openai/gpt-oss-120b"
+groq_model = "whisper-large-v3"
+integrator_model = "openai/gpt-oss-120b"
 language = "ja-JP"
 phrase_time_limit = 3.0
 custom_dictionary = ["ナイス", "キル", "デス"]
+vad_aggressiveness = 2
 
 [video_storage]
 base_dir = "videos"
