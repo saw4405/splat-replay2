@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from concurrent.futures import Future as ThreadFuture
 from pathlib import Path
 from typing import Callable, Dict, List, Optional, Tuple
 
@@ -23,6 +24,7 @@ from splat_replay.domain.models import Frame, VideoAsset
 from splat_replay.domain.services import RecordState, StateMachine
 from splat_replay.gui.utils.runtime_adapter import GuiRuntimeAdapter
 from splat_replay.infrastructure import GuiRuntimePortAdapter
+from splat_replay.infrastructure.runtime.commands import CommandResult
 from splat_replay.infrastructure.runtime.events import Event
 from splat_replay.infrastructure.runtime.runtime import AppRuntime
 from splat_replay.shared.config import BehaviorSettings
@@ -55,6 +57,7 @@ class GUIApplicationController:
         self._asset_events = {
             EventTypes.ASSET_RECORDED_SAVED,
             EventTypes.ASSET_RECORDED_METADATA_UPDATED,
+            EventTypes.ASSET_RECORDED_SUBTITLE_UPDATED,
             EventTypes.ASSET_RECORDED_DELETED,
             EventTypes.ASSET_EDITED_SAVED,
             EventTypes.ASSET_EDITED_DELETED,
@@ -299,6 +302,31 @@ class GUIApplicationController:
                 lambda: cb(bool(f.result().value) if f.result().ok else False)
             )
         )
+
+    def get_subtitle(
+        self, video_path: Path, cb: Callable[[Optional[str]], None]
+    ) -> None:
+        fut = self._gui_ports.submit("asset.get_subtitle", video_path=video_path)
+        fut.add_done_callback(
+            lambda f: self.adapter.call_soon(lambda: cb(f.result().value))
+        )
+
+    def save_subtitle(
+        self, video_path: Path, content: str, cb: Callable[[bool], None]
+    ) -> None:
+        fut = self._gui_ports.submit(
+            "asset.save_subtitle", video_path=video_path, content=content
+        )
+
+        def _notify(result_future: ThreadFuture[CommandResult[bool]]) -> None:
+            try:
+                res = result_future.result()
+                success = bool(res.value) if res.ok else False
+            except Exception:
+                success = False
+            self.adapter.call_soon(lambda: cb(success))
+
+        fut.add_done_callback(_notify)
 
     def get_video_length(
         self, video_path: Path, cb: Callable[[float | None], None]

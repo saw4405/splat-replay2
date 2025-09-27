@@ -27,12 +27,14 @@ class VideoListCard(CardWidget):
         show_edit_dialog: Callable[
             [Dict[str, str | None]], Optional[Dict[str, str]]
         ],
+        show_subtitle_dialog: Callable[[Path, Optional[str]], Optional[str]],
         upload_start_callback: Callable[[], None],
     ) -> None:
         title = "　🎦 動画リスト　"
         super().__init__(parent, title)
         self.controller = controller
         self.show_edit_dialog = show_edit_dialog
+        self.show_subtitle_dialog = show_subtitle_dialog
         self.upload_start_callback = upload_start_callback
 
         self._setup_toolbar()
@@ -110,6 +112,23 @@ class VideoListCard(CardWidget):
         self.edit_button_tooltip = ToggleToolTip(
             self.edit_button,
             text="動画を一つのみ選択してください",
+            padding=3,
+            enabled=False,
+            bootstyle="light",  # type: ignore
+        )
+
+        self.subtitle_button = ttk.Button(
+            self.header,
+            text="📝 字幕",
+            command=self._subtitle_clicked,
+            width=15,
+            state="disabled",
+            bootstyle="info-outline",  # type: ignore
+        )
+        self.subtitle_button.pack(side="left", padx=(0, 10))
+        self.subtitle_button_tooltip = ToggleToolTip(
+            self.subtitle_button,
+            text="録画済み動画を一つのみ選択してください",
             padding=3,
             enabled=False,
             bootstyle="light",  # type: ignore
@@ -409,6 +428,13 @@ class VideoListCard(CardWidget):
             self.delete_button.config(state="disabled")
             self.delete_button_tooltip.enable()
 
+        if can_single and not self._is_edited_tab_active():
+            self.subtitle_button.config(state="normal")
+            self.subtitle_button_tooltip.disable()
+        else:
+            self.subtitle_button.config(state="disabled")
+            self.subtitle_button_tooltip.enable()
+
     def _on_double_click_recorded(self, event) -> None:
         iid = event.widget.identify_row(event.y)
         if not iid:
@@ -470,6 +496,32 @@ class VideoListCard(CardWidget):
             self._show_edit_dialog(metadata, video_paths[0])
 
         self.controller.get_metadata(video_paths[0], on_complete)
+
+    def _subtitle_clicked(self) -> None:
+        if self._is_edited_tab_active():
+            return
+        video_paths = self.get_selected_video_paths()
+        if len(video_paths) != 1:
+            return
+
+        def on_loaded(subtitle: Optional[str]) -> None:
+            result = self.show_subtitle_dialog(video_paths[0], subtitle)
+            if result is None:
+                return
+
+            def on_saved(success: bool) -> None:
+                if success:
+                    return
+                Messagebox.show_warning(
+                    "字幕の保存に失敗しました",
+                    title="エラー",
+                    parent=self.parent,
+                    alert=True,
+                )
+
+            self.controller.save_subtitle(video_paths[0], result, on_saved)
+
+        self.controller.get_subtitle(video_paths[0], on_loaded)
 
     def _delete_clicked(self) -> None:
         video_paths = self.get_selected_video_paths()

@@ -83,6 +83,11 @@ class AssetQueryService:
 
             return await asyncio.to_thread(work)
 
+        async def _get_subtitle(video_path: Path) -> Optional[str]:
+            return await asyncio.to_thread(
+                self._repo.get_subtitle, video_path
+            )
+
         async def _save_metadata(
             video_path: Path, metadata_dict: dict[str, str]
         ) -> bool:
@@ -95,6 +100,11 @@ class AssetQueryService:
                     return False
 
             return await asyncio.to_thread(work)
+
+        async def _save_subtitle(video_path: Path, content: str) -> bool:
+            return await asyncio.to_thread(
+                self._repo.save_subtitle, video_path, content
+            )
 
         async def _get_length(video_path: Path) -> Optional[float]:
             return await asyncio.to_thread(
@@ -122,7 +132,9 @@ class AssetQueryService:
             "asset.list_with_length": _list_with_length,
             "asset.list_edited_with_length": _list_edited_with_length,
             "asset.get_metadata": _get_metadata,
+            "asset.get_subtitle": _get_subtitle,
             "asset.save_metadata": _save_metadata,
+            "asset.save_subtitle": _save_subtitle,
             "asset.get_length": _get_length,
             "asset.delete": _delete_recording,
             "asset.get_recorded_dir": _get_recorded_dir,
