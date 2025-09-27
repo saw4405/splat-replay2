@@ -1,3 +1,0 @@
-from __future__ import annotations
-
-def PostMessage(hwnd: int, msg: int, wparam: int, lparam: int) -> None: ...
