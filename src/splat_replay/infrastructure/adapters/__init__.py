@@ -14,12 +14,14 @@ __all__ = [
     "ImageDrawer",
     "IntegratedSpeechRecognizer",
     "SpeechTranscriber",
+    "GoogleTextToSpeech",
     "EventPublisherAdapter",
     "FramePublisherAdapter",
     "GuiRuntimePortAdapter",
 ]
 
 from .audio import (
+    GoogleTextToSpeech,
     IntegratedSpeechRecognizer,
     SpeechTranscriber,
 )

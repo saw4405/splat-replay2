@@ -31,6 +31,39 @@ class Caption:
     language: str = "ja"
 
 
+SpeechAudioEncoding = Literal["LINEAR16", "MP3", "OGG_OPUS"]
+
+
+@dataclass(frozen=True)
+class SpeechSynthesisRequest:
+    """読み上げ生成リクエスト。"""
+
+    text: str
+    language_code: str
+    voice_name: str
+    speaking_rate: float
+    pitch: float
+    audio_encoding: SpeechAudioEncoding
+    sample_rate_hz: int
+    model: Optional[str] = None
+
+
+@dataclass(frozen=True)
+class SpeechSynthesisResult:
+    """読み上げ生成結果。"""
+
+    audio: bytes
+    sample_rate_hz: int
+
+
+class TextToSpeechPort(Protocol):
+    """テキスト読み上げ処理を提供するポート。"""
+
+    def synthesize(
+        self, request: SpeechSynthesisRequest
+    ) -> SpeechSynthesisResult: ...
+
+
 class CaptureDevicePort(Protocol):
     """キャプチャデバイスの接続確認を行うポート。"""
 
@@ -165,6 +198,14 @@ class VideoEditorPort(Protocol):
     def change_volume(self, path: Path, multiplier: float) -> None: ...
 
     def get_video_length(self, path: Path) -> Optional[float]: ...
+
+    def add_audio_track(
+        self,
+        path: Path,
+        audio: Path,
+        *,
+        stream_title: Optional[str] = None,
+    ) -> None: ...
 
 
 Color = Union[str, Tuple[int, ...]]

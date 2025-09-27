@@ -178,7 +178,9 @@ class FileVideoAssetRepository(VideoAssetRepositoryPort):
             return subtitle.read_text(encoding="utf-8")
         except Exception as exc:  # noqa: BLE001
             self.logger.error(
-                "字幕の読み込みに失敗しました", path=str(subtitle), error=str(exc)
+                "字幕の読み込みに失敗しました",
+                path=str(subtitle),
+                error=str(exc),
             )
             return None
 
