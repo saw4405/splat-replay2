@@ -19,6 +19,7 @@ from splat_replay.application.interfaces import (
     RecorderWithTranscriptionPort,
     SpeechTranscriberPort,
     SubtitleEditorPort,
+    TextToSpeechPort,
     UploadPort,
     VideoAssetRepositoryPort,
     VideoEditorPort,
@@ -61,6 +62,7 @@ from splat_replay.infrastructure import (
     SubtitleEditor,
     SystemPower,
     TesseractOCR,
+    GoogleTextToSpeech,
     YouTubeClient,
 )
 from splat_replay.infrastructure.runtime.runtime import AppRuntime
@@ -151,6 +153,11 @@ def register_adapters(container: punq.Container) -> None:
     container.register(
         ImageSelector, instance=ImageDrawer.select_brightest_image
     )
+    try:
+        container.register(TextToSpeechPort, GoogleTextToSpeech)
+        container.resolve(TextToSpeechPort)
+    except Exception:
+        container.register(TextToSpeechPort, factory=lambda: None)
 
     # VideoAssetRepository は EventPublisher を利用するため factory で注入
     def _video_asset_repo_factory() -> VideoAssetRepositoryPort:

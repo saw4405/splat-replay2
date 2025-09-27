@@ -3,31 +3,67 @@
 from __future__ import annotations
 
 import asyncio
+import importlib
 from contextlib import suppress
 from pathlib import Path
-from typing import Awaitable, Callable, Dict, List, Optional
+from typing import Awaitable, Callable, Dict, List, Optional, Protocol, cast
 
 import psutil
 from obswsc.client import ObsWsClient
 from obswsc.data import Event, Request, Response1, Response2
 from structlog.stdlib import BoundLogger
 
-try:  # Windows 以外では win32gui が存在しないため optional import
-    import win32api
-    import win32con
-    import win32gui
-    import win32process
-except Exception:
-    win32con = None
-    win32gui = None
-    win32process = None
-    win32api = None
-
 from splat_replay.application.interfaces import (
     RecorderStatus,
     VideoRecorderPort,
 )
 from splat_replay.shared.config import OBSSettings
+
+
+class Win32ApiModule(Protocol):
+    def PostMessage(
+        self, hwnd: int, msg: int, wparam: int, lparam: int
+    ) -> None: ...
+
+
+class Win32ConModule(Protocol):
+    WM_CLOSE: int
+
+
+class Win32GuiModule(Protocol):
+    def EnumWindows(
+        self,
+        callback: Callable[[int, Optional[int]], bool],
+        param: Optional[int],
+    ) -> None: ...
+
+    def IsWindowVisible(self, hwnd: int) -> bool: ...
+
+    def GetWindowText(self, hwnd: int) -> str: ...
+
+
+class Win32ProcessModule(Protocol):
+    def GetWindowThreadProcessId(self, hwnd: int) -> tuple[int, int]: ...
+
+
+def _load_optional_module(name: str) -> object | None:
+    try:
+        return importlib.import_module(name)
+    except Exception:  # pragma: no cover - optional dependency
+        return None
+
+
+_WIN32API = _load_optional_module("win32api")
+_WIN32CON = _load_optional_module("win32con")
+_WIN32GUI = _load_optional_module("win32gui")
+_WIN32PROCESS = _load_optional_module("win32process")
+
+WIN32_API: Optional[Win32ApiModule] = cast(Optional[Win32ApiModule], _WIN32API)
+WIN32_CON: Optional[Win32ConModule] = cast(Optional[Win32ConModule], _WIN32CON)
+WIN32_GUI: Optional[Win32GuiModule] = cast(Optional[Win32GuiModule], _WIN32GUI)
+WIN32_PROCESS: Optional[Win32ProcessModule] = cast(
+    Optional[Win32ProcessModule], _WIN32PROCESS
+)
 
 Response = Response1 | Response2
 StatusListener = Callable[[RecorderStatus], Awaitable[None]]
@@ -83,22 +119,22 @@ class OBSController(VideoRecorderPort):
             return await asyncio.to_thread(_impl)
 
         async def exists_window_async() -> bool:
-            if win32gui is None:
+            if WIN32_GUI is None:
                 self._logger.warning("win32gui が利用できません")
                 return False
 
             def _impl() -> bool:
-                if win32gui is None:  # pragma: no cover - defensive
+                if WIN32_GUI is None:  # pragma: no cover - defensive
                     return False
 
                 handles: list[int] = []
 
                 def enum_window(hwnd: int, _param: Optional[int]) -> bool:
-                    if win32gui is None:  # pragma: no cover - defensive
+                    if WIN32_GUI is None:  # pragma: no cover - defensive
                         return False
                     try:
-                        if win32gui.IsWindowVisible(hwnd):
-                            title = win32gui.GetWindowText(hwnd)
+                        if WIN32_GUI.IsWindowVisible(hwnd):
+                            title = WIN32_GUI.GetWindowText(hwnd)
                             if "OBS" in title:
                                 handles.append(hwnd)
                     except Exception:  # pragma: no cover - defensive
@@ -106,7 +142,7 @@ class OBSController(VideoRecorderPort):
                     return True
 
                 try:
-                    win32gui.EnumWindows(enum_window, None)
+                    WIN32_GUI.EnumWindows(enum_window, None)
                 except Exception:  # pragma: no cover - defensive
                     return False
                 return bool(handles)
@@ -136,23 +172,23 @@ class OBSController(VideoRecorderPort):
         while not await self.is_running():
             await asyncio.sleep(1)
 
-    def find_window_by_pid(self, pid) -> List[int]:
-        if win32gui is None or win32process is None:
+    def find_window_by_pid(self, pid: int) -> List[int]:
+        if WIN32_GUI is None or WIN32_PROCESS is None:
             self._logger.warning("win32gui が利用できません")
             return []
 
         result = []
 
-        def callback(hwnd: int, _) -> bool:
-            if win32gui is None or win32process is None:
+        def callback(hwnd: int, _param: Optional[int]) -> bool:
+            if WIN32_GUI is None or WIN32_PROCESS is None:
                 return False
-            if win32gui.IsWindowVisible(hwnd):
-                _, found_pid = win32process.GetWindowThreadProcessId(hwnd)
+            if WIN32_GUI.IsWindowVisible(hwnd):
+                _, found_pid = WIN32_PROCESS.GetWindowThreadProcessId(hwnd)
                 if found_pid == pid:
                     result.append(hwnd)
             return True
 
-        win32gui.EnumWindows(callback, None)
+        WIN32_GUI.EnumWindows(callback, None)
         return result
 
     async def teardown(self) -> None:
@@ -173,10 +209,10 @@ class OBSController(VideoRecorderPort):
 
         if await self.is_running() and self._process is not None:
             try:
-                if win32api is not None and win32con is not None:
+                if WIN32_API is not None and WIN32_CON is not None:
                     hwnds = self.find_window_by_pid(self._process.pid)
                     for hwnd in hwnds:
-                        win32api.PostMessage(hwnd, win32con.WM_CLOSE, 0, 0)
+                        WIN32_API.PostMessage(hwnd, WIN32_CON.WM_CLOSE, 0, 0)
 
                 # 最大10秒待機して終了しなければ強制終了
                 try:
