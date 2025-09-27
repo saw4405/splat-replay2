@@ -29,6 +29,7 @@ class EventTypes:
     # Video Asset Repository (recorded assets)
     ASSET_RECORDED_SAVED = "asset.recorded.saved"
     ASSET_RECORDED_METADATA_UPDATED = "asset.recorded.metadata.updated"
+    ASSET_RECORDED_SUBTITLE_UPDATED = "asset.recorded.subtitle.updated"
     ASSET_RECORDED_DELETED = "asset.recorded.deleted"
     # Edited assets
     ASSET_EDITED_SAVED = "asset.edited.saved"

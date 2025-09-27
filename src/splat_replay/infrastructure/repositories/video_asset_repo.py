@@ -170,6 +170,35 @@ class FileVideoAssetRepository(VideoAssetRepositoryPort):
             and not metadata.exists()
         )
 
+    def get_subtitle(self, video: Path) -> str | None:
+        subtitle = video.with_suffix(".srt")
+        if not subtitle.exists():
+            return None
+        try:
+            return subtitle.read_text(encoding="utf-8")
+        except Exception as exc:  # noqa: BLE001
+            self.logger.error(
+                "字幕の読み込みに失敗しました", path=str(subtitle), error=str(exc)
+            )
+            return None
+
+    def save_subtitle(self, video: Path, content: str) -> bool:
+        subtitle = video.with_suffix(".srt")
+        try:
+            subtitle.parent.mkdir(parents=True, exist_ok=True)
+            subtitle.write_text(content, encoding="utf-8")
+        except Exception as exc:  # noqa: BLE001
+            self.logger.error(
+                "字幕の保存に失敗しました", path=str(subtitle), error=str(exc)
+            )
+            return False
+
+        self._publisher.publish(
+            EventTypes.ASSET_RECORDED_SUBTITLE_UPDATED,
+            {"video": str(video)},
+        )
+        return True
+
     def save_edited(self, video: Path) -> Path:
         dest = self.settings.edited_dir
         dest.mkdir(parents=True, exist_ok=True)

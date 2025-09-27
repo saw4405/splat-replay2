@@ -115,11 +115,25 @@ class CommandBus:
 
     @overload
     def submit(
+        self, name: Literal["asset.get_subtitle"], *, video_path: "Path"
+    ) -> ThreadFuture[CommandResult[Optional[str]]]: ...
+
+    @overload
+    def submit(
         self,
         name: Literal["asset.save_metadata"],
         *,
         video_path: "Path",
         metadata_dict: Dict[str, str],
+    ) -> ThreadFuture[CommandResult[bool]]: ...
+
+    @overload
+    def submit(
+        self,
+        name: Literal["asset.save_subtitle"],
+        *,
+        video_path: "Path",
+        content: str,
     ) -> ThreadFuture[CommandResult[bool]]: ...
 
     @overload
