@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 from contextlib import suppress
 from pathlib import Path
+from types import ModuleType
 from typing import Awaitable, Callable, Dict, List, Optional
 
 import psutil
@@ -12,22 +13,30 @@ from obswsc.client import ObsWsClient
 from obswsc.data import Event, Request, Response1, Response2
 from structlog.stdlib import BoundLogger
 
-try:  # Windows 以外では win32gui が存在しないため optional import
-    import win32api
-    import win32con
-    import win32gui
-    import win32process
-except Exception:
-    win32con = None
-    win32gui = None
-    win32process = None
-    win32api = None
-
 from splat_replay.application.interfaces import (
     RecorderStatus,
     VideoRecorderPort,
 )
 from splat_replay.shared.config import OBSSettings
+
+win32api: ModuleType | None = None
+win32con: ModuleType | None = None
+win32gui: ModuleType | None = None
+win32process: ModuleType | None = None
+
+try:  # Windows 以外では win32gui が存在しないため optional import
+    import win32api as _win32api
+    import win32con as _win32con
+    import win32gui as _win32gui
+    import win32process as _win32process
+
+    win32api = _win32api
+    win32con = _win32con
+    win32gui = _win32gui
+    win32process = _win32process
+except Exception:
+    # keep None for non-Windows
+    pass
 
 Response = Response1 | Response2
 StatusListener = Callable[[RecorderStatus], Awaitable[None]]
@@ -136,14 +145,14 @@ class OBSController(VideoRecorderPort):
         while not await self.is_running():
             await asyncio.sleep(1)
 
-    def find_window_by_pid(self, pid) -> List[int]:
+    def find_window_by_pid(self, pid: int) -> List[int]:
         if win32gui is None or win32process is None:
             self._logger.warning("win32gui が利用できません")
             return []
 
         result = []
 
-        def callback(hwnd: int, _) -> bool:
+        def callback(hwnd: int, _param: object) -> bool:
             if win32gui is None or win32process is None:
                 return False
             if win32gui.IsWindowVisible(hwnd):

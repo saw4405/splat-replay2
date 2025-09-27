@@ -84,9 +84,7 @@ class AssetQueryService:
             return await asyncio.to_thread(work)
 
         async def _get_subtitle(video_path: Path) -> Optional[str]:
-            return await asyncio.to_thread(
-                self._repo.get_subtitle, video_path
-            )
+            return await asyncio.to_thread(self._repo.get_subtitle, video_path)
 
         async def _save_metadata(
             video_path: Path, metadata_dict: dict[str, str]
