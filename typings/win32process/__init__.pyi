@@ -1,0 +1,3 @@
+from __future__ import annotations
+
+def GetWindowThreadProcessId(hwnd: int) -> tuple[int, int]: ...
