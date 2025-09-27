@@ -73,7 +73,7 @@ class AutoRecorder:
         self.recorder.add_status_listener(self._on_recorder_status_change)
         self._publisher = publisher
         self._frame_publisher = frame_publisher
-        self.metadata = RecordingMetadata()  # backward compat reference
+        self.metadata = RecordingMetadata()
         self._ctx = RecordingContext(self.metadata)
         self._stop_event = asyncio.Event()
         self._control_queue: asyncio.Queue[tuple[str, dict[str, object]]] = (
@@ -89,12 +89,9 @@ class AutoRecorder:
         )
         self._publisher_worker = PublisherWorker(
             publisher,
-            frame_publisher,
             queue_maxsize=PUBLISH_QUEUE_MAXSIZE,
             idle_sleep=PUBLISHER_LOOP_IDLE,
         )
-        # フレーム単位解析キャッシュ (name, args) -> result
-        self._analysis_cache: dict[tuple[str, tuple[object, ...]], object] = {}
 
         self.last_phase: str | None = None
 
@@ -143,9 +140,6 @@ class AutoRecorder:
                     # フレーム未到来。CPU スピン緩和のため譲歩。
                     await asyncio.sleep(0)
                     continue
-
-                # このフレーム内の解析結果キャッシュ初期化
-                self._analysis_cache.clear()
 
                 (
                     off_count,
@@ -284,6 +278,8 @@ class AutoRecorder:
                 video=str(asset.video),
                 start_at=self.metadata.started_at,
             )
+        except Exception as e:
+            self.logger.error(f"自動録画停止時にエラーが発生しました。: {e}")
         finally:
             await self._reset()
 
@@ -400,6 +396,10 @@ class AutoRecorder:
         """録画の状態をリセットする。"""
         self._ctx.reset()
         await self._publish_operation_status(WELCOME_MESSAGE)
+        self._publisher_worker.enqueue_event(
+            EventTypes.RECORDER_METADATA_UPDATED,
+            {"metadata": self.metadata.to_dict()},
+        )
 
     # ================================================================
     # 制御キュー / フレーム取得
@@ -462,6 +462,10 @@ class AutoRecorder:
             if game_mode is not None and game_mode != md.game_mode:
                 md.game_mode = game_mode
                 self.logger.info("ゲームモード取得", mode=str(md.game_mode))
+                self._publisher_worker.enqueue_event(
+                    EventTypes.RECORDER_METADATA_UPDATED,
+                    {"metadata": md.to_dict()},
+                )
 
             rate = await self.analyzer.extract_rate(frame, md.game_mode)
             if rate is not None and (
@@ -469,6 +473,10 @@ class AutoRecorder:
             ):
                 md.rate = rate
                 self.logger.info("レート取得", rate=str(rate))
+                self._publisher_worker.enqueue_event(
+                    EventTypes.RECORDER_METADATA_UPDATED,
+                    {"metadata": md.to_dict()},
+                )
 
         if await self.analyzer.detect_matching_start(frame):
             self.logger.info("マッチング開始を検出")
@@ -476,6 +484,10 @@ class AutoRecorder:
                 "マッチング開始を検出しました。"
             )
             md.started_at = self._now_dt()
+            self._publisher_worker.enqueue_event(
+                EventTypes.RECORDER_METADATA_UPDATED,
+                {"metadata": md.to_dict()},
+            )
 
     async def _process_matching(self, frame: Frame) -> None:
         md = self.metadata
@@ -527,19 +539,6 @@ class AutoRecorder:
             )
             await self.pause()
             return
-        if await self.analyzer.detect_session_judgement(frame, gm):
-            self._ctx.finish = True
-            self.logger.info("バトル終了より前にバトル判定を検出")
-            await self._publish_operation_status("バトル判定を検出しました。")
-            judgement = await self.analyzer.extract_session_judgement(
-                frame, gm
-            )
-            if judgement is not None and self._ctx.metadata.judgement is None:
-                self._ctx.metadata.judgement = judgement
-                self.logger.info(
-                    "バトルジャッジメント取得", judgement=str(judgement)
-                )
-            return
         if await self.analyzer.detect_communication_error(frame, gm):
             self.logger.info("通信エラーを検出")
             await self._publish_operation_status(
@@ -563,6 +562,10 @@ class AutoRecorder:
                 self._ctx.metadata.judgement = judgement
                 self.logger.info(
                     "バトルジャッジメント取得", judgement=str(judgement)
+                )
+                self._publisher_worker.enqueue_event(
+                    EventTypes.RECORDER_METADATA_UPDATED,
+                    {"metadata": self._ctx.metadata.to_dict()},
                 )
             return
         if await self.analyzer.detect_loading(frame):

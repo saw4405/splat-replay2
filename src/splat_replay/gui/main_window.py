@@ -8,7 +8,6 @@
 from __future__ import annotations
 
 from tkinter import font
-from pathlib import Path
 from typing import Callable, Dict, Optional
 
 import ttkbootstrap as ttk
@@ -17,10 +16,14 @@ from ttkbootstrap.style import ThemeDefinition
 from ttkbootstrap.utility import enable_high_dpi_awareness
 
 from splat_replay.domain.services import RecordState
-from splat_replay.gui.dialogs.metadata_editor_dialog import MetadataEditorDialog
-from splat_replay.gui.dialogs.subtitle_editor_dialog import SubtitleEditorDialog
+from splat_replay.gui.dialogs.metadata_editor_dialog import (
+    MetadataEditorDialog,
+)
 from splat_replay.gui.dialogs.progress_dialog import ProgressDialog
 from splat_replay.gui.dialogs.settings_dialog import SettingsDialog
+from splat_replay.gui.dialogs.subtitle_editor_dialog import (
+    SubtitleEditorDialog,
+)
 from splat_replay.gui.utils.application_controller import (
     GUIApplicationController,
 )
@@ -167,10 +170,8 @@ class MainWindow:
         result: Optional[Dict[str, str]] = dialog.result
         return result
 
-    def show_subtitle_dialog(
-        self, video_path: Path, subtitle: Optional[str]
-    ) -> Optional[str]:
-        dialog = SubtitleEditorDialog(self.window, video_path, subtitle)
+    def show_subtitle_dialog(self, subtitle: Optional[str]) -> Optional[str]:
+        dialog = SubtitleEditorDialog(self.window, subtitle)
         dialog.show()
         result: Optional[str] = dialog.result
         return result

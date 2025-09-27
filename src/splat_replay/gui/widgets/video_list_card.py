@@ -27,7 +27,7 @@ class VideoListCard(CardWidget):
         show_edit_dialog: Callable[
             [Dict[str, str | None]], Optional[Dict[str, str]]
         ],
-        show_subtitle_dialog: Callable[[Path, Optional[str]], Optional[str]],
+        show_subtitle_dialog: Callable[[Optional[str]], Optional[str]],
         upload_start_callback: Callable[[], None],
     ) -> None:
         title = "　🎦 動画リスト　"
@@ -122,7 +122,7 @@ class VideoListCard(CardWidget):
             text="📝 字幕",
             command=self._subtitle_clicked,
             width=15,
-            state="disabled",
+            state="disablesd",
             bootstyle="info-outline",  # type: ignore
         )
         self.subtitle_button.pack(side="left", padx=(0, 10))
@@ -505,7 +505,7 @@ class VideoListCard(CardWidget):
             return
 
         def on_loaded(subtitle: Optional[str]) -> None:
-            result = self.show_subtitle_dialog(video_paths[0], subtitle)
+            result = self.show_subtitle_dialog(subtitle)
             if result is None:
                 return
 

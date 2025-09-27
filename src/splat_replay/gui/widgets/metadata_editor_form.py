@@ -22,7 +22,7 @@ class MetadataEditorForm:
     def __init__(
         self,
         parent: ttk.Frame,
-        metadata: Optional[Dict[str, str | None]] = None,
+        metadata: Optional[Dict[str, str | int | None]] = None,
     ) -> None:
         self.logger = get_logger()
         self.parent = parent
@@ -183,37 +183,37 @@ class MetadataEditorForm:
         self.update(None)
         self.logger.info("metadata_manual_overrides_reset")
 
-    def update(self, metadata: Optional[Dict[str, str | None]]) -> None:
+    def update(self, metadata: Optional[Dict[str, str | int | None]]) -> None:
         try:
             game_mode_str = (metadata or {}).get("game_mode") or "未取得"
-            self._update_field("game_mode", game_mode_str)
+            self._update_field("game_mode", str(game_mode_str))
 
             started_str = (metadata or {}).get("started_at") or "未開始"
-            self._update_field("started_at", started_str)
+            self._update_field("started_at", str(started_str))
 
             match_str = (metadata or {}).get("match") or "未取得"
-            self._update_field("match", match_str)
+            self._update_field("match", str(match_str))
 
             rule_str = (metadata or {}).get("rule") or "未取得"
-            self._update_field("rule", rule_str)
+            self._update_field("rule", str(rule_str))
 
             rate_str = (metadata or {}).get("rate") or "未検出"
-            self._update_field("rate", rate_str)
+            self._update_field("rate", str(rate_str))
 
             judgement_str = (metadata or {}).get("judgement") or "未判定"
-            self._update_field("judgement", judgement_str)
+            self._update_field("judgement", str(judgement_str))
 
             stage_str = (metadata or {}).get("stage") or "未取得"
-            self._update_field("stage", stage_str)
+            self._update_field("stage", str(stage_str))
 
             kill_str = (metadata or {}).get("kill") or "未取得"
-            self._update_field("kill", kill_str)
+            self._update_field("kill", str(kill_str))
 
             death_str = (metadata or {}).get("death") or "未取得"
-            self._update_field("death", death_str)
+            self._update_field("death", str(death_str))
 
             special_str = (metadata or {}).get("special") or "未取得"
-            self._update_field("special", special_str)
+            self._update_field("special", str(special_str))
 
         except Exception as e:
             self.logger.error(f"メタデータ更新でエラー: {e}")

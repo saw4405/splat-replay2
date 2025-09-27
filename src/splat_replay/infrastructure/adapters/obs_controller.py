@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 from contextlib import suppress
 from pathlib import Path
-from typing import Awaitable, Callable, Dict, Optional
+from typing import Awaitable, Callable, Dict, List, Optional
 
 import psutil
 from obswsc.client import ObsWsClient
@@ -13,9 +13,15 @@ from obswsc.data import Event, Request, Response1, Response2
 from structlog.stdlib import BoundLogger
 
 try:  # Windows 以外では win32gui が存在しないため optional import
+    import win32api
+    import win32con
     import win32gui
-except Exception:  # pragma: no cover - 環境依存
-    win32gui = None  # type: ignore[assignment]
+    import win32process
+except Exception:
+    win32con = None
+    win32gui = None
+    win32process = None
+    win32api = None
 
 from splat_replay.application.interfaces import (
     RecorderStatus,
@@ -130,6 +136,25 @@ class OBSController(VideoRecorderPort):
         while not await self.is_running():
             await asyncio.sleep(1)
 
+    def find_window_by_pid(self, pid) -> List[int]:
+        if win32gui is None or win32process is None:
+            self._logger.warning("win32gui が利用できません")
+            return []
+
+        result = []
+
+        def callback(hwnd: int, _) -> bool:
+            if win32gui is None or win32process is None:
+                return False
+            if win32gui.IsWindowVisible(hwnd):
+                _, found_pid = win32process.GetWindowThreadProcessId(hwnd)
+                if found_pid == pid:
+                    result.append(hwnd)
+            return True
+
+        win32gui.EnumWindows(callback, None)
+        return result
+
     async def teardown(self) -> None:
         self._logger.info("OBS 終了要求")
 
@@ -140,7 +165,7 @@ class OBSController(VideoRecorderPort):
             self._monitor_task = None
 
         if self._is_connected:
-            active, _paused = await self._get_record_status()
+            active, _ = await self._get_record_status()
             if active:
                 await self.stop()
             if await self.is_virtual_camera_active():
@@ -148,9 +173,20 @@ class OBSController(VideoRecorderPort):
 
         if await self.is_running() and self._process is not None:
             try:
-                self._process.terminate()
-                await self._process.wait()
-            except Exception as exc:  # pragma: no cover - logging path
+                if win32api is not None and win32con is not None:
+                    hwnds = self.find_window_by_pid(self._process.pid)
+                    for hwnd in hwnds:
+                        win32api.PostMessage(hwnd, win32con.WM_CLOSE, 0, 0)
+
+                # 最大10秒待機して終了しなければ強制終了
+                try:
+                    await asyncio.wait_for(self._process.wait(), timeout=10.0)
+                except asyncio.TimeoutError:
+                    self._logger.warning("OBS 強制終了")
+                    self._process.terminate()
+                    await self._process.wait()
+
+            except Exception as exc:
                 self._logger.error("OBS 終了失敗", error=str(exc))
             finally:
                 self._process = None

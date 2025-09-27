@@ -15,6 +15,7 @@ class EventTypes:
     RECORDER_OPERATION = "recorder.operation"
     POWER_OFF_DETECTED = "power.off.detected"
     RECORDER_MATCH = "recorder.match"
+    RECORDER_METADATA_UPDATED = "recorder.metadata.updated"
     # Editor
     EDITOR_STARTED = "editor.started"
     EDITOR_PROGRESS = "editor.progress"

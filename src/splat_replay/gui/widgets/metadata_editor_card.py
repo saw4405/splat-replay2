@@ -9,7 +9,6 @@ from typing import Dict, Optional
 
 import ttkbootstrap as ttk
 
-from splat_replay.domain.services import RecordState
 from splat_replay.gui.utils.application_controller import (
     GUIApplicationController,
 )
@@ -30,7 +29,6 @@ class MetadataEditorCard(CardWidget):
         self.controller = controller
 
         self.form = MetadataEditorForm(self.content)
-        self._reflesh_metadata()
 
         self.reset_button = ttk.Button(
             self.footer,
@@ -41,22 +39,22 @@ class MetadataEditorCard(CardWidget):
         )
         self.reset_button.pack(side="left", padx=(0, 10))
 
-        self.controller.add_record_state_changed_listener(
-            self._on_record_state_changed
-        )
-        self.logger.info("MetadataEditorCard が初期化されました")
+        self.reset()
 
-    def _on_record_state_changed(self, state: RecordState) -> None:
-        if state != RecordState.STOPPED:
-            return
+        self.controller.add_metadata_listener(self._on_metadata_changed)
+        self.logger.info("MetadataEditorCard が初期化されました")
 
     def reset(self) -> None:
         self.form.reset()
-        self._reflesh_metadata()
 
-    def _reflesh_metadata(self) -> None:
-        def on_complete(metadata: Optional[Dict[str, str | None]]) -> None:
+        def on_complete(
+            metadata: Optional[Dict[str, str | int | None]],
+        ) -> None:
             self.form.update(metadata)
-            self.content.after(500, self._reflesh_metadata)
 
         self.controller.get_current_metadata(on_complete)
+
+    def _on_metadata_changed(
+        self, metadata: Dict[str, str | int | None]
+    ) -> None:
+        self.form.update(metadata)

@@ -5,7 +5,6 @@ from __future__ import annotations
 import re
 import tkinter as tk
 from dataclasses import dataclass
-from pathlib import Path
 
 import ttkbootstrap as ttk
 from ttkbootstrap.dialogs import Dialog, Messagebox
@@ -36,16 +35,14 @@ class SubtitleEditorDialog(Dialog):
     def __init__(
         self,
         window: ttk.Window,
-        video_path: Path,
         subtitle: str | None,
     ) -> None:
         super().__init__(
             window,
-            title=f"字幕編集: {video_path.name}",
+            title="字幕編集",
         )
         self.logger = get_logger()
         self.window = window
-        self.video_path = video_path
         self._initial_subtitle = subtitle or ""
         self._closed = False
         self.rows: list[SubtitleRow] = self._parse_srt(self._initial_subtitle)
@@ -58,9 +55,7 @@ class SubtitleEditorDialog(Dialog):
         self.apply_button: ttk.Button | None = None
         self.delete_button: ttk.Button | None = None
 
-        self.logger.info(
-            "字幕編集ダイアログが初期化されました", video=str(video_path)
-        )
+        self.logger.info("字幕編集ダイアログが初期化されました")
 
     def create_body(self, master: tk.Widget):
         container = ttk.Frame(master, padding=10)
@@ -320,7 +315,7 @@ class SubtitleEditorDialog(Dialog):
                 )
             )
 
-        self.table.insert_rows("end", row_data)
+        self.table.insert_rows(0, row_data)
 
         if select_index is not None and 0 <= select_index < len(self.rows):
             item = self.table.view.get_children()[select_index]

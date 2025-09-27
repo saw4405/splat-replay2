@@ -20,6 +20,8 @@ class FFmpegProcessor(VideoEditorPort):
 
     def __init__(self, logger: BoundLogger) -> None:
         self.logger = logger
+        # 動画長のキャッシュ (GUI リスト表示時の ffprobe 過多を防止)
+        self._length_cache: dict[Path, float | None] = {}
 
     # ------------------------------------------------------------------
     # Helpers
@@ -30,6 +32,7 @@ class FFmpegProcessor(VideoEditorPort):
         *,
         cwd: Path | None = None,
         input_text: str | None = None,
+        timeout: float | None = None,
     ) -> CompletedProcess[str]:
         return subprocess.run(
             list(command),
@@ -39,6 +42,7 @@ class FFmpegProcessor(VideoEditorPort):
             text=True,
             encoding="utf-8",
             input=input_text,
+            timeout=timeout,
         )
 
     def _run_binary(
@@ -77,7 +81,7 @@ class FFmpegProcessor(VideoEditorPort):
     def merge(self, clips: list[Path], output: Path) -> Path:
         abs_clips = [clip.resolve() for clip in clips]
         self.logger.info(
-            "FFmpeg 蜍慕判邨仙粋", clips=[str(c) for c in abs_clips]
+            "FFmpeg: クリップ結合", clips=[str(c) for c in abs_clips]
         )
         if not abs_clips:
             raise ValueError("clips is empty")
@@ -106,15 +110,13 @@ class FFmpegProcessor(VideoEditorPort):
         )
         filelist.unlink(missing_ok=True)
         if result.returncode != 0:
-            self._log_failure("蜍慕判邨仙粋縺ｫ螟ｱ謨・", result)
+            self._log_failure("FFmpeg: 結合に失敗", result)
         return output
 
     def embed_metadata(self, path: Path, metadata: Dict[str, str]) -> None:
         abs_path = path.resolve()
         self.logger.info(
-            "FFmpeg 繝｡繧ｿ繝・・繧ｿ蝓九ａ霎ｼ縺ｿ",
-            path=str(abs_path),
-            metadata=metadata,
+            "FFmpeg: メタデータ埋め込み", path=str(abs_path), metadata=metadata
         )
 
         temp = abs_path.with_name(f"temp{abs_path.suffix}")
@@ -139,13 +141,11 @@ class FFmpegProcessor(VideoEditorPort):
             abs_path.unlink(missing_ok=True)
             temp.rename(abs_path)
         if result.returncode != 0:
-            self._log_failure(
-                "繝｡繧ｿ繝・・繧ｿ縺ｮ蝓九ａ霎ｼ縺ｿ縺ｫ螟ｱ謨・", result
-            )
+            self._log_failure("FFmpeg: メタデータ埋め込み失敗", result)
 
     def get_metadata(self, path: Path) -> Dict[str, str]:
         abs_path = path.resolve()
-        self.logger.info("FFmpeg 繝｡繧ｿ繝・・繧ｿ蜿門ｾ・", path=str(abs_path))
+        self.logger.info("FFmpeg: メタデータ取得", path=str(abs_path))
 
         result = self._run_text(
             [
@@ -159,13 +159,13 @@ class FFmpegProcessor(VideoEditorPort):
             ]
         )
         if result.returncode != 0 or not result.stdout:
-            self._log_failure("繝｡繧ｿ繝・・繧ｿ縺ｮ蜿門ｾ励↓螟ｱ謨・", result)
+            self._log_failure("FFmpeg: メタデータ取得失敗", result)
             return {}
 
         try:
             data = json.loads(result.stdout)
         except json.JSONDecodeError:
-            self.logger.error("JSON隗｣譫蝉ｸｭ縺ｫ繧ｨ繝ｩ繝ｼ縺檎匱逕溘＠縺ｾ縺励◆")
+            self.logger.error("FFmpeg: メタデータ JSON parse 失敗")
             return {}
 
         if not isinstance(data, dict):
@@ -185,7 +185,7 @@ class FFmpegProcessor(VideoEditorPort):
 
     def embed_subtitle(self, path: Path, srt: str) -> None:
         abs_path = path.resolve()
-        self.logger.info("FFmpeg �����ǉ�", path=str(abs_path))
+        self.logger.info("FFmpeg: 字幕追加", path=str(abs_path))
 
         temp = abs_path.with_name(f"temp{abs_path.suffix}")
         result = self._run_text(
@@ -216,12 +216,12 @@ class FFmpegProcessor(VideoEditorPort):
             abs_path.unlink(missing_ok=True)
             temp.rename(abs_path)
         if result.returncode != 0:
-            self._log_failure("�����̒ǉ��Ɏ��s", result)
+            self._log_failure("FFmpeg: 字幕追加失敗", result)
 
     def get_subtitle(self, path: Path) -> Optional[str]:
         indices = self._find_streams(path, "subtitle", "subrip")
         if not indices:
-            self.logger.error("������������܂���ł���")
+            self.logger.error("FFmpeg: 字幕が見つかりません")
             return None
         index = indices[0]
 
@@ -231,7 +231,7 @@ class FFmpegProcessor(VideoEditorPort):
                 "-i",
                 str(path),
                 "-map",
-                f"0:s:{index}",
+                f"0:{index}",
                 "-c",
                 "copy",
                 "-f",
@@ -240,13 +240,13 @@ class FFmpegProcessor(VideoEditorPort):
             ]
         )
         if result.returncode != 0:
-            self._log_failure("�����̎擾�Ɏ��s", result)
+            self._log_failure("FFmpeg: 字幕取得失敗", result)
             return None
         return result.stdout
 
     def embed_thumbnail(self, path: Path, thumbnail: bytes) -> None:
         abs_path = path.resolve()
-        self.logger.info("FFmpeg �T���l�C���ǉ�", path=str(abs_path))
+        self.logger.info("FFmpeg: サムネイル追加", path=str(abs_path))
 
         temp = abs_path.with_name(f"temp{abs_path.suffix}")
         result = self._run_binary(
@@ -271,12 +271,12 @@ class FFmpegProcessor(VideoEditorPort):
             abs_path.unlink(missing_ok=True)
             temp.rename(abs_path)
         if result.returncode != 0:
-            self._log_failure("�T���l�C���̒ǉ��Ɏ��s", result)
+            self._log_failure("FFmpeg: サムネイル追加失敗", result)
 
     def get_thumbnail(self, path: Path) -> Optional[bytes]:
         indices = self._find_streams(path, "video", "png")
         if not indices:
-            self.logger.error("�T���l�C����������܂���ł���")
+            self.logger.error("FFmpeg: サムネイルが見つかりません")
             return None
         index = indices[0]
 
@@ -286,7 +286,7 @@ class FFmpegProcessor(VideoEditorPort):
                 "-i",
                 str(path),
                 "-map",
-                f"0:v:{index}",
+                f"0:{index}",
                 "-f",
                 "image2",
                 "-c",
@@ -296,7 +296,7 @@ class FFmpegProcessor(VideoEditorPort):
         )
         if result.returncode != 0:
             self.logger.error(
-                f"�T���l�C���̎擾�Ɏ��s���܂���: {result.stderr.decode('utf-8', errors='ignore')}"
+                f"FFmpeg: サムネイル取得失敗: {result.stderr.decode('utf-8', errors='ignore')}"
             )
             return None
         return result.stdout
@@ -304,7 +304,7 @@ class FFmpegProcessor(VideoEditorPort):
     def change_volume(self, path: Path, multiplier: float) -> None:
         abs_path = path.resolve()
         self.logger.info(
-            "FFmpeg ���ʕύX", path=str(abs_path), multiplier=multiplier
+            "FFmpeg: 音量変更", path=str(abs_path), multiplier=multiplier
         )
         if multiplier == 1.0:
             return
@@ -331,11 +331,18 @@ class FFmpegProcessor(VideoEditorPort):
             abs_path.unlink(missing_ok=True)
             temp.rename(abs_path)
         if result.returncode != 0:
-            self._log_failure("���ʂ̕ύX�Ɏ��s", result)
+            self._log_failure("FFmpeg: 音量変更失敗", result)
 
     def get_video_length(self, path: Path) -> Optional[float]:
         abs_path = path.resolve()
-        self.logger.info("FFmpeg ���撷���擾", path=str(abs_path))
+        # キャッシュ利用
+        cached = self._length_cache.get(abs_path)
+        if cached is not None:
+            self.logger.info(
+                "FFprobe: 長さ取得 (cache)", path=str(abs_path), seconds=cached
+            )
+            return cached
+        self.logger.info("FFprobe: 長さ取得", path=str(abs_path))
 
         result = self._run_text(
             [
@@ -347,17 +354,24 @@ class FFmpegProcessor(VideoEditorPort):
                 "-of",
                 "default=noprint_wrappers=1:nokey=1",
                 str(abs_path),
-            ]
+            ],
+            timeout=3,
         )
         if result.returncode != 0:
-            self._log_failure("����̒����̎擾�Ɏ��s", result)
+            self._log_failure("FFprobe: 長さ取得失敗", result)
+            self._length_cache[abs_path] = None
             return None
 
+        raw = result.stdout.strip()
         try:
-            return float(result.stdout.strip())
+            length = float(raw)
         except ValueError:
-            self.logger.error("����̒����̉�͂Ɏ��s���܂���")
+            self.logger.error("FFprobe: 長さ数値変換失敗", raw=raw)
+            self._length_cache[abs_path] = None
             return None
+        else:
+            self._length_cache[abs_path] = length
+            return length
 
     # ------------------------------------------------------------------
     # Internal utilities
@@ -380,15 +394,13 @@ class FFmpegProcessor(VideoEditorPort):
             ]
         )
         if result.returncode != 0 or not result.stdout:
-            self.logger.error(
-                "繧ｹ繝医Μ繝ｼ繝諠・ｱ縺ｮ蜿門ｾ励↓螟ｱ謨励＠縺ｾ縺励◆"
-            )
+            self.logger.error("FFprobe: ストリーム情報取得失敗")
             return []
 
         try:
             data = json.loads(result.stdout)
         except json.JSONDecodeError:
-            self.logger.error("JSON隗｣譫蝉ｸｭ縺ｫ繧ｨ繝ｩ繝ｼ縺檎匱逕溘＠縺ｾ縺励◆")
+            self.logger.error("FFprobe: ストリーム JSON parse 失敗")
             return []
         if not isinstance(data, dict):
             return []

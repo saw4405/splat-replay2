@@ -66,14 +66,17 @@ class BattleFrameAnalyzer(AnalyzerPlugin):
         self, frame: Frame, match: Match
     ) -> Optional[RateBase]:
         """レートを取得する。"""
-        if match.is_anarchy():
-            udemae = await self.matcher.matched_name(
-                "battle_rate_udemae", frame
-            )
-            return Udemae(udemae) if udemae else None
+        try:
+            if match.is_anarchy():
+                udemae = await self.matcher.matched_name(
+                    "battle_rate_udemae", frame
+                )
+                return Udemae(udemae) if udemae else None
 
-        if match is Match.X:
-            return await self.extract_xp(frame)
+            if match is Match.X:
+                return await self.extract_xp(frame)
+        except Exception as e:
+            self._logger.error(f"レート抽出でエラー: {e}")
 
         return None
 

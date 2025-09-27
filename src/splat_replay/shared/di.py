@@ -232,6 +232,8 @@ def configure_container() -> punq.Container:
 
     try:
         ar = cast(AutoRecorder, resolve(container, AutoRecorder))
+        container.register(AutoRecorder, instance=ar)
+
         rt = cast(AppRuntime, resolve(container, AppRuntime))
         handlers = ar.command_handlers()
         for name, handler in handlers.items():

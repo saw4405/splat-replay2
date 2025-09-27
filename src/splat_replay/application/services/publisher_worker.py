@@ -3,7 +3,7 @@ import threading
 import time
 from typing import Any, Optional, Tuple, cast
 
-from splat_replay.application.interfaces import EventPublisher, FramePublisher
+from splat_replay.application.interfaces import EventPublisher
 from splat_replay.domain.models import Frame
 
 EventPayload = Tuple[str, dict[str, Any]]
@@ -16,12 +16,10 @@ class PublisherWorker:
     def __init__(
         self,
         event_publisher: EventPublisher,
-        frame_publisher: Optional[FramePublisher],
         queue_maxsize: int = 200,
         idle_sleep: float = 0.01,
     ) -> None:
         self._event_publisher = event_publisher
-        self._frame_publisher = frame_publisher
         self._queue: queue.Queue[QueueItem] = queue.Queue(
             maxsize=queue_maxsize
         )
@@ -59,14 +57,6 @@ class PublisherWorker:
         except queue.Full:
             pass
 
-    def enqueue_frame(self, frame: Frame) -> None:
-        if self._frame_publisher is None:
-            return
-        try:
-            self._queue.put_nowait(("frame", frame))
-        except queue.Full:
-            pass
-
     # Internal ------------------------------------------------------
     def _loop(self) -> None:
         while self._running.is_set():
@@ -84,11 +74,5 @@ class PublisherWorker:
             try:
                 event_type, event_payload = cast(EventPayload, payload)
                 self._event_publisher.publish(event_type, event_payload)
-            except Exception:
-                pass
-        elif kind == "frame" and self._frame_publisher is not None:
-            try:
-                frame = cast(Frame, payload)
-                self._frame_publisher.publish_frame(frame)
             except Exception:
                 pass

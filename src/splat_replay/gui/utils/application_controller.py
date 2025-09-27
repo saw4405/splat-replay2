@@ -37,17 +37,35 @@ class GUIApplicationController:
         self.logger = get_logger()
 
         self.container = configure_container()
-        self.runtime = resolve(self.container, AppRuntime)
-        self._gui_ports = resolve(self.container, GuiRuntimePortAdapter)
-        self.behavior_settings = resolve(self.container, BehaviorSettings)
-        self._device_checker = resolve(self.container, DeviceChecker)
-        self._auto_recorder = resolve(self.container, AutoRecorder)
-        self._auto_editor = resolve(self.container, AutoEditor)
-        self._auto_uploader = resolve(self.container, AutoUploader)
-        self._progress = resolve(self.container, ProgressReporter)
-        self._asset_repo = resolve(self.container, VideoAssetRepositoryPort)
-        self._video_editor = resolve(self.container, VideoEditorPort)
-        self._state_machine = resolve(self.container, StateMachine)
+        self.runtime: AppRuntime = resolve(self.container, AppRuntime)
+        self._gui_ports: GuiRuntimePortAdapter = resolve(
+            self.container, GuiRuntimePortAdapter
+        )
+        self.behavior_settings: BehaviorSettings = resolve(
+            self.container, BehaviorSettings
+        )
+        self._device_checker: DeviceChecker = resolve(
+            self.container, DeviceChecker
+        )
+        self._auto_recorder: AutoRecorder = resolve(
+            self.container, AutoRecorder
+        )
+        self._auto_editor: AutoEditor = resolve(self.container, AutoEditor)
+        self._auto_uploader: AutoUploader = resolve(
+            self.container, AutoUploader
+        )
+        self._progress: ProgressReporter = resolve(
+            self.container, ProgressReporter
+        )
+        self._asset_repo: VideoAssetRepositoryPort = resolve(
+            self.container, VideoAssetRepositoryPort
+        )
+        self._video_editor: VideoEditorPort = resolve(
+            self.container, VideoEditorPort
+        )
+        self._state_machine: StateMachine = resolve(
+            self.container, StateMachine
+        )
 
         self._record_state_listeners: List[Callable[[RecordState], None]] = []
         self._operation_msg_listeners: List[Callable[[str], None]] = []
@@ -62,6 +80,9 @@ class GUIApplicationController:
             EventTypes.ASSET_EDITED_SAVED,
             EventTypes.ASSET_EDITED_DELETED,
         }
+        self._metadata_listeners: List[
+            Callable[[Dict[str, str | int | None]], None]
+        ] = []
         self.adapter = GuiRuntimeAdapter(
             dispatcher=self._gui_ports,
             subscriber=self._gui_ports,
@@ -69,42 +90,50 @@ class GUIApplicationController:
             tk_root=root,
         )
         self.adapter.add_event_handler(self._on_event)
+        self.logger.info("GUIApplicationController initialized")
 
     def _on_event(self, ev: Event) -> None:
         if ev.type == EventTypes.RECORDER_STATE:
             state = self._state_machine.state
             for cb in list(self._record_state_listeners):
                 try:
-                    cb(state)
+                    self.adapter.call_soon(cb, state)
                 except Exception:
                     pass
         elif ev.type == EventTypes.RECORDER_OPERATION:
             msg = ev.payload.get("message", "")
             for cb in list(self._operation_msg_listeners):
                 try:
-                    cb(msg)
+                    self.adapter.call_soon(cb, msg)
+                except Exception:
+                    pass
+        elif ev.type == EventTypes.RECORDER_METADATA_UPDATED:
+            md_payload = ev.payload.get("metadata") or {}
+            if not isinstance(md_payload, dict):
+                return
+            for cb in list(self._metadata_listeners):
+                try:
+                    self.adapter.call_soon(cb, dict(md_payload))
                 except Exception:
                     pass
         elif ev.type == EventTypes.POWER_OFF_DETECTED:
             for cb in list(self._power_off_listeners):
                 try:
-                    cb()
+                    self.adapter.call_soon(cb)
                 except Exception:
                     pass
         elif ev.type.startswith(EventTypes.PROGRESS_PREFIX):
-            # progress.<kind>
             payload = dict(ev.payload)
             payload["kind"] = ev.type[len(EventTypes.PROGRESS_PREFIX) :]
             for cb in list(self._progress_listeners):
                 try:
-                    cb(payload)
+                    self.adapter.call_soon(cb, payload)
                 except Exception:
                     pass
         elif ev.type in self._asset_events:
-            # video asset repository change events -> notify listeners
             for cb in list(self._asset_event_listeners):
                 try:
-                    cb(ev.type, dict(ev.payload))
+                    self.adapter.call_soon(cb, ev.type, dict(ev.payload))
                 except Exception:
                     pass
 
@@ -212,14 +241,32 @@ class GUIApplicationController:
 
     # Commands
     def get_current_metadata(
-        self, cb: Callable[[Optional[Dict[str, str | None]]], None]
+        self, cb: Callable[[Optional[Dict[str, str | int | None]]], None]
     ) -> None:
         fut = self._gui_ports.submit("recorder.get_metadata")
-        metadata = fut.result().value
-        metadata = metadata.to_dict() if metadata else None
-        fut.add_done_callback(
-            lambda f: self.adapter.call_soon(lambda: cb(metadata))
-        )
+
+        def _on_done(fut_inner):
+            try:
+                result = fut_inner.result()
+                metadata = result.value
+                metadata = metadata.to_dict() if metadata else None
+            except Exception:
+                metadata = None
+            self.adapter.call_soon(lambda: cb(metadata))
+
+        fut.add_done_callback(_on_done)
+
+    # metadata listeners (push model)
+    def add_metadata_listener(
+        self, cb: Callable[[Dict[str, str | int | None]], None]
+    ) -> None:
+        self._metadata_listeners.append(cb)
+
+    def remove_metadata_listener(
+        self, cb: Callable[[Dict[str, str | int | None]], None]
+    ) -> None:
+        if cb in self._metadata_listeners:
+            self._metadata_listeners.remove(cb)
 
     def start_manual_recording(self, cb: Callable[[bool], None]) -> None:
         fut = self._gui_ports.submit("recorder.start")

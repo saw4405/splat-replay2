@@ -16,6 +16,7 @@ from splat_replay.application.interfaces import (
 )
 from splat_replay.domain.models import Frame
 from splat_replay.infrastructure.runtime.events import Event
+from splat_replay.shared.logger import get_logger
 
 
 class GuiRuntimeAdapter:
@@ -35,7 +36,8 @@ class GuiRuntimeAdapter:
         self._event_handlers: list[Callable[[Event], None]] = []
         self._frame_handler: Optional[Callable[[Frame], None]] = None
         self._pump_scheduled = False
-        self._closed = False
+        self._stop_event = threading.Event()
+        self._logger = get_logger()
         # subscriptions
         self._event_sub = self._subscriber.subscribe(event_types=None)
         # start background poll thread (lightweight)
@@ -56,32 +58,54 @@ class GuiRuntimeAdapter:
     def send_command(self, name: str, **payload):  # fire & forget
         return self._dispatcher.submit(name, **payload)
 
-    def call_soon(self, func: Callable[[], None]) -> None:
-        """Schedule a callable on the Tk GUI thread ASAP.
-
-        Falls back to direct call if scheduling fails (e.g., during teardown).
-        """
-        try:
-            self.tk.after(0, func)
-        except Exception:
+    def call_soon(
+        self,
+        func: Callable[..., object],
+        *args: object,
+        **kwargs: object,
+    ) -> None:
+        def invoke() -> None:
             try:
-                func()
+                func(*args, **kwargs)
             except Exception:
                 pass
 
+        try:
+            self.tk.after(0, invoke)
+        except Exception:
+            invoke()
+
     # -------- internal ---------------------------------------------------
     def _poll_loop(self) -> None:
-        while not self._closed:
-            events = self._event_sub.poll(max_items=50)
+        # Poll in a loop but wake up promptly on close via _stop_event.
+        while not self._stop_event.is_set():
+            try:
+                events = self._event_sub.poll(max_items=50)
+            except Exception as e:
+                # Log and back off briefly to avoid tight loop on persistent errors
+                try:
+                    self._logger.error(
+                        "Event subscriber poll error", error=str(e)
+                    )
+                except Exception:
+                    pass
+                time.sleep(0.1)
+                continue
+
             if events:
                 for ev in list(events):
-                    self._event_queue.put(ev)
+                    try:
+                        self._event_queue.put(ev)
+                    except Exception:
+                        # queue.SimpleQueue.put shouldn't fail, but guard anyway
+                        pass
                 self._schedule_pump()
             else:
-                time.sleep(0.05)
+                # wait with timeout so we can react to stop_event faster
+                self._stop_event.wait(0.05)
 
     def _schedule_pump(self) -> None:
-        if self._pump_scheduled or self._closed:
+        if self._pump_scheduled or self._stop_event.is_set():
             return
         self._pump_scheduled = True
         self.tk.after(0, self._drain_events)
@@ -115,13 +139,26 @@ class GuiRuntimeAdapter:
         self.tk.after(0, lambda p=pkt: safe_call_frame(p))
 
     def close(self) -> None:
-        self._closed = True
+        try:
+            self._stop_event.set()
+        except Exception:
+            pass
         try:
             self._frame_source.remove_listener(self._on_frame)
         except Exception:
             pass
         try:
             self._event_sub.close()
+        except Exception:
+            pass
+        try:
+            if self._poll_thread.is_alive():
+                # give a short timeout to avoid hanging shutdown
+                self._poll_thread.join(timeout=0.5)
+        except Exception:
+            pass
+        try:
+            self._logger.info("GuiRuntimeAdapter closed")
         except Exception:
             pass
 
