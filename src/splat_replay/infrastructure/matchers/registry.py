@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import asyncio
 from pathlib import Path
-from typing import Dict, Optional, Protocol, Tuple
+from typing import Dict, Optional, Protocol
 
 import numpy as np
 
@@ -51,25 +51,11 @@ class MatcherRegistry(ImageMatcherPort):
 
         self.groups: Dict[str, list[str]] = settings.matcher_groups
 
-        # 軽量キャッシュ: (キー/グループ, フィンガープリント) -> 結果
-        self._match_cache: Dict[Tuple[str, int], bool] = {}
-        self._matched_name_cache: Dict[Tuple[str, int], Optional[str]] = {}
-
     def _get_matcher(self, key: str) -> MatcherLike | None:
         composite = self.composites.get(key)
         if composite is not None:
             return composite
         return self.matchers.get(key)
-
-    def _fingerprint(self, image: np.ndarray) -> int:
-        """高速な簡易フィンガープリント。
-
-        画素を粗くサンプリングし、単純合計で 32bit に収める。
-        同一フレームの反復照合を高速化するための近似キーとして利用。
-        """
-        # BGR の B チャネルのみサンプリングして軽量化
-        sample = image[::64, ::64, 0]
-        return int(sample.sum()) & 0xFFFFFFFF
 
     def _build_matcher(self, config: MatcherConfig) -> Optional[BaseMatcher]:
         if not config:
@@ -187,14 +173,8 @@ class MatcherRegistry(ImageMatcherPort):
         return CompositeMatcher(config.rule, lookup, name=name)
 
     async def match(self, key: str, image: np.ndarray) -> bool:
-        fp = self._fingerprint(image)
-        cached = self._match_cache.get((key, fp))
-        if cached is not None:
-            return cached
-
         matcher = self._get_matcher(key)
         result = await matcher.match(image) if matcher else False
-        self._match_cache[(key, fp)] = result
         return result
 
     async def match_first(
@@ -228,15 +208,8 @@ class MatcherRegistry(ImageMatcherPort):
         return None
 
     async def matched_name(self, group: str, image: np.ndarray) -> str | None:
-        fp = self._fingerprint(image)
-        cached = self._matched_name_cache.get((group, fp))
-        if cached is not None:
-            return cached
-
         keys = self.groups.get(group)
         if not keys:
-            self._matched_name_cache[(group, fp)] = None
             return None
         result = await self.match_first(keys, image)
-        self._matched_name_cache[(group, fp)] = result
         return result
