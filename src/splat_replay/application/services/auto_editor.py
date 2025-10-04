@@ -1,12 +1,17 @@
 import datetime
+import re
+import wave
+from array import array
 from collections import defaultdict
 from pathlib import Path
-from typing import Dict, List, Tuple
+from typing import Dict, List, Optional, Tuple
 
 from structlog.stdlib import BoundLogger
 
 from splat_replay.application.interfaces import (
     ImageSelector,
+    SpeechSynthesisRequest,
+    TextToSpeechPort,
     SubtitleEditorPort,
     VideoAssetRepositoryPort,
     VideoEditorPort,
@@ -33,6 +38,7 @@ class AutoEditor:
         video_editor: VideoEditorPort,
         subtitle_editor: SubtitleEditorPort,
         image_selector: ImageSelector,
+        text_to_speech: Optional[TextToSpeechPort],
         settings: VideoEditSettings,
         repo: VideoAssetRepositoryPort,
         logger: BoundLogger,
@@ -43,6 +49,7 @@ class AutoEditor:
         self.video_editor = video_editor
         self.subtitle_editor = subtitle_editor
         self.image_selector = image_selector
+        self.text_to_speech = text_to_speech
         self.settings = settings
         self.progress = progress
         self._cancelled: bool = False
@@ -148,7 +155,9 @@ class AutoEditor:
             "subtitle",
             "字幕編集",
         )
-        self._embed_subtitle(target, group)
+        combined_srt = self._embed_subtitle(target, group)
+        if combined_srt:
+            self._embed_subtitle_speech(target, combined_srt)
 
         self.progress.item_stage(
             task_id,
@@ -196,7 +205,7 @@ class AutoEditor:
         else:
             target.write_bytes(group[0].video.read_bytes())
 
-    def _embed_subtitle(self, target: Path, group: List[VideoAsset]) -> None:
+    def _embed_subtitle(self, target: Path, group: List[VideoAsset]) -> str:
         subtitles: List[Path] = []
         video_lengths: List[float] = []
         for asset in group:
@@ -212,7 +221,162 @@ class AutoEditor:
             video_lengths.append(video_length)
 
         combined_srt = self.subtitle_editor.merge(subtitles, video_lengths)
-        self.video_editor.embed_subtitle(target, combined_srt)
+        if combined_srt:
+            self.video_editor.embed_subtitle(target, combined_srt)
+        return combined_srt
+
+    def _embed_subtitle_speech(self, target: Path, srt_text: str) -> None:
+        speech_settings = self.settings.speech
+        if not speech_settings.enabled:
+            self.logger.info("字幕読み上げは無効化されています")
+            return
+        if not self.text_to_speech:
+            self.logger.warning(
+                "テキスト読み上げポートが利用できないためスキップします"
+            )
+            return
+        entries = self._parse_srt(srt_text)
+        if not entries:
+            self.logger.info("読み上げ対象の字幕がありません")
+            return
+
+        segments: list[tuple[float, bytes]] = []
+        has_text = False
+        for start, _, original_text in entries:
+            sanitized = re.sub(r"<[^>]+>", "", original_text)
+            normalized = sanitized.replace("\n", " ").strip()
+            if not normalized:
+                continue
+            has_text = True
+            request = SpeechSynthesisRequest(
+                text=normalized,
+                language_code=speech_settings.language_code,
+                voice_name=speech_settings.voice_name,
+                speaking_rate=speech_settings.speaking_rate,
+                pitch=speech_settings.pitch,
+                audio_encoding=speech_settings.audio_encoding,
+                sample_rate_hz=speech_settings.sample_rate_hz,
+                model=speech_settings.model or None,
+            )
+            try:
+                result = self.text_to_speech.synthesize(request)
+            except Exception as exc:  # noqa: BLE001
+                self.logger.error(
+                    "字幕読み上げ生成に失敗しました",
+                    error=str(exc),
+                    subtitle=request.text,
+                )
+                return
+            if result.sample_rate_hz != speech_settings.sample_rate_hz:
+                self.logger.warning(
+                    "サンプルレートが設定と一致しません",
+                    expected=speech_settings.sample_rate_hz,
+                    actual=result.sample_rate_hz,
+                )
+            segments.append((start, result.audio))
+
+        if not has_text:
+            self.logger.info("読み上げ対象となる字幕テキストがありません")
+            return
+
+        if not segments:
+            self.logger.info("読み上げ音声の生成結果が空でした")
+            return
+
+        narration_path = target.with_name(f"{target.stem}_narration.wav")
+        try:
+            waveform = self._compose_wave(
+                segments,
+                speech_settings.sample_rate_hz,
+            )
+            if not waveform:
+                self.logger.info(
+                    "生成された読み上げ波形が空のためスキップします"
+                )
+                return
+            with wave.open(str(narration_path), "wb") as wave_writer:
+                wave_writer.setnchannels(1)
+                wave_writer.setsampwidth(2)
+                wave_writer.setframerate(speech_settings.sample_rate_hz)
+                wave_writer.writeframes(waveform)
+            self.video_editor.add_audio_track(
+                target,
+                narration_path,
+                stream_title=speech_settings.track_title,
+            )
+        finally:
+            narration_path.unlink(missing_ok=True)
+
+    @staticmethod
+    def _compose_wave(
+        segments: List[Tuple[float, bytes]],
+        sample_rate: int,
+    ) -> bytes:
+        timeline: array[int] = array("h")
+        for start_sec, audio_bytes in segments:
+            samples: array[int] = array("h")
+            samples.frombytes(audio_bytes)
+            start_index = max(int(round(start_sec * sample_rate)), 0)
+            AutoEditor._mix_into_timeline(timeline, samples, start_index)
+        return timeline.tobytes()
+
+    @staticmethod
+    def _mix_into_timeline(
+        timeline: array[int],
+        samples: array[int],
+        start_index: int,
+    ) -> None:
+        required_length = start_index + len(samples)
+        if len(timeline) < required_length:
+            timeline.extend([0] * (required_length - len(timeline)))
+        for offset, sample in enumerate(samples):
+            idx = start_index + offset
+            mixed = timeline[idx] + sample
+            if mixed > 32767:
+                timeline[idx] = 32767
+            elif mixed < -32768:
+                timeline[idx] = -32768
+            else:
+                timeline[idx] = mixed
+
+    @staticmethod
+    def _parse_srt(srt_text: str) -> List[Tuple[float, float, str]]:
+        pattern = re.compile(
+            r"(?P<start>\d{2}:\d{2}:\d{2},\d{3})\s*-->\s*(?P<end>\d{2}:\d{2}:\d{2},\d{3})",
+        )
+        entries: List[Tuple[float, float, str]] = []
+        if not srt_text.strip():
+            return entries
+        blocks = re.split(r"\n{2,}", srt_text.strip())
+        for block in blocks:
+            lines = [
+                line.strip() for line in block.splitlines() if line.strip()
+            ]
+            if not lines:
+                continue
+            first_line = lines[0]
+            if first_line.isdigit():
+                lines = lines[1:]
+                if not lines:
+                    continue
+                first_line = lines[0]
+            match = pattern.match(first_line)
+            if not match:
+                continue
+            start = AutoEditor._to_seconds(match.group("start"))
+            end = AutoEditor._to_seconds(match.group("end"))
+            text_lines = lines[1:]
+            text = "\n".join(text_lines)
+            entries.append((start, end, text))
+        return entries
+
+    @staticmethod
+    def _to_seconds(timestamp: str) -> float:
+        hour = int(timestamp[0:2])
+        minute = int(timestamp[3:5])
+        second = int(timestamp[6:8])
+        millisecond = int(timestamp[9:12])
+        return hour * 3600 + minute * 60 + second + millisecond / 1000
 
     def _embed_metadata(
         self,

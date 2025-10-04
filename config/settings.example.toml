@@ -33,6 +33,19 @@ title_template = "{BATTLE}({RATE}) {RULE} {WIN}勝{LOSE}敗 {DAY:'%y.%m.%d} {SCH
 description_template = "{CHAPTERS}"
 chapter_template = "{RESULT:<5} {KILL:>3}k {DEATH:>3}d {SPECIAL:>3}s  {STAGE}"
 
+[video_edit.speech]
+enabled = false
+provider = "google"
+google_api_key = ""
+model = ""
+voice_name = "ja-JP-Chirp3-HD-Despina"
+language_code = "ja-JP"
+speaking_rate = 1.0
+pitch = 0.0
+audio_encoding = "LINEAR16"
+sample_rate_hz = 24000
+track_title = "字幕読み上げ"
+
 [upload]
 privacy_status = "private"
 tags = ["Splatoon3"]

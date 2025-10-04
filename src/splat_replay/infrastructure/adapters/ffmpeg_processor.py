@@ -373,6 +373,62 @@ class FFmpegProcessor(VideoEditorPort):
             self._length_cache[abs_path] = length
             return length
 
+    def add_audio_track(
+        self,
+        path: Path,
+        audio: Path,
+        *,
+        stream_title: Optional[str] = None,
+    ) -> None:
+        abs_path = path.resolve()
+        audio_path = audio.resolve()
+        self.logger.info(
+            "FFmpeg: 音声トラック追加",
+            path=str(abs_path),
+            audio=str(audio_path),
+            stream_title=stream_title,
+        )
+        temp = abs_path.with_name(f"temp{abs_path.suffix}")
+        audio_stream_index = self._count_streams(abs_path, "audio")
+
+        command: list[str] = [
+            "ffmpeg",
+            "-y",
+            "-i",
+            str(abs_path),
+            "-i",
+            str(audio_path),
+            "-map",
+            "0:v",
+            "-map",
+            "0:a?",
+            "-map",
+            "0:s?",
+            "-map",
+            "1:a",
+            "-c:v",
+            "copy",
+            "-c:a",
+            "aac",
+            "-c:s",
+            "copy",
+        ]
+        if stream_title:
+            command.extend(
+                [
+                    f"-metadata:s:a:{audio_stream_index}",
+                    f"title={stream_title}",
+                ]
+            )
+        command.append(str(temp))
+
+        result = self._run_text(command)
+        if temp.exists():
+            abs_path.unlink(missing_ok=True)
+            temp.rename(abs_path)
+        if result.returncode != 0:
+            self._log_failure("FFmpeg: 音声トラック追加失敗", result)
+
     # ------------------------------------------------------------------
     # Internal utilities
     # ------------------------------------------------------------------
@@ -420,3 +476,42 @@ class FFmpegProcessor(VideoEditorPort):
             if isinstance(index_value, int):
                 matching.append(index_value)
         return matching
+
+    def _count_streams(
+        self,
+        path: Path,
+        codec_type: Literal["video", "audio", "subtitle"],
+    ) -> int:
+        result = self._run_text(
+            [
+                "ffprobe",
+                "-v",
+                "error",
+                "-show_streams",
+                "-of",
+                "json",
+                str(path),
+            ]
+        )
+        if result.returncode != 0 or not result.stdout:
+            self.logger.error("FFprobe: ストリーム情報取得失敗")
+            return 0
+
+        try:
+            data = json.loads(result.stdout)
+        except json.JSONDecodeError:
+            self.logger.error("FFprobe: ストリーム JSON parse 失敗")
+            return 0
+        if not isinstance(data, dict):
+            return 0
+        streams = data.get("streams")
+        if not isinstance(streams, list):
+            return 0
+
+        count = 0
+        for stream in streams:
+            if not isinstance(stream, dict):
+                continue
+            if stream.get("codec_type") == codec_type:
+                count += 1
+        return count

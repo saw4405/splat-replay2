@@ -18,6 +18,7 @@ __all__ = [
     "ImageDrawer",
     "IntegratedSpeechRecognizer",
     "SpeechTranscriber",
+    "GoogleTextToSpeech",
     "FileVideoAssetRepository",
 ]
 
@@ -31,6 +32,7 @@ from .adapters import (
     ImageDrawer,
     ImageEditor,
     IntegratedSpeechRecognizer,
+    GoogleTextToSpeech,
     OBSController,
     RecorderWithTranscription,
     SpeechTranscriber,
