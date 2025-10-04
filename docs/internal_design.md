@@ -558,3 +558,67 @@ graph TD
 - **1〜2 クリック以内での操作完結**: 全ての主要操作をボタン・トグルで直接実行
 - **リアルタイム反映**: Qt のシグナル・スロットによる即座な UI 更新
 - **手動操作可否**: 外部設計書で ✔ の項目は全て手動操作に対応
+
+### 13. Web API
+
+#### 13.1 エンドポイント概要
+
+| メソッド | パス                         | 概要                                         |
+| -------- | ---------------------------- | -------------------------------------------- |
+| GET      | `/api/assets/edited/dir`    | 編集済み動画の保存先ディレクトリ取得         |
+| POST     | `/api/recorder/auto/start` | キャプチャデバイス確認後に自動録画ループ開始 |
+| GET      | `/api/preview/stream`      | OBS 仮想カメラ映像を MJPEG ストリームで返却 |
+
+#### 13.2 GET `/api/assets/edited/dir`
+
+- **役割**: `asset.get_edited_dir` コマンドを実行し、編集済み動画の保存先ディレクトリを返す。
+- **レスポンスモデル**: `AssetEditedDirResponseModel`
+  - `CommandResultModel` を継承し、`path` フィールドに絶対パス文字列を格納する。
+- **成功時 (200)**
+
+```json
+{
+  "ok": true,
+  "path": "C:/Users/user/Videos/Edited",
+  "error": null
+}
+```
+
+- **失敗時 (500)**
+  - `CommandExecutionError` を FastAPI の `HTTPException` へ変換し、`{"detail": "..."}` を返す。
+
+#### 13.3 POST `/api/recorder/auto/start`
+
+- **役割**: `AutoRecorderController.start_auto_recorder()` を呼び出し、自動録画ループをバックグラウンドで実行する。
+- **レスポンスモデル**: `AutoRecorderStartResponseModel`
+  - `message`: クライアントに提示するステータスメッセージ。
+  - `waiting_for_device`: キャプチャデバイス接続を待機中なら `true`。
+- **成功時 (202)**
+
+```json
+{
+  "ok": true,
+  "message": "キャプチャデバイスの接続を待機しています。接続され次第、録画を開始します。",
+  "waiting_for_device": true,
+  "error": null
+}
+```
+
+- **競合時 (409)**
+  - 既に自動録画が進行中の場合は `409 Conflict` を返し、`detail` に理由を格納する。
+
+#### 13.4 GET `/api/preview/stream`
+
+- **役割**: `FrameHub` に登録された最新フレームを MJPEG 形式で配信し、ブラウザの `<img>` でライブプレビューを表示できるようにする。
+- **メディアタイプ**: `multipart/x-mixed-replace; boundary=frame`
+- **備考**:
+  - 応答は長寿命のストリームであり、キャッシュ無効化のため `Cache-Control: no-store` を付与している。
+  - フレーム取得に失敗した場合はログ出力のみ行い、ストリームは継続する。
+
+### 14. Web フロントエンド (Svelte)
+
+- `src/splat_replay/web/frontend/` に Vite + Svelte 構成のフロントエンドを配置。
+  - ページ表示と同時に `/api/recorder/auto/start` へリクエストを送り、自動録画を起動。
+  - `/api/preview/stream` を `<img>` で購読し、MJPEG プレビューを表示。
+  - 接続待機・エラー・再接続操作を日本語 UI で提供。
+
