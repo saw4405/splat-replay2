@@ -67,6 +67,7 @@ class GUIApplicationController:
             self.container, StateMachine
         )
 
+        self._record_reset_listeners: List[Callable[[], None]] = []
         self._record_state_listeners: List[Callable[[RecordState], None]] = []
         self._operation_msg_listeners: List[Callable[[str], None]] = []
         self._power_off_listeners: List[Callable[[], None]] = []
@@ -98,6 +99,12 @@ class GUIApplicationController:
             for cb in list(self._record_state_listeners):
                 try:
                     self.adapter.call_soon(cb, state)
+                except Exception:
+                    pass
+        elif ev.type == EventTypes.RECORDER_RESET:
+            for cb in list(self._record_reset_listeners):
+                try:
+                    self.adapter.call_soon(cb)
                 except Exception:
                     pass
         elif ev.type == EventTypes.RECORDER_OPERATION:
@@ -203,6 +210,13 @@ class GUIApplicationController:
             pass
 
     # Listener registration
+    def add_record_reset_listener(self, cb: Callable[[], None]) -> None:
+        self._record_reset_listeners.append(cb)
+
+    def remove_record_reset_listener(self, cb: Callable[[], None]) -> None:
+        if cb in self._record_reset_listeners:
+            self._record_reset_listeners.remove(cb)
+
     def add_record_state_changed_listener(
         self, cb: Callable[[RecordState], None]
     ) -> None:

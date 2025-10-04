@@ -11,6 +11,7 @@ __all__ = ["EventTypes"]
 
 class EventTypes:
     # Recorder
+    RECORDER_RESET = "recorder.reset"
     RECORDER_STATE = "recorder.state"
     RECORDER_OPERATION = "recorder.operation"
     POWER_OFF_DETECTED = "power.off.detected"

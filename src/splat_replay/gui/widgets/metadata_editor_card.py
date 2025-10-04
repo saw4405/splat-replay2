@@ -41,8 +41,14 @@ class MetadataEditorCard(CardWidget):
 
         self.reset()
 
+        self.controller.add_record_reset_listener(self.reset)
         self.controller.add_metadata_listener(self._on_metadata_changed)
         self.logger.info("MetadataEditorCard が初期化されました")
+
+    def _on_metadata_changed(
+        self, metadata: Dict[str, str | int | None]
+    ) -> None:
+        self.form.update(metadata)
 
     def reset(self) -> None:
         self.form.reset()
@@ -53,8 +59,3 @@ class MetadataEditorCard(CardWidget):
             self.form.update(metadata)
 
         self.controller.get_current_metadata(on_complete)
-
-    def _on_metadata_changed(
-        self, metadata: Dict[str, str | int | None]
-    ) -> None:
-        self.form.update(metadata)

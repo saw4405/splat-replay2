@@ -256,15 +256,21 @@ class AutoRecorder:
                 return
 
             if self._ctx.result_frame is None:
-                self.logger.error("結果フレームが設定されていません。")
-                return
+                if frame := await self._acquire_frame():
+                    if await self.analyzer.detect_session_result(
+                        frame, self.metadata.game_mode
+                    ):
+                        self._ctx.result_frame = frame
 
-            self.metadata.result = await self.analyzer.extract_session_result(
-                self._ctx.result_frame, self.metadata.game_mode
-            )
-            self.logger.info(
-                "バトル結果を検出", result=str(self.metadata.result)
-            )
+            if self._ctx.result_frame is not None:
+                self.metadata.result = (
+                    await self.analyzer.extract_session_result(
+                        self._ctx.result_frame, self.metadata.game_mode
+                    )
+                )
+                self.logger.info(
+                    "バトル結果を検出", result=str(self.metadata.result)
+                )
 
             if self.metadata.started_at is None:
                 self.logger.error("マッチング開始時刻が設定されていません。")
@@ -396,6 +402,7 @@ class AutoRecorder:
         """録画の状態をリセットする。"""
         self._ctx.reset()
         await self._publish_operation_status(WELCOME_MESSAGE)
+        self._publisher_worker.enqueue_event(EventTypes.RECORDER_RESET, {})
         self._publisher_worker.enqueue_event(
             EventTypes.RECORDER_METADATA_UPDATED,
             {"metadata": self.metadata.to_dict()},
