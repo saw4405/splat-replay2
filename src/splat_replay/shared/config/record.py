@@ -4,10 +4,10 @@ from pydantic import BaseModel, Field
 class RecordSettings(BaseModel):
     """録画"""
 
-    capture_index: int = Field(
-        default=2,
-        title="キャプチャインデックス",
-        description="OBSの仮想カメラが出力されているキャプチャインデックス。通常、0がPC標準カメラ、1がキャプチャボード、2がOBSの仮想カメラです",
+    capture_device: str = Field(
+        default="OBS Virtual Camera",
+        title="キャプチャデバイス",
+        description="OBSの仮想カメラが出力されているキャプチャデバイス名、もしくはインデックス。通常、0がPC標準カメラ、1がキャプチャボード、2がOBSの仮想カメラです",
         recommended=True,
     )
     width: int = Field(

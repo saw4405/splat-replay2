@@ -2,6 +2,7 @@
 
 __all__ = [
     "CaptureDeviceChecker",
+    "NDICapture",
     "Capture",
     "OBSController",
     "RecorderWithTranscription",
@@ -33,6 +34,7 @@ from .frame_publisher_adapter import FramePublisherAdapter
 from .gui_runtime_port_adapter import GuiRuntimePortAdapter
 from .image_drawer import ImageDrawer
 from .image_editor import ImageEditor
+from .ndi_capture import NDICapture
 from .obs_controller import OBSController
 from .recorder_with_transcription import RecorderWithTranscription
 from .subtitle_editor import SubtitleEditor

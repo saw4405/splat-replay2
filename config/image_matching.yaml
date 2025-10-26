@@ -90,6 +90,7 @@ matcher_groups:
     - battle_match_anarchy_battle_series  # バンカラマッチ(チャレンジ)
     - battle_match_anarchy_battle_open    # バンカラマッチ(オープン)
     - battle_match_x_battle               # Xマッチ
+    - battle_match_event                  # イベントマッチ
     - battle_match_splatfest_battle_pro   # フェスマッチ(チャレンジ)
     - battle_match_splatfest_battle_open  # フェスマッチ(オープン)
     - battle_match_tricolor_battle        # トリカラマッチ
@@ -518,6 +519,13 @@ simple_matchers:
     template_path: "assets/matching/battle_match_x_battle.png"
     threshold: 0.9
     description: "Xマッチを検出する"
+
+  battle_match_event:
+    name: "イベントマッチ"
+    type: "template"
+    template_path: "assets/matching/battle_match_event.png"
+    threshold: 0.9
+    description: "イベントマッチを検出する"
 
   battle_match_splatfest_battle_pro:
     name: "フェスマッチ(チャレンジ)"

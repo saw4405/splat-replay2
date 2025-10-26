@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import subprocess
 from pathlib import Path
 from subprocess import CompletedProcess
 from typing import Dict, List, Literal, Optional, Sequence, TypeVar
+
+from asyncio import subprocess as asyncio_subprocess
 
 from structlog.stdlib import BoundLogger
 
@@ -26,7 +29,7 @@ class FFmpegProcessor(VideoEditorPort):
     # ------------------------------------------------------------------
     # Helpers
     # ------------------------------------------------------------------
-    def _run_text(
+    async def _run_text(
         self,
         command: Sequence[str],
         *,
@@ -34,28 +37,59 @@ class FFmpegProcessor(VideoEditorPort):
         input_text: str | None = None,
         timeout: float | None = None,
     ) -> CompletedProcess[str]:
-        return subprocess.run(
-            list(command),
-            check=False,
+        process = await asyncio.create_subprocess_exec(
+            *command,
             cwd=str(cwd) if cwd else None,
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            input=input_text,
-            timeout=timeout,
+            stdin=asyncio_subprocess.PIPE if input_text is not None else None,
+            stdout=asyncio_subprocess.PIPE,
+            stderr=asyncio_subprocess.PIPE,
+        )
+        input_bytes = (
+            input_text.encode("utf-8") if input_text is not None else None
+        )
+        communicate = process.communicate(input_bytes)
+        if timeout is None:
+            stdout_bytes, stderr_bytes = await communicate
+        else:
+            try:
+                stdout_bytes, stderr_bytes = await asyncio.wait_for(
+                    communicate, timeout=timeout
+                )
+            except asyncio.TimeoutError as exc:
+                process.kill()
+                await process.communicate()
+                raise subprocess.TimeoutExpired(
+                    list(command), timeout
+                ) from exc
+        return CompletedProcess(
+            args=list(command),
+            returncode=process.returncode
+            if process.returncode is not None
+            else -1,
+            stdout=stdout_bytes.decode("utf-8", errors="replace"),
+            stderr=stderr_bytes.decode("utf-8", errors="replace"),
         )
 
-    def _run_binary(
+    async def _run_binary(
         self,
         command: Sequence[str],
         *,
         input_bytes: bytes | None = None,
     ) -> CompletedProcess[bytes]:
-        return subprocess.run(
-            list(command),
-            check=False,
-            capture_output=True,
-            input=input_bytes,
+        process = await asyncio.create_subprocess_exec(
+            *command,
+            stdin=asyncio_subprocess.PIPE if input_bytes is not None else None,
+            stdout=asyncio_subprocess.PIPE,
+            stderr=asyncio_subprocess.PIPE,
+        )
+        stdout_bytes, stderr_bytes = await process.communicate(input_bytes)
+        return CompletedProcess(
+            args=list(command),
+            returncode=process.returncode
+            if process.returncode is not None
+            else -1,
+            stdout=stdout_bytes,
+            stderr=stderr_bytes,
         )
 
     def _log_failure(
@@ -78,7 +112,7 @@ class FFmpegProcessor(VideoEditorPort):
     # ------------------------------------------------------------------
     # VideoEditorPort implementation
     # ------------------------------------------------------------------
-    def merge(self, clips: list[Path], output: Path) -> Path:
+    async def merge(self, clips: list[Path], output: Path) -> Path:
         abs_clips = [clip.resolve() for clip in clips]
         self.logger.info(
             "FFmpeg: クリップ結合", clips=[str(c) for c in abs_clips]
@@ -92,7 +126,7 @@ class FFmpegProcessor(VideoEditorPort):
             encoding="utf-8",
         )
 
-        result = self._run_text(
+        result = await self._run_text(
             [
                 "ffmpeg",
                 "-y",
@@ -113,7 +147,9 @@ class FFmpegProcessor(VideoEditorPort):
             self._log_failure("FFmpeg: 結合に失敗", result)
         return output
 
-    def embed_metadata(self, path: Path, metadata: Dict[str, str]) -> None:
+    async def embed_metadata(
+        self, path: Path, metadata: Dict[str, str]
+    ) -> None:
         abs_path = path.resolve()
         self.logger.info(
             "FFmpeg: メタデータ埋め込み", path=str(abs_path), metadata=metadata
@@ -125,7 +161,7 @@ class FFmpegProcessor(VideoEditorPort):
             if value:
                 metadata_args.extend(["-metadata", f"{key}={value}"])
 
-        result = self._run_text(
+        result = await self._run_text(
             [
                 "ffmpeg",
                 "-y",
@@ -143,11 +179,11 @@ class FFmpegProcessor(VideoEditorPort):
         if result.returncode != 0:
             self._log_failure("FFmpeg: メタデータ埋め込み失敗", result)
 
-    def get_metadata(self, path: Path) -> Dict[str, str]:
+    async def get_metadata(self, path: Path) -> Dict[str, str]:
         abs_path = path.resolve()
         self.logger.info("FFmpeg: メタデータ取得", path=str(abs_path))
 
-        result = self._run_text(
+        result = await self._run_text(
             [
                 "ffprobe",
                 "-v",
@@ -183,12 +219,12 @@ class FFmpegProcessor(VideoEditorPort):
                 metadata[key.lower()] = value
         return metadata
 
-    def embed_subtitle(self, path: Path, srt: str) -> None:
+    async def embed_subtitle(self, path: Path, srt: str) -> None:
         abs_path = path.resolve()
         self.logger.info("FFmpeg: 字幕追加", path=str(abs_path))
 
         temp = abs_path.with_name(f"temp{abs_path.suffix}")
-        result = self._run_text(
+        result = await self._run_text(
             [
                 "ffmpeg",
                 "-y",
@@ -218,14 +254,14 @@ class FFmpegProcessor(VideoEditorPort):
         if result.returncode != 0:
             self._log_failure("FFmpeg: 字幕追加失敗", result)
 
-    def get_subtitle(self, path: Path) -> Optional[str]:
-        indices = self._find_streams(path, "subtitle", "subrip")
+    async def get_subtitle(self, path: Path) -> Optional[str]:
+        indices = await self._find_streams(path, "subtitle", "subrip")
         if not indices:
             self.logger.error("FFmpeg: 字幕が見つかりません")
             return None
         index = indices[0]
 
-        result = self._run_text(
+        result = await self._run_text(
             [
                 "ffmpeg",
                 "-i",
@@ -244,12 +280,12 @@ class FFmpegProcessor(VideoEditorPort):
             return None
         return result.stdout
 
-    def embed_thumbnail(self, path: Path, thumbnail: bytes) -> None:
+    async def embed_thumbnail(self, path: Path, thumbnail: bytes) -> None:
         abs_path = path.resolve()
         self.logger.info("FFmpeg: サムネイル追加", path=str(abs_path))
 
         temp = abs_path.with_name(f"temp{abs_path.suffix}")
-        result = self._run_binary(
+        result = await self._run_binary(
             [
                 "ffmpeg",
                 "-y",
@@ -273,14 +309,14 @@ class FFmpegProcessor(VideoEditorPort):
         if result.returncode != 0:
             self._log_failure("FFmpeg: サムネイル追加失敗", result)
 
-    def get_thumbnail(self, path: Path) -> Optional[bytes]:
-        indices = self._find_streams(path, "video", "png")
+    async def get_thumbnail(self, path: Path) -> Optional[bytes]:
+        indices = await self._find_streams(path, "video", "png")
         if not indices:
             self.logger.error("FFmpeg: サムネイルが見つかりません")
             return None
         index = indices[0]
 
-        result = self._run_binary(
+        result = await self._run_binary(
             [
                 "ffmpeg",
                 "-i",
@@ -301,7 +337,7 @@ class FFmpegProcessor(VideoEditorPort):
             return None
         return result.stdout
 
-    def change_volume(self, path: Path, multiplier: float) -> None:
+    async def change_volume(self, path: Path, multiplier: float) -> None:
         abs_path = path.resolve()
         self.logger.info(
             "FFmpeg: 音量変更", path=str(abs_path), multiplier=multiplier
@@ -310,7 +346,7 @@ class FFmpegProcessor(VideoEditorPort):
             return
 
         temp = abs_path.with_name(f"temp{abs_path.suffix}")
-        result = self._run_text(
+        result = await self._run_text(
             [
                 "ffmpeg",
                 "-y",
@@ -333,7 +369,7 @@ class FFmpegProcessor(VideoEditorPort):
         if result.returncode != 0:
             self._log_failure("FFmpeg: 音量変更失敗", result)
 
-    def get_video_length(self, path: Path) -> Optional[float]:
+    async def get_video_length(self, path: Path) -> Optional[float]:
         abs_path = path.resolve()
         # キャッシュ利用
         cached = self._length_cache.get(abs_path)
@@ -344,7 +380,7 @@ class FFmpegProcessor(VideoEditorPort):
             return cached
         self.logger.info("FFprobe: 長さ取得", path=str(abs_path))
 
-        result = self._run_text(
+        result = await self._run_text(
             [
                 "ffprobe",
                 "-v",
@@ -373,7 +409,7 @@ class FFmpegProcessor(VideoEditorPort):
             self._length_cache[abs_path] = length
             return length
 
-    def add_audio_track(
+    async def add_audio_track(
         self,
         path: Path,
         audio: Path,
@@ -389,7 +425,7 @@ class FFmpegProcessor(VideoEditorPort):
             stream_title=stream_title,
         )
         temp = abs_path.with_name(f"temp{abs_path.suffix}")
-        audio_stream_index = self._count_streams(abs_path, "audio")
+        audio_stream_index = await self._count_streams(abs_path, "audio")
 
         command: list[str] = [
             "ffmpeg",
@@ -422,7 +458,7 @@ class FFmpegProcessor(VideoEditorPort):
             )
         command.append(str(temp))
 
-        result = self._run_text(command)
+        result = await self._run_text(command)
         if temp.exists():
             abs_path.unlink(missing_ok=True)
             temp.rename(abs_path)
@@ -432,13 +468,13 @@ class FFmpegProcessor(VideoEditorPort):
     # ------------------------------------------------------------------
     # Internal utilities
     # ------------------------------------------------------------------
-    def _find_streams(
+    async def _find_streams(
         self,
         path: Path,
         codec_type: Literal["video", "audio", "subtitle"],
         codec_name: str,
     ) -> List[int]:
-        result = self._run_text(
+        result = await self._run_text(
             [
                 "ffprobe",
                 "-v",
@@ -477,12 +513,12 @@ class FFmpegProcessor(VideoEditorPort):
                 matching.append(index_value)
         return matching
 
-    def _count_streams(
+    async def _count_streams(
         self,
         path: Path,
         codec_type: Literal["video", "audio", "subtitle"],
     ) -> int:
-        result = self._run_text(
+        result = await self._run_text(
             [
                 "ffprobe",
                 "-v",

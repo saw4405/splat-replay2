@@ -32,6 +32,8 @@ from splat_replay.application.services import (
     DeviceChecker,
     PowerManager,
     ProgressReporter,
+    RecordingPreparationService,
+    SettingsService,
 )
 from splat_replay.application.services.queries import AssetQueryService
 from splat_replay.application.use_cases import AutoUseCase, UploadUseCase
@@ -45,24 +47,24 @@ from splat_replay.domain.services import (
     StateMachine,
 )
 from splat_replay.infrastructure import (
-    Capture,
     CaptureDeviceChecker,
     EventPublisherAdapter,
     FFmpegProcessor,
     FileVideoAssetRepository,
     FramePublisherAdapter,
+    GoogleTextToSpeech,
     GuiRuntimePortAdapter,
     ImageDrawer,
     ImageEditor,
     IntegratedSpeechRecognizer,
     MatcherRegistry,
+    NDICapture,
     OBSController,
     RecorderWithTranscription,
     SpeechTranscriber,
     SubtitleEditor,
     SystemPower,
     TesseractOCR,
-    GoogleTextToSpeech,
     YouTubeClient,
 )
 from splat_replay.infrastructure.runtime.runtime import AppRuntime
@@ -114,7 +116,7 @@ def register_image_matching_settings(
 def register_adapters(container: punq.Container) -> None:
     """アダプターを DI コンテナに登録する。"""
     container.register(CaptureDevicePort, CaptureDeviceChecker)
-    container.register(CapturePort, Capture)
+    container.register(CapturePort, NDICapture)
     container.register(VideoRecorderPort, OBSController)
     container.register(VideoEditorPort, FFmpegProcessor)
     container.register(ImageEditorFactory, instance=ImageEditor)
@@ -201,6 +203,9 @@ def register_domain_services(container: punq.Container) -> None:
 def register_app_services(container: punq.Container) -> None:
     """アプリケーションサービスを DI コンテナに登録する。"""
     container.register(DeviceChecker, DeviceChecker)
+    container.register(
+        RecordingPreparationService, RecordingPreparationService
+    )
     # Inject runtime-aware services
     container.register(AutoRecorder, AutoRecorder)
     container.register(ProgressReporter, ProgressReporter)
@@ -208,6 +213,10 @@ def register_app_services(container: punq.Container) -> None:
     container.register(AutoUploader, AutoUploader)
     container.register(PowerManager, PowerManager)
     container.register(AssetQueryService, AssetQueryService)
+    # SettingsService の __init__ は "settings_path: Path | None = None" を受け取る。
+    # punq は Optional 引数でも型アノテーションが付くと解決を試み MissingDependencyError を投げることがあるため
+    # factory で明示的にインスタンス化して不要な依存解決を避ける。
+    container.register(SettingsService, factory=lambda: SettingsService())
 
 
 def register_app_usecases(container: punq.Container) -> None:

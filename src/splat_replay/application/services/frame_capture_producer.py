@@ -19,8 +19,8 @@ class FrameCaptureProducer:
         self,
         capture: CapturePort,
         frame_publisher: Optional[FramePublisher],
-        queue_maxsize: int = 3,
-        device_retry_sleep: float = 0.005,
+        queue_maxsize: int = 1,
+        device_retry_sleep: float = 0.1,
         queue_put_timeout: float = 0.001,
     ) -> None:
         self._capture = capture

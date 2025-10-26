@@ -204,9 +204,17 @@ class ProgressReporter:
     def _emit(self, event: ProgressEvent) -> None:
         # publish to event bus
         try:
+            logger.info(
+                "Publishing progress event",
+                kind=event.kind,
+                task_id=event.task_id,
+                completed=event.completed,
+                total=event.total,
+            )
             self._publisher.publish(
                 f"progress.{event.kind}",
                 {
+                    "kind": event.kind,
                     "task_id": event.task_id,
                     "task_name": event.task_name,
                     "total": event.total,
@@ -224,8 +232,8 @@ class ProgressReporter:
                     "item_label": event.item_label,
                 },
             )
-        except Exception:
-            pass
+        except Exception as e:
+            logger.error("Progress event publish failed", error=str(e))
 
         # notify listeners (sync/async safe)
         for listener in list(self._listeners):

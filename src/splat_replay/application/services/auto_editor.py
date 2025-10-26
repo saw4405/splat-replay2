@@ -1,18 +1,19 @@
+import asyncio
 import datetime
 import re
 import wave
 from array import array
 from collections import defaultdict
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Tuple
 
 from structlog.stdlib import BoundLogger
 
 from splat_replay.application.interfaces import (
     ImageSelector,
     SpeechSynthesisRequest,
-    TextToSpeechPort,
     SubtitleEditorPort,
+    TextToSpeechPort,
     VideoAssetRepositoryPort,
     VideoEditorPort,
 )
@@ -38,7 +39,7 @@ class AutoEditor:
         video_editor: VideoEditorPort,
         subtitle_editor: SubtitleEditorPort,
         image_selector: ImageSelector,
-        text_to_speech: Optional[TextToSpeechPort],
+        text_to_speech: TextToSpeechPort,
         settings: VideoEditSettings,
         repo: VideoAssetRepositoryPort,
         logger: BoundLogger,
@@ -96,7 +97,7 @@ class AutoEditor:
                 message=label,
             )
 
-            target = self._edit(
+            target = await self._edit(
                 idx, day, time_slot, match_name, rule_name, group
             )
             self.logger.info("動画編集を開始します", path=str(target))
@@ -127,7 +128,7 @@ class AutoEditor:
         self.logger.info("自動編集を完了しました", edited=edited)
         return edited
 
-    def _edit(
+    async def _edit(
         self,
         idx: int,
         day: datetime.date,
@@ -147,7 +148,7 @@ class AutoEditor:
             "動画結合",
             message=f"{len(group)}本の動画を結合",
         )
-        self._merge_videos(target, group)
+        await self._merge_videos(target, group)
 
         self.progress.item_stage(
             task_id,
@@ -155,9 +156,9 @@ class AutoEditor:
             "subtitle",
             "字幕編集",
         )
-        combined_srt = self._embed_subtitle(target, group)
+        combined_srt = await self._create_subtitle(target, group)
         if combined_srt:
-            self._embed_subtitle_speech(target, combined_srt)
+            await self._embed_subtitle_speech(target, combined_srt)
 
         self.progress.item_stage(
             task_id,
@@ -165,7 +166,7 @@ class AutoEditor:
             "metadata",
             "メタデータ編集",
         )
-        self._embed_metadata(target, group, day, time_slot)
+        await self._save_metadata(target, group, day, time_slot)
 
         self.progress.item_stage(
             task_id,
@@ -173,7 +174,7 @@ class AutoEditor:
             "thumbnail",
             "サムネイル編集",
         )
-        self._embed_thumbnail(target, group)
+        await self._save_thumbnail(target, group)
 
         if self.settings.volume_multiplier != 1.0:
             self.progress.item_stage(
@@ -183,7 +184,7 @@ class AutoEditor:
                 "音量調整",
                 message=f"x{self.settings.volume_multiplier}",
             )
-        self._change_volume(target, self.settings.volume_multiplier)
+        await self._change_volume(target, self.settings.volume_multiplier)
         return target
 
     def _make_filename(
@@ -199,19 +200,27 @@ class AutoEditor:
         target = group[0].video.with_name(filename)
         return target
 
-    def _merge_videos(self, target: Path, group: List[VideoAsset]) -> None:
+    async def _merge_videos(
+        self, target: Path, group: List[VideoAsset]
+    ) -> None:
         if len(group) > 1:
-            self.video_editor.merge([a.video for a in group], target)
-        else:
-            target.write_bytes(group[0].video.read_bytes())
+            await self.video_editor.merge([a.video for a in group], target)
+            return
+        data = await asyncio.to_thread(group[0].video.read_bytes)
+        await asyncio.to_thread(target.write_bytes, data)
 
-    def _embed_subtitle(self, target: Path, group: List[VideoAsset]) -> str:
+    async def _create_subtitle(
+        self, target: Path, group: List[VideoAsset]
+    ) -> str:
+        """字幕を作成してファイルに保存する"""
         subtitles: List[Path] = []
         video_lengths: List[float] = []
         for asset in group:
             if not asset.subtitle or not asset.subtitle.exists():
                 continue
-            video_length = self.video_editor.get_video_length(asset.video)
+            video_length = await self.video_editor.get_video_length(
+                asset.video
+            )
             if video_length is None:
                 self.logger.warning(
                     "動画の長さを取得できませんでした", video=str(asset.video)
@@ -220,12 +229,19 @@ class AutoEditor:
             subtitles.append(asset.subtitle)
             video_lengths.append(video_length)
 
-        combined_srt = self.subtitle_editor.merge(subtitles, video_lengths)
+        combined_srt = await asyncio.to_thread(
+            self.subtitle_editor.merge, subtitles, video_lengths
+        )
         if combined_srt:
-            self.video_editor.embed_subtitle(target, combined_srt)
+            # 字幕をリポジトリ経由で保存
+            await asyncio.to_thread(
+                self.repo.save_edited_subtitle, target, combined_srt
+            )
         return combined_srt
 
-    def _embed_subtitle_speech(self, target: Path, srt_text: str) -> None:
+    async def _embed_subtitle_speech(
+        self, target: Path, srt_text: str
+    ) -> None:
         speech_settings = self.settings.speech
         if not speech_settings.enabled:
             self.logger.info("字幕読み上げは無効化されています")
@@ -259,7 +275,9 @@ class AutoEditor:
                 model=speech_settings.model or None,
             )
             try:
-                result = self.text_to_speech.synthesize(request)
+                result = await asyncio.to_thread(
+                    self.text_to_speech.synthesize, request
+                )
             except Exception as exc:  # noqa: BLE001
                 self.logger.error(
                     "字幕読み上げ生成に失敗しました",
@@ -285,7 +303,8 @@ class AutoEditor:
 
         narration_path = target.with_name(f"{target.stem}_narration.wav")
         try:
-            waveform = self._compose_wave(
+            waveform = await asyncio.to_thread(
+                self._compose_wave,
                 segments,
                 speech_settings.sample_rate_hz,
             )
@@ -294,18 +313,29 @@ class AutoEditor:
                     "生成された読み上げ波形が空のためスキップします"
                 )
                 return
-            with wave.open(str(narration_path), "wb") as wave_writer:
-                wave_writer.setnchannels(1)
-                wave_writer.setsampwidth(2)
-                wave_writer.setframerate(speech_settings.sample_rate_hz)
-                wave_writer.writeframes(waveform)
-            self.video_editor.add_audio_track(
+            await asyncio.to_thread(
+                self._write_wave_file,
+                narration_path,
+                waveform,
+                speech_settings.sample_rate_hz,
+            )
+            await self.video_editor.add_audio_track(
                 target,
                 narration_path,
                 stream_title=speech_settings.track_title,
             )
         finally:
-            narration_path.unlink(missing_ok=True)
+            await asyncio.to_thread(narration_path.unlink, missing_ok=True)
+
+    @staticmethod
+    def _write_wave_file(
+        path: Path, waveform: bytes, sample_rate: int
+    ) -> None:
+        with wave.open(str(path), "wb") as wave_writer:
+            wave_writer.setnchannels(1)
+            wave_writer.setsampwidth(2)
+            wave_writer.setframerate(sample_rate)
+            wave_writer.writeframes(waveform)
 
     @staticmethod
     def _compose_wave(
@@ -378,44 +408,59 @@ class AutoEditor:
         millisecond = int(timestamp[9:12])
         return hour * 3600 + minute * 60 + second + millisecond / 1000
 
-    def _embed_metadata(
+    async def _save_metadata(
         self,
         target: Path,
         group: List[VideoAsset],
         day: datetime.date,
         time_slot: datetime.time,
     ) -> None:
-        title, description = self._generate_title_and_description(
+        """メタデータをJSONファイルとして保存する"""
+        title, description = await self._generate_title_and_description(
             group,
             day,
             time_slot,
         )
         self.logger.info("タイトル編集", title=title)
         self.logger.debug("説明編集", description=description)
+
         metadata = {
             "title": title,
-            "comment": description,
+            "description": description,
         }
-        self.video_editor.embed_metadata(target, metadata)
 
-    def _embed_thumbnail(self, target: Path, group: List[VideoAsset]) -> None:
-        thumb = self._create_thumbnail(group)
+        await self.video_editor.embed_metadata(target, metadata)
+
+        # メタデータをリポジトリ経由で保存
+        await asyncio.to_thread(
+            self.repo.save_edited_metadata_dict, target, metadata
+        )
+
+    async def _save_thumbnail(
+        self, target: Path, group: List[VideoAsset]
+    ) -> None:
+        """サムネイルを作成して動画とリポジトリに保存する"""
+        thumb = await asyncio.to_thread(self._create_thumbnail, group)
         if not thumb or not thumb.exists():
             self.logger.warning("サムネイル生成に失敗しました")
             return
 
-        self.logger.info("サムネイル生成", thumbnail=str(thumb))
         try:
-            thumb_data = thumb.read_bytes()
-            self.video_editor.embed_thumbnail(target, thumb_data)
+            # サムネイルをリポジトリ経由で保存
+            thumb_data = await asyncio.to_thread(thumb.read_bytes)
+            await self.video_editor.embed_thumbnail(target, thumb_data)
+            await asyncio.to_thread(
+                self.repo.save_edited_thumbnail, target, thumb_data
+            )
         finally:
-            thumb.unlink(missing_ok=True)
+            # 一時ファイルを削除
+            await asyncio.to_thread(thumb.unlink, missing_ok=True)
 
-    def _change_volume(self, target: Path, multiplier: float) -> None:
-        if self.settings.volume_multiplier == 1.0:
+    async def _change_volume(self, target: Path, multiplier: float) -> None:
+        if multiplier == 1.0:
             return
 
-        self.video_editor.change_volume(target, multiplier)
+        await self.video_editor.change_volume(target, multiplier)
 
     def _group_assets(
         self, assets: List[VideoAsset]
@@ -471,7 +516,7 @@ class AutoEditor:
                         break
         return groups
 
-    def _generate_title_and_description(
+    async def _generate_title_and_description(
         self,
         assets: List[VideoAsset],
         day: datetime.date,
@@ -556,7 +601,9 @@ class AutoEditor:
                     "START_TIME": asset.metadata.started_at,
                 }
                 chapters += f"{format_seconds(elapsed)} {self.settings.chapter_template.format(**tokens) if self.settings.chapter_template else ''}\n"
-            video_length = self.video_editor.get_video_length(asset.video)
+            video_length = await self.video_editor.get_video_length(
+                asset.video
+            )
             if video_length is not None:
                 elapsed += video_length
             else:

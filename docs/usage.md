@@ -26,13 +26,16 @@
 - **OS**: Windows 11
 - **Python**: 3.13 以上
 - **uv**: パッケージ管理用
+- **Node.js**: 18 以上
 - **OBS Studio**: 28.0 以上（WebSocket 機能を使用するため）
+- **obs-ndi プラグイン**: OBS で NDI 出力を有効にするため
+- **NDI 6 Runtime**: OBS の映像をアプリに取り込むため
 - **FFmpeg**: 動画処理用
 - **Tesseract**: OCR（文字認識）用
 
 ## 2. インストール手順
 
-### 2.1. 前提ソフトウェアのインストール
+### 2.1. 必要ソフトウェアのインストール
 
 #### 2.1.1. Python 3 のインストール
 
@@ -48,20 +51,37 @@
    ```
 2. インストール後、`uv --version`で確認
 
-#### 2.1.3. OBS Studio のインストール
+#### 2.1.3. Node.js のインストール
+
+1. [Node.js 公式サイト](https://nodejs.org/en/download/)から LTS 版（18 以上）をダウンロード
+2. インストーラを実行し、デフォルト設定でインストール
+
+#### 2.1.4. OBS Studio のインストール
 
 1. [OBS Studio 公式サイト](https://obsproject.com/)から最新版をダウンロード
 2. インストーラを実行し、デフォルト設定でインストール
 3. 初回起動時の最適化ウィザードは「録画向け設定」を選択
 
-#### 2.1.4. FFmpeg のインストール
+#### 2.1.5. obs-ndi プラグインのインストール
+
+参考サイト: [obs-ndi プラグインと NDI 6 Runtime のインストール手順](https://note.com/tkykmts/n/nb78d5fd2cd6c)
+
+1. [obs-ndi プラグインのリリースページ](https://github.com/Palakis/obs-ndi/releases)から最新のリリース(`Windows-x64-installer.exe`)をダウンロード
+2. インストーラを実行し、デフォルト設定でインストール
+
+#### 2.1.6. NDI 6 Runtime のインストール
+
+1. [NDI 公式サイト](https://www.faronics.com/ja/apps/ndi-6-runtime)から NDI 6 Runtime をダウンロード
+2. インストーラを実行し、デフォルト設定でインストール
+
+#### 2.1.7. FFmpeg のインストール
 
 1. [FFmpeg 公式サイト](https://ffmpeg.org/download.html)から最新の Windows 用ビルドをダウンロード
 2. ダウンロードした zip ファイルを解凍し、例えば`C:\ffmpeg`などの場所に配置
 3. システム環境変数 PATH に`C:\ffmpeg\bin`を追加
 4. コマンドプロンプトで`ffmpeg -version`を実行して確認
 
-#### 2.1.5. Tesseract のインストール
+#### 2.1.8. Tesseract のインストール
 
 1. [UB-Mannheim のリポジトリ](https://github.com/UB-Mannheim/tesseract/wiki)から最新の Tesseract-OCR をダウンロード
 2. インストーラを実行し、「Additional language data」で「English」を選択
@@ -98,45 +118,23 @@
 
 ### 2.3. アプリケーションのインストール
 
-#### 2.3.1. リポジトリのクローン
+#### 2.3.1. アプリのダウンロード
 
-```powershell
-git clone https://github.com/saw4405/splat-replay2.git
-cd splat-replay2
-```
+1. [Splat Replay リリースページ](https://github.com/saw4405/splat-replay2/releases)から最新のリリースをダウンロード
 
-#### 2.3.2. 依存パッケージのインストール
+2. ダウンロードした zip ファイルを解凍し、任意の場所に配置
 
-```powershell
-uv venv
-.venv\Scripts\activate
-uv sync
-uv pip install -e .
-```
+#### 2.3.2. イカモドキフォントの配置
 
-#### 2.3.3. イカモドキフォントの配置
+1. ダウンロードしたイカモドキフォントを`_internal\assets\thumbnail`フォルダに配置
 
-1. ダウンロードしたイカモドキフォントを`assets\thumbnail`フォルダに配置
+#### 2.3.3. YouTube API 認証情報の配置
 
-#### 2.3.4. YouTube API 認証情報の配置
-
-1. ダウンロードした`client_secrets.json`を`config`フォルダに配置
-
-### 2.3.5. OBS Studio の設定
-
-1. OBS Studio を起動
-2. ソースを追加:
-   - 「ソース」パネルの「+」ボタン →「映像キャプチャデバイス」
-   - キャプチャーデバイスを選択し、解像度を 1080p、フレームレートを 60fps に設定
-3. WebSocket 設定:
-   1. 「ツール」メニュー →「WebSocket Server Settings」
-   2. 「WebSocket server 有効」にチェック
-   3. パスワードをメモしておく。(後の設定で使用)
-4. 出力設定
+1. ダウンロードした`client_secrets.json`を`_internal\config`フォルダに配置
 
 ## 4. 使用方法
 
-### 4.1. 事前準備
+### 4.1. 機器接続
 
 1. Nintendo Switch からキャプチャーボードを通して PC に接続
 
@@ -154,52 +152,52 @@ uv pip install -e .
 
 ### 4.2. アプリ起動
 
-#### 4.2.1. GUI 起動
-
 1. 仮想環境を有効化する
 
    ```
    .venv\Scripts\activate
    ```
 
-2. アプリケーションを起動する
+2. ビルドする
 
    ```
-   splat-replay gui
+   .\scripts\build_webview.ps1
    ```
-
-3. (初回起動時のみ) 設定ボタンをクリックし、設定画面を開く。強調表示されている必須項目を設定し、保存する。
-
-#### 4.2.2. CLI 起動
-
-1. 仮想環境を有効化する
-
-   ```
-   .venv\Scripts\activate
-   ```
-
-2. (初回起動時のみ) 設定する。
-
-   1. `config`フォルダ内の`settings.example.toml`ファイルをコピーし、`settings.toml`にリネーム
-   2. テキストエディタで`settings.toml`ファイルを開き、以下の重要設定を行う:
-      - capture_index: キャプチャーデバイスのインデックス
-      - name: キャプチャーデバイス名
-      - websocket_host: OBS WebSocket のホスト名
-      - websocket_port: OBS WebSocket のポート番号
-      - websocket_password: OBS WebSocket のパスワード
 
 3. アプリケーションを起動する
 
    ```
-   splat-replay auto
+   dist\SplatReplay\SplatReplay.exe
    ```
 
-### 4.3. YouTube 認証
+### 4.3. 初回設定
+
+### 4.3.1. OBS Studio の設定
+
+1. OBS Studio を起動
+2. ソースを追加:
+   - 「ソース」パネルの「+」ボタン →「映像キャプチャデバイス」
+   - キャプチャーデバイスを選択し、解像度を 1080p、フレームレートを 60fps に設定
+3. WebSocket 設定:
+   1. 「ツール」メニュー →「WebSocket Server Settings」
+   2. 「WebSocket server 有効」にチェック
+   3. パスワードをメモしておく。(後の設定で使用)
+4. NDI 出力設定:
+   1. 「ツール」メニュー →「DistroAV NDI Settings」
+   2. 「Main Output」にチェックを入れる
+5. 出力設定
+
+#### 4.3.2. YouTube 認証
 
 1. アプリ初回起動、もしくは認証の有効期限が切れたとき、YouTube 認証のためにブラウザが開きます
 2. Google アカウントでログインし、必要な権限を許可
 3. 「アクセスを許可しました。このタブを閉じて先に進んでください。」と表示されたらブラウザタブを閉じる
 4. 認証情報が`token.pickle`ファイルに自動保存される
+
+#### 4.3.3. アプリ設定
+
+1. 設定ボタンをクリックし、設定画面を開く。
+2. 強調表示されている必須項目を設定し、保存する。
 
 ## 5. 仕様概要
 
@@ -282,3 +280,11 @@ uv pip install -e .
   - キャプチャボードの接続を確認
   - 設定画面でデバイスインデックスを変更
   - 他のアプリケーションがカメラを使用していないか確認
+
+### 7.3. OBS で「エンコードが高負荷です」と表示される/録画された動画がカクつく
+
+- **原因**: PC の性能不足や OBS の設定が高負荷になっている
+- **対処法**:
+  - 本アプリを最小化する (リソース使用量を削減)
+  - 解像度やフレームレートを下げる
+  - 不要なソフトウェアを終了してリソースを確保

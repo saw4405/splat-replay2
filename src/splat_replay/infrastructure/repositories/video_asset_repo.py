@@ -205,10 +205,32 @@ class FileVideoAssetRepository(VideoAssetRepositoryPort):
         dest = self.settings.edited_dir
         dest.mkdir(parents=True, exist_ok=True)
         target = dest / video.name
+
+        # 動画ファイルを移動
         try:
             shutil.move(str(video), target)
         except Exception:
             target = video
+
+        # 関連ファイル（字幕、サムネイル、メタデータ）も移動
+        for suffix in (".srt", ".png", ".json"):
+            src_file = video.with_suffix(suffix)
+            if src_file.exists():
+                dst_file = target.with_suffix(suffix)
+                try:
+                    shutil.move(str(src_file), dst_file)
+                    self.logger.info(
+                        f"関連ファイル{suffix}を移動しました",
+                        src=str(src_file),
+                        dst=str(dst_file),
+                    )
+                except Exception as exc:  # noqa: BLE001
+                    self.logger.error(
+                        f"関連ファイル{suffix}の移動に失敗しました",
+                        error=str(exc),
+                        src=str(src_file),
+                    )
+
         self.logger.info("編集後ファイル保存", path=str(target))
 
         self._publisher.publish(
@@ -225,11 +247,141 @@ class FileVideoAssetRepository(VideoAssetRepositoryPort):
 
     def delete_edited(self, video: Path) -> bool:
         video = video.resolve()
+
+        # 動画ファイルを削除
         if video.exists():
             video.unlink(missing_ok=True)
+
+        # 関連ファイル（字幕、サムネイル、メタデータ）も削除
+        subtitle = video.with_suffix(".srt")
+        if subtitle.exists():
+            subtitle.unlink(missing_ok=True)
+        thumbnail = video.with_suffix(".png")
+        if thumbnail.exists():
+            thumbnail.unlink(missing_ok=True)
+        metadata = video.with_suffix(".json")
+        if metadata.exists():
+            metadata.unlink(missing_ok=True)
 
         self._publisher.publish(
             EventTypes.ASSET_EDITED_DELETED, {"video": str(video)}
         )
 
-        return not video.exists()
+        return (
+            not video.exists()
+            and not subtitle.exists()
+            and not thumbnail.exists()
+            and not metadata.exists()
+        )
+
+    def get_edited_subtitle(self, video: Path) -> str | None:
+        """編集済み動画の字幕を取得する"""
+        subtitle = video.with_suffix(".srt")
+        if not subtitle.exists():
+            return None
+        try:
+            return subtitle.read_text(encoding="utf-8")
+        except Exception as exc:  # noqa: BLE001
+            self.logger.error(
+                "編集済み動画の字幕読み込みに失敗しました",
+                path=str(subtitle),
+                error=str(exc),
+            )
+            return None
+
+    def save_edited_subtitle(self, video: Path, content: str) -> bool:
+        """編集済み動画の字幕を保存する"""
+        subtitle = video.with_suffix(".srt")
+        try:
+            subtitle.parent.mkdir(parents=True, exist_ok=True)
+            subtitle.write_text(content, encoding="utf-8")
+            self.logger.info(
+                "編集済み動画の字幕を保存しました", path=str(subtitle)
+            )
+            return True
+        except Exception as exc:  # noqa: BLE001
+            self.logger.error(
+                "編集済み動画の字幕保存に失敗しました",
+                path=str(subtitle),
+                error=str(exc),
+            )
+            return False
+
+    def get_edited_thumbnail(self, video: Path) -> bytes | None:
+        """編集済み動画のサムネイルを取得する"""
+        thumbnail = video.with_suffix(".png")
+        if not thumbnail.exists():
+            return None
+        try:
+            return thumbnail.read_bytes()
+        except Exception as exc:  # noqa: BLE001
+            self.logger.error(
+                "編集済み動画のサムネイル読み込みに失敗しました",
+                path=str(thumbnail),
+                error=str(exc),
+            )
+            return None
+
+    def save_edited_thumbnail(self, video: Path, data: bytes) -> bool:
+        """編集済み動画のサムネイルを保存する"""
+        thumbnail = video.with_suffix(".png")
+        try:
+            thumbnail.parent.mkdir(parents=True, exist_ok=True)
+            thumbnail.write_bytes(data)
+            self.logger.info(
+                "編集済み動画のサムネイルを保存しました", path=str(thumbnail)
+            )
+            return True
+        except Exception as exc:  # noqa: BLE001
+            self.logger.error(
+                "編集済み動画のサムネイル保存に失敗しました",
+                path=str(thumbnail),
+                error=str(exc),
+            )
+            return False
+
+    def get_edited_metadata(self, video: Path) -> dict[str, str] | None:
+        """編集済み動画のメタデータを取得する"""
+        metadata_path = video.with_suffix(".json")
+        if not metadata_path.exists():
+            return None
+        try:
+            data = json.loads(metadata_path.read_text(encoding="utf-8"))
+            if not isinstance(data, dict):
+                return None
+            # 文字列型に変換
+            return {
+                str(k): str(v) if v is not None else ""
+                for k, v in data.items()
+            }
+        except Exception as exc:  # noqa: BLE001
+            self.logger.error(
+                "編集済み動画のメタデータ読み込みに失敗しました",
+                path=str(metadata_path),
+                error=str(exc),
+            )
+            return None
+
+    def save_edited_metadata_dict(
+        self, video: Path, metadata: dict[str, str]
+    ) -> bool:
+        """編集済み動画のメタデータを保存する"""
+        metadata_path = video.with_suffix(".json")
+        try:
+            metadata_path.parent.mkdir(parents=True, exist_ok=True)
+            metadata_path.write_text(
+                json.dumps(metadata, ensure_ascii=False, indent=2),
+                encoding="utf-8",
+            )
+            self.logger.info(
+                "編集済み動画のメタデータを保存しました",
+                path=str(metadata_path),
+            )
+            return True
+        except Exception as exc:  # noqa: BLE001
+            self.logger.error(
+                "編集済み動画のメタデータ保存に失敗しました",
+                path=str(metadata_path),
+                error=str(exc),
+            )
+            return False

@@ -5,24 +5,37 @@ from __future__ import annotations
 import asyncio
 import threading
 import time
-from typing import TypeVar
 
+import punq
 import typer
 from structlog.stdlib import BoundLogger
 
 from splat_replay.application.use_cases import AutoUseCase, UploadUseCase
-from splat_replay.gui.app import SplatReplayGUI
 from splat_replay.shared.di import configure_container, resolve
 from splat_replay.shared.logger import buffer_console_logs
 
 app = typer.Typer(help="Splat Replay ツール群")
 
-container = configure_container()
+# Lazy container and logger initialization
+_container: punq.Container | None = None
+_logger: BoundLogger | None = None
 
-T = TypeVar("T")
+
+def get_container() -> punq.Container:
+    """Get or create container lazily."""
+    global _container
+    if _container is None:
+        _container = configure_container()
+    return _container
 
 
-logger = resolve(container, BoundLogger)
+def get_logger() -> BoundLogger:
+    """Get or create logger lazily."""
+    global _logger
+    if _logger is None:
+        _logger = resolve(get_container(), BoundLogger)
+    assert _logger is not None
+    return _logger
 
 
 @app.command()
@@ -36,6 +49,8 @@ def auto(
 
 
 async def _auto(timeout: float | None = None) -> None:
+    logger = get_logger()
+    container = get_container()
     logger.info("auto コマンド開始", timeout=timeout)
 
     def animate(stop_event: threading.Event) -> None:
@@ -79,6 +94,8 @@ def upload() -> None:
 
 
 async def _upload() -> None:
+    logger = get_logger()
+    container = get_container()
     logger.info("upload コマンド開始")
     uc = resolve(container, UploadUseCase)
     await uc.execute()
@@ -87,11 +104,14 @@ async def _upload() -> None:
 @app.command()
 def gui() -> None:
     """GUI アプリケーションを起動する。"""
+    logger = get_logger()
     logger.info("GUI アプリケーション開始")
 
     try:
-        app = SplatReplayGUI()
-        app.run()
+        from splat_replay.gui.app import SplatReplayGUI
+
+        app_instance = SplatReplayGUI()
+        app_instance.run()
     except ImportError as e:
         logger.error(f"GUI の依存関係が不足しています: {e}")
         typer.echo("GUI を使用するには追加の依存関係が必要です。")
@@ -99,6 +119,109 @@ def gui() -> None:
     except Exception as e:
         logger.error(f"GUI アプリケーションでエラーが発生: {e}")
         typer.echo(f"GUI アプリケーションの起動に失敗しました: {e}")
+        raise typer.Exit(1)
+
+
+@app.command()
+def web(
+    host: str = typer.Option("127.0.0.1", help="Webサーバーのホスト"),
+    port: int = typer.Option(8000, help="Webサーバーのポート"),
+    dev: bool = typer.Option(
+        False, help="開発モード (フロントエンド同時起動)"
+    ),
+) -> None:
+    """Web GUI アプリケーションを起動する。"""
+    # Don't initialize logger/container yet for dev mode
+    if dev:
+        # Start development server with frontend
+        from splat_replay.web.dev_server import start_dev_server
+
+        start_dev_server()
+        return
+
+    logger = get_logger()
+    container = get_container()
+    logger.info("Web GUI アプリケーション開始", host=host, port=port)
+
+    try:
+        # Start backend only
+        import uvicorn
+
+        from splat_replay.application.services import (
+            AutoRecorder,
+            DeviceChecker,
+            RecordingPreparationService,
+            SettingsService,
+        )
+        from splat_replay.application.use_cases import UploadUseCase
+        from splat_replay.infrastructure.adapters import GuiRuntimePortAdapter
+        from splat_replay.infrastructure.runtime.runtime import AppRuntime
+        from splat_replay.web.server import WebServer
+
+        # Resolve dependencies
+        auto_recorder = resolve(container, AutoRecorder)
+        device_checker = resolve(container, DeviceChecker)
+        recording_preparation_service = resolve(
+            container, RecordingPreparationService
+        )
+        runtime_adapter = resolve(container, GuiRuntimePortAdapter)
+        settings_service = resolve(container, SettingsService)
+        app_runtime = resolve(container, AppRuntime)
+        upload_use_case = resolve(container, UploadUseCase)
+
+        # Create web server
+        web_server = WebServer(
+            auto_recorder=auto_recorder,
+            device_checker=device_checker,
+            recording_preparation_service=recording_preparation_service,
+            command_dispatcher=runtime_adapter,
+            logger=logger,
+            settings_service=settings_service,
+            event_bus=app_runtime.event_bus,
+            upload_use_case=upload_use_case,
+        )
+
+        # Run uvicorn
+        uvicorn.run(web_server.app, host=host, port=port)
+
+    except ImportError as e:
+        logger.error(f"Web GUI の依存関係が不足しています: {e}")
+        typer.echo("Web GUI を使用するには追加の依存関係が必要です。")
+        raise typer.Exit(1)
+    except Exception as e:
+        logger.error(f"Web GUI アプリケーションでエラーが発生: {e}")
+        typer.echo(f"Web GUI アプリケーションの起動に失敗しました: {e}")
+        raise typer.Exit(1)
+
+
+@app.command()
+def webview() -> None:
+    """pywebviewベースのデスクトップアプリケーションを起動する。"""
+    logger = get_logger()
+    logger.info("WebView デスクトップアプリケーション開始")
+
+    try:
+        from splat_replay.gui.webview_app import SplatReplayWebViewApp
+
+        app_instance = SplatReplayWebViewApp()
+        app_instance.run()
+    except ImportError as e:
+        logger.error(f"WebView の依存関係が不足しています: {e}")
+        typer.echo("WebView を使用するには追加の依存関係が必要です。")
+        typer.echo("次のコマンドで依存関係をインストールしてください:")
+        typer.echo("  uv sync")
+        raise typer.Exit(1)
+    except FileNotFoundError as e:
+        logger.error(f"フロントエンドビルドが見つかりません: {e}")
+        typer.echo(str(e))
+        typer.echo("\n次のコマンドでフロントエンドをビルドしてください:")
+        typer.echo("  cd frontend")
+        typer.echo("  npm install")
+        typer.echo("  npm run build")
+        raise typer.Exit(1)
+    except Exception as e:
+        logger.error(f"WebView アプリケーションでエラーが発生: {e}")
+        typer.echo(f"WebView アプリケーションの起動に失敗しました: {e}")
         raise typer.Exit(1)
 
 

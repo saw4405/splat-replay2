@@ -12,7 +12,9 @@ websocket_password = ""
 executable_path = "C:\\Program Files\\obs-studio\\bin\\64bit\\obs64.exe"
 
 [record]
-capture_index = 0
+capture_device = "OBS Virtual Camera"
+width = 1920
+height = 1080
 
 [speech_transcriber]
 mic_device_name = "マイク (USB Audio Device)"

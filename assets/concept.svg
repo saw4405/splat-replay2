@@ -1,0 +1,58 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="260" viewBox="0 0 1024 260">
+  <defs>
+    <style>
+      .label { font-family: sans-serif; fill: #FFD700; }
+      .small { font-size: 12px; fill: #dddddd; }
+      .strong { font-weight: 700; }
+      .center { text-anchor: middle; dominant-baseline: middle; }
+    </style>
+  </defs>
+
+  <!-- 背景 -->
+  <rect x="0" y="0" width="1024" height="260" fill="#161616"/>
+
+  <!-- 左：準備 -->
+  <g transform="translate(0,0)">
+    <rect x="16" y="16" rx="8" ry="8" width="204" height="96" fill="#2f2f2f"/>
+    <text x="118" y="44" class="center" style="font-size:24px;">🔌</text>
+    <text x="118" y="74" class="center label" style="font-size:16px;"><tspan class="strong">機器接続</tspan></text>
+    <text x="118" y="96" class="center small">必要なデバイスを繋ぐ</text>
+
+    <rect x="16" y="128" rx="8" ry="8" width="204" height="96" fill="#2f2f2f"/>
+    <text x="118" y="156" class="center" style="font-size:24px;">🚀</text>
+    <text x="118" y="186" class="center label" style="font-size:16px;"><tspan class="strong">アプリ起動</tspan></text>
+    <text x="118" y="208" class="center small">特別な操作は不要</text>
+  </g>
+
+  <!-- 矢印１ -->
+  <text x="256" y="130" class="center" style="font-family: sans-serif; font-size:24px; fill:#FFD700;">▶</text>
+
+  <!-- 中央：プレイするだけ！ -->
+  <g transform="translate(276,0)">
+    <rect x="40" y="58" rx="12" ry="12" width="392" height="144" fill="#FFD700" stroke="#444444" stroke-width="2"/>
+    <text x="236" y="96" class="center" style="font-size:36px; fill:#303030;">🎮</text>
+    <text x="236" y="132" class="center" style="font-family: sans-serif; font-size:22px; font-weight:700; fill:#303030;">
+      プレイするだけ！
+    </text>
+    <text x="236" y="156" class="center" style="font-family: sans-serif; font-size:12px; fill:#303030;">
+      アプリが自動で録画・編集・アップロード
+    </text>
+  </g>
+
+  <!-- 矢印２ -->
+  <text x="768" y="130" class="center" style="font-family: sans-serif; font-size:24px; fill:#A020F0;">▶</text>
+
+  <!-- 右：結果（振り返り） -->
+  <g transform="translate(788,0)">
+    <rect x="16" y="82" rx="8" ry="8" width="204" height="96" fill="#A020F0"/>
+    <!-- YouTubeアイコン中央寄せ -->
+    <g transform="translate(118,100) scale(1.2)" text-anchor="middle">
+      <g transform="translate(-12,0)">
+        <path fill="#FF0000" d="M23.5 3.2s-.2-2.2-.9-3.1c-.8-1-1.7-1-2.1-1.1C16.9-1.5 12-1.5 12-1.5s-4.9 0-8.5.5c-.4.1-1.3.1-2.1 1.1-.7.9-.9 3.1-.9 3.1S0 5.7 0 8.1v.8c0 2.4.6 4.9.6 4.9s.2 2.2.9 3.1c.8 1 1.6 1 2.1 1.1 3.6.5 8.5.5 8.5.5s4.9 0 8.5-.5c.4-.1 1.3-.1 2.1-1.1.7-.9.9-3.1.9-3.1s.6-2.5.6-4.9v-.8c0-2.4-.6-4.9-.6-4.9Z" transform="translate(0 1.5)"/>
+        <path fill="#FFFFFF" d="M9.75 5.25v6.5l5.5-3.25-5.5-3.25Z"/>
+      </g>
+    </g>
+    <text x="118" y="146" class="center" style="font-family: sans-serif; font-weight:700; fill:#ffffff;">振り返り</text>
+    <text x="118" y="168" class="center" style="font-family: sans-serif; font-size:12px; fill:#f3e6ff;">好きなタイミングで視聴</text>
+  </g>
+</svg>

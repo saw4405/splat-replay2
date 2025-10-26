@@ -31,40 +31,34 @@ class AssetQueryService:
             return await asyncio.to_thread(self._repo.list_recordings)
 
         async def _list_with_length() -> List[Tuple[VideoAsset, float | None]]:
-            def work() -> List[Tuple[VideoAsset, float | None]]:
-                result: List[Tuple[VideoAsset, float | None]] = []
-                for a in self._repo.list_recordings():
-                    try:
-                        length = self._editor.get_video_length(a.video)
-                    except Exception:
-                        length = None
-                    result.append((a, length))
-                return result
-
-            return await asyncio.to_thread(work)
+            assets = await asyncio.to_thread(self._repo.list_recordings)
+            result: List[Tuple[VideoAsset, float | None]] = []
+            for asset in assets:
+                try:
+                    length = await self._editor.get_video_length(asset.video)
+                except Exception:
+                    length = None
+                result.append((asset, length))
+            return result
 
         async def _list_edited_with_length() -> List[
             Tuple[Path, float | None, dict[str, str] | None]
         ]:
-            def work() -> List[
-                Tuple[Path, float | None, dict[str, str] | None]
-            ]:
-                result: List[
-                    Tuple[Path, float | None, dict[str, str] | None]
-                ] = []
-                for p in self._repo.list_edited():
-                    try:
-                        length = self._editor.get_video_length(p)
-                    except Exception:
-                        length = None
-                    try:
-                        md = self._editor.get_metadata(p)
-                    except Exception:
-                        md = None
-                    result.append((p, length, md))
-                return result
+            paths = await asyncio.to_thread(self._repo.list_edited)
+            result: List[Tuple[Path, float | None, dict[str, str] | None]] = []
+            for path in paths:
+                try:
+                    length = await self._editor.get_video_length(path)
+                except Exception:
+                    length = None
 
-            return await asyncio.to_thread(work)
+                # メタデータをリポジトリ経由で読み込む
+                md = await asyncio.to_thread(
+                    self._repo.get_edited_metadata, path
+                )
+
+                result.append((path, length, md))
+            return result
 
         async def _get_metadata(
             video_path: Path,
@@ -82,6 +76,18 @@ class AssetQueryService:
                 }
 
             return await asyncio.to_thread(work)
+
+        async def _get_asset(video: Path) -> Optional[VideoAsset]:
+            """VideoAsset を取得する。"""
+            return await asyncio.to_thread(self._repo.get_asset, video)
+
+        async def _save_edited_metadata(
+            video: Path, metadata: RecordingMetadata
+        ) -> None:
+            """編集済みメタデータを保存する。"""
+            return await asyncio.to_thread(
+                self._repo.save_edited_metadata, video, metadata
+            )
 
         async def _get_subtitle(video_path: Path) -> Optional[str]:
             return await asyncio.to_thread(self._repo.get_subtitle, video_path)
@@ -105,9 +111,7 @@ class AssetQueryService:
             )
 
         async def _get_length(video_path: Path) -> Optional[float]:
-            return await asyncio.to_thread(
-                self._editor.get_video_length, video_path
-            )
+            return await self._editor.get_video_length(video_path)
 
         async def _delete_recording(video_path: Path) -> bool:
             return await asyncio.to_thread(
@@ -129,9 +133,11 @@ class AssetQueryService:
             "asset.list": _list,
             "asset.list_with_length": _list_with_length,
             "asset.list_edited_with_length": _list_edited_with_length,
+            "asset.get": _get_asset,
             "asset.get_metadata": _get_metadata,
             "asset.get_subtitle": _get_subtitle,
             "asset.save_metadata": _save_metadata,
+            "asset.save_edited_metadata": _save_edited_metadata,
             "asset.save_subtitle": _save_subtitle,
             "asset.get_length": _get_length,
             "asset.delete": _delete_recording,

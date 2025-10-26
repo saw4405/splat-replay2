@@ -1,3 +1,4 @@
+import asyncio
 from pathlib import Path
 from typing import Optional
 
@@ -44,10 +45,10 @@ class AutoUploader:
         videos = self.repo.list_edited()
 
         task_id = "auto_upload"
-        items: list[str] = [
-            self.video_editor.get_metadata(v).get("title", v.name)
-            for v in videos
-        ]
+        items: list[str] = []
+        for video in videos:
+            metadata = await self.video_editor.get_metadata(video)
+            items.append(metadata.get("title", video.name))
         self.progress.start_task(
             task_id, "アップロード準備", len(items), items=items
         )
@@ -61,7 +62,7 @@ class AutoUploader:
 
             self.logger.info("アップロード中", path=str(video))
 
-            self._upload(idx, video)
+            await self._upload(idx, video)
             self.progress.item_stage(task_id, idx, "delete", "ファイル削除中")
             self.repo.delete_edited(video)
 
@@ -70,29 +71,33 @@ class AutoUploader:
         self.progress.finish(task_id, True, "自動アップロードを完了しました")
         self.logger.info("自動アップロードを完了しました")
 
-    def _upload(self, idx: int, path: Path) -> None:
+    async def _upload(self, idx: int, path: Path) -> None:
         """動画をアップロードし、動画 ID を返す"""
         self.logger.info("動画アップロード中", clip=str(path))
 
         task_id = "auto_upload"
-        thumb: Optional[Path] = None
-        subtitle: Optional[Path] = None
+        temp_thumb: Optional[Path] = None
+        temp_subtitle: Optional[Path] = None
 
         try:
             self.progress.item_stage(
                 task_id, idx, "collect", "ファイル情報収集中"
             )
-            metadata = self.video_editor.get_metadata(path)
 
-            thumb_data = self.video_editor.get_thumbnail(path)
+            # メタデータをリポジトリ経由で読み込む
+            metadata = self.repo.get_edited_metadata(path) or {}
+
+            # サムネイルをリポジトリ経由で読み込む
+            thumb_data = self.repo.get_edited_thumbnail(path)
             if thumb_data:
-                thumb = path.with_suffix(".png")
-                thumb.write_bytes(thumb_data)
+                temp_thumb = path.with_suffix(".tmp.png")
+                temp_thumb.write_bytes(thumb_data)
 
-            srt = self.video_editor.get_subtitle(path)
-            if srt:
-                subtitle = path.with_suffix(".srt")
-                subtitle.write_text(srt, encoding="utf-8")
+            # 字幕をリポジトリ経由で読み込む
+            srt_content = self.repo.get_edited_subtitle(path)
+            if srt_content:
+                temp_subtitle = path.with_suffix(".tmp.srt")
+                temp_subtitle.write_text(srt_content, encoding="utf-8")
 
             self.progress.item_stage(
                 task_id,
@@ -101,37 +106,38 @@ class AutoUploader:
                 "アップロード中",
                 message=path.name,
             )
-            self.uploader.upload(
+            await asyncio.to_thread(
+                self.uploader.upload,
                 path,
                 title=metadata.get("title", ""),
-                description=metadata.get("comment", ""),
+                description=metadata.get("description", ""),
                 tags=self.settings.tags,
                 privacy_status=self.settings.privacy_status,
-                thumb=thumb,
+                thumb=temp_thumb,
                 caption=Caption(
-                    subtitle=subtitle,
+                    subtitle=temp_subtitle,
                     caption_name=self.settings.caption_name,
                 )
-                if subtitle
+                if temp_subtitle
                 else None,
                 playlist_id=self.settings.playlist_id,
             )
             self.logger.info("動画アップロードを完了しました")
-            if subtitle:
+            if temp_subtitle:
                 self.progress.item_stage(
                     task_id,
                     idx,
                     "caption",
                     "字幕アップロード中",
-                    message=subtitle.name,
+                    message=temp_subtitle.name,
                 )
-            if thumb:
+            if temp_thumb:
                 self.progress.item_stage(
                     task_id,
                     idx,
                     "thumb",
                     "サムネイルアップロード中",
-                    message=thumb.name,
+                    message=temp_thumb.name,
                 )
             self.progress.item_stage(
                 task_id,
@@ -140,10 +146,9 @@ class AutoUploader:
                 "プレイリスト追加中",
                 message=path.name,
             )
-            # deprecated: external UPLOADER_ITEM_FINISHED removed
         finally:
-            if thumb:
-                thumb.unlink(missing_ok=True)
-
-            if subtitle:
-                subtitle.unlink(missing_ok=True)
+            # 一時ファイルを削除
+            if temp_thumb:
+                temp_thumb.unlink(missing_ok=True)
+            if temp_subtitle:
+                temp_subtitle.unlink(missing_ok=True)

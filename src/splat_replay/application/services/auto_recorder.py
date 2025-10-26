@@ -40,7 +40,7 @@ POWER_OFF_COUNT_THRESHOLD = 3
 EARLY_ABORT_WINDOW_SECONDS = 60
 MAX_RECORDING_SECONDS = 600
 CONTROL_QUEUE_DRAIN_LIMIT = 20
-FRAME_QUEUE_MAXSIZE = 3
+FRAME_QUEUE_MAXSIZE = 1
 PUBLISH_QUEUE_MAXSIZE = 200
 FRAME_DEVICE_RETRY_SLEEP = 0.005
 FRAME_QUEUE_PUT_TIMEOUT = 0.001
@@ -138,7 +138,7 @@ class AutoRecorder:
                 frame = await self._acquire_frame()
                 if frame is None:
                     # フレーム未到来。CPU スピン緩和のため譲歩。
-                    await asyncio.sleep(0)
+                    await asyncio.sleep(0.1)
                     continue
 
                 (
@@ -207,7 +207,7 @@ class AutoRecorder:
         await self.sm.handle(RecordEvent.START)
         await self.recorder.start()
         self._publisher_worker.enqueue_event(
-            EventTypes.RECORDER_STATE, {"state": "STARTED"}
+            EventTypes.RECORDER_STATE, {"state": "RECORDING"}
         )
 
     async def pause(self) -> None:
@@ -234,7 +234,7 @@ class AutoRecorder:
         await self.sm.handle(RecordEvent.STOP)
         await self.recorder.cancel()
         self._publisher_worker.enqueue_event(
-            EventTypes.RECORDER_STATE, {"state": "CANCELLED"}
+            EventTypes.RECORDER_STATE, {"state": "STOPPED"}
         )
         await self._reset()
 
@@ -256,7 +256,8 @@ class AutoRecorder:
                 return
 
             if self._ctx.result_frame is None:
-                if frame := await self._acquire_frame():
+                frame: Frame | None = await self._acquire_frame()
+                if frame is not None:
                     if await self.analyzer.detect_session_result(
                         frame, self.metadata.game_mode
                     ):

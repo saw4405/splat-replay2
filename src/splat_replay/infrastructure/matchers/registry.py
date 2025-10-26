@@ -12,6 +12,7 @@ from splat_replay.shared.config import (
     ImageMatchingSettings,
     MatcherConfig,
 )
+from splat_replay.shared.paths import PROJECT_ROOT
 
 from .base import BaseMatcher
 from .brightness import BrightnessMatcher
@@ -62,7 +63,14 @@ class MatcherRegistry(ImageMatcherPort):
             return None
 
         name = config.name
-        mask_path = Path(config.mask_path) if config.mask_path else None
+
+        # mask_path を絶対パスに変換
+        mask_path = None
+        if config.mask_path:
+            mask_path = Path(config.mask_path)
+            if not mask_path.is_absolute():
+                mask_path = PROJECT_ROOT / mask_path
+
         roi_cfg = config.roi
         roi = None
         if roi_cfg:
@@ -74,7 +82,11 @@ class MatcherRegistry(ImageMatcherPort):
             )
         if config.type == "hash":
             if config.hash_path:
-                return HashMatcher(Path(config.hash_path), roi, name=name)
+                # 相対パスの場合はPROJECT_ROOTからの絶対パスに変換
+                hash_path = Path(config.hash_path)
+                if not hash_path.is_absolute():
+                    hash_path = PROJECT_ROOT / hash_path
+                return HashMatcher(hash_path, roi, name=name)
             else:
                 raise ValueError("ハッシュマッチャーには hash_path が必要です")
         if config.type == "hsv":
@@ -137,8 +149,12 @@ class MatcherRegistry(ImageMatcherPort):
                 )
         if config.type == "template":
             if config.template_path:
+                # 相対パスの場合はPROJECT_ROOTからの絶対パスに変換
+                template_path = Path(config.template_path)
+                if not template_path.is_absolute():
+                    template_path = PROJECT_ROOT / template_path
                 return TemplateMatcher(
-                    Path(config.template_path),
+                    template_path,
                     mask_path,
                     config.threshold,
                     roi,
@@ -150,8 +166,12 @@ class MatcherRegistry(ImageMatcherPort):
                 )
         if config.type == "edge":
             if config.template_path:
+                # 相対パスの場合はPROJECT_ROOTからの絶対パスに変換
+                template_path = Path(config.template_path)
+                if not template_path.is_absolute():
+                    template_path = PROJECT_ROOT / template_path
                 return EdgeMatcher(
-                    Path(config.template_path),
+                    template_path,
                     config.threshold,
                     roi,
                     name=name,
@@ -193,7 +213,6 @@ class MatcherRegistry(ImageMatcherPort):
                     tasks.append(
                         asyncio.create_task(asyncio.sleep(0, result=False))
                     )
-
             results = await asyncio.gather(*tasks)
             for key, matcher, ok in zip(keys, matchers, results):
                 if matcher is not None and ok:

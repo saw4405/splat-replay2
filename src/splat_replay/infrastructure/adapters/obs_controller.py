@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import re
 from contextlib import suppress
 from pathlib import Path
 from types import ModuleType
@@ -109,6 +110,12 @@ class OBSController(VideoRecorderPort):
                         if win32gui.IsWindowVisible(hwnd):
                             title = win32gui.GetWindowText(hwnd)
                             if "OBS" in title:
+                                pass
+                            if re.search(
+                                r"\bOBS\b(?:\s+\d+(?:\.\d+){1,2})",
+                                title,
+                                re.IGNORECASE,
+                            ):
                                 handles.append(hwnd)
                     except Exception:  # pragma: no cover - defensive
                         return True
@@ -133,9 +140,17 @@ class OBSController(VideoRecorderPort):
             return
 
         try:
+            # Windows環境では優先度「高」でプロセスを起動
+            creation_flags = 0
+            if win32process is not None:
+                # HIGH_PRIORITY_CLASS = 0x00000080
+                creation_flags = 0x00000080
+                self._logger.info("OBS を優先度「高」で起動します")
+
             self._process = await asyncio.create_subprocess_exec(
                 self.obs_path,
                 cwd=self.obs_path.parent,
+                creationflags=creation_flags,
             )
         except Exception as exc:  # pragma: no cover - process launch failure
             self._logger.error("OBS 起動失敗", error=str(exc))
@@ -168,28 +183,36 @@ class OBSController(VideoRecorderPort):
         self._logger.info("OBS 終了要求")
 
         if self._monitor_task is not None:
+            self._logger.info("OBS 接続モニタリングタスク停止")
             self._monitor_task.cancel()
             with suppress(Exception):
                 await self._monitor_task
             self._monitor_task = None
 
         if self._is_connected:
+            self._logger.info("OBS 切断")
             active, _ = await self._get_record_status()
             if active:
+                self._logger.info("OBS 録画停止")
                 await self.stop()
             if await self.is_virtual_camera_active():
+                self._logger.info("OBS 仮想カメラ停止")
                 await self.stop_virtual_camera()
 
         if await self.is_running() and self._process is not None:
+            self._logger.info("OBS 終了処理開始")
             try:
                 if win32api is not None and win32con is not None:
                     hwnds = self.find_window_by_pid(self._process.pid)
+                    self._logger.info("OBS ウィンドウを閉じる")
                     for hwnd in hwnds:
                         win32api.PostMessage(hwnd, win32con.WM_CLOSE, 0, 0)
 
                 # 最大10秒待機して終了しなければ強制終了
                 try:
+                    self._logger.info("OBS 終了処理待機")
                     await asyncio.wait_for(self._process.wait(), timeout=10.0)
+                    self._logger.info("OBS 終了処理完了")
                 except asyncio.TimeoutError:
                     self._logger.warning("OBS 強制終了")
                     self._process.terminate()
@@ -297,6 +320,8 @@ class OBSController(VideoRecorderPort):
 
     async def is_virtual_camera_active(self) -> bool:
         response = await self._request("GetVirtualCamStatus")
+        if response.res_data is None:
+            return False
         return bool(response.res_data.get("outputActive", False))
 
     async def start_virtual_camera(self) -> None:
@@ -316,6 +341,8 @@ class OBSController(VideoRecorderPort):
     async def _get_record_status(self) -> tuple[bool, bool]:
         await self.connect()
         response = await self._request("GetRecordStatus")
+        if response.res_data is None:
+            return False, False
         active = bool(response.res_data.get("outputActive", False))
         paused = bool(response.res_data.get("outputPaused", False))
         return active, paused
@@ -335,6 +362,9 @@ class OBSController(VideoRecorderPort):
             self._logger.warning("録画は開始されていません")
             return None
         response = await self._request("StopRecord")
+        if response.res_data is None:
+            self._logger.warning("録画停止レスポンスが空です")
+            return None
         output = response.res_data.get("outputPath")
         if not isinstance(output, str) or not output:
             self._logger.warning("録画ファイルの取得に失敗しました")

@@ -14,9 +14,9 @@ class Event:
     ) -> None: ...
 
 class Response1:
-    res_data: Dict[str, Any]
+    res_data: Dict[str, Any] | None
 
-    def __init__(self, res_data: Dict[str, Any]) -> None: ...
+    def __init__(self, res_data: Dict[str, Any] | None) -> None: ...
 
 class Response2:
     results: List[Response1]

@@ -62,8 +62,9 @@ class PublisherWorker:
         while self._running.is_set():
             try:
                 try:
-                    kind, payload = self._queue.get(timeout=0.1)
+                    kind, payload = self._queue.get(timeout=self._idle_sleep)
                 except queue.Empty:
+                    time.sleep(self._idle_sleep)
                     continue
                 self._process(kind, payload)
             except Exception:

@@ -43,7 +43,7 @@ graph TD
     end
     subgraph PC
         CaptureDevice --> OBS[OBS Studio]
-        OBS -- 仮想カメラ映像、録画データ --> App[本アプリ]
+        OBS -- 仮想カメラ(画面表示)、NDI(録画制御)、録画データ --> App[本アプリ]
         Microphone[マイク] -- 音声データ --> App
         App -- 音声データ --> Groq
         Groq -- 文字起こしデータ --> App
@@ -56,6 +56,8 @@ graph TD
 - **OBS Studio** 28 以降（仮想カメラ & 録画制御）
 - **Python 3.13**（アプリ本体）
 - **uv**（仮想環境管理）
+- **Node.js 18+**（フロントエンドビルド）
+- **NDI 6 Runtime**（OBS からの映像取り込み）
 - **FFmpeg**（動画編集 CLI）
 - **Google YouTube Data API v3**（アップロード）
 - **Groq API**（音声認識）

@@ -41,7 +41,7 @@ class SpeechTranscriber(SpeechTranscriberPort):
         microphone_index = self.find_microphone(settings.mic_device_name)
         if microphone_index is None:
             raise ValueError("マイクが見つかりません")
-        self._microphone = sr.Microphone(device_index=microphone_index)
+        self._microphone_index = microphone_index
         self.phrase_time_limit = settings.phrase_time_limit
         self._speech_recognizer = speech_recognizer
         self._logger = logger
@@ -74,7 +74,7 @@ class SpeechTranscriber(SpeechTranscriberPort):
             return None
 
     def _recording_loop(self) -> None:
-        with self._microphone as source:
+        with sr.Microphone(device_index=self._microphone_index) as source:
             self._recognizer.adjust_for_ambient_noise(source)
             while not self._recording_event.is_set():
                 if self._is_paused:

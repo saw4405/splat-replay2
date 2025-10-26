@@ -50,6 +50,39 @@ class BattleResult:
             "special": str(self.special),
         }
 
+    def update_from_dict(self, data: Mapping[str, object]) -> None:
+        """手動編集されたフィールドで部分的に更新する。"""
+        if "match" in data:
+            try:
+                self.match = Match(_as_str(data["match"], "match"))
+            except Exception:
+                pass
+        if "rule" in data:
+            try:
+                self.rule = Rule(_as_str(data["rule"], "rule"))
+            except Exception:
+                pass
+        if "stage" in data:
+            try:
+                self.stage = Stage(_as_str(data["stage"], "stage"))
+            except Exception:
+                pass
+        if "kill" in data:
+            try:
+                self.kill = _as_int(data["kill"], "kill")
+            except Exception:
+                pass
+        if "death" in data:
+            try:
+                self.death = _as_int(data["death"], "death")
+            except Exception:
+                pass
+        if "special" in data:
+            try:
+                self.special = _as_int(data["special"], "special")
+            except Exception:
+                pass
+
     @classmethod
     def from_dict(cls, data: Mapping[str, object]) -> "BattleResult":
         match_str = _as_str(data["match"], "match")
@@ -88,6 +121,39 @@ class SalmonResult:
             "rescue": self.rescue,
             "rescued": self.rescued,
         }
+
+    def update_from_dict(self, data: Mapping[str, object]) -> None:
+        """手動編集されたフィールドで部分的に更新する。"""
+        if "hazard" in data:
+            try:
+                self.hazard = _as_int(data["hazard"], "hazard")
+            except Exception:
+                pass
+        if "stage" in data:
+            try:
+                self.stage = Stage[_as_str(data["stage"], "stage")]
+            except Exception:
+                pass
+        if "golden_egg" in data:
+            try:
+                self.golden_egg = _as_int(data["golden_egg"], "golden_egg")
+            except Exception:
+                pass
+        if "power_egg" in data:
+            try:
+                self.power_egg = _as_int(data["power_egg"], "power_egg")
+            except Exception:
+                pass
+        if "rescue" in data:
+            try:
+                self.rescue = _as_int(data["rescue"], "rescue")
+            except Exception:
+                pass
+        if "rescued" in data:
+            try:
+                self.rescued = _as_int(data["rescued"], "rescued")
+            except Exception:
+                pass
 
     @classmethod
     def from_dict(cls, data: Mapping[str, object]) -> "SalmonResult":

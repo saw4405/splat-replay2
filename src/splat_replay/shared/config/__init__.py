@@ -3,8 +3,14 @@ from .behavior import BehaviorSettings as BehaviorSettings
 from .capture_device import CaptureDeviceSettings as CaptureDeviceSettings
 from .image_matching import (
     CompositeMatcherConfig as CompositeMatcherConfig,
+)
+from .image_matching import (
     ImageMatchingSettings as ImageMatchingSettings,
+)
+from .image_matching import (
     MatcherConfig as MatcherConfig,
+)
+from .image_matching import (
     MatchExpression as MatchExpression,
 )
 from .obs import OBSSettings as OBSSettings
