@@ -1,184 +1,69 @@
 <script lang="ts">
-  import { Settings } from "lucide-svelte";
-  import SettingsDialog from "./lib/SettingsDialog.svelte";
-  import VideoPreviewContainer from "./lib/VideoPreviewContainer.svelte";
-  import BottomDrawer from "./lib/BottomDrawer.svelte";
+  import { onMount } from "svelte";
+  import { InstallerApp } from "./installer";
+  import {
+    installationState,
+    fetchInstallationStatus,
+  } from "./installer/store";
+  import MainApp from "./MainApp.svelte";
 
-  let isSettingsOpen = false;
+  let isCheckingInstallation = true;
 
-  function openSettings(): void {
-    isSettingsOpen = true;
-  }
+  onMount(async () => {
+    // インストール状態をチェック
+    await fetchInstallationStatus();
+    isCheckingInstallation = false;
+  });
+
+  $: showInstaller =
+    !isCheckingInstallation &&
+    (!$installationState || !$installationState.is_completed);
+  $: showMainApp =
+    !isCheckingInstallation &&
+    $installationState &&
+    $installationState.is_completed;
 </script>
 
-<main class="app-shell glass-surface">
-  <div class="header">
-    <div class="header-spacer"></div>
-    <h1>Splat Replay</h1>
-    <button
-      class="icon-button settings-button"
-      type="button"
-      aria-label="Settings"
-      on:click={openSettings}
-      title="設定"
-    >
-      <Settings class="icon" aria-hidden="true" stroke-width={1.75} />
-    </button>
+{#if isCheckingInstallation}
+  <div class="loading-screen">
+    <div class="loading-spinner"></div>
+    <p>読み込み中...</p>
   </div>
-
-  <div class="preview-container">
-    <VideoPreviewContainer />
-  </div>
-
-  <BottomDrawer />
-
-  <SettingsDialog bind:open={isSettingsOpen} />
-</main>
+{:else if showInstaller}
+  <InstallerApp />
+{:else if showMainApp}
+  <MainApp />
+{/if}
 
 <style>
-  .app-shell {
-    padding: 2rem;
-    padding-bottom: 7rem; /* BottomDrawerのヘッダー分を確保 */
-    max-width: 1400px;
-    margin: 0 auto;
+  .loading-screen {
+    width: 100%;
     height: 100vh;
     display: flex;
     flex-direction: column;
-    overflow: hidden;
-    box-sizing: border-box;
-  }
-
-  .header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 1rem;
-    margin-bottom: 0.5rem;
-    flex-shrink: 0;
-    position: relative;
-  }
-
-  .header-spacer {
-    width: 2.5rem;
-    flex-shrink: 0;
-  }
-
-  h1 {
-    color: #19d3c7;
-    font-size: 3em;
-    font-weight: 700;
-    margin: 0;
-    position: absolute;
-    left: 50%;
-    transform: translateX(-50%);
-    white-space: nowrap;
-    text-shadow:
-      0 0 10px rgba(25, 211, 199, 0.8),
-      0 0 20px rgba(25, 211, 199, 0.6),
-      0 0 30px rgba(25, 211, 199, 0.4),
-      0 0 40px rgba(25, 211, 199, 0.3),
-      0 0 60px rgba(25, 211, 199, 0.2),
-      0 2px 4px rgba(0, 0, 0, 0.5);
-    letter-spacing: 0.05em;
-    animation: pulse-glow 3s ease-in-out infinite;
-  }
-
-  .preview-container {
-    flex: 1;
-    display: flex;
     align-items: center;
     justify-content: center;
-    min-height: 0;
-    padding: 2rem 0 1rem 0;
-    display: flex;
-    justify-content: center;
+    gap: 1.5rem;
   }
 
-  @keyframes pulse-glow {
-    0%,
-    100% {
-      text-shadow:
-        0 0 10px rgba(25, 211, 199, 0.8),
-        0 0 20px rgba(25, 211, 199, 0.6),
-        0 0 30px rgba(25, 211, 199, 0.4),
-        0 0 40px rgba(25, 211, 199, 0.3),
-        0 0 60px rgba(25, 211, 199, 0.2),
-        0 2px 4px rgba(0, 0, 0, 0.5);
-    }
-    50% {
-      text-shadow:
-        0 0 15px rgba(25, 211, 199, 1),
-        0 0 30px rgba(25, 211, 199, 0.8),
-        0 0 45px rgba(25, 211, 199, 0.6),
-        0 0 60px rgba(25, 211, 199, 0.4),
-        0 0 90px rgba(25, 211, 199, 0.3),
-        0 2px 4px rgba(0, 0, 0, 0.5);
-    }
-  }
-
-  .icon-button {
-    height: 2.75rem;
-    width: 2.75rem;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  }
-
-  .icon-button:hover {
-    transform: translateY(-2px);
-  }
-
-  .icon-button:focus-visible {
-    outline: none;
-  }
-
-  .icon-button:active {
-    transform: translateY(0);
-  }
-
-  .settings-button {
+  .loading-spinner {
+    width: 64px;
+    height: 64px;
+    border: 4px solid rgba(255, 255, 255, 0.1);
+    border-top-color: var(--accent-color);
     border-radius: 50%;
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    background: linear-gradient(
-      135deg,
-      rgba(255, 255, 255, 0.05) 0%,
-      rgba(255, 255, 255, 0.01) 100%
-    );
-    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.18);
-    backdrop-filter: blur(10px);
-    -webkit-backdrop-filter: blur(10px);
+    animation: spin 1s linear infinite;
   }
 
-  .settings-button:hover {
-    border-color: rgba(255, 255, 255, 0.14);
-    background: linear-gradient(
-      135deg,
-      rgba(255, 255, 255, 0.08) 0%,
-      rgba(255, 255, 255, 0.02) 100%
-    );
-    box-shadow: 0 10px 24px rgba(0, 0, 0, 0.22);
+  @keyframes spin {
+    to {
+      transform: rotate(360deg);
+    }
   }
 
-  .settings-button:active {
-    transform: translateY(0);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
-  }
-
-  .icon {
-    display: block;
-    height: 1.5rem;
-    width: 1.5rem;
-    color: rgba(255, 255, 255, 0.92);
-    transition: opacity 0.2s ease;
-  }
-
-  .settings-button .icon {
-    opacity: 0.65;
-  }
-
-  .settings-button:hover .icon,
-  .settings-button:focus-visible .icon {
-    opacity: 0.85;
+  .loading-screen p {
+    margin: 0;
+    font-size: 1.125rem;
+    color: var(--text-secondary);
   }
 </style>

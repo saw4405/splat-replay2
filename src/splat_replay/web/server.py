@@ -35,7 +35,13 @@ from splat_replay.application.interfaces import CommandDispatcher
 from splat_replay.application.services import (
     AutoRecorder,
     DeviceChecker,
+    ErrorHandler,
     RecordingPreparationService,
+    SystemCheckService,
+    SystemSetupService,
+)
+from splat_replay.application.services.installer_service import (
+    InstallerService,
 )
 from splat_replay.application.services.settings_service import (
     FieldValue,
@@ -45,6 +51,7 @@ from splat_replay.application.services.settings_service import (
     UnknownSettingsFieldError,
     UnknownSettingsSectionError,
 )
+from splat_replay.web.installer_router import create_installer_router
 from splat_replay.application.use_cases import UploadUseCase
 from splat_replay.domain.models import (
     BattleResult,
@@ -161,6 +168,10 @@ class WebServer:
         settings_service: SettingsService,
         event_bus: EventBus,
         upload_use_case: UploadUseCase,
+        installer_service: InstallerService,
+        system_check_service: SystemCheckService,
+        system_setup_service: SystemSetupService,
+        error_handler: ErrorHandler,
     ) -> None:
         self.device_checker = device_checker
         self.recording_preparation_service = recording_preparation_service
@@ -170,6 +181,10 @@ class WebServer:
         self.settings_service = settings_service
         self.event_bus = event_bus
         self.upload_use_case = upload_use_case
+        self.installer_service = installer_service
+        self.system_check_service = system_check_service
+        self.system_setup_service = system_setup_service
+        self.error_handler = error_handler
         self.app = create_app(self)
         self._edit_upload_task: Optional[asyncio.Task[None]] = None
         self._edit_upload_state: EditUploadState = "idle"
@@ -1032,6 +1047,16 @@ def create_app(server: WebServer) -> FastAPI:
     async def health() -> dict[str, str]:
         """ヘルスチェックエンドポイント"""
         return {"status": "ok"}
+
+    # インストーラールーターを登録
+    installer_router = create_installer_router(
+        installer_service=server.installer_service,
+        system_check_service=server.system_check_service,
+        system_setup_service=server.system_setup_service,
+        error_handler=server.error_handler,
+        logger=server.logger,
+    )
+    app.include_router(installer_router)
 
     @app.get("/api/settings")
     async def get_settings() -> JSONResponse:

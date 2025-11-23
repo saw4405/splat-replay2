@@ -375,3 +375,50 @@ class FrameSource(Protocol):
     def add_listener(self, cb: Callable[[Frame], None]) -> None: ...
     def remove_listener(self, cb: Callable[[Frame], None]) -> None: ...
     def get_latest(self) -> Optional[Frame]: ...
+
+
+@dataclass(frozen=True)
+class CommandResult:
+    """コマンド実行結果。"""
+
+    return_code: int
+    stdout: str
+    stderr: str
+
+    @property
+    def success(self) -> bool:
+        """コマンドが成功したかどうか。"""
+        return self.return_code == 0
+
+
+class CommandExecutionError(Exception):
+    """コマンド実行エラー。"""
+
+    def __init__(
+        self,
+        message: str,
+        command: list[str],
+        cause: Optional[Exception] = None,
+    ) -> None:
+        """エラーを初期化する。
+
+        Args:
+            message: エラーメッセージ
+            command: 実行しようとしたコマンド
+            cause: 原因となった例外（オプション）
+        """
+        super().__init__(message)
+        self.command = command
+        self.cause = cause
+
+
+class SystemCommandPort(Protocol):
+    """システムコマンド実行のポートインターフェース。"""
+
+    def execute_command(
+        self,
+        command: list[str],
+        timeout: Optional[float] = None,
+    ) -> CommandResult: ...
+
+    def check_command_exists(self, command: str) -> bool: ...

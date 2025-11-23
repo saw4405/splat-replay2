@@ -19,6 +19,7 @@ from splat_replay.application.interfaces import (
     RecorderWithTranscriptionPort,
     SpeechTranscriberPort,
     SubtitleEditorPort,
+    SystemCommandPort,
     TextToSpeechPort,
     UploadPort,
     VideoAssetRepositoryPort,
@@ -30,13 +31,18 @@ from splat_replay.application.services import (
     AutoRecorder,
     AutoUploader,
     DeviceChecker,
+    ErrorHandler,
+    InstallerService,
     PowerManager,
     ProgressReporter,
     RecordingPreparationService,
     SettingsService,
+    SystemCheckService,
+    SystemSetupService,
 )
 from splat_replay.application.services.queries import AssetQueryService
 from splat_replay.application.use_cases import AutoUseCase, UploadUseCase
+from splat_replay.domain.repositories import InstallationStateRepository
 from splat_replay.domain.services import (
     BattleFrameAnalyzer,
     FrameAnalyzer,
@@ -56,6 +62,7 @@ from splat_replay.infrastructure import (
     GuiRuntimePortAdapter,
     ImageDrawer,
     ImageEditor,
+    InstallationStateFileAdapter,
     IntegratedSpeechRecognizer,
     MatcherRegistry,
     NDICapture,
@@ -63,6 +70,7 @@ from splat_replay.infrastructure import (
     RecorderWithTranscription,
     SpeechTranscriber,
     SubtitleEditor,
+    SystemCommandAdapter,
     SystemPower,
     TesseractOCR,
     YouTubeClient,
@@ -124,6 +132,16 @@ def register_adapters(container: punq.Container) -> None:
     container.register(OCRPort, TesseractOCR)
     container.register(UploadPort, YouTubeClient)
     container.register(AuthenticatedClientPort, YouTubeClient)
+    container.register(SystemCommandPort, SystemCommandAdapter)
+
+    # InstallationStateRepository の登録
+    def _installation_state_repo_factory() -> InstallationStateRepository:
+        state_file = paths.CONFIG_DIR / "installation_state.toml"
+        return InstallationStateFileAdapter(state_file)
+
+    container.register(
+        InstallationStateRepository, factory=_installation_state_repo_factory
+    )
 
     # EventPublisherAdapter には AppRuntime の event_bus を注入する
     def _event_publisher_factory() -> EventPublisher:
@@ -217,6 +235,10 @@ def register_app_services(container: punq.Container) -> None:
     # punq は Optional 引数でも型アノテーションが付くと解決を試み MissingDependencyError を投げることがあるため
     # factory で明示的にインスタンス化して不要な依存解決を避ける。
     container.register(SettingsService, factory=lambda: SettingsService())
+    container.register(InstallerService, InstallerService)
+    container.register(SystemCheckService, SystemCheckService)
+    container.register(SystemSetupService, SystemSetupService)
+    container.register(ErrorHandler, ErrorHandler)
 
 
 def register_app_usecases(container: punq.Container) -> None:

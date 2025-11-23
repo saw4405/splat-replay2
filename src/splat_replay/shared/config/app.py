@@ -21,6 +21,7 @@ from pydantic.fields import ModelField
 from splat_replay.shared import paths
 from splat_replay.shared.config.behavior import BehaviorSettings
 from splat_replay.shared.config.capture_device import CaptureDeviceSettings
+from splat_replay.shared.config.installer import InstallerSettings
 from splat_replay.shared.config.obs import OBSSettings
 from splat_replay.shared.config.record import RecordSettings
 from splat_replay.shared.config.speech_transcriber import (
@@ -33,6 +34,7 @@ from splat_replay.shared.config.video_storage import VideoStorageSettings
 SECTION_CLASSES = {
     "behavior": BehaviorSettings,
     "capture_device": CaptureDeviceSettings,
+    "installer": InstallerSettings,
     "obs": OBSSettings,
     "record": RecordSettings,
     "speech_transcriber": SpeechTranscriberSettings,
@@ -47,6 +49,7 @@ class AppSettings(BaseModel):
 
     behavior = BehaviorSettings()
     capture_device = CaptureDeviceSettings()
+    installer = InstallerSettings()
     obs = OBSSettings()
     record = RecordSettings()
     speech_transcriber = SpeechTranscriberSettings()
@@ -91,12 +94,19 @@ class AppSettings(BaseModel):
         """
         dictやリストの中のSecretStrやPathをstrに変換するヘルパー
         """
-        if isinstance(obj, SecretStr):
+        if obj is None:
+            return None  # Noneはそのまま返す（後で除外される）
+        elif isinstance(obj, SecretStr):
             return obj.get_secret_value()
         elif isinstance(obj, Path):
             return str(obj)
         elif isinstance(obj, dict):
-            return {k: self._convert_for_toml(v) for k, v in obj.items()}
+            # Noneの値を除外してから変換
+            return {
+                k: self._convert_for_toml(v)
+                for k, v in obj.items()
+                if v is not None
+            }
         elif isinstance(obj, list):
             return [self._convert_for_toml(v) for v in obj]
         else:
@@ -110,6 +120,7 @@ class AppSettings(BaseModel):
         toml_data["capture_device"] = self._convert_for_toml(
             self.capture_device.dict()
         )
+        toml_data["installer"] = self._convert_for_toml(self.installer.dict())
         toml_data["obs"] = self._convert_for_toml(self.obs.dict())
         toml_data["record"] = self._convert_for_toml(self.record.dict())
         toml_data["speech_transcriber"] = self._convert_for_toml(

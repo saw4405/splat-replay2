@@ -19,6 +19,8 @@ __all__ = [
     "EventPublisherAdapter",
     "FramePublisherAdapter",
     "GuiRuntimePortAdapter",
+    "InstallationStateFileAdapter",
+    "SystemCommandAdapter",
 ]
 
 from .audio import (
@@ -34,10 +36,12 @@ from .frame_publisher_adapter import FramePublisherAdapter
 from .gui_runtime_port_adapter import GuiRuntimePortAdapter
 from .image_drawer import ImageDrawer
 from .image_editor import ImageEditor
+from .installation_state_file_adapter import InstallationStateFileAdapter
 from .ndi_capture import NDICapture
 from .obs_controller import OBSController
 from .recorder_with_transcription import RecorderWithTranscription
 from .subtitle_editor import SubtitleEditor
+from .system_command_adapter import SystemCommandAdapter
 from .system_power import SystemPower
 from .tesseract_ocr import TesseractOCR
 from .youtube_client import YouTubeClient

@@ -150,8 +150,11 @@ def web(
         from splat_replay.application.services import (
             AutoRecorder,
             DeviceChecker,
+            ErrorHandler,
+            InstallerService,
             RecordingPreparationService,
             SettingsService,
+            SystemCheckService,
         )
         from splat_replay.application.use_cases import UploadUseCase
         from splat_replay.infrastructure.adapters import GuiRuntimePortAdapter
@@ -179,6 +182,9 @@ def web(
             settings_service=settings_service,
             event_bus=app_runtime.event_bus,
             upload_use_case=upload_use_case,
+            installer_service=resolve(container, InstallerService),
+            system_check_service=resolve(container, SystemCheckService),
+            error_handler=resolve(container, ErrorHandler),
         )
 
         # Run uvicorn
