@@ -40,6 +40,8 @@ export interface ProgressInfo {
   total_steps: number;
   percentage: number;
   current_step_name: string;
+  completed_substeps: number;
+  total_substeps: number;
 }
 
 export interface ApiError {

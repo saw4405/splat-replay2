@@ -46,10 +46,8 @@ class YouTubeClient(UploadPort, AuthenticatedClientPort):
             "https://www.googleapis.com/auth/youtube.force-ssl",
         ]
 
-        self._credentials = self._get_credentials()
-        self._youtube: Resource = build(
-            self.API_NAME, self.API_VERSION, credentials=self._credentials
-        )
+        self._credentials: Optional[Credentials] = None
+        self._youtube: Optional[Resource] = None
 
     def _load_credentials(self) -> Optional[Credentials]:
         """認証情報をファイルからロードする
@@ -73,6 +71,18 @@ class YouTubeClient(UploadPort, AuthenticatedClientPort):
         with open(self.TOKEN_FILE, "wb") as token_file:
             pickle.dump(credentials, token_file)
 
+    def _ensure_credentials_file(self) -> None:
+        """認証情報ファイルの存在を確認する。"""
+        if self.CLIENT_SECRET_FILE.exists():
+            return
+
+        message = (
+            "YouTube API の認証情報ファイルが見つかりません。 "
+            f"配置先: {self.CLIENT_SECRET_FILE}"
+        )
+        self.logger.error(message)
+        raise FileNotFoundError(message)
+
     def _get_credentials(self) -> Credentials:
         """認証情報を取得する
 
@@ -90,6 +100,8 @@ class YouTubeClient(UploadPort, AuthenticatedClientPort):
                 # 認証更新できなかった場合は新規認証を行う
                 pass
 
+        self._ensure_credentials_file()
+
         flow = InstalledAppFlow.from_client_secrets_file(
             str(self.CLIENT_SECRET_FILE), self.SCOPES
         )
@@ -99,11 +111,20 @@ class YouTubeClient(UploadPort, AuthenticatedClientPort):
 
     def _ensure_credentials(self) -> None:
         """認証情報が有効であることを確認する"""
-        if self._credentials.expired:
-            self._credentials = self._get_credentials()
-            self._youtube = build(
-                self.API_NAME, self.API_VERSION, credentials=self._credentials
-            )
+        needs_refresh = (
+            self._credentials is None
+            or self._credentials.expired
+            or self._youtube is None
+        )
+        if not needs_refresh:
+            return
+
+        self._credentials = self._get_credentials()
+        self._youtube = build(
+            self.API_NAME,
+            self.API_VERSION,
+            credentials=self._credentials,
+        )
 
     def authenticate(self) -> None:
         """認証を行う。"""
@@ -161,6 +182,8 @@ class YouTubeClient(UploadPort, AuthenticatedClientPort):
         """動画をアップロードし ID を返す。"""
         self.logger.info("動画アップロード実行", path=str(path))
         self._ensure_credentials()
+        if self._youtube is None:
+            raise RuntimeError("YouTube クライアントの初期化に失敗しました")
 
         media_file = None
         try:
@@ -203,6 +226,8 @@ class YouTubeClient(UploadPort, AuthenticatedClientPort):
             "サムネイルアップロード実行", video_id=video_id, thumb=str(thumb)
         )
         self._ensure_credentials()
+        if self._youtube is None:
+            raise RuntimeError("YouTube クライアントの初期化に失敗しました")
 
         media_file = None
         try:
@@ -234,6 +259,8 @@ class YouTubeClient(UploadPort, AuthenticatedClientPort):
             "字幕アップロード実行", video_id=video_id, subtitle=str(subtitle)
         )
         self._ensure_credentials()
+        if self._youtube is None:
+            raise RuntimeError("YouTube クライアントの初期化に失敗しました")
 
         media_file = None
         try:
@@ -267,6 +294,8 @@ class YouTubeClient(UploadPort, AuthenticatedClientPort):
             "プレイリスト追加実行", video_id=video_id, playlist_id=playlist_id
         )
         self._ensure_credentials()
+        if self._youtube is None:
+            raise RuntimeError("YouTube クライアントの初期化に失敗しました")
 
         try:
             request = self._youtube.playlistItems().insert(

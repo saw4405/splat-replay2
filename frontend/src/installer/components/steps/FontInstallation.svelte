@@ -14,47 +14,139 @@
   } from "../../store";
   import { type SystemCheckResult, InstallationStep } from "../../types";
 
+  const SUBSTEP_STORAGE_KEY = "font_substep_index";
+
   interface SetupStep {
     id: string;
     title: string;
+    description: string;
     completed: boolean;
   }
 
   let fontInstalled = false;
   let fontPath: string | null = null;
   let isChecking = false;
-  let checkingIndex: number | null = null;
+  let hasInitializedSubstep = false;
 
   let setupSteps: SetupStep[] = [
     {
       id: "font-download",
       title: "イカモドキフォントをダウンロード",
+      description:
+        "サムネイル生成に使用するイカモドキフォントをダウンロードします。",
       completed: false,
     },
     {
       id: "font-place",
       title: "イカモドキフォントを配置",
+      description:
+        "ダウンロードしたフォントファイルをアプリケーションフォルダに配置します。",
       completed: false,
     },
   ];
+
+  let currentSubStepIndex = 0;
+
+  // 親コンポーネントに通知するためのフラグ
+  export let canGoBack = false;
+  export let isStepCompleted = false;
+
+  $: isStepCompleted = setupSteps[currentSubStepIndex].completed;
+
+  $: canGoBack = currentSubStepIndex > 0;
 
   onMount(async () => {
     await checkFontInstallation();
   });
 
+  function loadSavedSubstepIndex(maxIndex: number): number | null {
+    if (typeof window === "undefined") return null;
+    const stored = window.sessionStorage.getItem(SUBSTEP_STORAGE_KEY);
+    if (stored === null) return null;
+    const parsed = Number.parseInt(stored, 10);
+    if (Number.isNaN(parsed)) return null;
+    return Math.max(0, Math.min(parsed, maxIndex));
+  }
+
+  function saveSubstepIndex(index: number): void {
+    if (typeof window === "undefined") return;
+    window.sessionStorage.setItem(SUBSTEP_STORAGE_KEY, index.toString());
+  }
+
+  function computeInitialSubstepIndex(steps: SetupStep[]): number {
+    const firstIncomplete = steps.findIndex((step) => !step.completed);
+    if (firstIncomplete !== -1) {
+      return firstIncomplete;
+    }
+    return steps.length > 0 ? steps.length - 1 : 0;
+  }
+
   // Sync with installation state
   $: if ($installationState && $installationState.step_details) {
     const details =
       $installationState.step_details[InstallationStep.FONT_INSTALLATION] || {};
-    setupSteps = setupSteps.map((step) => ({
+    const updatedSteps = setupSteps.map((step) => ({
       ...step,
       completed: details[step.id] || false,
     }));
+    setupSteps = updatedSteps;
+
+    if (!hasInitializedSubstep) {
+      const savedIndex = loadSavedSubstepIndex(updatedSteps.length - 1);
+      if (savedIndex !== null) {
+        currentSubStepIndex = savedIndex;
+      } else {
+        currentSubStepIndex = computeInitialSubstepIndex(updatedSteps);
+      }
+      hasInitializedSubstep = true;
+    }
+  }
+
+  $: if (hasInitializedSubstep) {
+    saveSubstepIndex(currentSubStepIndex);
+  }
+
+  export async function next(
+    options: { skip?: boolean } = {},
+  ): Promise<boolean> {
+    const currentStep = setupSteps[currentSubStepIndex];
+
+    // フォント配置ステップのバリデーション
+    if (currentSubStepIndex === 1 && !fontInstalled) {
+      await checkFontInstallation();
+      if (!fontInstalled) {
+        alert(
+          "フォントファイルが見つかりませんでした。配置してから次へ進んでください。",
+        );
+        return true;
+      }
+    }
+
+    if (!options.skip && !currentStep.completed) {
+      await markSubstepCompleted(
+        InstallationStep.FONT_INSTALLATION,
+        currentStep.id,
+        true,
+      );
+    }
+
+    if (currentSubStepIndex < setupSteps.length - 1) {
+      currentSubStepIndex++;
+      return true;
+    }
+    return false;
+  }
+
+  export async function back(): Promise<boolean> {
+    if (currentSubStepIndex > 0) {
+      currentSubStepIndex--;
+      return true;
+    }
+    return false;
   }
 
   async function checkFontInstallation(): Promise<void> {
     isChecking = true;
-    checkingIndex = 1;
 
     try {
       const result: SystemCheckResult = await checkSystem("font");
@@ -77,27 +169,17 @@
       console.error("Font check failed", error);
     } finally {
       isChecking = false;
-      checkingIndex = null;
     }
   }
 
   async function toggleStep(index: number): Promise<void> {
     const step = setupSteps[index];
 
-    if (step.completed) {
-      // Prevent unchecking if installed (both steps)
-      if (fontInstalled) return;
-
-      await markSubstepCompleted(
-        InstallationStep.FONT_INSTALLATION,
-        step.id,
-        false,
-      );
-      return;
-    }
+    // Prevent unchecking if installed (both steps)
+    if (fontInstalled) return;
 
     // For step 2 (font placement), check installation
-    if (index === 1) {
+    if (index === 1 && !step.completed) {
       await checkFontInstallation();
       if (!fontInstalled) {
         alert("フォントファイルが見つかりませんでした。");
@@ -106,8 +188,40 @@
       await markSubstepCompleted(
         InstallationStep.FONT_INSTALLATION,
         step.id,
-        true,
+        !step.completed,
       );
+    }
+  }
+
+  function handleCardClick(event: Event) {
+    // テキスト選択中は反応しない
+    if (window.getSelection()?.toString()) {
+      return;
+    }
+
+    // イベントターゲットの取得と要素への正規化（テキストノードの場合は親要素を取得）
+    let target = event.target as Element;
+    if (target.nodeType === Node.TEXT_NODE) {
+      target = target.parentElement as Element;
+    }
+
+    // インタラクティブな要素のクリックは除外
+    if (
+      target &&
+      (target.closest("button") ||
+        target.closest("a") ||
+        target.closest("input") ||
+        target.closest(".path-value"))
+    ) {
+      return;
+    }
+
+    toggleStep(currentSubStepIndex);
+  }
+
+  function handleKeyDown(event: KeyboardEvent) {
+    if (event.key === "Enter") {
+      handleCardClick(event);
     }
   }
 
@@ -118,30 +232,54 @@
 
 <div class="font-installation">
   <div class="step-header">
-    <h2 class="step-title">イカモドキフォントのインストール</h2>
+    <h2 class="step-title">イカモドキフォントのダウンロード</h2>
     <p class="step-description">
-      サムネイル生成に使用するイカモドキフォントをダウンロードし、アプリケーションフォルダに配置します。
-      スプラトゥーンの雰囲気を再現するために推奨されます。
+      サムネイル生成に使用するイカモドキフォントをダウンロードします
     </p>
   </div>
 
   <div class="setup-steps-section">
-    <div class="step-card glass-card">
-      <div class="step-content">
-        <div class="step-number">1</div>
-        <div class="step-info">
-          <h4 class="step-name">
-            イカモドキフォントをダウンロード
-            {#if fontInstalled}
-              <span class="installed-badge">インストール済</span>
-            {/if}
-          </h4>
-          {#if !setupSteps[0].completed}
-            <div class="instructions">
-              <ol>
+    <div
+      class="step-card glass-card"
+      class:completed={setupSteps[currentSubStepIndex].completed}
+      class:disabled={fontInstalled ||
+        (currentSubStepIndex === 1 && isChecking)}
+      on:click={handleCardClick}
+      on:keydown={handleKeyDown}
+      role="button"
+      tabindex="0"
+    >
+      {#key currentSubStepIndex}
+        <div class="step-content-wrapper">
+          <div class="card-header">
+            <div class="header-left">
+              <div class="step-number-large">{currentSubStepIndex + 1}</div>
+              <div class="title-wrapper">
+                <h3 class="step-name-large">
+                  {setupSteps[currentSubStepIndex].title}
+                </h3>
+                {#if fontInstalled}
+                  <span class="installed-badge">配置済み</span>
+                {/if}
+              </div>
+            </div>
+            <div
+              class="checkbox-indicator"
+              class:checked={setupSteps[currentSubStepIndex].completed}
+            >
+              {#if setupSteps[currentSubStepIndex].completed}
+                <Check size={20} />
+              {/if}
+            </div>
+          </div>
+
+          <div class="card-body">
+            {#if currentSubStepIndex === 0}
+              <!-- Font Download -->
+              <ol class="instruction-list">
                 <li>
                   イカモドキフォント配布ページからフォントファイルをダウンロードする
-                  <div style="margin-top: 0.5rem;">
+                  <div style="margin-top: 1rem;">
                     <button
                       class="link-button"
                       type="button"
@@ -157,45 +295,15 @@
                   </div>
                 </li>
               </ol>
-              <div class="info-box">
-                <p>※ イカモドキフォントはシステムにインストールしません</p>
-              </div>
-            </div>
-          {/if}
-        </div>
-        <button
-          class="step-checkbox"
-          type="button"
-          class:checked={setupSteps[0].completed}
-          on:click={() => toggleStep(0)}
-          aria-label={setupSteps[0].completed ? "完了を解除" : "完了にする"}
-          disabled={fontInstalled}
-        >
-          <div class="checkbox-box" class:checked={setupSteps[0].completed}>
-            {#if setupSteps[0].completed}
-              <Check class="check-icon" size={20} />
-            {/if}
-          </div>
-        </button>
-      </div>
-    </div>
-
-    <div class="step-card glass-card">
-      <div class="step-content">
-        <div class="step-number">2</div>
-        <div class="step-info">
-          <h4 class="step-name">
-            イカモドキフォントを配置
-            {#if fontInstalled}
-              <span class="installed-badge">インストール済</span>
-            {/if}
-          </h4>
-          {#if !setupSteps[1].completed}
-            <div class="instructions">
-              <ol>
+              <p class="step-note">
+                ※ イカモドキフォントはシステムにインストールしません
+              </p>
+            {:else if currentSubStepIndex === 1}
+              <!-- Font Placement -->
+              <ol class="instruction-list">
                 <li>
                   ダウンロードしたイカモドキフォント（<code>ikamodoki1.ttf</code
-                  >）をアプリケーションフォルダに配置
+                  >）をアプリケーションフォルダに配置する
                   <div class="path-box">
                     <FolderOpen class="icon" size={20} />
                     <div class="path-content">
@@ -207,26 +315,10 @@
                   </div>
                 </li>
               </ol>
-            </div>
-          {/if}
-        </div>
-        <button
-          class="step-checkbox"
-          type="button"
-          class:checked={setupSteps[1].completed}
-          on:click={() => toggleStep(1)}
-          aria-label={setupSteps[1].completed ? "完了を解除" : "完了にする"}
-          disabled={isChecking || fontInstalled}
-        >
-          <div class="checkbox-box" class:checked={setupSteps[1].completed}>
-            {#if isChecking && checkingIndex === 1}
-              <RefreshCw class="icon spinning" size={20} />
-            {:else if setupSteps[1].completed}
-              <Check class="check-icon" size={20} />
             {/if}
           </div>
-        </button>
-      </div>
+        </div>
+      {/key}
     </div>
   </div>
 </div>
@@ -235,25 +327,27 @@
   .font-installation {
     display: flex;
     flex-direction: column;
-    gap: 2rem;
-    padding: 1rem;
+    gap: 1rem;
+    padding: 0;
+    height: 100%;
+    justify-content: center;
   }
 
   .step-header {
-    text-align: left;
+    text-align: center;
+    margin-bottom: 1rem;
   }
 
   .step-title {
-    margin: 0 0 1rem 0;
-    font-size: 1.75rem;
+    margin: 0;
+    font-size: 1.5rem;
     font-weight: 600;
     color: var(--text-primary);
   }
 
   .step-description {
-    margin: 0;
-    font-size: 1rem;
-    line-height: 1.6;
+    margin: 0.5rem 0 0 0;
+    font-size: 0.9rem;
     color: var(--text-secondary);
   }
 
@@ -268,31 +362,122 @@
   }
 
   .setup-steps-section {
+    flex: 1;
     display: flex;
     flex-direction: column;
-    gap: 1rem;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    min-height: 0;
   }
 
   .step-card {
-    padding: 1.5rem;
-    transition: all 0.3s ease;
+    width: 100%;
+    max-width: 600px;
+    height: 100%;
+    padding: 2rem;
+    display: flex;
+    flex-direction: column;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 16px;
+    max-height: 100%;
+    box-sizing: border-box;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    outline: none;
+  }
+
+  .step-card:focus-visible {
+    box-shadow: 0 0 0 2px var(--accent-color);
   }
 
   .step-card:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+    border-color: rgba(255, 255, 255, 0.3);
+    background: rgba(255, 255, 255, 0.05);
   }
 
-  .step-content {
+  .step-card.completed {
+    border-color: var(--accent-color);
+    box-shadow: 0 0 15px rgba(25, 211, 199, 0.1);
+    background: rgba(25, 211, 199, 0.05);
+  }
+
+  .step-card.disabled {
+    cursor: default;
+    opacity: 0.8;
+  }
+
+  .step-card.disabled:hover {
+    border-color: rgba(255, 255, 255, 0.1);
+    background: rgba(255, 255, 255, 0.03);
+  }
+
+  .step-content-wrapper {
+    flex: 1;
+    min-height: 0;
     display: flex;
-    align-items: flex-start;
+    flex-direction: column;
     gap: 1.5rem;
+    width: 100%;
+    animation: fadeIn 0.3s ease-out;
+    overflow: hidden;
   }
 
-  .step-number {
-    flex-shrink: 0;
-    width: 40px;
-    height: 40px;
+  @keyframes fadeIn {
+    from {
+      opacity: 0;
+      transform: translateY(10px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding-bottom: 1rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  }
+
+  .header-left {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+  }
+
+  .checkbox-indicator {
+    width: 32px;
+    height: 32px;
+    border-radius: 6px;
+    border: 2px solid rgba(255, 255, 255, 0.2);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: transparent;
+    transition: all 0.2s ease;
+    background: rgba(255, 255, 255, 0.05);
+  }
+
+  .checkbox-indicator.checked {
+    background: var(--accent-color);
+    border-color: var(--accent-color);
+    color: #1a1a1a;
+    box-shadow: 0 0 10px var(--accent-glow);
+  }
+
+  .step-card:hover .checkbox-indicator:not(.checked) {
+    border-color: rgba(255, 255, 255, 0.4);
+    background: rgba(255, 255, 255, 0.1);
+  }
+
+  .step-number-large {
+    width: 48px;
+    height: 48px;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -303,33 +488,61 @@
       rgba(25, 211, 199, 0.05) 100%
     );
     border: 2px solid rgba(25, 211, 199, 0.3);
-    font-size: 1.125rem;
+    font-size: 1.25rem;
     font-weight: 700;
     color: var(--accent-color);
+    flex-shrink: 0;
   }
 
-  .step-info {
-    flex: 1;
+  .title-wrapper {
     display: flex;
     flex-direction: column;
-    gap: 0.5rem;
+    align-items: flex-start;
+    gap: 0.25rem;
   }
 
-  .step-name {
+  .step-name-large {
     margin: 0;
-    font-size: 1.125rem;
-    font-weight: 600;
+    font-size: 1.25rem;
+    font-weight: 700;
     color: var(--text-primary);
-    display: flex;
-    align-items: center;
-    gap: 0.75rem;
     text-align: left;
+  }
+
+  .card-body {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    text-align: left;
+    overflow-y: auto;
+    flex: 1;
+    min-height: 0; /* Allow shrinking for scroll */
+    padding-right: 0.5rem;
+    box-sizing: border-box;
+  }
+
+  .card-body::-webkit-scrollbar {
+    width: 8px;
+  }
+
+  .card-body::-webkit-scrollbar-track {
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 4px;
+  }
+
+  .card-body::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 4px;
+  }
+
+  .card-body::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.3);
   }
 
   .installed-badge {
     display: inline-flex;
     align-items: center;
-    padding: 0.25rem 0.75rem;
+    padding: 0.125rem 0.5rem;
     font-size: 0.75rem;
     font-weight: 600;
     border-radius: 999px;
@@ -342,49 +555,11 @@
     box-shadow: 0 0 8px var(--accent-glow);
   }
 
-  .instructions {
-    padding: 0;
-    margin-top: 0.5rem;
-  }
-
-  .instructions ol {
-    margin: 0;
-    padding-left: 1.5rem;
-  }
-
-  .instructions li {
-    margin-bottom: 0.5rem;
-    font-size: 0.9375rem;
-    line-height: 1.5;
+  .step-note {
+    margin: 1rem 0 0 0;
+    font-size: 0.85rem;
+    font-style: italic;
     color: var(--text-secondary);
-    text-align: left;
-  }
-
-  .instructions li:last-child {
-    margin-bottom: 0;
-  }
-
-  .instructions code {
-    padding: 0.125rem 0.375rem;
-    background: rgba(25, 211, 199, 0.1);
-    border: 1px solid rgba(25, 211, 199, 0.3);
-    border-radius: 4px;
-    font-family: monospace;
-    color: var(--accent-color);
-    font-size: 0.875rem;
-  }
-
-  .info-box {
-    padding: 0;
-    margin-top: 0.5rem;
-  }
-
-  .info-box p {
-    margin: 0;
-    font-size: 0.9375rem;
-    line-height: 1.5;
-    color: var(--text-secondary);
-    text-align: left;
   }
 
   .link-button {
@@ -392,20 +567,19 @@
     align-items: center;
     gap: 0.5rem;
     padding: 0.5rem 1rem;
-    font-size: 0.875rem;
+    font-size: 1rem;
     font-weight: 500;
     border-radius: 6px;
-    border: 1px solid rgba(25, 211, 199, 0.3);
-    background: rgba(25, 211, 199, 0.1);
-    color: var(--accent-color);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    background: rgba(255, 255, 255, 0.05);
+    color: var(--text-secondary);
     cursor: pointer;
     transition: all 0.2s ease;
-    align-self: flex-start;
   }
 
   .link-button:hover {
-    background: rgba(25, 211, 199, 0.2);
-    border-color: rgba(25, 211, 199, 0.5);
+    background: rgba(255, 255, 255, 0.1);
+    border-color: rgba(255, 255, 255, 0.3);
     transform: translateY(-1px);
   }
 
@@ -449,74 +623,46 @@
     word-break: break-all;
   }
 
-  .step-checkbox {
-    flex-shrink: 0;
-    width: 48px;
-    height: 48px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border: none;
-    background: transparent;
-    cursor: pointer;
-    transition: all 0.2s ease;
-    padding: 0;
-  }
-
-  .step-checkbox:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-  }
-
-  .step-checkbox:hover:not(:disabled) {
-    transform: scale(1.1);
-  }
-
-  .checkbox-box {
-    flex-shrink: 0;
-    width: 32px;
-    height: 32px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border-radius: 8px;
-    border: 2px solid rgba(255, 255, 255, 0.2);
-    background: rgba(0, 0, 0, 0.2);
-    transition: all 0.3s ease;
-  }
-
-  .checkbox-box.checked {
-    background: linear-gradient(
-      135deg,
-      var(--accent-color) 0%,
-      var(--accent-color-strong) 100%
-    );
-    border-color: var(--accent-color);
-    box-shadow: 0 0 12px var(--accent-glow);
-  }
-
-  .check-icon {
-    color: white;
-  }
-
   .icon {
     display: block;
     flex-shrink: 0;
   }
 
+  .instruction-list {
+    margin: 0;
+    padding-left: 1.25rem;
+    font-size: 1rem;
+    line-height: 1.6;
+    color: var(--text-secondary);
+  }
+
+  .instruction-list li + li {
+    margin-top: 0.5rem;
+  }
+
+  .instruction-list code {
+    padding: 0.125rem 0.375rem;
+    background: rgba(25, 211, 199, 0.1);
+    border: 1px solid rgba(25, 211, 199, 0.3);
+    border-radius: 4px;
+    font-family: monospace;
+    color: var(--accent-color);
+    font-size: 0.875rem;
+  }
+
   @media (max-width: 768px) {
-    .font-installation {
-      padding: 0.5rem;
-      gap: 1.5rem;
+    .step-card {
+      padding: 1.5rem;
     }
 
-    .step-title {
-      font-size: 1.5rem;
+    .step-name-large {
+      font-size: 1.125rem;
     }
+  }
 
-    .step-content {
-      flex-direction: column;
-      gap: 1rem;
+  @media (max-height: 700px) {
+    .step-card {
+      padding: 1rem;
     }
   }
 </style>

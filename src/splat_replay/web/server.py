@@ -51,7 +51,6 @@ from splat_replay.application.services.settings_service import (
     UnknownSettingsFieldError,
     UnknownSettingsSectionError,
 )
-from splat_replay.web.installer_router import create_installer_router
 from splat_replay.application.use_cases import UploadUseCase
 from splat_replay.domain.models import (
     BattleResult,
@@ -61,6 +60,7 @@ from splat_replay.domain.models import (
 from splat_replay.domain.models.rate import RateBase
 from splat_replay.infrastructure.runtime.events import EventBus
 from splat_replay.shared.paths import PROJECT_ROOT, RUNTIME_ROOT
+from splat_replay.web.installer_router import create_installer_router
 
 
 class SettingsUpdateSection(BaseModel):
@@ -1021,10 +1021,16 @@ def create_app(server: WebServer) -> FastAPI:
     """Create FastAPI application."""
     app = FastAPI(title="Splat Replay Web API")
 
-    # CORS設定 (開発時)
+    # CORS設定 (開発時 & pywebview)
+    # pywebview からのアクセスも許可するため、127.0.0.1:8000 と localhost:8000 を追加
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
+        allow_origins=[
+            "http://localhost:5173",
+            "http://127.0.0.1:5173",
+            "http://localhost:8000",
+            "http://127.0.0.1:8000",
+        ],
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],

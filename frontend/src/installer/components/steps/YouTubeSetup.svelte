@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount } from "svelte";
+  import { createEventDispatcher } from "svelte";
   import {
     Download,
     ExternalLink,
@@ -15,122 +15,288 @@
     installationState,
   } from "../../store";
   import { type SystemCheckResult, InstallationStep } from "../../types";
+  import ErrorDialog from "../ErrorDialog.svelte";
+
+  const SUBSTEP_STORAGE_KEY = "youtube_substep_index";
+
+  interface SetupStep {
+    id: string;
+    title: string;
+    description: string;
+    completed: boolean;
+  }
+
+  const dispatch = createEventDispatcher<{
+    substepChange: { isFinalSubstep: boolean };
+  }>();
 
   let credentialsInstalled = false;
-  let checkingIndex: number | null = null;
+  let isChecking = false;
+  let hasInitializedSubstep = false;
+  let showError = false;
+  let errorMessage = "";
 
-  let setupCompleted = {
-    createProject: false,
-    enableAPI: false,
-    createCredentials: false,
-    downloadJSON: false,
-    placeFile: false,
-  };
+  let setupSteps: SetupStep[] = [
+    {
+      id: "youtube-create-project",
+      title: "Google Cloud プロジェクトの作成",
+      description:
+        "YouTube API を使用するための Google Cloud プロジェクトを作成します。",
+      completed: false,
+    },
+    {
+      id: "youtube-enable-api",
+      title: "YouTube Data API v3 の有効化",
+      description: "作成したプロジェクトで YouTube Data API を有効化します。",
+      completed: false,
+    },
+    {
+      id: "youtube-create-credentials",
+      title: "OAuth 2.0 認証情報の作成",
+      description: "YouTube API にアクセスするための認証情報を作成します。",
+      completed: false,
+    },
+    {
+      id: "youtube-place-file",
+      title: "認証情報ファイルの配置",
+      description:
+        "ダウンロードした認証情報ファイルをアプリケーションフォルダに配置します。",
+      completed: false,
+    },
+    {
+      id: "youtube-initial-auth",
+      title: "初回起動について",
+      description: "アプリケーションの初回起動時の認証手順について確認します。",
+      completed: false,
+    },
+  ];
 
-  onMount(async () => {
-    await checkYouTubeCredentials();
-  });
+  let currentSubStepIndex = 0;
+  let isOnFinalSubstep = false;
+
+  // 親コンポーネントに通知するためのフラグ
+  export let canGoBack = false;
+  export let isStepCompleted = false;
+
+  $: isStepCompleted = setupSteps[currentSubStepIndex].completed;
+
+  function loadSavedSubstepIndex(maxIndex: number): number | null {
+    if (typeof window === "undefined") return null;
+    const stored = window.sessionStorage.getItem(SUBSTEP_STORAGE_KEY);
+    if (stored === null) return null;
+    const parsed = Number.parseInt(stored, 10);
+    if (Number.isNaN(parsed)) return null;
+    return Math.max(0, Math.min(parsed, maxIndex));
+  }
+
+  function saveSubstepIndex(index: number): void {
+    if (typeof window === "undefined") return;
+    window.sessionStorage.setItem(SUBSTEP_STORAGE_KEY, index.toString());
+  }
+
+  function computeInitialSubstepIndex(steps: SetupStep[]): number {
+    const firstIncomplete = steps.findIndex((step) => !step.completed);
+    if (firstIncomplete !== -1) {
+      return firstIncomplete;
+    }
+    return steps.length > 0 ? steps.length - 1 : 0;
+  }
+
+  $: {
+    isOnFinalSubstep = currentSubStepIndex >= setupSteps.length - 1;
+    dispatch("substepChange", { isFinalSubstep: isOnFinalSubstep });
+  }
+
+  $: canGoBack = currentSubStepIndex > 0;
 
   // Sync with installation state
   $: if ($installationState && $installationState.step_details) {
     const details =
       $installationState.step_details[InstallationStep.YOUTUBE_SETUP] || {};
-    setupCompleted = {
-      createProject: details["youtube-create-project"] || false,
-      enableAPI: details["youtube-enable-api"] || false,
-      createCredentials: details["youtube-create-credentials"] || false,
-      downloadJSON: details["youtube-download-json"] || false,
-      placeFile: details["youtube-place-file"] || false,
-    };
-  }
+    console.log(
+      "[YouTubeSetup] Reactive update - details:",
+      details,
+      "credentialsInstalled:",
+      credentialsInstalled
+    );
+    const updatedSteps = setupSteps.map((step, index) => ({
+      ...step,
+      // 手順1,2,3,5（インデックス0,1,2,4）は details のみから状態を取得
+      // 手順4（インデックス3）のみ credentialsInstalled も考慮
+      completed:
+        index === 3
+          ? details[step.id] || credentialsInstalled
+          : details[step.id] || false,
+    }));
+    console.log(
+      "[YouTubeSetup] Updated steps:",
+      updatedSteps.map((s, i) => ({
+        index: i,
+        id: s.id,
+        completed: s.completed,
+      }))
+    );
+    setupSteps = updatedSteps;
 
-  async function checkYouTubeCredentials(): Promise<void> {
-    try {
-      const result: SystemCheckResult = await checkSystem("youtube");
-      credentialsInstalled = result.is_installed;
-
-      if (credentialsInstalled) {
-        // ファイルが存在する場合、全ステップにチェックを入れる
-        const steps = [
-          "youtube-create-project",
-          "youtube-enable-api",
-          "youtube-create-credentials",
-          "youtube-download-json",
-          "youtube-place-file",
-        ];
-        for (const stepId of steps) {
-          await markSubstepCompleted(
-            InstallationStep.YOUTUBE_SETUP,
-            stepId,
-            true,
-          );
-        }
+    if (!hasInitializedSubstep) {
+      const savedIndex = loadSavedSubstepIndex(updatedSteps.length - 1);
+      if (savedIndex !== null) {
+        currentSubStepIndex = savedIndex;
+      } else {
+        currentSubStepIndex = computeInitialSubstepIndex(updatedSteps);
       }
-    } catch (error) {
-      console.error("YouTube credentials check failed:", error);
+      hasInitializedSubstep = true;
     }
   }
 
-  async function toggleStep(
-    step: keyof typeof setupCompleted,
-    index: number,
-  ): Promise<void> {
-    const currentValue = setupCompleted[step];
-    const stepIds: Record<keyof typeof setupCompleted, string> = {
-      createProject: "youtube-create-project",
-      enableAPI: "youtube-enable-api",
-      createCredentials: "youtube-create-credentials",
-      downloadJSON: "youtube-download-json",
-      placeFile: "youtube-place-file",
-    };
-    const stepId = stepIds[step];
+  $: if (hasInitializedSubstep) {
+    saveSubstepIndex(currentSubStepIndex);
+  }
 
-    // 手順5（placeFile）のチェック時にファイル存在確認
-    if (step === "placeFile" && !currentValue) {
-      checkingIndex = index;
+  export async function next(
+    options: { skip?: boolean } = {}
+  ): Promise<boolean> {
+    const currentStep = setupSteps[currentSubStepIndex];
+
+    // ファイル配置ステップのバリデーション
+    if (!options.skip && currentSubStepIndex === 3 && !credentialsInstalled) {
+      isChecking = true;
       try {
         const result: SystemCheckResult = await checkSystem("youtube");
         if (result.is_installed) {
-          // ファイルが存在する場合、全ステップにチェックを入れる
+          // ファイルが存在する場合、手順1〜4を完了とする
           credentialsInstalled = true;
-          const steps = [
-            "youtube-create-project",
-            "youtube-enable-api",
-            "youtube-create-credentials",
-            "youtube-download-json",
-            "youtube-place-file",
-          ];
-          for (const sId of steps) {
+          for (let i = 0; i <= 3; i++) {
             await markSubstepCompleted(
               InstallationStep.YOUTUBE_SETUP,
-              sId,
-              true,
+              setupSteps[i].id,
+              true
             );
           }
         } else {
-          // ファイルが存在しない場合、通知してチェックを入れない
-          alert("client_secrets.json ファイルが見つかりませんでした。");
+          errorMessage =
+            "client_secrets.json ファイルが見つかりませんでした。配置してから次へ進んでください。";
+          showError = true;
+          isChecking = false;
+          return true;
         }
       } catch (error) {
         console.error("YouTube credentials check failed:", error);
-        alert("認証情報の確認に失敗しました。");
+        errorMessage = "認証情報の確認に失敗しました。";
+        showError = true;
+        isChecking = false;
+        return true;
       } finally {
-        checkingIndex = null;
+        isChecking = false;
       }
+    }
+
+    if (currentSubStepIndex < setupSteps.length - 1) {
+      currentSubStepIndex++;
+      return true;
+    }
+    return false;
+  }
+
+  export async function back(): Promise<boolean> {
+    if (currentSubStepIndex > 0) {
+      currentSubStepIndex--;
+      return true;
+    }
+    return false;
+  }
+
+  async function toggleStep(index: number): Promise<void> {
+    const step = setupSteps[index];
+    console.log("[YouTubeSetup] toggleStep called:", {
+      index,
+      stepId: step.id,
+      currentCompleted: step.completed,
+    });
+
+    // 手順4(インデックス3、ファイル配置)の場合のみ、チェック時にファイル存在確認を行う
+    if (index === 3) {
+      // インストール済の場合はチェックを外せないようにする
+      if (credentialsInstalled && step.completed) return;
+
+      if (!step.completed) {
+        isChecking = true;
+        try {
+          const result: SystemCheckResult = await checkSystem("youtube");
+          if (result.is_installed) {
+            // ファイルが存在する場合、手順1〜4(インデックス0〜3)を完了とする
+            credentialsInstalled = true;
+            for (let i = 0; i <= 3; i++) {
+              await markSubstepCompleted(
+                InstallationStep.YOUTUBE_SETUP,
+                setupSteps[i].id,
+                true
+              );
+            }
+          } else {
+            // ファイルが存在しない場合、エラーダイアログを表示してチェックを入れない
+            errorMessage =
+              "client_secrets.json ファイルが見つかりませんでした。";
+            showError = true;
+          }
+        } catch (error) {
+          console.error("YouTube credentials check failed:", error);
+          errorMessage = "認証情報の確認に失敗しました。";
+          showError = true;
+        } finally {
+          isChecking = false;
+        }
+      } else {
+        // 手順4を未完了に戻す(インストール済でない場合のみここに来る)
+        await markSubstepCompleted(
+          InstallationStep.YOUTUBE_SETUP,
+          step.id,
+          false
+        );
+      }
+    } else {
+      // 手順1, 2, 3, 5 (インデックス0, 1, 2, 4) はファイル確認せずに単純にトグルする
+      // インストール済の場合はチェックを外せないようにする
+      if (credentialsInstalled && step.completed) return;
+
+      await markSubstepCompleted(
+        InstallationStep.YOUTUBE_SETUP,
+        step.id,
+        !step.completed
+      );
+    }
+  }
+
+  function handleCardClick(event: Event) {
+    // テキスト選択中は反応しない
+    if (window.getSelection()?.toString()) {
       return;
     }
 
-    // インストール済の場合はチェックを外せないようにする
-    if (credentialsInstalled && currentValue) {
+    // イベントターゲットの取得と要素への正規化（テキストノードの場合は親要素を取得）
+    let target = event.target as Element;
+    if (target.nodeType === Node.TEXT_NODE) {
+      target = target.parentElement as Element;
+    }
+
+    // インタラクティブな要素のクリックは除外
+    if (
+      target &&
+      (target.closest("button") ||
+        target.closest("a") ||
+        target.closest("input") ||
+        target.closest(".path-value"))
+    ) {
       return;
     }
 
-    // 通常のトグル
-    await markSubstepCompleted(
-      InstallationStep.YOUTUBE_SETUP,
-      stepId,
-      !currentValue,
-    );
+    toggleStep(currentSubStepIndex);
+  }
+
+  function handleKeyDown(event: KeyboardEvent) {
+    if (event.key === "Enter") {
+      handleCardClick(event);
+    }
   }
 
   function openUrl(url: string): void {
@@ -140,48 +306,73 @@
 
 <div class="youtube-setup">
   <div class="step-header">
-    <h2 class="step-title">YouTube API 設定</h2>
+    <div class="title-row">
+      <h2 class="step-title">YouTube API 設定</h2>
+      <div class="tooltip-container">
+        <AlertCircle class="icon warning-icon" size={20} />
+        <div class="tooltip-content glass-card">
+          <p>
+            YouTube API の使用には Google アカウントが必要です。 また、API
+            の利用には Google Cloud Platform のプロジェクト作成が必要です。
+            無料枠内での使用が可能ですが、クレジットカード情報の登録が求められる場合があります。
+          </p>
+        </div>
+      </div>
+    </div>
     <p class="step-description">
       YouTube への自動アップロード機能を使用するために、 YouTube Data API
-      を有効化し、認証情報を設定します。
+      を有効化し、認証情報を設定します
     </p>
   </div>
 
-  <div class="warning-card glass-card">
-    <AlertCircle class="icon" size={24} />
-    <div class="warning-content">
-      <h3 class="warning-title">重要な注意事項</h3>
-      <p class="warning-text">
-        YouTube API の使用には Google アカウントが必要です。 また、API
-        の利用には Google Cloud Platform のプロジェクト作成が必要です。
-        無料枠内での使用が可能ですが、クレジットカード情報の登録が求められる場合があります。
-      </p>
-    </div>
-  </div>
-
   <div class="setup-steps-section">
-    <div class="step-card glass-card">
-      <div class="step-content">
-        <div class="step-number">1</div>
-        <div class="step-info">
-          <h4 class="step-name">
-            Google Cloud プロジェクトの作成
-            {#if credentialsInstalled}
-              <span class="installed-badge">インストール済</span>
-            {/if}
-          </h4>
-          {#if !setupCompleted.createProject}
-            <div class="instructions">
-              <ol>
+    <div
+      class="step-card glass-card"
+      class:completed={setupSteps[currentSubStepIndex].completed}
+      class:disabled={credentialsInstalled ||
+        (currentSubStepIndex === 3 && isChecking)}
+      on:click={handleCardClick}
+      on:keydown={handleKeyDown}
+      role="button"
+      tabindex="0"
+    >
+      {#key currentSubStepIndex}
+        <div class="step-content-wrapper">
+          <div class="card-header">
+            <div class="header-left">
+              <div class="step-number-large">{currentSubStepIndex + 1}</div>
+              <div class="title-wrapper">
+                <h3 class="step-name-large">
+                  {setupSteps[currentSubStepIndex].title}
+                </h3>
+                {#if credentialsInstalled}
+                  <span class="installed-badge">インストール済</span>
+                {/if}
+              </div>
+            </div>
+            <div
+              class="checkbox-indicator"
+              class:checked={setupSteps[currentSubStepIndex].completed}
+            >
+              {#if setupSteps[currentSubStepIndex].completed}
+                <Check size={20} />
+              {/if}
+            </div>
+          </div>
+
+          <div class="card-body">
+            {#if currentSubStepIndex === 0}
+              <!-- Create Project -->
+              <ol class="instruction-list">
                 <li>
                   新しいプロジェクト作成ページにアクセスする
-                  <div style="margin-top: 0.5rem;">
+                  <div style="margin-top: 1rem;">
                     <button
                       class="link-button"
                       type="button"
                       on:click={() =>
                         openUrl(
-                          "https://console.cloud.google.com/projectcreate",
+                          "https://console.cloud.google.com/projectcreate"
                         )}
                     >
                       <ExternalLink class="icon" size={16} />
@@ -190,55 +381,20 @@
                   </div>
                 </li>
                 <li>プロジェクト名を入力する（例: Splat Replay）</li>
-                <li>「作成」をクリック</li>
+                <li>「作成」をクリックする</li>
               </ol>
-            </div>
-          {/if}
-        </div>
-        <button
-          class="step-checkbox"
-          type="button"
-          class:checked={setupCompleted.createProject}
-          on:click={() => toggleStep("createProject", 0)}
-          aria-label={setupCompleted.createProject
-            ? "完了を解除"
-            : "完了にする"}
-          disabled={credentialsInstalled}
-        >
-          <div
-            class="checkbox-box"
-            class:checked={setupCompleted.createProject}
-          >
-            {#if setupCompleted.createProject}
-              <Check class="check-icon" size={20} />
-            {/if}
-          </div>
-        </button>
-      </div>
-    </div>
-
-    <div class="step-card glass-card">
-      <div class="step-content">
-        <div class="step-number">2</div>
-        <div class="step-info">
-          <h4 class="step-name">
-            YouTube Data API v3 の有効化
-            {#if credentialsInstalled}
-              <span class="installed-badge">インストール済</span>
-            {/if}
-          </h4>
-          {#if !setupCompleted.enableAPI}
-            <div class="instructions">
-              <ol>
+            {:else if currentSubStepIndex === 1}
+              <!-- Enable API -->
+              <ol class="instruction-list">
                 <li>
                   YouTube Data API v3 の有効化ページを開く
-                  <div style="margin-top: 0.5rem;">
+                  <div style="margin-top: 1rem;">
                     <button
                       class="link-button"
                       type="button"
                       on:click={() =>
                         openUrl(
-                          "https://console.cloud.google.com/apis/library/youtube.googleapis.com",
+                          "https://console.cloud.google.com/apis/library/youtube.googleapis.com"
                         )}
                     >
                       <ExternalLink class="icon" size={16} />
@@ -252,48 +408,18 @@
                 <li>「有効にする」ボタンをクリックする</li>
                 <li>API が有効になるまで待機する</li>
               </ol>
-            </div>
-          {/if}
-        </div>
-        <button
-          class="step-checkbox"
-          type="button"
-          class:checked={setupCompleted.enableAPI}
-          on:click={() => toggleStep("enableAPI", 1)}
-          aria-label={setupCompleted.enableAPI ? "完了を解除" : "完了にする"}
-          disabled={credentialsInstalled}
-        >
-          <div class="checkbox-box" class:checked={setupCompleted.enableAPI}>
-            {#if setupCompleted.enableAPI}
-              <Check class="check-icon" size={20} />
-            {/if}
-          </div>
-        </button>
-      </div>
-    </div>
-
-    <div class="step-card glass-card">
-      <div class="step-content">
-        <div class="step-number">3</div>
-        <div class="step-info">
-          <h4 class="step-name">
-            OAuth 2.0 認証情報の作成
-            {#if credentialsInstalled}
-              <span class="installed-badge">インストール済</span>
-            {/if}
-          </h4>
-          {#if !setupCompleted.createCredentials}
-            <div class="instructions">
-              <ol>
+            {:else if currentSubStepIndex === 2}
+              <!-- Create Credentials -->
+              <ol class="instruction-list">
                 <li>
                   認証情報ページを開く
-                  <div style="margin-top: 0.5rem;">
+                  <div style="margin-top: 1rem;">
                     <button
                       class="link-button"
                       type="button"
                       on:click={() =>
                         openUrl(
-                          "https://console.cloud.google.com/apis/credentials",
+                          "https://console.cloud.google.com/apis/credentials"
                         )}
                     >
                       <Key class="icon" size={16} />
@@ -313,51 +439,16 @@
                 <li>「作成」をクリックする</li>
                 <li>JSONをダウンロードをクリックする</li>
               </ol>
-            </div>
-            <div class="info-box">
-              <p>
+              <p class="step-note">
                 ※ 初回作成時は「OAuth 同意画面」の設定が必要な場合があります。
                 その場合は画面の指示に従って設定してください。
               </p>
-            </div>
-          {/if}
-        </div>
-        <button
-          class="step-checkbox"
-          type="button"
-          class:checked={setupCompleted.createCredentials}
-          on:click={() => toggleStep("createCredentials", 2)}
-          aria-label={setupCompleted.createCredentials
-            ? "完了を解除"
-            : "完了にする"}
-          disabled={credentialsInstalled}
-        >
-          <div
-            class="checkbox-box"
-            class:checked={setupCompleted.createCredentials}
-          >
-            {#if setupCompleted.createCredentials}
-              <Check class="check-icon" size={20} />
-            {/if}
-          </div>
-        </button>
-      </div>
-    </div>
-
-    <div class="step-card glass-card">
-      <div class="step-content">
-        <div class="step-number">5</div>
-        <div class="step-info">
-          <h4 class="step-name">
-            認証情報ファイルの配置
-            {#if credentialsInstalled}
-              <span class="installed-badge">インストール済</span>
-            {/if}
-          </h4>
-          {#if !setupCompleted.placeFile}
-            <div class="instructions">
-              <ol>
-                <li>ファイル名を <code>client_secrets.json</code> に変更</li>
+            {:else if currentSubStepIndex === 3}
+              <!-- Place File -->
+              <ol class="instruction-list">
+                <li>
+                  ファイル名を <code>client_secrets.json</code> に変更
+                </li>
                 <li>
                   アプリケーションの config フォルダに <code
                     >client_secrets.json</code
@@ -372,171 +463,56 @@
                   </div>
                 </li>
               </ol>
-            </div>
-          {/if}
-        </div>
-        <button
-          class="step-checkbox"
-          type="button"
-          class:checked={setupCompleted.placeFile}
-          on:click={() => toggleStep("placeFile", 4)}
-          aria-label={setupCompleted.placeFile ? "完了を解除" : "完了にする"}
-          disabled={credentialsInstalled || checkingIndex === 4}
-        >
-          <div class="checkbox-box" class:checked={setupCompleted.placeFile}>
-            {#if checkingIndex === 4}
-              <RefreshCw class="icon spinning" size={20} />
-            {:else if setupCompleted.placeFile}
-              <Check class="check-icon" size={20} />
+            {:else if currentSubStepIndex === 4}
+              <!-- Initial Launch Info -->
+              <p style="margin-bottom: 1rem;">
+                アプリケーションから YouTube への初回アップロード時に、
+                ブラウザが開いて認証画面が表示されます。
+              </p>
+              <ol class="instruction-list">
+                <li>
+                  Google アカウントでログインし、アクセスを許可してください。
+                </li>
+                <li>
+                  認証が完了すると、トークンファイルが自動的に保存され、
+                  次回以降は自動的にアップロードが行われます。
+                </li>
+              </ol>
             {/if}
           </div>
-        </button>
-      </div>
-    </div>
-
-    <div class="info-card glass-card">
-      <div class="info-card-content">
-        <h4 class="info-card-title">初回認証について</h4>
-        <p class="info-card-text">
-          アプリケーションから YouTube への初回アップロード時に、
-          ブラウザが開いて認証画面が表示されます。 Google
-          アカウントでログインし、アクセスを許可してください。
-        </p>
-        <p class="info-card-text">
-          認証が完了すると、トークンファイルが自動的に保存され、
-          次回以降は自動的にアップロードが行われます。
-        </p>
-      </div>
+        </div>
+      {/key}
     </div>
   </div>
 </div>
+
+<ErrorDialog bind:open={showError} title="エラー" message={errorMessage} />
 
 <style>
   .youtube-setup {
     display: flex;
     flex-direction: column;
-    gap: 2rem;
-    padding: 1rem;
+    gap: 1rem;
+    padding: 0;
+    height: 100%;
+    justify-content: center;
   }
 
   .step-header {
-    text-align: left;
+    text-align: center;
+    margin-bottom: 1rem;
   }
 
   .step-title {
-    margin: 0 0 1rem 0;
-    font-size: 1.75rem;
+    margin: 0;
+    font-size: 1.5rem;
     font-weight: 600;
     color: var(--text-primary);
   }
 
   .step-description {
-    margin: 0;
-    font-size: 1rem;
-    line-height: 1.6;
-    color: var(--text-secondary);
-  }
-
-  .installation-check {
-    padding: 1.5rem;
-  }
-
-  .check-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 1.5rem;
-  }
-
-  .check-title {
-    margin: 0;
-    font-size: 1.125rem;
-    font-weight: 600;
-    color: var(--text-primary);
-  }
-
-  .refresh-button {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.5rem;
-    padding: 0.5rem 1rem;
-    font-size: 0.875rem;
-    font-weight: 500;
-    border-radius: 6px;
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    background: rgba(255, 255, 255, 0.05);
-    color: var(--text-primary);
-    cursor: pointer;
-    transition: all 0.2s ease;
-  }
-
-  .refresh-button:hover:not(:disabled) {
-    background: rgba(255, 255, 255, 0.1);
-    border-color: rgba(255, 255, 255, 0.2);
-    transform: translateY(-1px);
-  }
-
-  .refresh-button:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-  }
-
-  .check-status {
-    display: flex;
-    align-items: center;
-    gap: 1rem;
-    padding: 1.25rem;
-    border-radius: 8px;
-    border: 1px solid;
-  }
-
-  .check-status.checking {
-    background: rgba(255, 255, 255, 0.05);
-    border-color: rgba(255, 255, 255, 0.1);
-  }
-
-  .check-status.success {
-    background: rgba(25, 211, 199, 0.1);
-    border-color: rgba(25, 211, 199, 0.3);
-  }
-
-  .check-status.error,
-  .check-status.not-found {
-    background: rgba(255, 107, 107, 0.1);
-    border-color: rgba(255, 107, 107, 0.3);
-  }
-
-  .status-icon {
-    flex-shrink: 0;
-  }
-
-  .check-status.success .status-icon {
-    color: var(--accent-color);
-  }
-
-  .check-status.error .status-icon,
-  .check-status.not-found .status-icon {
-    color: #ff6b6b;
-  }
-
-  .status-content {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    gap: 0.25rem;
-  }
-
-  .status-text {
-    margin: 0;
-    font-size: 1rem;
-    font-weight: 600;
-    color: var(--text-primary);
-  }
-
-  .status-detail,
-  .error-message {
-    margin: 0;
-    font-size: 0.875rem;
+    margin: 0.5rem 0 0 0;
+    font-size: 0.9rem;
     color: var(--text-secondary);
   }
 
@@ -550,103 +526,194 @@
     }
   }
 
-  .warning-card {
-    padding: 1.5rem;
+  .title-row {
     display: flex;
-    align-items: flex-start;
-    gap: 1rem;
-    background: rgba(255, 165, 0, 0.05);
-    border-color: rgba(255, 165, 0, 0.3);
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    margin-bottom: 0.5rem;
   }
 
-  .warning-card > .icon {
-    flex-shrink: 0;
+  .tooltip-container {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    cursor: help;
+  }
+
+  .warning-icon {
     color: #ffa500;
-    margin-top: 0.125rem;
+    opacity: 0.8;
+    transition: opacity 0.2s;
   }
 
-  .warning-content {
-    flex: 1;
+  .tooltip-container:hover .warning-icon {
+    opacity: 1;
   }
 
-  .warning-title {
-    margin: 0 0 0.5rem 0;
-    font-size: 1.125rem;
-    font-weight: 600;
-    color: var(--text-primary);
+  .tooltip-content {
+    visibility: hidden;
+    position: absolute;
+    bottom: 100%;
+    left: 50%;
+    transform: translateX(-50%) translateY(-10px);
+    width: 320px;
+    padding: 1rem;
+    background: rgba(20, 20, 20, 0.95);
+    border: 1px solid rgba(255, 165, 0, 0.3);
+    border-radius: 8px;
+    z-index: 100;
+    opacity: 0;
+    transition: all 0.2s ease;
+    pointer-events: none;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(10px);
   }
 
-  .warning-text {
+  .tooltip-container:hover .tooltip-content {
+    visibility: visible;
+    opacity: 1;
+    transform: translateX(-50%) translateY(-5px);
+  }
+
+  .tooltip-content p {
     margin: 0;
-    font-size: 0.9375rem;
+    font-size: 0.85rem;
     line-height: 1.6;
-    color: var(--text-secondary);
-  }
-
-  .info-card {
-    padding: 1.5rem;
-    background: rgba(25, 211, 199, 0.05);
-    border-color: rgba(25, 211, 199, 0.3);
-  }
-
-  .info-card-content {
-    flex: 1;
-  }
-
-  .info-card-title {
-    margin: 0 0 0.75rem 0;
-    font-size: 1.125rem;
-    font-weight: 600;
-    color: var(--accent-color);
-  }
-
-  .info-card-text {
-    margin: 0 0 0.5rem 0;
-    font-size: 0.9375rem;
-    line-height: 1.6;
-    color: var(--text-secondary);
+    color: #e0e0e0;
     text-align: left;
   }
 
-  .info-card-text:last-child {
-    margin-bottom: 0;
+  /* Tooltip arrow */
+  .tooltip-content::after {
+    content: "";
+    position: absolute;
+    top: 100%;
+    left: 50%;
+    margin-left: -6px;
+    border-width: 6px;
+    border-style: solid;
+    border-color: rgba(255, 165, 0, 0.3) transparent transparent transparent;
   }
 
   .setup-steps-section {
+    flex: 1;
     display: flex;
     flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
     gap: 1rem;
-  }
-
-  .section-title {
-    margin: 0;
-    font-size: 1.25rem;
-    font-weight: 600;
-    color: var(--accent-color);
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
+    min-height: 0;
   }
 
   .step-card {
-    padding: 1.5rem;
-    transition: all 0.3s ease;
+    width: 100%;
+    max-width: 600px;
+    height: 100%;
+    padding: 2rem;
+    display: flex;
+    flex-direction: column;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 16px;
+    max-height: 100%;
+    box-sizing: border-box;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    outline: none;
+  }
+
+  .step-card:focus-visible {
+    box-shadow: 0 0 0 2px var(--accent-color);
   }
 
   .step-card:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+    border-color: rgba(255, 255, 255, 0.3);
+    background: rgba(255, 255, 255, 0.05);
   }
 
-  .step-content {
+  .step-card.completed {
+    border-color: var(--accent-color);
+    box-shadow: 0 0 15px rgba(25, 211, 199, 0.1);
+    background: rgba(25, 211, 199, 0.05);
+  }
+
+  .step-card.disabled {
+    cursor: default;
+    opacity: 0.8;
+  }
+
+  .step-card.disabled:hover {
+    border-color: rgba(255, 255, 255, 0.1);
+    background: rgba(255, 255, 255, 0.03);
+  }
+
+  .step-content-wrapper {
+    flex: 1;
+    min-height: 0;
     display: flex;
-    align-items: flex-start;
+    flex-direction: column;
     gap: 1.5rem;
+    width: 100%;
+    animation: fadeIn 0.3s ease-out;
+    overflow: hidden;
   }
 
-  .step-number {
-    flex-shrink: 0;
-    width: 40px;
-    height: 40px;
+  @keyframes fadeIn {
+    from {
+      opacity: 0;
+      transform: translateY(10px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding-bottom: 1rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  }
+
+  .header-left {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+  }
+
+  .checkbox-indicator {
+    width: 32px;
+    height: 32px;
+    border-radius: 6px;
+    border: 2px solid rgba(255, 255, 255, 0.2);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: transparent;
+    transition: all 0.2s ease;
+    background: rgba(255, 255, 255, 0.05);
+  }
+
+  .checkbox-indicator.checked {
+    background: var(--accent-color);
+    border-color: var(--accent-color);
+    color: #1a1a1a;
+    box-shadow: 0 0 10px var(--accent-glow);
+  }
+
+  .step-card:hover .checkbox-indicator:not(.checked) {
+    border-color: rgba(255, 255, 255, 0.4);
+    background: rgba(255, 255, 255, 0.1);
+  }
+
+  .step-number-large {
+    width: 48px;
+    height: 48px;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -657,49 +724,61 @@
       rgba(25, 211, 199, 0.05) 100%
     );
     border: 2px solid rgba(25, 211, 199, 0.3);
-    font-size: 1.125rem;
+    font-size: 1.25rem;
     font-weight: 700;
     color: var(--accent-color);
+    flex-shrink: 0;
   }
 
-  .step-info {
-    flex: 1;
+  .title-wrapper {
     display: flex;
     flex-direction: column;
-    gap: 0.5rem;
+    align-items: flex-start;
+    gap: 0.25rem;
   }
 
-  .step-name {
+  .step-name-large {
     margin: 0;
-    font-size: 1.125rem;
-    font-weight: 600;
+    font-size: 1.25rem;
+    font-weight: 700;
     color: var(--text-primary);
     text-align: left;
   }
 
-  .step-desc {
-    margin: 0;
-    font-size: 0.9375rem;
-    line-height: 1.5;
-    color: var(--text-secondary);
-    white-space: pre-line;
+  .card-body {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
     text-align: left;
+    overflow-y: auto;
+    flex: 1;
+    min-height: 0; /* Allow shrinking for scroll */
+    padding-right: 0.5rem;
+    box-sizing: border-box;
   }
 
-  .step-desc code {
-    padding: 0.125rem 0.375rem;
-    background: rgba(25, 211, 199, 0.1);
-    border: 1px solid rgba(25, 211, 199, 0.3);
+  .card-body::-webkit-scrollbar {
+    width: 8px;
+  }
+
+  .card-body::-webkit-scrollbar-track {
+    background: rgba(255, 255, 255, 0.05);
     border-radius: 4px;
-    font-family: monospace;
-    color: var(--accent-color);
-    font-size: 0.875rem;
+  }
+
+  .card-body::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 4px;
+  }
+
+  .card-body::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.3);
   }
 
   .installed-badge {
     display: inline-flex;
     align-items: center;
-    padding: 0.25rem 0.75rem;
+    padding: 0.125rem 0.5rem;
     font-size: 0.75rem;
     font-weight: 600;
     border-radius: 999px;
@@ -712,25 +791,31 @@
     box-shadow: 0 0 8px var(--accent-glow);
   }
 
+  .step-note {
+    margin: 1rem 0 0 0;
+    font-size: 0.85rem;
+    font-style: italic;
+    color: var(--text-secondary);
+  }
+
   .link-button {
     display: inline-flex;
     align-items: center;
     gap: 0.5rem;
     padding: 0.5rem 1rem;
-    font-size: 0.875rem;
+    font-size: 1rem;
     font-weight: 500;
     border-radius: 6px;
-    border: 1px solid rgba(25, 211, 199, 0.3);
-    background: rgba(25, 211, 199, 0.1);
-    color: var(--accent-color);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    background: rgba(255, 255, 255, 0.05);
+    color: var(--text-secondary);
     cursor: pointer;
     transition: all 0.2s ease;
-    align-self: flex-start;
   }
 
   .link-button:hover {
-    background: rgba(25, 211, 199, 0.2);
-    border-color: rgba(25, 211, 199, 0.5);
+    background: rgba(255, 255, 255, 0.1);
+    border-color: rgba(255, 255, 255, 0.3);
     transform: translateY(-1px);
   }
 
@@ -774,29 +859,24 @@
     word-break: break-all;
   }
 
-  .instructions {
-    padding: 0;
+  .icon {
+    display: block;
+    flex-shrink: 0;
+  }
+
+  .instruction-list {
+    margin: 0;
+    padding-left: 1.25rem;
+    font-size: 1rem;
+    line-height: 1.6;
+    color: var(--text-secondary);
+  }
+
+  .instruction-list li + li {
     margin-top: 0.5rem;
   }
 
-  .instructions ol {
-    margin: 0;
-    padding-left: 1.5rem;
-  }
-
-  .instructions li {
-    margin-bottom: 0.5rem;
-    font-size: 0.9375rem;
-    line-height: 1.5;
-    color: var(--text-secondary);
-    text-align: left;
-  }
-
-  .instructions li:last-child {
-    margin-bottom: 0;
-  }
-
-  .instructions code {
+  .instruction-list code {
     padding: 0.125rem 0.375rem;
     background: rgba(25, 211, 199, 0.1);
     border: 1px solid rgba(25, 211, 199, 0.3);
@@ -806,87 +886,19 @@
     font-size: 0.875rem;
   }
 
-  .info-box {
-    padding: 0;
-    margin-top: 0.5rem;
-  }
-
-  .info-box p {
-    margin: 0;
-    font-size: 0.9375rem;
-    line-height: 1.5;
-    color: var(--text-secondary);
-    text-align: left;
-  }
-
-  .step-checkbox {
-    flex-shrink: 0;
-    width: 48px;
-    height: 48px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border: none;
-    background: transparent;
-    cursor: pointer;
-    transition: all 0.2s ease;
-    padding: 0;
-  }
-
-  .step-checkbox:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
-  }
-
-  .step-checkbox:hover:not(:disabled) {
-    transform: scale(1.1);
-  }
-
-  .checkbox-box {
-    flex-shrink: 0;
-    width: 32px;
-    height: 32px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border-radius: 8px;
-    border: 2px solid rgba(255, 255, 255, 0.2);
-    background: rgba(0, 0, 0, 0.2);
-    transition: all 0.3s ease;
-  }
-
-  .checkbox-box.checked {
-    background: linear-gradient(
-      135deg,
-      var(--accent-color) 0%,
-      var(--accent-color-strong) 100%
-    );
-    border-color: var(--accent-color);
-    box-shadow: 0 0 12px var(--accent-glow);
-  }
-
-  .check-icon {
-    color: white;
-  }
-
-  .icon {
-    display: block;
-    flex-shrink: 0;
-  }
-
   @media (max-width: 768px) {
-    .youtube-setup {
-      padding: 0.5rem;
-      gap: 1.5rem;
+    .step-card {
+      padding: 1.5rem;
     }
 
-    .step-title {
-      font-size: 1.5rem;
+    .step-name-large {
+      font-size: 1.125rem;
     }
+  }
 
-    .step-content {
-      flex-direction: column;
-      gap: 1rem;
+  @media (max-height: 700px) {
+    .step-card {
+      padding: 1rem;
     }
   }
 </style>

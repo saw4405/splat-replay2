@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import { ChevronLeft, ChevronRight, SkipForward } from "lucide-svelte";
+  import { ChevronLeft, ChevronRight } from "lucide-svelte";
   import {
     installationState,
     isLoading,
@@ -9,21 +9,27 @@
     fetchInstallationStatus,
     goToNextStep,
     goToPreviousStep,
-    skipCurrentStep,
     executeStep,
     completeInstallation,
     clearError,
   } from "../store";
   import { InstallationStep } from "../types";
   import ErrorDialog from "./ErrorDialog.svelte";
-  import ConfirmDialog from "./ConfirmDialog.svelte";
   import CompletionDialog from "./CompletionDialog.svelte";
-  import StepProgress from "./StepProgress.svelte";
 
   // ステップコンポーネントのスロット
   export let currentStepComponent: any = null;
 
-  let showSkipConfirm = false;
+  // 現在のステップコンポーネントのインスタンス
+  let stepComponentInstance: any;
+
+  // 子コンポーネントが戻れるかどうか
+  let childCanGoBack = false;
+  let childAtFinalSubstep = false;
+  let childStepCompleted = false;
+  let shouldShowCompletion = false;
+  let lastObservedStep: InstallationStep | null = null;
+
   let showErrorDialog = false;
   let showCompletionDialog = false;
 
@@ -35,20 +41,38 @@
     ? $installationState.current_step !== InstallationStep.HARDWARE_CHECK
     : false;
 
-  $: canSkip = $installationState
-    ? $installationState.current_step === InstallationStep.FONT_INSTALLATION ||
-      $installationState.current_step === InstallationStep.YOUTUBE_SETUP
-    : false;
-
   $: isLastStep = $installationState
     ? $installationState.current_step === InstallationStep.YOUTUBE_SETUP
     : false;
+
+  $: {
+    const currentStep = $installationState?.current_step ?? null;
+    if (currentStep !== lastObservedStep) {
+      childAtFinalSubstep = false;
+      lastObservedStep = currentStep;
+    }
+  }
+
+  $: shouldShowCompletion = isLastStep && childAtFinalSubstep;
 
   onMount(async () => {
     await fetchInstallationStatus();
   });
 
   async function handleNext(): Promise<void> {
+    // コンポーネント側で次へ処理が実装されている場合はそれを優先
+    if (stepComponentInstance && stepComponentInstance.next) {
+      const isSkipping = !childStepCompleted;
+      const handled = await stepComponentInstance.next({ skip: isSkipping });
+      if (handled) return;
+
+      // スキップしている場合は完了マークをつけない
+      if (isSkipping) {
+        await goToNextStep();
+        return;
+      }
+    }
+
     // 現在のステップを完了としてマークしてから次へ進む
     if ($installationState) {
       try {
@@ -70,23 +94,19 @@
   }
 
   async function handleBack(): Promise<void> {
+    // コンポーネント側で戻る処理が実装されている場合はそれを優先
+    if (stepComponentInstance && stepComponentInstance.back) {
+      const handled = await stepComponentInstance.back();
+      if (handled) return;
+    }
+
     await goToPreviousStep();
   }
 
-  function handleSkipClick(): void {
-    showSkipConfirm = true;
-  }
-
-  async function handleSkipConfirm(): Promise<void> {
-    await skipCurrentStep();
-
-    // 最後のステップをスキップした場合は完了処理
-    if (isLastStep) {
-      await completeInstallation();
-      showCompletionDialog = true;
-    } else {
-      await goToNextStep();
-    }
+  function handleSubstepChange(
+    event: CustomEvent<{ isFinalSubstep: boolean }>,
+  ): void {
+    childAtFinalSubstep = event.detail.isFinalSubstep;
   }
 
   function handleErrorClose(): void {
@@ -109,10 +129,27 @@
 <div class="installer-wizard glass-surface">
   <div class="wizard-header">
     <h1 class="wizard-title">Splat Replay セットアップ</h1>
-  </div>
-
-  <div class="wizard-progress">
-    <StepProgress progress={$progressInfo} />
+    {#if $progressInfo}
+      <div class="progress-container">
+        <div class="progress-info">
+          <div class="progress-step-info">
+            <span class="progress-step"
+              >ステップ {$progressInfo.current_step_index + 1} / {$progressInfo.total_steps}</span
+            >
+            <span class="progress-substep"
+              >タスク {$progressInfo.completed_substeps} / {$progressInfo.total_substeps}</span
+            >
+          </div>
+          <span class="progress-percentage">{$progressInfo.percentage}%</span>
+        </div>
+        <div class="progress-bar-wrapper">
+          <div
+            class="progress-bar"
+            style="width: {$progressInfo.percentage}%"
+          ></div>
+        </div>
+      </div>
+    {/if}
   </div>
 
   <div class="wizard-content">
@@ -123,15 +160,23 @@
       </div>
     {:else if $installationState}
       <div class="step-container">
-        <slot name="step-content">
-          {#if currentStepComponent}
-            <svelte:component this={currentStepComponent} />
-          {:else}
-            <div class="placeholder-content">
-              <p>ステップコンテンツがありません</p>
-            </div>
-          {/if}
-        </slot>
+        <div class="step-wrapper">
+          <slot name="step-content">
+            {#if currentStepComponent}
+              <svelte:component
+                this={currentStepComponent}
+                bind:this={stepComponentInstance}
+                bind:canGoBack={childCanGoBack}
+                bind:isStepCompleted={childStepCompleted}
+                on:substepChange={handleSubstepChange}
+              />
+            {:else}
+              <div class="placeholder-content">
+                <p>ステップコンテンツがありません</p>
+              </div>
+            {/if}
+          </slot>
+        </div>
       </div>
     {:else}
       <div class="error-container">
@@ -145,7 +190,7 @@
       <button
         class="button button-secondary"
         type="button"
-        disabled={!canGoBack || $isLoading}
+        disabled={(!canGoBack && !childCanGoBack) || $isLoading}
         on:click={handleBack}
       >
         <ChevronLeft class="button-icon" size={20} />
@@ -154,25 +199,18 @@
 
       <div class="footer-spacer"></div>
 
-      {#if canSkip}
-        <button
-          class="button button-skip"
-          type="button"
-          disabled={$isLoading}
-          on:click={handleSkipClick}
-        >
-          <SkipForward class="button-icon" size={20} />
-          スキップ
-        </button>
-      {/if}
-
       <button
         class="button button-primary"
+        class:button-skip={!shouldShowCompletion && !childStepCompleted}
         type="button"
         disabled={$isLoading}
         on:click={handleNext}
       >
-        {isLastStep ? "完了" : "次へ"}
+        {shouldShowCompletion
+          ? "完了"
+          : childStepCompleted
+            ? "次へ"
+            : "スキップ"}
         <ChevronRight class="button-icon" size={20} />
       </button>
     </div>
@@ -186,16 +224,6 @@
   onRetry={handleErrorRetry}
 />
 
-<ConfirmDialog
-  bind:open={showSkipConfirm}
-  title="ステップをスキップ"
-  message="このステップをスキップしますか？後で設定することもできます。"
-  confirmText="スキップする"
-  cancelText="キャンセル"
-  variant="warning"
-  onConfirm={handleSkipConfirm}
-/>
-
 <CompletionDialog
   bind:open={showCompletionDialog}
   onContinue={handleCompletionContinue}
@@ -205,11 +233,14 @@
   .installer-wizard {
     width: 100%;
     max-width: 900px;
-    margin: 2rem auto;
-    padding: 2rem;
+    margin: 0 auto;
+    padding: 1.5rem;
     display: flex;
     flex-direction: column;
-    min-height: 600px;
+    max-height: 100%;
+    height: 100%;
+    min-height: 0;
+    overflow: hidden;
   }
 
   .wizard-header {
@@ -225,27 +256,114 @@
     color: var(--accent-color);
   }
 
-  .wizard-subtitle {
-    margin: 0;
-    font-size: 1rem;
+  .progress-container {
+    margin-top: 1rem;
+  }
+
+  .progress-info {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.5rem;
+    font-size: 0.875rem;
     color: var(--text-secondary);
   }
 
-  .wizard-progress {
+  .progress-step-info {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 1rem;
+  }
+
+  .progress-step {
+    font-weight: 500;
+  }
+
+  .progress-substep {
+    font-size: 0.8125rem;
+    opacity: 0.75;
+  }
+
+  .progress-percentage {
+    font-weight: 600;
+    color: var(--accent-color);
+    font-size: 1.125rem;
+  }
+
+  .progress-bar-wrapper {
     width: 100%;
+    height: 8px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 4px;
+    overflow: hidden;
+    position: relative;
+  }
+
+  .progress-bar {
+    height: 100%;
+    background: linear-gradient(
+      90deg,
+      var(--accent-color) 0%,
+      var(--accent-color-strong) 100%
+    );
+    border-radius: 4px;
+    transition: width 0.3s ease;
+    position: relative;
+  }
+
+  .progress-bar::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: linear-gradient(
+      90deg,
+      transparent 0%,
+      rgba(255, 255, 255, 0.3) 50%,
+      transparent 100%
+    );
+    animation: shimmer 2s infinite;
+  }
+
+  @keyframes shimmer {
+    0% {
+      transform: translateX(-100%);
+    }
+    100% {
+      transform: translateX(100%);
+    }
   }
 
   .wizard-content {
     flex: 1;
     display: flex;
     flex-direction: column;
-    min-height: 400px;
+    min-height: 0; /* Important for nested flex scrolling */
+    overflow: hidden; /* Don't scroll here, let child handle it */
   }
 
   .step-container {
     flex: 1;
+    min-height: 0;
     display: flex;
     flex-direction: column;
+    overflow: hidden;
+  }
+
+  .step-wrapper {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  :global(.step-wrapper > *) {
+    flex: 1;
+    min-height: 0;
   }
 
   .loading-container,
@@ -347,6 +465,26 @@
     box-shadow: 0 6px 16px var(--accent-glow);
   }
 
+  .button-skip {
+    background: linear-gradient(
+      135deg,
+      rgba(255, 159, 10, 0.9) 0%,
+      rgba(255, 149, 0, 0.9) 100%
+    ) !important;
+    color: white !important;
+    border-color: rgba(255, 159, 10, 0.8) !important;
+  }
+
+  .button-skip:hover:not(:disabled) {
+    background: linear-gradient(
+      135deg,
+      rgba(255, 159, 10, 1) 0%,
+      rgba(255, 149, 0, 1) 100%
+    ) !important;
+    border-color: rgba(255, 159, 10, 1) !important;
+    box-shadow: 0 6px 16px rgba(255, 159, 10, 0.4) !important;
+  }
+
   .button-secondary {
     background: rgba(255, 255, 255, 0.05);
     color: var(--text-primary);
@@ -356,18 +494,6 @@
   .button-secondary:hover:not(:disabled) {
     background: rgba(255, 255, 255, 0.1);
     border-color: rgba(255, 255, 255, 0.2);
-    transform: translateY(-2px);
-  }
-
-  .button-skip {
-    background: rgba(255, 165, 0, 0.1);
-    color: #ffa500;
-    border-color: rgba(255, 165, 0, 0.3);
-  }
-
-  .button-skip:hover:not(:disabled) {
-    background: rgba(255, 165, 0, 0.2);
-    border-color: rgba(255, 165, 0, 0.5);
     transform: translateY(-2px);
   }
 
@@ -386,10 +512,6 @@
       font-size: 1.5rem;
     }
 
-    .wizard-subtitle {
-      font-size: 0.875rem;
-    }
-
     .footer-actions {
       flex-wrap: wrap;
     }
@@ -397,6 +519,29 @@
     .button {
       padding: 0.625rem 1.25rem;
       font-size: 0.9375rem;
+    }
+  }
+
+  @media (max-height: 700px) {
+    .installer-wizard {
+      padding: 1rem;
+    }
+
+    .wizard-header {
+      padding-bottom: 0.5rem;
+    }
+
+    .wizard-title {
+      font-size: 1.5rem;
+      margin-bottom: 0.25rem;
+    }
+
+    .wizard-footer {
+      padding-top: 0.75rem;
+    }
+
+    .button {
+      padding: 0.5rem 1rem;
     }
   }
 </style>

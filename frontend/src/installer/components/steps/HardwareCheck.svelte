@@ -3,6 +3,8 @@
   import { markSubstepCompleted, installationState } from "../../store";
   import { InstallationStep } from "../../types";
 
+  const SUBSTEP_STORAGE_KEY = "hardware_substep_index";
+
   interface HardwareRequirement {
     id: string;
     name: string;
@@ -51,27 +53,133 @@
     },
   ];
 
-  let allChecked = false;
+  let currentSubStepIndex = 0;
+  let hasInitializedSubstep = false;
 
-  $: allChecked = requirements.every((req) => req.checked);
+  // 親コンポーネントに通知するためのフラグ
+  export let canGoBack = false;
+  export let isStepCompleted = false;
+
+  $: isStepCompleted = requirements[currentSubStepIndex].checked;
+
+  $: canGoBack = currentSubStepIndex > 0;
+
+  function loadSavedSubstepIndex(maxIndex: number): number | null {
+    if (typeof window === "undefined") return null;
+    const stored = window.sessionStorage.getItem(SUBSTEP_STORAGE_KEY);
+    if (stored === null) return null;
+    const parsed = Number.parseInt(stored, 10);
+    if (Number.isNaN(parsed)) return null;
+    return Math.max(0, Math.min(parsed, maxIndex));
+  }
+
+  function saveSubstepIndex(index: number): void {
+    if (typeof window === "undefined") return;
+    window.sessionStorage.setItem(SUBSTEP_STORAGE_KEY, index.toString());
+  }
+
+  function computeInitialSubstepIndex(steps: HardwareRequirement[]): number {
+    const firstIncomplete = steps.findIndex((step) => !step.checked);
+    if (firstIncomplete !== -1) {
+      return firstIncomplete;
+    }
+    return steps.length > 0 ? steps.length - 1 : 0;
+  }
 
   // Sync with installation state
   $: if ($installationState && $installationState.step_details) {
     const details =
       $installationState.step_details[InstallationStep.HARDWARE_CHECK] || {};
-    requirements = requirements.map((req) => ({
+    const updatedRequirements = requirements.map((req) => ({
       ...req,
       checked: details[req.id] || false,
     }));
+    requirements = updatedRequirements;
+
+    if (!hasInitializedSubstep) {
+      const savedIndex = loadSavedSubstepIndex(updatedRequirements.length - 1);
+      if (savedIndex !== null) {
+        currentSubStepIndex = savedIndex;
+      } else {
+        currentSubStepIndex = computeInitialSubstepIndex(updatedRequirements);
+      }
+      hasInitializedSubstep = true;
+    }
+  }
+
+  $: if (hasInitializedSubstep) {
+    saveSubstepIndex(currentSubStepIndex);
+  }
+
+  export async function next(
+    options: { skip?: boolean } = {},
+  ): Promise<boolean> {
+    // 現在のステップをチェック済みにする
+    if (!options.skip && !requirements[currentSubStepIndex].checked) {
+      await toggleRequirement(currentSubStepIndex);
+    }
+
+    if (currentSubStepIndex < requirements.length - 1) {
+      currentSubStepIndex++;
+      return true;
+    }
+    return false;
+  }
+
+  export async function back(): Promise<boolean> {
+    if (currentSubStepIndex > 0) {
+      currentSubStepIndex--;
+      return true;
+    }
+    return false;
   }
 
   async function toggleRequirement(index: number): Promise<void> {
     const req = requirements[index];
+    const updatedChecked = !req.checked;
+
+    requirements = requirements.map((requirement, requirementIndex) =>
+      requirementIndex === index
+        ? { ...requirement, checked: updatedChecked }
+        : requirement,
+    );
+
     await markSubstepCompleted(
       InstallationStep.HARDWARE_CHECK,
       req.id,
-      !req.checked,
+      updatedChecked,
     );
+  }
+
+  function handleCardClick(event: Event) {
+    // テキスト選択中は反応しない
+    if (window.getSelection()?.toString()) {
+      return;
+    }
+
+    // イベントターゲットの取得と要素への正規化（テキストノードの場合は親要素を取得）
+    let target = event.target as Element;
+    if (target.nodeType === Node.TEXT_NODE) {
+      target = target.parentElement as Element;
+    }
+
+    // インタラクティブな要素のクリックは除外
+    if (
+      target &&
+      (target.closest("button") ||
+        target.closest("a") ||
+        target.closest("input"))
+    ) {
+      return;
+    }
+
+    toggleRequirement(currentSubStepIndex);
+  }
+
+  function handleKeyDown(event: KeyboardEvent) {
+    if (event.key === "Enter") {
+      handleCardClick(event);
+    }
   }
 </script>
 
@@ -79,154 +187,182 @@
   <div class="step-header">
     <h2 class="step-title">準備するもの</h2>
     <p class="step-description">
-      Splat Replay を使用するために以下のものを準備してください。
+      Splat Replay を使用するために以下のものを準備します
     </p>
   </div>
 
   <div class="requirements-section">
-    <div class="requirements-list">
-      {#each requirements as requirement, index}
-        <div class="requirement-card glass-card">
-          <button
-            class="requirement-button"
-            type="button"
-            on:click={() => toggleRequirement(index)}
-            aria-pressed={requirement.checked}
-          >
-            <div class="requirement-icon">
-              <svelte:component
-                this={requirement.icon}
-                class="icon"
-                size={32}
-                stroke-width={1.5}
-              />
-            </div>
-            <div class="requirement-content">
-              <h4 class="requirement-name">{requirement.name}</h4>
-              <p class="requirement-spec">{requirement.spec}</p>
-              {#if requirement.isConnection}
-                <div class="diagram-content">
-                  <div class="diagram-item">
-                    <div class="diagram-box switch">Nintendo Switch</div>
-                    <div class="diagram-arrow">HDMI →</div>
-                  </div>
-                  <div class="diagram-item">
-                    <div class="diagram-box capture">キャプチャーボード</div>
-                    <div class="diagram-arrow">USB →</div>
-                  </div>
-                  <div class="diagram-item">
-                    <div class="diagram-box pc">PC</div>
-                  </div>
-                </div>
-              {/if}
+    <div
+      class="requirement-card glass-card"
+      class:completed={requirements[currentSubStepIndex].checked}
+      on:click={handleCardClick}
+      on:keydown={handleKeyDown}
+      role="button"
+      tabindex="0"
+    >
+      {#key currentSubStepIndex}
+        <div class="requirement-content-wrapper">
+          <div class="card-header">
+            <div class="header-left">
+              <div class="requirement-icon-large">
+                <svelte:component
+                  this={requirements[currentSubStepIndex].icon}
+                  class="icon"
+                  size={32}
+                  stroke-width={1.5}
+                />
+              </div>
+              <h3 class="requirement-name-large">
+                {requirements[currentSubStepIndex].name}
+              </h3>
             </div>
             <div
-              class="requirement-checkbox"
-              class:checked={requirement.checked}
+              class="checkbox-indicator"
+              class:checked={requirements[currentSubStepIndex].checked}
             >
-              {#if requirement.checked}
-                <Check class="check-icon" size={20} />
+              {#if requirements[currentSubStepIndex].checked}
+                <Check size={20} />
               {/if}
             </div>
-          </button>
+          </div>
+
+          <div class="card-body">
+            <p class="requirement-spec-large">
+              {requirements[currentSubStepIndex].spec}
+            </p>
+
+            {#if requirements[currentSubStepIndex].isConnection}
+              <div class="diagram-content">
+                <div class="diagram-item">
+                  <div class="diagram-box switch">Switch</div>
+                  <div class="diagram-arrow">→</div>
+                </div>
+                <div class="diagram-item">
+                  <div class="diagram-box capture">キャプボ</div>
+                  <div class="diagram-arrow">→</div>
+                </div>
+                <div class="diagram-item">
+                  <div class="diagram-box pc">PC</div>
+                </div>
+              </div>
+            {/if}
+          </div>
         </div>
-      {/each}
+      {/key}
     </div>
   </div>
-
-  {#if allChecked}
-    <div class="completion-message">
-      <div class="completion-icon">
-        <Check size={24} />
-      </div>
-      <p class="completion-text">
-        すべてのハードウェア要件を確認しました。次のステップに進んでください。
-      </p>
-    </div>
-  {/if}
 </div>
 
 <style>
   .hardware-check {
     display: flex;
     flex-direction: column;
-    gap: 2rem;
-    padding: 1rem;
+    gap: 1rem;
+    padding: 0;
+    height: 100%;
+    justify-content: center;
   }
 
   .step-header {
-    text-align: left;
+    text-align: center;
+    margin-bottom: 1rem;
   }
 
   .step-title {
     margin: 0;
-    font-size: 1.75rem;
+    font-size: 1.5rem;
     font-weight: 600;
     color: var(--text-primary);
   }
 
   .step-description {
-    margin: 0;
-    font-size: 1rem;
-    line-height: 1.6;
+    margin: 0.5rem 0 0 0;
+    font-size: 0.9rem;
     color: var(--text-secondary);
   }
 
   .requirements-section {
+    flex: 1;
     display: flex;
     flex-direction: column;
-    gap: 1rem;
-  }
-
-  .section-header {
-    display: flex;
-    justify-content: space-between;
     align-items: center;
-    gap: 1rem;
-  }
-
-  .section-title {
-    margin: 0;
-    font-size: 1.25rem;
-    font-weight: 600;
-    color: var(--accent-color);
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-  }
-
-  .requirements-list {
-    display: flex;
-    flex-direction: column;
-    gap: 1rem;
+    justify-content: center;
+    width: 100%;
+    min-height: 0;
   }
 
   .requirement-card {
-    padding: 0;
-    overflow: hidden;
-    transition: all 0.3s ease;
+    width: 100%;
+    max-width: 600px;
+    height: 100%;
+    padding: 2rem;
+    display: flex;
+    flex-direction: column;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 16px;
+    max-height: 100%;
+    box-sizing: border-box;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    outline: none;
+  }
+
+  .requirement-card:focus-visible {
+    box-shadow: 0 0 0 2px var(--accent-color);
   }
 
   .requirement-card:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+    border-color: rgba(255, 255, 255, 0.3);
+    background: rgba(255, 255, 255, 0.05);
   }
 
-  .requirement-button {
+  .requirement-card.completed {
+    border-color: var(--accent-color);
+    box-shadow: 0 0 15px rgba(25, 211, 199, 0.1);
+    background: rgba(25, 211, 199, 0.05);
+  }
+
+  .requirement-content-wrapper {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
     width: 100%;
+    animation: fadeIn 0.3s ease-out;
+    overflow: hidden;
+  }
+
+  @keyframes fadeIn {
+    from {
+      opacity: 0;
+      transform: translateY(10px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  .card-header {
     display: flex;
     align-items: center;
-    gap: 1.5rem;
-    padding: 1.5rem;
-    border: none;
-    background: transparent;
-    cursor: pointer;
-    text-align: left;
+    justify-content: space-between;
+    gap: 1rem;
+    padding-bottom: 1rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
   }
 
-  .requirement-icon {
-    flex-shrink: 0;
-    width: 64px;
-    height: 64px;
+  .header-left {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+  }
+
+  .requirement-icon-large {
+    width: 56px;
+    height: 56px;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -240,76 +376,74 @@
     color: var(--accent-color);
   }
 
-  .requirement-content {
-    flex: 1;
+  .requirement-name-large {
+    margin: 0;
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--text-primary);
+    text-align: left;
+  }
+
+  .card-body {
     display: flex;
     flex-direction: column;
-    gap: 0.5rem;
+    gap: 1rem;
+    text-align: left;
+    overflow-y: auto;
+    flex: 1;
+    min-height: 0;
+    padding-right: 0.5rem;
+    box-sizing: border-box;
   }
 
-  .requirement-name {
-    margin: 0;
-    font-size: 1.125rem;
-    font-weight: 600;
-    color: var(--text-primary);
+  .card-body::-webkit-scrollbar {
+    width: 8px;
   }
 
-  .requirement-spec {
+  .card-body::-webkit-scrollbar-track {
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 4px;
+  }
+
+  .card-body::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 4px;
+  }
+
+  .card-body::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.3);
+  }
+
+  .requirement-spec-large {
     margin: 0;
-    font-size: 0.9375rem;
-    line-height: 1.5;
+    font-size: 1rem;
+    line-height: 1.6;
     color: var(--text-secondary);
-  }
-
-  .requirement-checkbox {
-    flex-shrink: 0;
-    width: 32px;
-    height: 32px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border-radius: 8px;
-    border: 2px solid rgba(255, 255, 255, 0.2);
-    background: rgba(0, 0, 0, 0.2);
-    transition: all 0.3s ease;
-  }
-
-  .requirement-checkbox.checked {
-    background: linear-gradient(
-      135deg,
-      var(--accent-color) 0%,
-      var(--accent-color-strong) 100%
-    );
-    border-color: var(--accent-color);
-    box-shadow: 0 0 12px var(--accent-glow);
-  }
-
-  .check-icon {
-    color: white;
   }
 
   .diagram-content {
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 1rem;
+    gap: 0.5rem;
     flex-wrap: wrap;
-    margin-top: 1rem;
+    margin: 1rem 0;
+    width: 100%;
   }
 
   .diagram-item {
     display: flex;
     align-items: center;
-    gap: 1rem;
+    gap: 0.5rem;
   }
 
   .diagram-box {
-    padding: 1rem 1.5rem;
-    border-radius: 8px;
+    padding: 0.5rem 1rem;
+    border-radius: 6px;
     font-weight: 600;
-    font-size: 0.9375rem;
+    font-size: 0.875rem;
     text-align: center;
-    min-width: 140px;
+    min-width: 80px;
     border: 2px solid;
   }
 
@@ -332,93 +466,57 @@
   }
 
   .diagram-arrow {
-    font-size: 1.25rem;
+    font-size: 1rem;
     font-weight: 700;
     color: var(--text-secondary);
   }
 
-  .completion-message {
-    display: flex;
-    align-items: center;
-    gap: 1rem;
-    padding: 1.25rem 1.5rem;
-    background: linear-gradient(
-      135deg,
-      rgba(25, 211, 199, 0.15) 0%,
-      rgba(25, 211, 199, 0.05) 100%
-    );
-    border: 1px solid rgba(25, 211, 199, 0.4);
-    border-radius: 12px;
-    animation: slide-in 0.3s ease-out;
-  }
-
-  @keyframes slide-in {
-    from {
-      opacity: 0;
-      transform: translateY(-10px);
-    }
-    to {
-      opacity: 1;
-      transform: translateY(0);
-    }
-  }
-
-  .completion-icon {
-    flex-shrink: 0;
-    width: 48px;
-    height: 48px;
+  .checkbox-indicator {
+    width: 32px;
+    height: 32px;
+    border-radius: 6px;
+    border: 2px solid rgba(255, 255, 255, 0.2);
     display: flex;
     align-items: center;
     justify-content: center;
-    border-radius: 50%;
-    background: var(--accent-color);
-    color: white;
-    box-shadow: 0 0 20px var(--accent-glow);
+    color: transparent;
+    transition: all 0.2s ease;
+    background: rgba(255, 255, 255, 0.05);
   }
 
-  .completion-text {
-    margin: 0;
-    font-size: 1rem;
-    font-weight: 500;
-    color: var(--text-primary);
+  .checkbox-indicator.checked {
+    background: var(--accent-color);
+    border-color: var(--accent-color);
+    color: #1a1a1a;
+    box-shadow: 0 0 10px var(--accent-glow);
+  }
+
+  .requirement-card:hover .checkbox-indicator:not(.checked) {
+    border-color: rgba(255, 255, 255, 0.4);
+    background: rgba(255, 255, 255, 0.1);
   }
 
   @media (max-width: 768px) {
-    .hardware-check {
-      padding: 0.5rem;
-      gap: 1.5rem;
+    .requirement-card {
+      padding: 1.5rem;
     }
 
-    .step-title {
-      font-size: 1.5rem;
-    }
-
-    .section-header {
-      flex-direction: column;
-      align-items: flex-start;
-    }
-
-    .requirement-button {
-      flex-direction: column;
-      text-align: center;
-      gap: 1rem;
-    }
-
-    .requirement-content {
-      align-items: center;
-      text-align: center;
+    .requirement-name-large {
+      font-size: 1.25rem;
     }
 
     .diagram-content {
       flex-direction: column;
     }
 
-    .diagram-item {
-      flex-direction: column;
-    }
-
     .diagram-arrow {
       transform: rotate(90deg);
+    }
+  }
+
+  @media (max-height: 700px) {
+    .requirement-card {
+      padding: 1rem;
     }
   }
 </style>

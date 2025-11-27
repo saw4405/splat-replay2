@@ -48,11 +48,13 @@
 <style>
   .installer-app {
     width: 100%;
-    min-height: 100vh;
+    height: 100vh;
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: 2rem;
+    padding: 1rem;
+    overflow: hidden;
+    box-sizing: border-box;
   }
 
   .step-placeholder {

@@ -24,7 +24,17 @@ export const isLoading = writable<boolean>(false);
 // エラー状態
 export const error = writable<ApiError | null>(null);
 
-// 進行状況の計算
+// 各ステップのサブステップ数を定義
+const STEP_SUBSTEP_COUNTS: Record<string, number> = {
+  hardware_check: 5, // ハードウェアチェック: 5つのタスク
+  obs_setup: 6, // OBS: 6つのサブステップ
+  ffmpeg_setup: 1, // FFMPEG: 1つのサブステップ
+  tesseract_setup: 2, // Tesseract: 2つのサブステップ
+  font_installation: 2, // Font: 2つのサブステップ
+  youtube_setup: 5, // YouTube: 5つのサブステップ
+};
+
+// 進行状況の計算（サブステップを含む）
 export const progressInfo = derived(
   installationState,
   ($state): ProgressInfo | null => {
@@ -40,16 +50,39 @@ export const progressInfo = derived(
     ];
 
     const currentIndex = steps.indexOf($state.current_step);
-    const totalSteps = steps.length;
-    const percentage = Math.round(
-      ($state.completed_steps.length / totalSteps) * 100
+
+    // 総サブステップ数を計算
+    const totalSubsteps = steps.reduce(
+      (sum, step) => sum + (STEP_SUBSTEP_COUNTS[step] || 1),
+      0
     );
+
+    // 完了したサブステップ数を計算
+    let completedSubsteps = 0;
+
+    // 完了済みステップのサブステップをすべてカウント
+    for (const completedStep of $state.completed_steps) {
+      completedSubsteps += STEP_SUBSTEP_COUNTS[completedStep] || 1;
+    }
+
+    // 現在のステップの完了済みサブステップをカウント
+    if (currentIndex >= 0 && !$state.completed_steps.includes($state.current_step)) {
+      const currentStepDetails = $state.step_details[$state.current_step] || {};
+      const completedSubstepsInCurrentStep = Object.values(currentStepDetails).filter(
+        (completed) => completed === true
+      ).length;
+      completedSubsteps += completedSubstepsInCurrentStep;
+    }
+
+    const percentage = Math.round((completedSubsteps / totalSubsteps) * 100);
 
     return {
       current_step_index: currentIndex,
-      total_steps: totalSteps,
+      total_steps: steps.length,
       percentage,
       current_step_name: $state.current_step,
+      completed_substeps: completedSubsteps,
+      total_substeps: totalSubsteps,
     };
   }
 );
@@ -291,7 +324,11 @@ export async function markSubstepCompleted(
     );
     if (!response.ok) {
       console.error("Failed to mark substep completed");
+      return;
     }
+
+    // サブステップの状態を更新した後、インストール状態を再取得
+    await fetchInstallationStatus();
   } catch (err) {
     console.error("Failed to mark substep completed:", err);
   }

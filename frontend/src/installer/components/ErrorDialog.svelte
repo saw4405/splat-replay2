@@ -4,6 +4,8 @@
 
   export let open = false;
   export let error: ApiError | null = null;
+  export let title = "エラーが発生しました";
+  export let message = "";
   export let onClose: (() => void) | undefined = undefined;
   export let onRetry: (() => void) | undefined = undefined;
 
@@ -28,14 +30,23 @@
   }
 </script>
 
-{#if open && error}
-  <div class="dialog-backdrop" on:click={handleBackdropClick} role="presentation">
-    <div class="dialog glass-surface" role="dialog" aria-modal="true" aria-labelledby="error-title">
+{#if open && (error || message)}
+  <div
+    class="dialog-backdrop"
+    on:click={handleBackdropClick}
+    role="presentation"
+  >
+    <div
+      class="dialog glass-surface"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="error-title"
+    >
       <div class="dialog-header">
         <div class="header-icon">
           <AlertCircle class="icon error-icon" size={24} />
         </div>
-        <h2 id="error-title" class="dialog-title">エラーが発生しました</h2>
+        <h2 id="error-title" class="dialog-title">{title}</h2>
         <button
           class="close-button"
           type="button"
@@ -47,27 +58,37 @@
       </div>
 
       <div class="dialog-content">
-        <p class="error-message">{error.error}</p>
+        <p class="error-message">{message || (error ? error.error : "")}</p>
 
-        {#if error.error_code}
-          <p class="error-code">エラーコード: {error.error_code}</p>
-        {/if}
+        {#if error}
+          {#if error.error_code}
+            <p class="error-code">エラーコード: {error.error_code}</p>
+          {/if}
 
-        {#if error.recovery_action}
-          <div class="recovery-section">
-            <h3 class="recovery-title">推奨される対処方法</h3>
-            <p class="recovery-action">{error.recovery_action}</p>
-          </div>
+          {#if error.recovery_action}
+            <div class="recovery-section">
+              <h3 class="recovery-title">推奨される対処方法</h3>
+              <p class="recovery-action">{error.recovery_action}</p>
+            </div>
+          {/if}
         {/if}
       </div>
 
       <div class="dialog-actions">
         {#if onRetry}
-          <button class="button button-primary" type="button" on:click={handleRetry}>
+          <button
+            class="button button-primary"
+            type="button"
+            on:click={handleRetry}
+          >
             再試行
           </button>
         {/if}
-        <button class="button button-secondary" type="button" on:click={handleClose}>
+        <button
+          class="button button-secondary"
+          type="button"
+          on:click={handleClose}
+        >
           閉じる
         </button>
       </div>
@@ -231,7 +252,11 @@
   }
 
   .button-primary {
-    background: linear-gradient(135deg, var(--accent-color) 0%, var(--accent-color-strong) 100%);
+    background: linear-gradient(
+      135deg,
+      var(--accent-color) 0%,
+      var(--accent-color-strong) 100%
+    );
     color: white;
     border-color: var(--accent-color);
   }
