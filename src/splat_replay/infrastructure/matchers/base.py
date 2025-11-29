@@ -7,6 +7,8 @@ from typing import Optional, Tuple
 import cv2
 import numpy as np
 
+from .utils import imread_unicode
+
 
 class BaseMatcher(ABC):
     """画像マッチングの基底クラス。"""
@@ -18,11 +20,14 @@ class BaseMatcher(ABC):
         name: str | None = None,
     ) -> None:
         self.name = name
-        self._mask = (
-            cv2.imread(str(mask_path), cv2.IMREAD_GRAYSCALE)
-            if mask_path
-            else None
-        )
+        self._mask: Optional[np.ndarray] = None
+        if mask_path is not None:
+            mask = imread_unicode(mask_path, cv2.IMREAD_GRAYSCALE)
+            if mask is None:
+                raise FileNotFoundError(
+                    f"マスク画像の読み込みに失敗しました: {mask_path}"
+                )
+            self._mask = mask
         self._roi = roi
 
     def _apply_roi(self, image: np.ndarray) -> np.ndarray:
