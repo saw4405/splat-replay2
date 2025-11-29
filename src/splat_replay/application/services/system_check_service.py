@@ -289,8 +289,8 @@ class SystemCheckService:
         self._logger.info("Checking YouTube credentials")
 
         try:
-            # configフォルダ内のclient_secrets.jsonを確認
-            credentials_path = CONFIG_DIR / "client_secrets.json"
+            # configフォルダ内のclient_secret.jsonを確認
+            credentials_path = CONFIG_DIR / "client_secret.json"
             self._logger.info(
                 "Checking credentials path", path=str(credentials_path)
             )

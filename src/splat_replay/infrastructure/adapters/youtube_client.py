@@ -38,7 +38,7 @@ class YouTubeClient(UploadPort, AuthenticatedClientPort):
     def __init__(self, logger: BoundLogger):
         self.logger = logger
         self.TOKEN_FILE = paths.config("token.pickle")
-        self.CLIENT_SECRET_FILE = paths.config("client_secrets.json")
+        self.CLIENT_SECRET_FILE = paths.config("client_secret.json")
         self.API_NAME = "youtube"
         self.API_VERSION = "v3"
         self.SCOPES = [

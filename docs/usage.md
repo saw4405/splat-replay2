@@ -108,7 +108,7 @@
 3. 認証情報ページで「OAuth 2.0 クライアント ID」を作成:
    - アプリケーションの種類: デスクトップアプリケーション
    - リダイレクト URI: `http://localhost:8080/`
-4. 作成した認証情報の「JSON をダウンロード」をクリックし、`client_secrets.json`として保存（後で配置します）
+4. 作成した認証情報の「JSON をダウンロード」をクリックし、`client_secret.json`として保存（後で配置します）
 5. YouTube チャンネルの確認と登録を完了する
 
 #### 2.2.3. Groq API キーの取得（文字起こしを使用する場合のみ）
@@ -130,7 +130,7 @@
 
 #### 2.3.3. YouTube API 認証情報の配置
 
-1. ダウンロードした`client_secrets.json`を`_internal\config`フォルダに配置
+1. ダウンロードした`client_secret.json`を`_internal\config`フォルダに配置
 
 ## 4. 使用方法
 

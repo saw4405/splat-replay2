@@ -214,7 +214,7 @@ $RECYCLE.BIN/
 
 
 settings.toml
-client_secrets.json
+client_secret.json
 token.pickle
 logs/
 videos/

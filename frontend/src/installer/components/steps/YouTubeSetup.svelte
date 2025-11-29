@@ -204,7 +204,7 @@
           }
         } else {
           errorMessage =
-            "client_secrets.json ファイルが見つかりませんでした。配置してから次へ進んでください。";
+            "client_secret.json ファイルが見つかりませんでした。配置してから次へ進んでください。";
           showError = true;
           isChecking = false;
           return true;
@@ -291,7 +291,7 @@
           } else {
             // ファイルが存在しない場合、エラーダイアログを表示してチェックを入れない
             errorMessage =
-              "client_secrets.json ファイルが見つかりませんでした。";
+              "client_secret.json ファイルが見つかりませんでした。";
             showError = true;
           }
         } catch (error) {
@@ -540,11 +540,11 @@
               <!-- Place File -->
               <ol class="instruction-list">
                 <li>
-                  ファイル名を <code>client_secrets.json</code> に変更します
+                  ファイル名を <code>client_secret.json</code> に変更します
                 </li>
                 <li>
                   アプリケーションの config フォルダに <code
-                    >client_secrets.json</code
+                    >client_secret.json</code
                   >
                   ファイルを配置します
                   <div class="path-box">
