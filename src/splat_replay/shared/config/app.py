@@ -21,7 +21,6 @@ from pydantic.fields import ModelField
 from splat_replay.shared import paths
 from splat_replay.shared.config.behavior import BehaviorSettings
 from splat_replay.shared.config.capture_device import CaptureDeviceSettings
-from splat_replay.shared.config.installer import InstallerSettings
 from splat_replay.shared.config.obs import OBSSettings
 from splat_replay.shared.config.record import RecordSettings
 from splat_replay.shared.config.speech_transcriber import (
@@ -34,7 +33,6 @@ from splat_replay.shared.config.video_storage import VideoStorageSettings
 SECTION_CLASSES = {
     "behavior": BehaviorSettings,
     "capture_device": CaptureDeviceSettings,
-    "installer": InstallerSettings,
     "obs": OBSSettings,
     "record": RecordSettings,
     "speech_transcriber": SpeechTranscriberSettings,
@@ -49,7 +47,6 @@ class AppSettings(BaseModel):
 
     behavior = BehaviorSettings()
     capture_device = CaptureDeviceSettings()
-    installer = InstallerSettings()
     obs = OBSSettings()
     record = RecordSettings()
     speech_transcriber = SpeechTranscriberSettings()
@@ -120,7 +117,6 @@ class AppSettings(BaseModel):
         toml_data["capture_device"] = self._convert_for_toml(
             self.capture_device.dict()
         )
-        toml_data["installer"] = self._convert_for_toml(self.installer.dict())
         toml_data["obs"] = self._convert_for_toml(self.obs.dict())
         toml_data["record"] = self._convert_for_toml(self.record.dict())
         toml_data["speech_transcriber"] = self._convert_for_toml(
