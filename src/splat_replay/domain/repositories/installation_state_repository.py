@@ -58,6 +58,48 @@ class InstallationStateRepository(ABC):
         """
         pass
 
+    @abstractmethod
+    def is_camera_permission_dialog_shown(self) -> bool:
+        """カメラ許可ダイアログが表示済みかどうかを確認する。
+
+        Returns:
+            表示済みの場合はTrue、そうでなければFalse
+
+        Raises:
+            RepositoryError: 確認に失敗した場合
+        """
+        pass
+
+    @abstractmethod
+    def mark_camera_permission_dialog_shown(self) -> None:
+        """カメラ許可ダイアログを表示済みとしてマークし、永続化する。
+
+        Raises:
+            RepositoryError: 更新に失敗した場合
+        """
+        pass
+
+    @abstractmethod
+    def is_youtube_permission_dialog_shown(self) -> bool:
+        """YouTube権限ダイアログが表示済みかどうかを確認する。
+
+        Returns:
+            表示済みの場合はTrue、そうでなければFalse
+
+        Raises:
+            RepositoryError: 確認に失敗した場合
+        """
+        pass
+
+    @abstractmethod
+    def mark_youtube_permission_dialog_shown(self) -> None:
+        """YouTube権限ダイアログを表示済みとしてマークし、永続化する。
+
+        Raises:
+            RepositoryError: 更新に失敗した場合
+        """
+        pass
+
 
 class RepositoryError(Exception):
     """リポジトリ操作で発生するエラーの基底クラス。"""

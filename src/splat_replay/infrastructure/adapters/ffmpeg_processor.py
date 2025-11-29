@@ -465,6 +465,38 @@ class FFmpegProcessor(VideoEditorPort):
         if result.returncode != 0:
             self._log_failure("FFmpeg: 音声トラック追加失敗", result)
 
+    async def list_video_devices(self) -> List[str]:
+        """List available DirectShow video capture devices.
+
+        Returns:
+            List of device names
+        """
+        self.logger.info("FFmpeg: ビデオデバイス一覧取得")
+
+        result = await self._run_text(
+            ["ffmpeg", "-list_devices", "true", "-f", "dshow", "-i", "dummy"],
+            timeout=10,
+        )
+
+        # Parse the output to extract video device names
+        devices: List[str] = []
+        lines = result.stderr.split("\n")
+
+        for line in lines:
+            # Look for lines with device names marked as (video)
+            # Format: [dshow @ ...] "Device Name" (video)
+            if "(video)" in line and '"' in line:
+                # Extract text between quotes
+                start = line.find('"')
+                end = line.rfind('"')
+                if start != -1 and end != -1 and start < end:
+                    device_name = line[start + 1 : end]
+                    if device_name and device_name not in devices:
+                        devices.append(device_name)
+
+        self.logger.info(f"FFmpeg: {len(devices)}個のビデオデバイスを検出")
+        return devices
+
     # ------------------------------------------------------------------
     # Internal utilities
     # ------------------------------------------------------------------

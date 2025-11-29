@@ -48,13 +48,13 @@
   }
 
   export async function next(
-    options: { skip?: boolean } = {},
+    options: { skip?: boolean } = {}
   ): Promise<boolean> {
     if (!ffmpegInstalled) {
       await handleSetup();
       if (!ffmpegInstalled) {
         alert(
-          "FFMPEG が検出されませんでした。インストールしてから次へ進んでください。",
+          "FFMPEG が検出されませんでした。インストールしてから次へ進んでください。"
         );
         return true;
       }
@@ -64,7 +64,7 @@
       await markSubstepCompleted(
         InstallationStep.FFMPEG_SETUP,
         "ffmpeg-download-extract",
-        true,
+        true
       );
     }
 
@@ -90,7 +90,7 @@
         await markSubstepCompleted(
           InstallationStep.FFMPEG_SETUP,
           "ffmpeg-download-extract",
-          true,
+          true
         );
       }
     } catch (error) {
@@ -110,7 +110,7 @@
       await markSubstepCompleted(
         InstallationStep.FFMPEG_SETUP,
         "ffmpeg-download-extract",
-        false,
+        false
       );
       return;
     }
@@ -128,7 +128,7 @@
         await markSubstepCompleted(
           InstallationStep.FFMPEG_SETUP,
           "ffmpeg-download-extract",
-          true,
+          true
         );
       } else {
         checkError = result.error_message || "セットアップに失敗しました";
@@ -250,7 +250,9 @@
                   class="link-button"
                   type="button"
                   on:click={() =>
-                    openUrl("https://github.com/BtbN/FFmpeg-Builds/releases")}
+                    openUrl(
+                      "https://github.com/BtbN/FFmpeg-Builds/releases/tag/latest"
+                    )}
                 >
                   <Download class="icon" size={16} />
                   FFMPEG をダウンロード
@@ -266,11 +268,13 @@
                 >ffmpeg</code
               >
               に変更して Cドライブ直下に配置します
+            </li>
+            <li>
+              下記のフォルダに「ffmpeg.exe」があることを確認します
               <div class="path-box">
                 <FolderOpen class="icon" size={20} />
                 <div class="path-content">
-                  <p class="path-label">配置先フォルダ:</p>
-                  <code class="path-value">C:\ffmpeg</code>
+                  <code class="path-value">C:\ffmpeg\bin</code>
                 </div>
               </div>
             </li>

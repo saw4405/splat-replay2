@@ -13,8 +13,8 @@ class InstallationStep(Enum):
     """インストールステップの列挙型。"""
 
     HARDWARE_CHECK = "hardware_check"
-    OBS_SETUP = "obs_setup"
     FFMPEG_SETUP = "ffmpeg_setup"
+    OBS_SETUP = "obs_setup"
     TESSERACT_SETUP = "tesseract_setup"
     FONT_INSTALLATION = "font_installation"
     YOUTUBE_SETUP = "youtube_setup"
@@ -24,8 +24,8 @@ class InstallationStep(Enum):
         """全てのインストールステップを順序通りに取得する。"""
         return [
             cls.HARDWARE_CHECK,
-            cls.OBS_SETUP,
             cls.FFMPEG_SETUP,
+            cls.OBS_SETUP,
             cls.TESSERACT_SETUP,
             cls.FONT_INSTALLATION,
             cls.YOUTUBE_SETUP,
@@ -57,8 +57,8 @@ class InstallationStep(Enum):
         """ステップの表示名を取得する。"""
         display_names = {
             self.HARDWARE_CHECK: "ハードウェア確認",
-            self.OBS_SETUP: "OBSセットアップ",
             self.FFMPEG_SETUP: "FFMPEGセットアップ",
+            self.OBS_SETUP: "OBSセットアップ",
             self.TESSERACT_SETUP: "Tesseractセットアップ",
             self.FONT_INSTALLATION: "フォントインストール",
             self.YOUTUBE_SETUP: "YouTube API設定",
@@ -88,6 +88,12 @@ class InstallationState(BaseModel):
     )
     installation_date: Optional[datetime] = Field(
         default=None, description="インストール完了日時"
+    )
+    camera_permission_dialog_shown: bool = Field(
+        default=False, description="カメラ許可ダイアログが表示済みかどうか"
+    )
+    youtube_permission_dialog_shown: bool = Field(
+        default=False, description="YouTube権限ダイアログが表示済みかどうか"
     )
 
     def mark_step_completed(self, step: InstallationStep) -> None:
@@ -125,7 +131,9 @@ class InstallationState(BaseModel):
             self.step_details[step_key] = {}
         self.step_details[step_key][substep_id] = completed
 
-    def is_substep_completed(self, step: InstallationStep, substep_id: str) -> bool:
+    def is_substep_completed(
+        self, step: InstallationStep, substep_id: str
+    ) -> bool:
         """指定されたサブステップが完了済みかどうかを確認する。"""
         step_key = step.value
         if step_key not in self.step_details:
@@ -139,10 +147,9 @@ class InstallationState(BaseModel):
 
     def can_proceed_to_next_step(self) -> bool:
         """次のステップに進むことができるかどうかを確認する。"""
-        return (
-            self.is_step_completed(self.current_step)
-            or self.is_step_skipped(self.current_step)
-        )
+        return self.is_step_completed(
+            self.current_step
+        ) or self.is_step_skipped(self.current_step)
 
     def proceed_to_next_step(self) -> bool:
         """次のステップに進む。進めた場合はTrue、進めなかった場合はFalseを返す。"""

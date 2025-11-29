@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Literal
 
 from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel
@@ -57,6 +57,37 @@ class ErrorResponse(BaseModel):
     is_recoverable: bool
 
 
+class OBSConfigResponse(BaseModel):
+    """OBS設定レスポンス。"""
+
+    websocket_password: str
+    capture_device_name: str
+
+
+class OBSWebSocketPasswordRequest(BaseModel):
+    """OBS WebSocketパスワード設定リクエスト。"""
+
+    password: str
+
+
+class VideoDeviceListResponse(BaseModel):
+    """ビデオデバイスリストレスポンス。"""
+
+    devices: list[str]
+
+
+class CaptureDeviceRequest(BaseModel):
+    """キャプチャデバイス設定リクエスト。"""
+
+    device_name: str
+
+
+class YouTubePrivacyStatusRequest(BaseModel):
+    """YouTube公開範囲設定リクエスト。"""
+
+    privacy_status: Literal["public", "unlisted", "private"]
+
+
 def create_installer_router(
     installer_service: InstallerService,
     system_check_service: SystemCheckService,
@@ -91,7 +122,8 @@ def create_installer_router(
                 skipped_steps=[step.value for step in state.skipped_steps],
                 progress_percentage=state.get_progress_percentage(),
                 remaining_steps=[
-                    step.value for step in state.get_remaining_steps()],
+                    step.value for step in state.get_remaining_steps()
+                ],
                 step_details=state.step_details,
             )
         except Exception as e:
@@ -115,7 +147,8 @@ def create_installer_router(
                 skipped_steps=[step.value for step in state.skipped_steps],
                 progress_percentage=state.get_progress_percentage(),
                 remaining_steps=[
-                    step.value for step in state.get_remaining_steps()],
+                    step.value for step in state.get_remaining_steps()
+                ],
                 step_details=state.step_details,
             )
         except Exception as e:
@@ -132,6 +165,11 @@ def create_installer_router(
         try:
             state = installer_service.complete_installation()
 
+            logger.info(
+                "Installation completed successfully. Settings have been reloaded.",
+                is_completed=state.is_completed,
+            )
+
             return InstallationStatusResponse(
                 is_completed=state.is_completed,
                 current_step=state.current_step.value,
@@ -139,7 +177,8 @@ def create_installer_router(
                 skipped_steps=[step.value for step in state.skipped_steps],
                 progress_percentage=state.get_progress_percentage(),
                 remaining_steps=[
-                    step.value for step in state.get_remaining_steps()],
+                    step.value for step in state.get_remaining_steps()
+                ],
                 step_details=state.step_details,
             )
         except Exception as e:
@@ -176,7 +215,9 @@ def create_installer_router(
                 detail=error_response.user_message,
             )
 
-    @router.post("/steps/{step}/complete", response_model=InstallationStatusResponse)
+    @router.post(
+        "/steps/{step}/complete", response_model=InstallationStatusResponse
+    )
     async def mark_step_completed(step: str) -> InstallationStatusResponse:
         """ステップを完了済みとしてマークする。"""
         try:
@@ -198,15 +239,19 @@ def create_installer_router(
                 detail=f"Invalid step: {step}",
             )
         except Exception as e:
-            logger.error("Failed to mark step completed",
-                         step=step, error=str(e))
+            logger.error(
+                "Failed to mark step completed", step=step, error=str(e)
+            )
             error_response = error_handler.handle_error(e)
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail=error_response.user_message,
             )
 
-    @router.post("/steps/{step}/substeps/{substep_id}", response_model=InstallationStatusResponse)
+    @router.post(
+        "/steps/{step}/substeps/{substep_id}",
+        response_model=InstallationStatusResponse,
+    )
     async def mark_substep_completed(
         step: str, substep_id: str, completed: bool = True
     ) -> InstallationStatusResponse:
@@ -244,7 +289,9 @@ def create_installer_router(
                 detail=error_response.user_message,
             )
 
-    @router.post("/steps/{step}/skip", response_model=InstallationStatusResponse)
+    @router.post(
+        "/steps/{step}/skip", response_model=InstallationStatusResponse
+    )
     async def skip_step(step: str) -> InstallationStatusResponse:
         """ステップをスキップする。"""
         try:
@@ -305,7 +352,9 @@ def create_installer_router(
                 detail=error_response.user_message,
             )
 
-    @router.post("/navigation/previous", response_model=InstallationStatusResponse)
+    @router.post(
+        "/navigation/previous", response_model=InstallationStatusResponse
+    )
     async def go_back_to_previous_step() -> InstallationStatusResponse:
         """前のステップに戻る。"""
         try:
@@ -342,8 +391,9 @@ def create_installer_router(
             return SystemCheckResponse(
                 is_installed=result.is_installed,
                 version=result.version,
-                installation_path=str(
-                    result.installation_path) if result.installation_path else None,
+                installation_path=str(result.installation_path)
+                if result.installation_path
+                else None,
                 error_message=result.error_message,
             )
         except Exception as e:
@@ -363,8 +413,9 @@ def create_installer_router(
             return SystemCheckResponse(
                 is_installed=result.is_installed,
                 version=result.version,
-                installation_path=str(
-                    result.installation_path) if result.installation_path else None,
+                installation_path=str(result.installation_path)
+                if result.installation_path
+                else None,
                 error_message=result.error_message,
             )
         except Exception as e:
@@ -384,8 +435,9 @@ def create_installer_router(
             return SystemCheckResponse(
                 is_installed=result.is_installed,
                 version=result.version,
-                installation_path=str(
-                    result.installation_path) if result.installation_path else None,
+                installation_path=str(result.installation_path)
+                if result.installation_path
+                else None,
                 error_message=result.error_message,
             )
         except Exception as e:
@@ -405,8 +457,9 @@ def create_installer_router(
             return SystemCheckResponse(
                 is_installed=result.is_installed,
                 version=result.version,
-                installation_path=str(
-                    result.installation_path) if result.installation_path else None,
+                installation_path=str(result.installation_path)
+                if result.installation_path
+                else None,
                 error_message=result.error_message,
             )
         except Exception as e:
@@ -426,8 +479,9 @@ def create_installer_router(
             return SystemCheckResponse(
                 is_installed=result.is_installed,
                 version=result.version,
-                installation_path=str(
-                    result.installation_path) if result.installation_path else None,
+                installation_path=str(result.installation_path)
+                if result.installation_path
+                else None,
                 error_message=result.error_message,
             )
         except Exception as e:
@@ -447,8 +501,9 @@ def create_installer_router(
             return SystemCheckResponse(
                 is_installed=result.is_installed,
                 version=result.version,
-                installation_path=str(
-                    result.installation_path) if result.installation_path else None,
+                installation_path=str(result.installation_path)
+                if result.installation_path
+                else None,
                 error_message=result.error_message,
             )
         except Exception as e:
@@ -468,8 +523,9 @@ def create_installer_router(
             return SystemCheckResponse(
                 is_installed=result.is_installed,
                 version=result.version,
-                installation_path=str(
-                    result.installation_path) if result.installation_path else None,
+                installation_path=str(result.installation_path)
+                if result.installation_path
+                else None,
                 error_message=result.error_message,
             )
         except Exception as e:
@@ -489,8 +545,9 @@ def create_installer_router(
             return SystemCheckResponse(
                 is_installed=result.is_installed,
                 version=result.version,
-                installation_path=str(
-                    result.installation_path) if result.installation_path else None,
+                installation_path=str(result.installation_path)
+                if result.installation_path
+                else None,
                 error_message=result.error_message,
             )
         except Exception as e:
@@ -501,5 +558,147 @@ def create_installer_router(
                 detail=error_response.user_message,
             )
 
-    return router
+    @router.get("/config/obs", response_model=OBSConfigResponse)
+    async def get_obs_config() -> OBSConfigResponse:
+        """現在のOBS関連設定を取得する。"""
+        try:
+            from splat_replay.shared import paths
+            from splat_replay.shared.config.app import AppSettings
 
+            # 現在の設定を読み込む
+            settings = AppSettings.load_from_toml(paths.SETTINGS_FILE)
+
+            return OBSConfigResponse(
+                websocket_password=settings.obs.websocket_password.get_secret_value(),
+                capture_device_name=settings.capture_device.name,
+            )
+        except Exception as e:
+            logger.error("Failed to get OBS config", error=str(e))
+            error_response = error_handler.handle_error(e)
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=error_response.user_message,
+            )
+
+    @router.post("/config/obs/websocket-password")
+    async def save_obs_websocket_password(
+        request: OBSWebSocketPasswordRequest,
+    ) -> dict[str, str]:
+        """OBS WebSocketパスワードを設定ファイルに保存する。"""
+        try:
+            from pydantic import SecretStr
+
+            from splat_replay.shared import paths
+            from splat_replay.shared.config.app import AppSettings
+
+            # 現在の設定を読み込む
+            settings = AppSettings.load_from_toml(paths.SETTINGS_FILE)
+
+            # WebSocketパスワードを更新
+            settings.obs.websocket_password = SecretStr(request.password)
+
+            # 設定を保存
+            settings.save_to_toml(paths.SETTINGS_FILE)
+
+            logger.info("OBS WebSocket password saved successfully")
+
+            return {
+                "status": "success",
+                "message": "パスワードが保存されました",
+            }
+        except Exception as e:
+            logger.error("Failed to save OBS WebSocket password", error=str(e))
+            error_response = error_handler.handle_error(e)
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=error_response.user_message,
+            )
+
+    @router.get("/devices/video", response_model=VideoDeviceListResponse)
+    async def list_video_devices() -> VideoDeviceListResponse:
+        """利用可能なビデオキャプチャデバイスを一覧表示する。"""
+        try:
+            from splat_replay.infrastructure.adapters.ffmpeg_processor import (
+                FFmpegProcessor,
+            )
+
+            ffmpeg_processor = FFmpegProcessor(logger)
+            devices = await ffmpeg_processor.list_video_devices()
+
+            return VideoDeviceListResponse(devices=devices)
+        except Exception as e:
+            logger.error("Failed to list video devices", error=str(e))
+            error_response = error_handler.handle_error(e)
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=error_response.user_message,
+            )
+
+    @router.post("/config/capture-device")
+    async def save_capture_device(
+        request: CaptureDeviceRequest,
+    ) -> dict[str, str]:
+        """キャプチャデバイス名を設定ファイルに保存する。"""
+        try:
+            from splat_replay.shared import paths
+            from splat_replay.shared.config.app import AppSettings
+
+            # 現在の設定を読み込む
+            settings = AppSettings.load_from_toml(paths.SETTINGS_FILE)
+
+            # キャプチャデバイス名を更新
+            settings.capture_device.name = request.device_name
+
+            # 設定を保存
+            settings.save_to_toml(paths.SETTINGS_FILE)
+
+            logger.info(
+                "Capture device name saved successfully",
+                device_name=request.device_name,
+            )
+
+            return {
+                "status": "success",
+                "message": "キャプチャデバイス名が保存されました",
+            }
+        except Exception as e:
+            logger.error("Failed to save capture device name", error=str(e))
+            error_response = error_handler.handle_error(e)
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=error_response.user_message,
+            )
+
+    @router.post("/config/youtube/privacy-status")
+    async def save_youtube_privacy_status(
+        request: YouTubePrivacyStatusRequest,
+    ) -> dict[str, str]:
+        """YouTube公開範囲を設定ファイルに保存する。"""
+        try:
+            from splat_replay.shared import paths
+            from splat_replay.shared.config.app import AppSettings
+
+            # 現在の設定を読み込む
+            settings = AppSettings.load_from_toml(paths.SETTINGS_FILE)
+
+            # 公開範囲を更新
+            settings.upload.privacy_status = request.privacy_status
+
+            # 設定を保存
+            settings.save_to_toml(paths.SETTINGS_FILE)
+
+            logger.info(
+                "YouTube privacy status saved successfully",
+                privacy_status=request.privacy_status,
+            )
+
+            return {"status": "success", "message": "公開範囲が保存されました"}
+        except Exception as e:
+            logger.error("Failed to save YouTube privacy status", error=str(e))
+            error_response = error_handler.handle_error(e)
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=error_response.user_message,
+            )
+
+    return router

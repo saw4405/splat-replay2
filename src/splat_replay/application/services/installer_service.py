@@ -74,6 +74,21 @@ class InstallerService:
         state.complete_installation()
         self._repository.save_installation_state(state)
 
+        # インストール完了後、設定ファイルを再読み込み
+        try:
+            from splat_replay.shared.config import AppSettings
+
+            # 設定ファイルを再読み込み（ファイルが更新されている可能性があるため）
+            AppSettings.load_from_toml()
+            self._logger.info(
+                "Settings file reloaded successfully after installation completion"
+            )
+        except Exception as e:
+            self._logger.warning(
+                "Failed to reload settings file after installation",
+                error=str(e),
+            )
+
         self._logger.info(
             "Installation completed",
             installation_date=state.installation_date,
@@ -102,16 +117,48 @@ class InstallerService:
         self._logger.info("Proceeding to next step")
 
         state = self._repository.load_installation_state()
-
-        if not state.can_proceed_to_next_step():
-            error_msg = (
-                f"Cannot proceed to next step. "
-                f"Current step '{state.current_step.value}' is not completed or skipped."
-            )
-            self._logger.error(error_msg)
-            raise ValueError(error_msg)
-
         current_step = state.current_step
+
+        # 最後のステップかどうかを確認
+        next_step = current_step.get_next_step()
+        is_last_step = next_step is None
+
+        # 最後のステップの場合、完了していなくてもインストールを完了とする
+        if is_last_step:
+            self._logger.info(
+                "Last step reached, completing installation",
+                current_step=current_step.value,
+                is_step_completed=state.is_step_completed(current_step),
+            )
+            state.complete_installation()
+            self._repository.save_installation_state(state)
+
+            self._logger.info(
+                "Installation completed from last step",
+                from_step=current_step.value,
+                is_completed=state.is_completed,
+            )
+
+            return state
+
+        # 最後のステップでない場合は、通常の進行チェックを行う
+        if not state.can_proceed_to_next_step():
+            # YouTubeセットアップは最後のステップであり、部分的な設定でも完了とみなして進めるようにする
+            # (ユーザーからの「制限をつけないで」という要望への対応)
+            if state.current_step == InstallationStep.YOUTUBE_SETUP:
+                self._logger.info(
+                    "Auto-completing YouTube setup step to finish installation"
+                )
+                state.mark_step_completed(state.current_step)
+                self._repository.save_installation_state(state)
+            else:
+                error_msg = (
+                    f"Cannot proceed to next step. "
+                    f"Current step '{state.current_step.value}' is not completed or skipped."
+                )
+                self._logger.error(error_msg)
+                raise ValueError(error_msg)
+
         success = state.proceed_to_next_step()
 
         if not success:
@@ -124,7 +171,9 @@ class InstallerService:
         self._logger.info(
             "Proceeded to next step",
             from_step=current_step.value,
-            to_step=state.current_step.value if not state.is_completed else "completed",
+            to_step=state.current_step.value
+            if not state.is_completed
+            else "completed",
             is_completed=state.is_completed,
         )
 
@@ -277,3 +326,31 @@ class InstallerService:
         self._logger.info("Installation state reset")
 
         return state
+
+    def is_camera_permission_dialog_shown(self) -> bool:
+        """カメラ許可ダイアログが表示済みかどうかを確認する。
+
+        Returns:
+            表示済みの場合はTrue、そうでなければFalse
+        """
+        return self._repository.is_camera_permission_dialog_shown()
+
+    def mark_camera_permission_dialog_shown(self) -> None:
+        """カメラ許可ダイアログを表示済みとしてマークする。"""
+        self._logger.info("Marking camera permission dialog as shown")
+        self._repository.mark_camera_permission_dialog_shown()
+        self._logger.info("Camera permission dialog marked as shown")
+
+    def is_youtube_permission_dialog_shown(self) -> bool:
+        """YouTube権限ダイアログが表示済みかどうかを確認する。
+
+        Returns:
+            表示済みの場合はTrue、そうでなければFalse
+        """
+        return self._repository.is_youtube_permission_dialog_shown()
+
+    def mark_youtube_permission_dialog_shown(self) -> None:
+        """YouTube権限ダイアログを表示済みとしてマークする。"""
+        self._logger.info("Marking youtube permission dialog as shown")
+        self._repository.mark_youtube_permission_dialog_shown()
+        self._logger.info("YouTube permission dialog marked as shown")

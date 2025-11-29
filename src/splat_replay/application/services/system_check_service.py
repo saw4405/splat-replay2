@@ -139,7 +139,7 @@ class SystemCheckService:
 
     def check_tesseract_installation(self) -> SoftwareCheckResult:
         """Tesseractのインストール状態を確認する。
-        
+
         1. まずtesseractコマンドが実行可能かを確認
         2. 実行できない場合、C:\\Program Files\\Tesseract-OCR\\tesseract.exeが存在するかを確認
         3. ファイルがあればインストール済として返す
@@ -160,7 +160,9 @@ class SystemCheckService:
 
                 if result.success:
                     version = self._extract_tesseract_version(result.stdout)
-                    self._logger.info("Tesseract found via command", version=version)
+                    self._logger.info(
+                        "Tesseract found via command", version=version
+                    )
                     return SoftwareCheckResult(
                         is_installed=True,
                         version=version,
@@ -173,14 +175,16 @@ class SystemCheckService:
 
         # 2. C:\Program Files\Tesseract-OCR\tesseract.exeが存在するかを確認
         tesseract_exe = Path("C:/Program Files/Tesseract-OCR/tesseract.exe")
-        
+
         if tesseract_exe.exists():
-            self._logger.info("Tesseract executable found", path=str(tesseract_exe))
+            self._logger.info(
+                "Tesseract executable found", path=str(tesseract_exe)
+            )
             # ファイルが存在すればインストール済とみなす
             return SoftwareCheckResult(
                 is_installed=True,
                 version="Installed",
-                installation_path=tesseract_exe
+                installation_path=tesseract_exe,
             )
 
         # 3. どちらも見つからない場合
@@ -229,7 +233,9 @@ class SystemCheckService:
 
         return exists
 
-    def check_font_installation(self, font_name: str = "ikamodoki1") -> SoftwareCheckResult:
+    def check_font_installation(
+        self, font_name: str = "ikamodoki1"
+    ) -> SoftwareCheckResult:
         """フォントのインストール状態を確認する。
 
         Args:
@@ -245,7 +251,9 @@ class SystemCheckService:
         try:
             # サムネイル用アセットディレクトリ (assets/thumbnail) を使用
             font_dir = THUMBNAIL_ASSETS_DIR
-            self._logger.info("Checking font directory", font_dir=str(font_dir))
+            self._logger.info(
+                "Checking font directory", font_dir=str(font_dir)
+            )
 
             # ikamodoki1.ttf ファイルをチェック
             font_path = font_dir / f"{font_name}.ttf"
@@ -256,7 +264,9 @@ class SystemCheckService:
                     installation_path=font_path,
                 )
 
-            self._logger.info("Font not found", font_name=font_name, font_dir=str(font_dir))
+            self._logger.info(
+                "Font not found", font_name=font_name, font_dir=str(font_dir)
+            )
             return SoftwareCheckResult(
                 is_installed=False,
                 error_message=f"{font_name}.ttf フォントが見つかりませんでした",
@@ -281,10 +291,14 @@ class SystemCheckService:
         try:
             # configフォルダ内のclient_secrets.jsonを確認
             credentials_path = CONFIG_DIR / "client_secrets.json"
-            self._logger.info("Checking credentials path", path=str(credentials_path))
+            self._logger.info(
+                "Checking credentials path", path=str(credentials_path)
+            )
 
             if credentials_path.exists() and credentials_path.is_file():
-                self._logger.info("YouTube credentials found", path=str(credentials_path))
+                self._logger.info(
+                    "YouTube credentials found", path=str(credentials_path)
+                )
                 return SoftwareCheckResult(
                     is_installed=True,
                     installation_path=credentials_path,
@@ -330,7 +344,7 @@ class SystemCheckService:
                         version = "6.x"
                     elif "NDI 5" in str(path):
                         version = "5.x"
-                    
+
                     return SoftwareCheckResult(
                         is_installed=True,
                         version=version,

@@ -72,18 +72,19 @@
     if (Number.isNaN(parsed)) return null;
     return Math.max(0, Math.min(parsed, maxIndex));
   }
-
   function saveSubstepIndex(index: number): void {
     if (typeof window === "undefined") return;
     window.sessionStorage.setItem(SUBSTEP_STORAGE_KEY, index.toString());
   }
 
   function computeInitialSubstepIndex(steps: HardwareRequirement[]): number {
-    const firstIncomplete = steps.findIndex((step) => !step.checked);
-    if (firstIncomplete !== -1) {
-      return firstIncomplete;
-    }
-    return steps.length > 0 ? steps.length - 1 : 0;
+    // 常に最初の手順から開始する
+    return 0;
+  }
+
+  // 現在のステップが変更されたときにhasInitializedSubstepをリセット
+  $: if ($installationState?.current_step !== InstallationStep.HARDWARE_CHECK) {
+    hasInitializedSubstep = false;
   }
 
   // Sync with installation state
@@ -96,7 +97,10 @@
     }));
     requirements = updatedRequirements;
 
-    if (!hasInitializedSubstep) {
+    if (
+      !hasInitializedSubstep &&
+      $installationState.current_step === InstallationStep.HARDWARE_CHECK
+    ) {
       const savedIndex = loadSavedSubstepIndex(updatedRequirements.length - 1);
       if (savedIndex !== null) {
         currentSubStepIndex = savedIndex;
@@ -112,7 +116,7 @@
   }
 
   export async function next(
-    options: { skip?: boolean } = {},
+    options: { skip?: boolean } = {}
   ): Promise<boolean> {
     // 現在のステップをチェック済みにする
     if (!options.skip && !requirements[currentSubStepIndex].checked) {
@@ -141,13 +145,13 @@
     requirements = requirements.map((requirement, requirementIndex) =>
       requirementIndex === index
         ? { ...requirement, checked: updatedChecked }
-        : requirement,
+        : requirement
     );
 
     await markSubstepCompleted(
       InstallationStep.HARDWARE_CHECK,
       req.id,
-      updatedChecked,
+      updatedChecked
     );
   }
 
@@ -233,16 +237,35 @@
 
             {#if requirements[currentSubStepIndex].isConnection}
               <div class="diagram-content">
-                <div class="diagram-item">
+                <div class="diagram-layout">
+                  <!-- Switch -->
                   <div class="diagram-box switch">Switch</div>
-                  <div class="diagram-arrow">→</div>
-                </div>
-                <div class="diagram-item">
-                  <div class="diagram-box capture">キャプボ</div>
-                  <div class="diagram-arrow">→</div>
-                </div>
-                <div class="diagram-item">
-                  <div class="diagram-box pc">PC</div>
+
+                  <!-- Switch → キャプチャボード -->
+                  <div class="vertical-connection">
+                    <div class="vertical-line"></div>
+                    <span class="connection-label-vertical">HDMI</span>
+                    <div class="vertical-line"></div>
+                  </div>
+
+                  <!-- キャプチャボード -->
+                  <div class="diagram-box capture">キャプチャボード</div>
+
+                  <!-- キャプチャボード → PC & モニター -->
+                  <div class="split-connections">
+                    <div class="branch-connection">
+                      <div class="vertical-line"></div>
+                      <span class="connection-label-vertical">USB</span>
+                      <div class="vertical-line"></div>
+                      <div class="diagram-box pc">PC</div>
+                    </div>
+                    <div class="branch-connection">
+                      <div class="vertical-line"></div>
+                      <span class="connection-label-vertical">HDMI</span>
+                      <div class="vertical-line"></div>
+                      <div class="diagram-box monitor">モニター</div>
+                    </div>
+                  </div>
                 </div>
               </div>
             {/if}
@@ -423,52 +446,156 @@
 
   .diagram-content {
     display: flex;
+    flex-direction: column;
     align-items: center;
-    justify-content: center;
-    gap: 0.5rem;
-    flex-wrap: wrap;
-    margin: 1rem 0;
+    gap: 0;
+    margin: 0;
+    width: 100%;
+    padding: 1.5rem;
+    background: rgba(0, 0, 0, 0.3);
+    border-radius: 16px;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+  }
+
+  .connection-instruction {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    margin-bottom: 1.5rem;
+    text-align: center;
+    font-weight: 500;
+  }
+
+  .diagram-layout {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0;
     width: 100%;
   }
 
-  .diagram-item {
+  .vertical-connection {
     display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 0;
+  }
+
+  .vertical-line {
+    width: 2px;
+    height: 10px;
+    background: rgba(255, 255, 255, 0.4);
+  }
+
+  .connection-label-vertical {
+    font-size: 0.7rem;
+    color: rgba(255, 255, 255, 0.9);
+    font-weight: 700;
+    padding: 0.3rem 0.6rem;
+    background: rgba(50, 50, 60, 0.95);
+    border-radius: 4px;
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    white-space: nowrap;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+  }
+
+  .split-connections {
+    display: flex;
+    gap: 3rem;
+    justify-content: center;
+    align-items: flex-start;
+    margin-top: 1rem;
+  }
+
+  .branch-connection {
+    display: flex;
+    flex-direction: column;
     align-items: center;
     gap: 0.5rem;
   }
 
+  .connection-notes {
+    margin-top: 2rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    width: 100%;
+    padding: 1rem 1.5rem;
+    background: rgba(255, 255, 255, 0.03);
+    border-radius: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+  }
+
+  .note-item {
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+    line-height: 1.6;
+    display: flex;
+    align-items: center;
+  }
+
+  .note-item::before {
+    content: "•";
+    color: var(--accent-color);
+    font-weight: bold;
+    font-size: 1.2rem;
+    margin-right: 0.5rem;
+  }
+
   .diagram-box {
-    padding: 0.5rem 1rem;
-    border-radius: 6px;
+    padding: 0.625rem 1.25rem;
+    border-radius: 8px;
     font-weight: 600;
     font-size: 0.875rem;
     text-align: center;
-    min-width: 80px;
+    min-width: 90px;
     border: 2px solid;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+    transition: transform 0.2s ease;
+  }
+
+  .diagram-box:hover {
+    transform: translateY(-2px);
   }
 
   .diagram-box.switch {
-    background: rgba(255, 69, 58, 0.1);
-    border-color: rgba(255, 69, 58, 0.5);
-    color: #ff453a;
+    background: linear-gradient(
+      135deg,
+      rgba(255, 69, 58, 0.15) 0%,
+      rgba(255, 69, 58, 0.05) 100%
+    );
+    border-color: rgba(255, 69, 58, 0.6);
+    color: #ff6b6b;
   }
 
   .diagram-box.capture {
-    background: rgba(255, 159, 10, 0.1);
-    border-color: rgba(255, 159, 10, 0.5);
-    color: #ff9f0a;
+    background: linear-gradient(
+      135deg,
+      rgba(255, 159, 10, 0.15) 0%,
+      rgba(255, 159, 10, 0.05) 100%
+    );
+    border-color: rgba(255, 159, 10, 0.6);
+    color: #ffb347;
   }
 
   .diagram-box.pc {
-    background: rgba(25, 211, 199, 0.1);
-    border-color: rgba(25, 211, 199, 0.5);
-    color: var(--accent-color);
+    background: linear-gradient(
+      135deg,
+      rgba(25, 211, 199, 0.15) 0%,
+      rgba(25, 211, 199, 0.05) 100%
+    );
+    border-color: rgba(25, 211, 199, 0.6);
+    color: #19d3c7;
   }
 
-  .diagram-arrow {
-    font-size: 1rem;
-    font-weight: 700;
-    color: var(--text-secondary);
+  .diagram-box.monitor {
+    background: linear-gradient(
+      135deg,
+      rgba(94, 92, 230, 0.15) 0%,
+      rgba(94, 92, 230, 0.05) 100%
+    );
+    border-color: rgba(94, 92, 230, 0.6);
+    color: #7b79e8;
   }
 
   .checkbox-indicator {
@@ -506,11 +633,24 @@
     }
 
     .diagram-content {
-      flex-direction: column;
+      padding: 1.5rem 1rem;
     }
 
-    .diagram-arrow {
-      transform: rotate(90deg);
+    .split-connections {
+      flex-direction: column;
+      gap: 2rem;
+    }
+
+    .diagram-box {
+      min-width: 130px;
+    }
+
+    .connection-notes {
+      padding: 1rem;
+    }
+
+    .note-item {
+      font-size: 0.75rem;
     }
   }
 

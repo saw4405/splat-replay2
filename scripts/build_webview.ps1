@@ -75,6 +75,25 @@ if ($LASTEXITCODE -eq 0) {
     
     Write-Host "Runtime directories setup completed" -ForegroundColor Green
     
+    # Remove ikamodoki1.ttf (redistribution prohibited)
+    Write-Host ""
+    Write-Host "Removing redistribution-prohibited files..." -ForegroundColor Yellow
+    $ikamodokiPaths = @(
+        "$distDir\assets\thumbnail\ikamodoki1.ttf",
+        "$distDir\_internal\assets\thumbnail\ikamodoki1.ttf"
+    )
+    $removed = $false
+    foreach ($path in $ikamodokiPaths) {
+        if (Test-Path $path) {
+            Remove-Item -Force $path
+            Write-Host "  - ikamodoki1.ttf removed from: $path" -ForegroundColor Gray
+            $removed = $true
+        }
+    }
+    if (-not $removed) {
+        Write-Host "  - ikamodoki1.ttf not found, skipping" -ForegroundColor Gray
+    }
+    
     Write-Host ""
     Write-Host "Executable location:" -ForegroundColor Cyan
     Write-Host "   dist\SplatReplay\SplatReplay.exe" -ForegroundColor White

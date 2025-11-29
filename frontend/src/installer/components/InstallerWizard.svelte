@@ -11,6 +11,7 @@
     goToPreviousStep,
     executeStep,
     completeInstallation,
+    skipCurrentStep,
     clearError,
   } from "../store";
   import { InstallationStep } from "../types";
@@ -66,8 +67,9 @@
       const handled = await stepComponentInstance.next({ skip: isSkipping });
       if (handled) return;
 
-      // スキップしている場合は完了マークをつけない
+      // スキップしている場合はステップ全体をスキップとしてマーク
       if (isSkipping) {
+        await skipCurrentStep();
         await goToNextStep();
         return;
       }
@@ -104,7 +106,7 @@
   }
 
   function handleSubstepChange(
-    event: CustomEvent<{ isFinalSubstep: boolean }>,
+    event: CustomEvent<{ isFinalSubstep: boolean }>
   ): void {
     childAtFinalSubstep = event.detail.isFinalSubstep;
   }
@@ -343,6 +345,7 @@
     flex-direction: column;
     min-height: 0; /* Important for nested flex scrolling */
     overflow: hidden; /* Don't scroll here, let child handle it */
+    padding-bottom: 1rem;
   }
 
   .step-container {

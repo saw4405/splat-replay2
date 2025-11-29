@@ -74,11 +74,15 @@
   }
 
   function computeInitialSubstepIndex(steps: SetupStep[]): number {
-    const firstIncomplete = steps.findIndex((step) => !step.completed);
-    if (firstIncomplete !== -1) {
-      return firstIncomplete;
-    }
-    return steps.length > 0 ? steps.length - 1 : 0;
+    // 常に最初の手順から開始する
+    return 0;
+  }
+
+  // 現在のステップが変更されたときにhasInitializedSubstepをリセット
+  $: if (
+    $installationState?.current_step !== InstallationStep.FONT_INSTALLATION
+  ) {
+    hasInitializedSubstep = false;
   }
 
   // Sync with installation state
@@ -91,7 +95,10 @@
     }));
     setupSteps = updatedSteps;
 
-    if (!hasInitializedSubstep) {
+    if (
+      !hasInitializedSubstep &&
+      $installationState.current_step === InstallationStep.FONT_INSTALLATION
+    ) {
       const savedIndex = loadSavedSubstepIndex(updatedSteps.length - 1);
       if (savedIndex !== null) {
         currentSubStepIndex = savedIndex;
@@ -107,7 +114,7 @@
   }
 
   export async function next(
-    options: { skip?: boolean } = {},
+    options: { skip?: boolean } = {}
   ): Promise<boolean> {
     const currentStep = setupSteps[currentSubStepIndex];
 
@@ -116,7 +123,7 @@
       await checkFontInstallation();
       if (!fontInstalled) {
         alert(
-          "フォントファイルが見つかりませんでした。配置してから次へ進んでください。",
+          "フォントファイルが見つかりませんでした。配置してから次へ進んでください。"
         );
         return true;
       }
@@ -126,7 +133,7 @@
       await markSubstepCompleted(
         InstallationStep.FONT_INSTALLATION,
         currentStep.id,
-        true,
+        true
       );
     }
 
@@ -157,12 +164,12 @@
         await markSubstepCompleted(
           InstallationStep.FONT_INSTALLATION,
           setupSteps[0].id,
-          true,
+          true
         );
         await markSubstepCompleted(
           InstallationStep.FONT_INSTALLATION,
           setupSteps[1].id,
-          true,
+          true
         );
       }
     } catch (error) {
@@ -188,7 +195,7 @@
       await markSubstepCompleted(
         InstallationStep.FONT_INSTALLATION,
         step.id,
-        !step.completed,
+        !step.completed
       );
     }
   }
@@ -285,7 +292,7 @@
                       type="button"
                       on:click={() =>
                         openUrl(
-                          "https://web.archive.org/web/20150906013956/http://aramugi.com/?page_id=807",
+                          "https://web.archive.org/web/20150906013956/http://aramugi.com/?page_id=807"
                         )}
                     >
                       <Download class="icon" size={16} />
@@ -302,14 +309,19 @@
               <!-- Font Placement -->
               <ol class="instruction-list">
                 <li>
+                  ダウンロードした ZIP ファイルを展開し、ファイル名を <code
+                    >ikamodoki1.ttf</code
+                  >
+                  に変更して アプリケーションフォルダに配置します
+                </li>
+                <li>
                   ダウンロードしたイカモドキフォント（<code>ikamodoki1.ttf</code
-                  >）をアプリケーションフォルダに配置する
+                  >）を下記のフォルダに配置する
                   <div class="path-box">
                     <FolderOpen class="icon" size={20} />
                     <div class="path-content">
-                      <p class="path-label">配置先フォルダ:</p>
                       <code class="path-value"
-                        >_internal\assets\thumbnail\ikamodoki1.ttf</code
+                        >SplatReplay\_internal\assets\thumbnail</code
                       >
                     </div>
                   </div>

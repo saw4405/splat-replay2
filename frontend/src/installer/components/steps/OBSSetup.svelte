@@ -6,13 +6,19 @@
     Settings,
     RefreshCw,
     Check,
+    Search,
   } from "lucide-svelte";
   import {
     checkSystem,
     markSubstepCompleted,
     installationState,
+    saveOBSWebSocketPassword,
+    listVideoDevices,
+    saveCaptureDevice,
+    getOBSConfig,
   } from "../../store";
   import { type SystemCheckResult, InstallationStep } from "../../types";
+  import AlertDialog from "../../../lib/AlertDialog.svelte";
 
   const SUBSTEP_STORAGE_KEY = "obs_substep_index";
 
@@ -33,6 +39,14 @@
   let ndiInstalled = false;
   let ndiVersion: string | null = null;
   let ndiPath: string | null = null;
+
+  let websocketPassword = "";
+  let videoDevices: string[] = [];
+  let selectedCaptureDevice = "";
+  let isLoadingDevices = false;
+
+  let dialogOpen = false;
+  let dialogMessage = "";
 
   let setupSteps: SetupStep[] = [
     {
@@ -57,12 +71,18 @@
       description:
         "NDI公式サイトからRuntimeをダウンロードしてインストールします",
       completed: false,
-      url: "https://obsproject.com/",
+      url: "http://ndi.link/NDIRedistV6",
     },
     {
       id: "video-capture-device",
       title: "OBS キャプチャ設定",
       description: "OBSで映像キャプチャデバイスを追加します",
+      completed: false,
+    },
+    {
+      id: "recording-settings",
+      title: "OBS 録画設定",
+      description: "録画フォーマットや品質を設定します",
       completed: false,
     },
     {
@@ -72,9 +92,9 @@
       completed: false,
     },
     {
-      id: "recording-settings",
-      title: "OBS 録画設定",
-      description: "録画フォーマットや品質を設定します",
+      id: "websocket-password",
+      title: "OBS WebSocket パスワード設定",
+      description: "OBS WebSocketのパスワードを設定します",
       completed: false,
     },
   ];
@@ -122,7 +142,25 @@
   $: canGoBack = currentSubStepIndex > 0;
 
   onMount(async () => {
-    // Initial checks are handled by reactive statements below
+    try {
+      const config = await getOBSConfig();
+      if (config.websocket_password) {
+        websocketPassword = config.websocket_password;
+      }
+      if (config.capture_device_name) {
+        selectedCaptureDevice = config.capture_device_name;
+
+        // If devices are already loaded, ensure the selected device is in the list
+        if (
+          videoDevices.length > 0 &&
+          !videoDevices.includes(selectedCaptureDevice)
+        ) {
+          videoDevices = [...videoDevices, selectedCaptureDevice];
+        }
+      }
+    } catch (error) {
+      console.error("Failed to load OBS config:", error);
+    }
   });
 
   function loadSavedSubstepIndex(maxIndex: number): number | null {
@@ -140,11 +178,13 @@
   }
 
   function computeInitialSubstepIndex(steps: SetupStep[]): number {
-    const firstIncomplete = steps.findIndex((step) => !step.completed);
-    if (firstIncomplete !== -1) {
-      return firstIncomplete;
-    }
-    return steps.length > 0 ? steps.length - 1 : 0;
+    // 常に最初の手順から開始する
+    return 0;
+  }
+
+  // 現在のステップが変更されたときにhasInitializedSubstepをリセット
+  $: if ($installationState?.current_step !== InstallationStep.OBS_SETUP) {
+    hasInitializedSubstep = false;
   }
 
   // Sync with installation state
@@ -157,7 +197,10 @@
     }));
     setupSteps = updatedSteps;
 
-    if (!hasInitializedSubstep) {
+    if (
+      !hasInitializedSubstep &&
+      $installationState.current_step === InstallationStep.OBS_SETUP
+    ) {
       const savedIndex = loadSavedSubstepIndex(updatedSteps.length - 1);
       if (savedIndex !== null) {
         currentSubStepIndex = savedIndex;
@@ -194,8 +237,19 @@
     checkNDIInstallation(false);
   }
 
+  // 手順4が表示されたときにビデオデバイス一覧を取得
+  let lastLoadedDevicesIndex = -1;
+  $: if (
+    hasInitializedSubstep &&
+    currentSubStepIndex === 3 &&
+    lastLoadedDevicesIndex !== currentSubStepIndex
+  ) {
+    lastLoadedDevicesIndex = currentSubStepIndex;
+    loadVideoDevices();
+  }
+
   export async function next(
-    options: { skip?: boolean } = {},
+    options: { skip?: boolean } = {}
   ): Promise<boolean> {
     const currentStep = setupSteps[currentSubStepIndex];
 
@@ -203,8 +257,8 @@
     if (currentSubStepIndex === 0 && !obsInstalled) {
       await checkOBSInstallation(false);
       if (!obsInstalled) {
-        alert(
-          "OBS Studio が検出されませんでした。インストールしてから次へ進んでください。",
+        showDialog(
+          "OBS Studio が検出されませんでした。インストールしてから次へ進んでください。"
         );
         return true;
       }
@@ -213,9 +267,43 @@
     if (currentSubStepIndex === 2 && !ndiInstalled) {
       await checkNDIInstallation(false);
       if (!ndiInstalled) {
-        alert(
-          "NDI Runtime が検出されませんでした。インストールしてから次へ進んでください。",
+        showDialog(
+          "NDI Runtime が検出されませんでした。インストールしてから次へ進んでください。"
         );
+        return true;
+      }
+    }
+
+    // キャプチャデバイスの選択チェック
+    if (currentSubStepIndex === 3 && !selectedCaptureDevice) {
+      showDialog("キャプチャデバイスを選択してください。");
+      return true;
+    }
+
+    // キャプチャデバイスを保存
+    if (currentSubStepIndex === 3 && selectedCaptureDevice) {
+      try {
+        await saveCaptureDevice(selectedCaptureDevice);
+      } catch (error) {
+        console.error("Failed to save capture device:", error);
+        showDialog("キャプチャデバイスの保存に失敗しました。");
+        return true;
+      }
+    }
+
+    // WebSocketパスワードの入力チェック
+    if (currentSubStepIndex === 6 && !websocketPassword.trim()) {
+      showDialog("WebSocket パスワードを入力してください。");
+      return true;
+    }
+
+    // WebSocketパスワードを保存
+    if (currentSubStepIndex === 6 && websocketPassword.trim()) {
+      try {
+        await saveOBSWebSocketPassword(websocketPassword);
+      } catch (error) {
+        console.error("Failed to save WebSocket password:", error);
+        showDialog("WebSocket パスワードの保存に失敗しました。");
         return true;
       }
     }
@@ -224,7 +312,7 @@
       await markSubstepCompleted(
         InstallationStep.OBS_SETUP,
         currentStep.id,
-        true,
+        true
       );
     }
 
@@ -244,7 +332,7 @@
   }
 
   async function checkOBSInstallation(
-    showError: boolean = false,
+    showError: boolean = false
   ): Promise<void> {
     isChecking = true;
     checkingIndex = 0;
@@ -267,19 +355,19 @@
         await markSubstepCompleted(
           InstallationStep.OBS_SETUP,
           setupSteps[0].id,
-          true,
+          true
         );
         console.log("[OBSSetup] Marked OBS as completed");
       } else if (showError) {
         // ユーザーがチェックを入れようとした場合のみエラー表示
-        alert(
-          "OBS Studio が検出されませんでした。インストールしてからチェックを入れてください。",
+        showDialog(
+          "OBS Studio が検出されませんでした。インストールしてからチェックを入れてください。"
         );
       }
     } catch (error) {
       console.error("OBS check failed", error);
       if (showError) {
-        alert("OBSの確認中にエラーが発生しました。");
+        showDialog("OBSの確認中にエラーが発生しました。");
       }
     } finally {
       isChecking = false;
@@ -288,7 +376,7 @@
   }
 
   async function checkNDIInstallation(
-    showError: boolean = false,
+    showError: boolean = false
   ): Promise<void> {
     isChecking = true;
     checkingIndex = 2;
@@ -310,24 +398,53 @@
         await markSubstepCompleted(
           InstallationStep.OBS_SETUP,
           setupSteps[2].id,
-          true,
+          true
         );
         console.log("[OBSSetup] Marked NDI as completed");
       } else if (showError) {
         // ユーザーがチェックを入れようとした場合のみエラー表示
-        alert(
-          "NDI Runtime が検出されませんでした。インストールしてからチェックを入れてください。",
+        showDialog(
+          "NDI Runtime が検出されませんでした。インストールしてからチェックを入れてください。"
         );
       }
     } catch (error) {
       console.warn("NDI Runtime check failed:", error);
       if (showError) {
-        alert("NDI Runtimeの確認中にエラーが発生しました。");
+        showDialog("NDI Runtimeの確認中にエラーが発生しました。");
       }
     } finally {
       isChecking = false;
       checkingIndex = null;
     }
+  }
+
+  async function loadVideoDevices(): Promise<void> {
+    isLoadingDevices = true;
+    try {
+      videoDevices = await listVideoDevices();
+      console.log("[OBSSetup] Loaded video devices:", videoDevices);
+
+      // 設定済みのデバイスが一覧にない場合、一覧に追加する
+      if (
+        selectedCaptureDevice &&
+        !videoDevices.includes(selectedCaptureDevice)
+      ) {
+        console.log(
+          "[OBSSetup] Adding saved device to list:",
+          selectedCaptureDevice
+        );
+        videoDevices = [...videoDevices, selectedCaptureDevice];
+      }
+    } catch (error) {
+      console.error("Failed to load video devices:", error);
+      showDialog("ビデオデバイスの取得に失敗しました。");
+    } finally {
+      isLoadingDevices = false;
+    }
+  }
+
+  async function refreshVideoDevices(): Promise<void> {
+    await loadVideoDevices();
   }
 
   async function toggleStep(index: number): Promise<void> {
@@ -349,7 +466,7 @@
     await markSubstepCompleted(
       InstallationStep.OBS_SETUP,
       step.id,
-      !step.completed,
+      !step.completed
     );
   }
 
@@ -406,6 +523,11 @@
     const completed = setupSteps[index]?.completed || false;
     console.log(`[OBSSetup] isStepChecked(${index}):`, completed);
     return completed;
+  }
+
+  function showDialog(message: string): void {
+    dialogMessage = message;
+    dialogOpen = true;
   }
 </script>
 
@@ -470,6 +592,7 @@
                 </li>
                 <li>ダウンロードしたインストーラーを実行します</li>
               </ol>
+              <p class="step-note">※ OBSはまだ起動しません</p>
             {:else if currentSubStepIndex === 1}
               <!-- OBS NDI Plugin -->
               <ol class="instruction-list">
@@ -489,7 +612,7 @@
                   </div>
                 </li>
                 <li>
-                  「Assets」エリアから「Windows-x64-installer.exe」をダウンロードします
+                  「Assets」エリアから「distroav-*-windows-x64-installer.exe」をダウンロードします
                 </li>
                 <li>ダウンロードしたインストーラーを実行します</li>
               </ol>
@@ -497,37 +620,83 @@
               <!-- NDI Runtime -->
               <ol class="instruction-list">
                 <li>
-                  NDI 公式サイトにアクセス
+                  NDI Runtime をダウンロードします
                   <div style="margin-top: 1rem;">
                     <button
                       class="link-button"
                       type="button"
-                      on:click={() => openUrl("https://obsproject.com/")}
+                      on:click={() => openUrl("http://ndi.link/NDIRedistV6")}
                     >
                       <Download class="icon" size={16} />
-                      ダウンロードページを開く
+                      ダウンロードする
                       <ExternalLink class="icon" size={14} />
                     </button>
                   </div>
                 </li>
-                <li>「Download (.msi)」のリンクをクリックします</li>
-                <li>NDI Runtimeをダウンロードしてインストールを完了します</li>
+                <li>ダウンロードしたインストーラーを実行します</li>
               </ol>
-              <p class="step-note">
-                ※ NDI
-                Runtimeをインストールする前にOBSを起動するとエラーが表示されます
-              </p>
             {:else if currentSubStepIndex === 3}
               <!-- Capture Device -->
               <ol class="instruction-list">
                 <li>OBSを起動します</li>
                 <li>OBSの「ソース」パネルの「+」ボタンをクリックします</li>
                 <li>「映像キャプチャデバイス」を選択します</li>
-                <li>キャプチャーデバイスを選択します</li>
                 <li>OKボタンをクリックして設定画面を閉じます</li>
-                <li>映像が表示されていることを確認します</li>
+                <li>ゲーム映像が表示されていることを確認します</li>
+                <li style="margin-top: 1rem;">
+                  OBSで設定したキャプチャーデバイスを選択します
+                  <div
+                    style="margin-top: 1rem; display: flex; gap: 0.5rem; align-items: center;"
+                  >
+                    <select
+                      class="device-select"
+                      bind:value={selectedCaptureDevice}
+                      on:click={(e) => e.stopPropagation()}
+                      disabled={isLoadingDevices}
+                    >
+                      <option value="">-- デバイスを選択 --</option>
+                      {#each videoDevices as device}
+                        <option value={device}>{device}</option>
+                      {/each}
+                    </select>
+                    <button
+                      class="refresh-button"
+                      type="button"
+                      on:click={refreshVideoDevices}
+                      disabled={isLoadingDevices}
+                      title="デバイス一覧を更新"
+                    >
+                      <RefreshCw class="icon" size={16} />
+                    </button>
+                  </div>
+                </li>
               </ol>
             {:else if currentSubStepIndex === 4}
+              <!-- Recording Settings -->
+              <p style="margin: 0.5rem 0 0 0; font-weight: 600;">推奨設定:</p>
+              <ul class="instruction-list">
+                <li>録画フォーマット: MKV</li>
+                <li>エンコーダ: ハードウェアエンコーダ(H.264やHEVC等)推奨</li>
+                <li>解像度: 1920x1080 (1080p)</li>
+                <li>フレームレート: 30 FPS 以上</li>
+              </ul>
+              <p class="step-note">
+                ※
+                一度録画をしてみて、映像のカクツキや音声の乱れがないか確認することを推奨します。
+              </p>
+              <p class="search-note">
+                録画設定の詳細については、Webで調べてください:
+              </p>
+              <button
+                class="search-box"
+                type="button"
+                on:click={() =>
+                  openUrl("https://www.google.com/search?q=OBS録画設定")}
+              >
+                <Search class="search-icon" size={18} />
+                <span class="search-keyword">OBS録画設定</span>
+              </button>
+            {:else if currentSubStepIndex === 5}
               <!-- NDI Settings -->
               <ol class="instruction-list">
                 <li>
@@ -537,18 +706,37 @@
                 <li>「Main Output」にチェックを入れます</li>
                 <li>OKボタンをクリックして設定画面を閉じます</li>
               </ol>
-            {:else if currentSubStepIndex === 5}
-              <!-- Recording Settings -->
-              <p style="margin: 0.5rem 0 0 0; font-weight: 600;">推奨設定:</p>
+            {:else if currentSubStepIndex === 6}
+              <!-- WebSocket Password -->
+              <p
+                style="margin: 0 0 1rem 0; font-size: 1rem; line-height: 1.6; color: var(--text-secondary);"
+              >
+                このパスワードは、アプリがOBSの録画制御をするために使用します
+              </p>
               <ol class="instruction-list">
-                <li>フォーマット: MKV</li>
-                <li>解像度: 1920x1080 (1080p)</li>
-                <li>フレームレート: 30 FPS 以上</li>
-                <li>エンコーダ: ハードウェアエンコーダ(H.264やHEVC等)推奨</li>
+                <li>
+                  OBS の「ツール」メニューから「WebSocket
+                  サーバー設定」をクリックします
+                </li>
+                <li>「WebSocket サーバーを有効にする」にチェックを入れます</li>
+                <li>
+                  「接続情報を表示」ボタンをクリックして、パスワードを確認します
+                </li>
+                <li>
+                  確認したパスワードを下記の入力欄に入力してください
+                  <div style="margin-top: 1rem;">
+                    <input
+                      type="password"
+                      class="password-input"
+                      placeholder="WebSocket サーバーパスワードを入力"
+                      bind:value={websocketPassword}
+                      on:click={(e) => e.stopPropagation()}
+                    />
+                  </div>
+                </li>
               </ol>
               <p class="step-note">
-                ※
-                一度録画をしてみて、映像のカクツキや音声の乱れがないか確認することを推奨します。
+                ※ OBSのバージョンによって表記が異なる場合があります
               </p>
             {/if}
           </div>
@@ -557,6 +745,8 @@
     </div>
   </div>
 </div>
+
+<AlertDialog bind:isOpen={dialogOpen} message={dialogMessage} />
 
 <style>
   .obs-setup {
@@ -808,7 +998,7 @@
     color: var(--text-secondary);
   }
 
-  .icon {
+  :global(.icon) {
     display: block;
     flex-shrink: 0;
   }
@@ -825,19 +1015,115 @@
     margin-top: 0.5rem;
   }
 
-  @media (max-width: 768px) {
-    .step-card {
-      padding: 1.5rem;
-    }
-
-    .step-name-large {
-      font-size: 1.125rem;
-    }
+  .password-input {
+    width: 100%;
+    padding: 0.75rem 1rem;
+    font-size: 1rem;
+    font-family: inherit;
+    border-radius: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    background: rgba(255, 255, 255, 0.05);
+    color: var(--text-primary);
+    transition: all 0.2s ease;
+    box-sizing: border-box;
   }
 
-  @media (max-height: 700px) {
-    .step-card {
-      padding: 1rem;
-    }
+  .device-select {
+    flex: 1;
+    padding: 0.75rem 1rem;
+    font-size: 1rem;
+    font-family: inherit;
+    border-radius: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    background-color: rgba(255, 255, 255, 0.05);
+    color: var(--text-primary);
+    transition: all 0.2s ease;
+    box-sizing: border-box;
+    cursor: pointer;
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%2319D3C7' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 1rem center;
+    background-size: 1.2em;
+    padding-right: 2.5rem;
+  }
+
+  .device-select:hover {
+    background-color: rgba(255, 255, 255, 0.1);
+    border-color: rgba(255, 255, 255, 0.3);
+  }
+
+  .device-select:focus {
+    outline: none;
+    border-color: var(--accent-color);
+    box-shadow: 0 0 0 2px rgba(25, 211, 199, 0.2);
+    background-color: rgba(255, 255, 255, 0.1);
+  }
+
+  .device-select option {
+    background-color: #1a1a1a;
+    color: var(--text-primary);
+    padding: 0.5rem;
+  }
+
+  .refresh-button {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 42px;
+    height: 42px;
+    border-radius: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    background: rgba(255, 255, 255, 0.05);
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all 0.2s ease;
+    flex-shrink: 0;
+  }
+
+  .refresh-button:hover {
+    background: rgba(255, 255, 255, 0.1);
+    border-color: rgba(255, 255, 255, 0.3);
+    color: var(--text-primary);
+  }
+
+  .refresh-button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  .search-note {
+    margin: 0.75rem 0 0 0;
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+  }
+
+  .search-box {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.75rem 1.25rem;
+    border-radius: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    background: rgba(255, 255, 255, 0.05);
+    font-size: 1rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+
+  .search-box:hover {
+    background: rgba(255, 255, 255, 0.1);
+    border-color: var(--accent-color);
+    transform: translateY(-1px);
+  }
+
+  .search-box :global(.search-icon) {
+    flex-shrink: 0;
+    color: var(--accent-color);
+  }
+
+  .search-keyword {
+    color: var(--text-primary);
+    font-weight: 500;
   }
 </style>

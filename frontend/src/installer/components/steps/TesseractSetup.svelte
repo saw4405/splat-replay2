@@ -69,11 +69,15 @@
   }
 
   function computeInitialSubstepIndex(steps: SetupStep[]): number {
-    const firstIncomplete = steps.findIndex((step) => !step.completed);
-    if (firstIncomplete !== -1) {
-      return firstIncomplete;
-    }
-    return steps.length > 0 ? steps.length - 1 : 0;
+    // 常に最初の手順から開始する
+    return 0;
+  }
+
+  // 現在のステップが変更されたときにhasInitializedSubstepをリセット
+  $: if (
+    $installationState?.current_step !== InstallationStep.TESSERACT_SETUP
+  ) {
+    hasInitializedSubstep = false;
   }
 
   // Sync with installation state
@@ -86,7 +90,10 @@
     }));
     setupSteps = updatedSteps;
 
-    if (!hasInitializedSubstep) {
+    if (
+      !hasInitializedSubstep &&
+      $installationState.current_step === InstallationStep.TESSERACT_SETUP
+    ) {
       const savedIndex = loadSavedSubstepIndex(updatedSteps.length - 1);
       if (savedIndex !== null) {
         currentSubStepIndex = savedIndex;
@@ -102,7 +109,7 @@
   }
 
   export async function next(
-    options: { skip?: boolean } = {},
+    options: { skip?: boolean } = {}
   ): Promise<boolean> {
     const currentStep = setupSteps[currentSubStepIndex];
 
@@ -111,7 +118,7 @@
       await checkTesseractInstallation();
       if (!tesseractInstalled) {
         alert(
-          "Tesseract が検出されませんでした。インストールしてから次へ進んでください。",
+          "Tesseract が検出されませんでした。インストールしてから次へ進んでください。"
         );
         return true;
       }
@@ -121,7 +128,7 @@
       await markSubstepCompleted(
         InstallationStep.TESSERACT_SETUP,
         currentStep.id,
-        true,
+        true
       );
     }
 
@@ -152,7 +159,7 @@
         await markSubstepCompleted(
           InstallationStep.TESSERACT_SETUP,
           "tesseract-install",
-          true,
+          true
         );
       }
     } catch (error) {
@@ -181,7 +188,7 @@
           await markSubstepCompleted(
             InstallationStep.TESSERACT_SETUP,
             step.id,
-            true,
+            true
           );
         } else {
           alert("Tesseract が検出されませんでした。");
@@ -196,7 +203,7 @@
       await markSubstepCompleted(
         InstallationStep.TESSERACT_SETUP,
         step.id,
-        !step.completed,
+        !step.completed
       );
     }
   }
@@ -293,7 +300,7 @@
                       type="button"
                       on:click={() =>
                         openUrl(
-                          "https://github.com/UB-Mannheim/tesseract/wiki",
+                          "https://github.com/UB-Mannheim/tesseract/wiki"
                         )}
                     >
                       <Download class="icon" size={16} />
@@ -313,15 +320,17 @@
               <!-- Language Data -->
               <ol class="instruction-list">
                 <li>
-                  下のボタンからデータ配布ページを開き、「Download raw
-                  file」ボタンをクリックしてダウンロードします
+                  下のボタンからデータ配布ページを開き、<span
+                    class="inline-icon-wrapper"
+                    ><Download class="inline-icon" size={16} /></span
+                  >(Download raw file)ボタンをクリックしてダウンロードします
                   <div style="margin-top: 1rem;">
                     <button
                       class="link-button"
                       type="button"
                       on:click={() =>
                         openUrl(
-                          "https://github.com/tesseract-ocr/tessdata_best/blob/main/eng.traineddata",
+                          "https://github.com/tesseract-ocr/tessdata_best/blob/main/eng.traineddata"
                         )}
                     >
                       <Download class="icon" size={16} />
@@ -336,7 +345,6 @@
                   <div class="path-box">
                     <FolderOpen class="icon" size={20} />
                     <div class="path-content">
-                      <p class="path-label">配置先フォルダ:</p>
                       <code class="path-value">
                         C:\Program Files\Tesseract-OCR\tessdata
                       </code>
@@ -684,6 +692,17 @@
   .icon {
     display: block;
     flex-shrink: 0;
+  }
+
+  .inline-icon-wrapper {
+    display: inline-flex;
+    align-items: center;
+    vertical-align: middle;
+  }
+
+  .inline-icon {
+    display: inline-block;
+    vertical-align: middle;
   }
 
   @media (max-width: 768px) {

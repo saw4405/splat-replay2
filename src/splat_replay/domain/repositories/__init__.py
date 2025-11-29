@@ -5,4 +5,7 @@ __all__ = [
     "RepositoryError",
 ]
 
-from .installation_state_repository import InstallationStateRepository, RepositoryError
+from .installation_state_repository import (
+    InstallationStateRepository,
+    RepositoryError,
+)

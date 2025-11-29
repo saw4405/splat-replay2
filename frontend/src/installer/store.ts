@@ -27,7 +27,7 @@ export const error = writable<ApiError | null>(null);
 // 各ステップのサブステップ数を定義
 const STEP_SUBSTEP_COUNTS: Record<string, number> = {
   hardware_check: 5, // ハードウェアチェック: 5つのタスク
-  obs_setup: 6, // OBS: 6つのサブステップ
+  obs_setup: 7, // OBS: 7つのサブステップ
   ffmpeg_setup: 1, // FFMPEG: 1つのサブステップ
   tesseract_setup: 2, // Tesseract: 2つのサブステップ
   font_installation: 2, // Font: 2つのサブステップ
@@ -181,6 +181,66 @@ export async function completeInstallation(): Promise<void> {
 }
 
 /**
+ * ステップに対応するセッションストレージキーを取得
+ */
+function getSubstepStorageKey(step: InstallationStep): string {
+  const stepToKeyMap: Record<InstallationStep, string> = {
+    hardware_check: "hardware_substep_index",
+    obs_setup: "obs_substep_index",
+    ffmpeg_setup: "ffmpeg_substep_index",
+    tesseract_setup: "tesseract_substep_index",
+    font_installation: "font_substep_index",
+    youtube_setup: "youtube_substep_index",
+  };
+  return stepToKeyMap[step];
+}
+
+/**
+ * 指定したステップのサブステップインデックスをクリア
+ */
+function clearStepSubstepIndex(step: InstallationStep): void {
+  if (typeof window === "undefined") return;
+  const key = getSubstepStorageKey(step);
+  if (key) {
+    console.log(`[SubstepStorage] Clearing substep index for ${step} (key: ${key})`);
+    window.sessionStorage.removeItem(key);
+  }
+}
+
+/**
+ * すべてのステップのサブステップインデックスをクリア
+ */
+function clearAllSubstepSessionStorage(): void {
+  if (typeof window === "undefined") return;
+
+  const substepKeys = [
+    "hardware_substep_index",
+    "obs_substep_index",
+    "ffmpeg_substep_index",
+    "tesseract_substep_index",
+    "font_substep_index",
+    "youtube_substep_index",
+  ];
+
+  console.log("[SubstepStorage] Clearing ALL substep indices");
+  for (const key of substepKeys) {
+    window.sessionStorage.removeItem(key);
+  }
+}
+
+/**
+ * 指定したステップのサブステップインデックスを設定
+ */
+function setStepSubstepIndex(step: InstallationStep, index: number): void {
+  if (typeof window === "undefined") return;
+  const key = getSubstepStorageKey(step);
+  if (key) {
+    console.log(`[SubstepStorage] Setting substep index for ${step} to ${index} (key: ${key})`);
+    window.sessionStorage.setItem(key, index.toString());
+  }
+}
+
+/**
  * 次のステップに進む
  */
 export async function goToNextStep(): Promise<void> {
@@ -188,6 +248,9 @@ export async function goToNextStep(): Promise<void> {
   error.set(null);
 
   try {
+    const currentState = get(installationState);
+    console.log(`[Navigation] goToNextStep: current step = ${currentState?.current_step}`);
+
     const response = await fetch(`${API_BASE_URL}/installer/navigation/next`, {
       method: "POST",
     });
@@ -195,7 +258,13 @@ export async function goToNextStep(): Promise<void> {
       await handleApiError(response);
     }
 
+    // 次のステップは必ず最初から開始するため、すべてのサブステップ記録をクリア
+    clearAllSubstepSessionStorage();
+
     await fetchInstallationStatus();
+
+    const newState = get(installationState);
+    console.log(`[Navigation] goToNextStep: new step = ${newState?.current_step}`);
   } catch (err) {
     console.error("Failed to go to next step:", err);
     if (err instanceof Error && !get(error)) {
@@ -214,6 +283,9 @@ export async function goToPreviousStep(): Promise<void> {
   error.set(null);
 
   try {
+    const currentState = get(installationState);
+    console.log(`[Navigation] goToPreviousStep: current step = ${currentState?.current_step}`);
+
     const response = await fetch(
       `${API_BASE_URL}/installer/navigation/previous`,
       {
@@ -224,7 +296,24 @@ export async function goToPreviousStep(): Promise<void> {
       await handleApiError(response);
     }
 
-    await fetchInstallationStatus();
+    // レスポンスから新しい状態を取得
+    const newState: InstallationState = await response.json();
+    const targetStep = newState.current_step;
+
+    console.log(`[Navigation] goToPreviousStep: target step = ${targetStep}`);
+
+    // 1. まず全ての履歴をクリア
+    clearAllSubstepSessionStorage();
+
+    // 2. 戻り先のステップだけ、最後のサブステップに設定
+    if (targetStep) {
+      const lastIndex = (STEP_SUBSTEP_COUNTS[targetStep] || 1) - 1;
+      setStepSubstepIndex(targetStep, lastIndex);
+    }
+
+    // 3. 最後に状態を更新
+    installationState.set(newState);
+
   } catch (err) {
     console.error("Failed to go to previous step:", err);
     if (err instanceof Error && !get(error)) {
@@ -423,4 +512,152 @@ export async function setupTesseract(): Promise<SystemCheckResult> {
  */
 export function clearError(): void {
   error.set(null);
+}
+
+/**
+ * OBS設定を取得
+ */
+export async function getOBSConfig(): Promise<{ websocket_password: string; capture_device_name: string }> {
+  isLoading.set(true);
+  error.set(null);
+
+  try {
+    const response = await fetch(`${API_BASE_URL}/installer/config/obs`);
+    if (!response.ok) {
+      await handleApiError(response);
+    }
+
+    const result = await response.json();
+    return result;
+  } catch (err) {
+    console.error("Failed to get OBS config:", err);
+    if (err instanceof Error && !get(error)) {
+      error.set({ error: err.message });
+    }
+    throw err;
+  } finally {
+    isLoading.set(false);
+  }
+}
+
+/**
+ * OBS WebSocketパスワードを保存
+ */
+export async function saveOBSWebSocketPassword(password: string): Promise<void> {
+  isLoading.set(true);
+  error.set(null);
+
+  try {
+    const response = await fetch(`${API_BASE_URL}/installer/config/obs/websocket-password`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ password }),
+    });
+    if (!response.ok) {
+      await handleApiError(response);
+    }
+
+    const result = await response.json();
+    console.log("OBS WebSocket password saved:", result.message);
+  } catch (err) {
+    console.error("Failed to save OBS WebSocket password:", err);
+    if (err instanceof Error && !get(error)) {
+      error.set({ error: err.message });
+    }
+    throw err;
+  } finally {
+    isLoading.set(false);
+  }
+}
+
+/**
+ * ビデオキャプチャデバイス一覧を取得
+ */
+export async function listVideoDevices(): Promise<string[]> {
+  isLoading.set(true);
+  error.set(null);
+
+  try {
+    const response = await fetch(`${API_BASE_URL}/installer/devices/video`);
+    if (!response.ok) {
+      await handleApiError(response);
+    }
+
+    const result: { devices: string[] } = await response.json();
+    return result.devices;
+  } catch (err) {
+    console.error("Failed to list video devices:", err);
+    if (err instanceof Error && !get(error)) {
+      error.set({ error: err.message });
+    }
+    throw err;
+  } finally {
+    isLoading.set(false);
+  }
+}
+
+/**
+ * キャプチャデバイス名を保存
+ */
+export async function saveCaptureDevice(deviceName: string): Promise<void> {
+  isLoading.set(true);
+  error.set(null);
+
+  try {
+    const response = await fetch(`${API_BASE_URL}/installer/config/capture-device`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ device_name: deviceName }),
+    });
+    if (!response.ok) {
+      await handleApiError(response);
+    }
+
+    const result = await response.json();
+    console.log("Capture device saved:", result.message);
+  } catch (err) {
+    console.error("Failed to save capture device:", err);
+    if (err instanceof Error && !get(error)) {
+      error.set({ error: err.message });
+    }
+    throw err;
+  } finally {
+    isLoading.set(false);
+  }
+}
+
+/**
+ * YouTube公開範囲を保存
+ */
+export async function saveYouTubePrivacyStatus(privacyStatus: "public" | "unlisted" | "private"): Promise<void> {
+  isLoading.set(true);
+  error.set(null);
+
+  try {
+    const response = await fetch(`${API_BASE_URL}/installer/config/youtube/privacy-status`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ privacy_status: privacyStatus }),
+    });
+    if (!response.ok) {
+      await handleApiError(response);
+    }
+
+    const result = await response.json();
+    console.log("YouTube privacy status saved:", result.message);
+  } catch (err) {
+    console.error("Failed to save YouTube privacy status:", err);
+    if (err instanceof Error && !get(error)) {
+      error.set({ error: err.message });
+    }
+    throw err;
+  } finally {
+    isLoading.set(false);
+  }
 }

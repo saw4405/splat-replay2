@@ -8,10 +8,11 @@ from pathlib import Path
 from structlog.stdlib import BoundLogger
 
 from splat_replay.application.interfaces import (
-    CommandExecutionError,
     SystemCommandPort,
 )
-from splat_replay.application.services.system_check_service import SoftwareCheckResult
+from splat_replay.application.services.system_check_service import (
+    SoftwareCheckResult,
+)
 
 
 class SystemSetupService:
@@ -33,7 +34,7 @@ class SystemSetupService:
 
     def setup_ffmpeg(self) -> SoftwareCheckResult:
         """FFMPEGのセットアップを行う。
-        
+
         1. まずffmpegコマンドが実行可能かを確認
         2. 実行できない場合、C:\\ffmpeg\\bin\\ffmpeg.exeが存在するかを確認
         3. ファイルがあれば環境変数PATHを設定
@@ -60,14 +61,19 @@ class SystemSetupService:
                 return SoftwareCheckResult(
                     is_installed=True,
                     version="Installed",
-                    installation_path=None  # コマンドで実行可能なのでパスは不明
+                    installation_path=None,  # コマンドで実行可能なのでパスは不明
                 )
         except Exception as e:
-            self._logger.info("FFMPEG command not available, checking file existence", error=str(e))
+            self._logger.info(
+                "FFMPEG command not available, checking file existence",
+                error=str(e),
+            )
 
         # 2. C:\ffmpeg\bin\ffmpeg.exeが存在するかを確認
         if not ffmpeg_exe.exists():
-            self._logger.warning("FFMPEG executable not found", path=str(ffmpeg_exe))
+            self._logger.warning(
+                "FFMPEG executable not found", path=str(ffmpeg_exe)
+            )
             return SoftwareCheckResult(
                 is_installed=False,
                 error_message=f"FFMPEGの実行ファイルが見つかりません。\n{ffmpeg_exe} に配置されているか確認してください。",
@@ -78,19 +84,21 @@ class SystemSetupService:
             # 現在のPATHを確認
             current_path = os.environ.get("PATH", "")
             target_path_str = str(ffmpeg_dir).replace("/", "\\")
-            
+
             if target_path_str.lower() not in current_path.lower():
-                self._logger.info("Adding FFMPEG to PATH", path=target_path_str)
-                
+                self._logger.info(
+                    "Adding FFMPEG to PATH", path=target_path_str
+                )
+
                 # PowerShellを使用してPATHを追加（Userスコープ）
                 ps_command = [
                     "powershell",
                     "-Command",
-                    f"[Environment]::SetEnvironmentVariable('Path', [Environment]::GetEnvironmentVariable('Path', 'User') + ';{target_path_str}', 'User')"
+                    f"[Environment]::SetEnvironmentVariable('Path', [Environment]::GetEnvironmentVariable('Path', 'User') + ';{target_path_str}', 'User')",
                 ]
-                
+
                 self._command_port.execute_command(ps_command)
-                
+
                 # 現在のプロセスの環境変数も更新（以降のチェックのため）
                 os.environ["PATH"] = f"{current_path};{target_path_str}"
             else:
@@ -116,7 +124,7 @@ class SystemSetupService:
                 return SoftwareCheckResult(
                     is_installed=True,
                     version="Installed",
-                    installation_path=ffmpeg_exe
+                    installation_path=ffmpeg_exe,
                 )
             else:
                 # PATHに追加した直後は反映されないことがあるため、フルパスで確認
@@ -125,12 +133,12 @@ class SystemSetupService:
                     timeout=5.0,
                 )
                 if result_full.success:
-                     return SoftwareCheckResult(
+                    return SoftwareCheckResult(
                         is_installed=True,
                         version="Installed (Path update pending)",
-                        installation_path=ffmpeg_exe
+                        installation_path=ffmpeg_exe,
                     )
-                
+
                 return SoftwareCheckResult(
                     is_installed=False,
                     error_message="FFMPEGの実行確認に失敗しました",
@@ -145,7 +153,7 @@ class SystemSetupService:
 
     def setup_tesseract(self) -> SoftwareCheckResult:
         """Tesseractのセットアップを行う。
-        
+
         インストール先（C:\\Program Files\\Tesseract-OCR\\tesseract.exe）を確認し、
         存在する場合はPATHに追加して確認を行う。
 
@@ -160,7 +168,9 @@ class SystemSetupService:
 
         # 1. 実行ファイルの存在確認
         if not tesseract_exe.exists():
-            self._logger.warning("Tesseract executable not found", path=str(tesseract_exe))
+            self._logger.warning(
+                "Tesseract executable not found", path=str(tesseract_exe)
+            )
             return SoftwareCheckResult(
                 is_installed=False,
                 error_message=f"Tesseractの実行ファイルが見つかりません。\n{tesseract_exe} にインストールされているか確認してください。",
@@ -171,19 +181,21 @@ class SystemSetupService:
             # 現在のPATHを確認
             current_path = os.environ.get("PATH", "")
             target_path_str = str(tesseract_dir).replace("/", "\\")
-            
+
             if target_path_str.lower() not in current_path.lower():
-                self._logger.info("Adding Tesseract to PATH", path=target_path_str)
-                
+                self._logger.info(
+                    "Adding Tesseract to PATH", path=target_path_str
+                )
+
                 # PowerShellを使用してPATHを追加（Userスコープ）
                 ps_command = [
                     "powershell",
                     "-Command",
-                    f"[Environment]::SetEnvironmentVariable('Path', [Environment]::GetEnvironmentVariable('Path', 'User') + ';{target_path_str}', 'User')"
+                    f"[Environment]::SetEnvironmentVariable('Path', [Environment]::GetEnvironmentVariable('Path', 'User') + ';{target_path_str}', 'User')",
                 ]
-                
+
                 self._command_port.execute_command(ps_command)
-                
+
                 # 現在のプロセスの環境変数も更新（以降のチェックのため）
                 os.environ["PATH"] = f"{current_path};{target_path_str}"
             else:
@@ -209,7 +221,7 @@ class SystemSetupService:
                 return SoftwareCheckResult(
                     is_installed=True,
                     version="Installed",
-                    installation_path=tesseract_exe
+                    installation_path=tesseract_exe,
                 )
             else:
                 # PATHに追加した直後は反映されないことがあるため、フルパスで確認
@@ -218,12 +230,12 @@ class SystemSetupService:
                     timeout=5.0,
                 )
                 if result_full.success:
-                     return SoftwareCheckResult(
+                    return SoftwareCheckResult(
                         is_installed=True,
                         version="Installed (Path update pending)",
-                        installation_path=tesseract_exe
+                        installation_path=tesseract_exe,
                     )
-                
+
                 return SoftwareCheckResult(
                     is_installed=False,
                     error_message="Tesseractの実行確認に失敗しました",

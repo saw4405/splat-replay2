@@ -1105,14 +1105,84 @@ def create_app(server: WebServer) -> FastAPI:
 
     @app.get("/api/device/status")
     async def get_device_status() -> JSONResponse:
-        # status = await server.get_device_status()
-        status = True
+        status = await server.get_device_status()
         return JSONResponse(content=status)
+
+    @app.get("/api/settings/camera-permission-dialog")
+    async def get_camera_permission_dialog_status() -> JSONResponse:
+        """カメラ許可ダイアログの表示状態を取得する。"""
+        try:
+            shown = (
+                server.installer_service.is_camera_permission_dialog_shown()
+            )
+            return JSONResponse(content={"shown": shown})
+        except Exception as e:
+            server.logger.error(
+                "Failed to get camera permission dialog status", error=str(e)
+            )
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to get camera permission dialog status",
+            )
+
+    @app.post("/api/settings/camera-permission-dialog")
+    async def mark_camera_permission_dialog_shown(
+        request: dict[str, bool],
+    ) -> JSONResponse:
+        """カメラ許可ダイアログを表示済みとしてマークする。"""
+        try:
+            if request.get("shown", False):
+                server.installer_service.mark_camera_permission_dialog_shown()
+            return JSONResponse(content={"status": "ok"})
+        except Exception as e:
+            server.logger.error(
+                "Failed to mark camera permission dialog as shown",
+                error=str(e),
+            )
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to mark camera permission dialog as shown",
+            )
+
+    @app.get("/api/settings/youtube-permission-dialog")
+    async def get_youtube_permission_dialog_status() -> JSONResponse:
+        """YouTube権限ダイアログの表示状態を取得する。"""
+        try:
+            shown = (
+                server.installer_service.is_youtube_permission_dialog_shown()
+            )
+            return JSONResponse(content={"shown": shown})
+        except Exception as e:
+            server.logger.error(
+                "Failed to get youtube permission dialog status", error=str(e)
+            )
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to get youtube permission dialog status",
+            )
+
+    @app.post("/api/settings/youtube-permission-dialog")
+    async def mark_youtube_permission_dialog_shown(
+        request: dict[str, bool],
+    ) -> JSONResponse:
+        """YouTube権限ダイアログを表示済みとしてマークする。"""
+        try:
+            if request.get("shown", False):
+                server.installer_service.mark_youtube_permission_dialog_shown()
+            return JSONResponse(content={"status": "ok"})
+        except Exception as e:
+            server.logger.error(
+                "Failed to mark youtube permission dialog as shown",
+                error=str(e),
+            )
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to mark youtube permission dialog as shown",
+            )
 
     @app.post("/api/recording/prepare")
     async def prepare_recording() -> JSONResponse:
-        # result = await server.prepare_recording()
-        result = True
+        result = await server.prepare_recording()
         return JSONResponse(content={"success": result})
 
     @app.post("/api/recording/start")

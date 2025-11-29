@@ -369,29 +369,37 @@ class BattleFrameAnalyzer(AnalyzerPlugin):
                                 proc = proc0[
                                     :, valid_runs[0][0] : valid_runs[-1][1] + 1
                                 ]
-                                
+
                                 # killフィールドでは各クラスタを個別にOCRして結合を試みる
                                 if name == "kill" and len(valid_runs) == 2:
                                     # 2つのクラスタを個別にOCR
                                     cluster_results: List[str] = []
                                     for run_s, run_e in valid_runs:
-                                        cluster_img = proc0[:, run_s : run_e + 1]
+                                        cluster_img = proc0[
+                                            :, run_s : run_e + 1
+                                        ]
                                         try:
-                                            cluster_text = await self.ocr.recognize_text(
-                                                cluster_img,
-                                                ps_mode="SINGLE_LINE",
-                                                whitelist="0123456789",
+                                            cluster_text = (
+                                                await self.ocr.recognize_text(
+                                                    cluster_img,
+                                                    ps_mode="SINGLE_LINE",
+                                                    whitelist="0123456789",
+                                                )
                                             )
                                             if cluster_text:
                                                 # 数字のみ抽出
                                                 cluster_digits = re.sub(
-                                                    r"\D", "", cluster_text.strip()
+                                                    r"\D",
+                                                    "",
+                                                    cluster_text.strip(),
                                                 )
                                                 if cluster_digits:
-                                                    cluster_results.append(cluster_digits)
+                                                    cluster_results.append(
+                                                        cluster_digits
+                                                    )
                                         except Exception:
                                             pass
-                                    
+
                                     # 個別OCRが成功した場合、結果を結合
                                     if len(cluster_results) == 2:
                                         combined = "".join(cluster_results)
@@ -400,14 +408,20 @@ class BattleFrameAnalyzer(AnalyzerPlugin):
                                         # - 値1: 正解7が['0','1']と誤認識されるケース
                                         # - 値11: 正解10/17が['1','1']と誤認識されるケース
                                         # これらの場合は全体画像OCRにフォールバック
-                                        if len(combined) <= 2 and combined.isdigit():
+                                        if (
+                                            len(combined) <= 2
+                                            and combined.isdigit()
+                                        ):
                                             val = int(combined)
-                                            if 0 <= val <= 99 and val not in (1, 11):
+                                            if 0 <= val <= 99 and val not in (
+                                                1,
+                                                11,
+                                            ):
                                                 # 個別OCRの結果を使用
                                                 records[name] = val
                                                 # このnameのOCRタスクをスキップ
                                                 proc = None  # type: ignore
-                                
+
                                 # 個別OCRが失敗した場合、または他のケースではprocを使用
                                 # (procは既に全体範囲で初期化済み)
                         else:

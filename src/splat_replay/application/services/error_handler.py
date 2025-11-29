@@ -101,13 +101,16 @@ class ErrorHandler:
             actions.extend(self._get_network_recovery_actions(error))
         elif isinstance(error, InstallationStateError):
             actions.extend(
-                self._get_installation_state_recovery_actions(error))
+                self._get_installation_state_recovery_actions(error)
+            )
         elif isinstance(error, UserCancelledError):
             actions.extend(["インストーラーを再起動してください"])
 
         # 共通の回復アクション
         if not actions:
-            actions.append("問題が解決しない場合は、サポートにお問い合わせください")
+            actions.append(
+                "問題が解決しない場合は、サポートにお問い合わせください"
+            )
 
         return actions
 
@@ -255,7 +258,9 @@ class ErrorHandler:
         ]
 
         if error.url:
-            actions.append(f"URL '{error.url}' にアクセスできるか確認してください")
+            actions.append(
+                f"URL '{error.url}' にアクセスできるか確認してください"
+            )
 
         return actions
 
