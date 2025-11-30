@@ -321,7 +321,7 @@
                     <FolderOpen class="icon" size={20} />
                     <div class="path-content">
                       <code class="path-value"
-                        >SplatReplay\_internal\assets\thumbnail</code
+                        >SplatReplay\assets\thumbnail</code
                       >
                     </div>
                   </div>

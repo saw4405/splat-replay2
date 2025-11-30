@@ -12,7 +12,7 @@ from splat_replay.shared.config import (
     ImageMatchingSettings,
     MatcherConfig,
 )
-from splat_replay.shared.paths import PROJECT_ROOT
+from splat_replay.shared.paths import ASSETS_DIR
 
 from .base import BaseMatcher
 from .brightness import BrightnessMatcher
@@ -69,7 +69,16 @@ class MatcherRegistry(ImageMatcherPort):
         if config.mask_path:
             mask_path = Path(config.mask_path)
             if not mask_path.is_absolute():
-                mask_path = PROJECT_ROOT / mask_path
+                # mask_pathはassetsディレクトリからの相対パス
+                # 設定ファイルでは "assets/matching/..." 形式のため、
+                # "assets/" プレフィックスを除去してからASSETS_DIRと結合
+                mask_path_str = str(mask_path)
+                if mask_path_str.startswith(
+                    "assets/"
+                ) or mask_path_str.startswith("assets\\"):
+                    mask_path_str = mask_path_str[7:]  # "assets/" を削除
+                    mask_path = Path(mask_path_str)
+                mask_path = ASSETS_DIR / mask_path
 
         roi_cfg = config.roi
         roi = None
@@ -82,10 +91,18 @@ class MatcherRegistry(ImageMatcherPort):
             )
         if config.type == "hash":
             if config.hash_path:
-                # 相対パスの場合はPROJECT_ROOTからの絶対パスに変換
+                # 相対パスの場合はASSETS_DIRからの絶対パスに変換
                 hash_path = Path(config.hash_path)
                 if not hash_path.is_absolute():
-                    hash_path = PROJECT_ROOT / hash_path
+                    # 設定ファイルでは "assets/matching/..." 形式のため、
+                    # "assets/" プレフィックスを除去してからASSETS_DIRと結合
+                    hash_path_str = str(hash_path)
+                    if hash_path_str.startswith(
+                        "assets/"
+                    ) or hash_path_str.startswith("assets\\"):
+                        hash_path_str = hash_path_str[7:]  # "assets/" を削除
+                        hash_path = Path(hash_path_str)
+                    hash_path = ASSETS_DIR / hash_path
                 return HashMatcher(hash_path, roi, name=name)
             else:
                 raise ValueError("ハッシュマッチャーには hash_path が必要です")
@@ -149,10 +166,20 @@ class MatcherRegistry(ImageMatcherPort):
                 )
         if config.type == "template":
             if config.template_path:
-                # 相対パスの場合はPROJECT_ROOTからの絶対パスに変換
+                # 相対パスの場合はASSETS_DIRからの絶対パスに変換
                 template_path = Path(config.template_path)
                 if not template_path.is_absolute():
-                    template_path = PROJECT_ROOT / template_path
+                    # 設定ファイルでは "assets/matching/..." 形式のため、
+                    # "assets/" プレフィックスを除去してからASSETS_DIRと結合
+                    template_path_str = str(template_path)
+                    if template_path_str.startswith(
+                        "assets/"
+                    ) or template_path_str.startswith("assets\\"):
+                        template_path_str = template_path_str[
+                            7:
+                        ]  # "assets/" を削除
+                        template_path = Path(template_path_str)
+                    template_path = ASSETS_DIR / template_path
                 return TemplateMatcher(
                     template_path,
                     mask_path,
@@ -166,10 +193,20 @@ class MatcherRegistry(ImageMatcherPort):
                 )
         if config.type == "edge":
             if config.template_path:
-                # 相対パスの場合はPROJECT_ROOTからの絶対パスに変換
+                # 相対パスの場合はASSETS_DIRからの絶対パスに変換
                 template_path = Path(config.template_path)
                 if not template_path.is_absolute():
-                    template_path = PROJECT_ROOT / template_path
+                    # 設定ファイルでは "assets/matching/..." 形式のため、
+                    # "assets/" プレフィックスを除去してからASSETS_DIRと結合
+                    template_path_str = str(template_path)
+                    if template_path_str.startswith(
+                        "assets/"
+                    ) or template_path_str.startswith("assets\\"):
+                        template_path_str = template_path_str[
+                            7:
+                        ]  # "assets/" を削除
+                        template_path = Path(template_path_str)
+                    template_path = ASSETS_DIR / template_path
                 return EdgeMatcher(
                     template_path,
                     config.threshold,

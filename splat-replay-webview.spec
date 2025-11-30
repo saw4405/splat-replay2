@@ -12,11 +12,9 @@ project_root = Path(SPECPATH)
 import certifi
 
 datas = [
-    # フロントエンドdist
+    # フロントエンドdist（_internal内に配置）
     (str(project_root / 'frontend' / 'dist'), 'frontend/dist'),
-    # アセット（アイコン等）
-    (str(project_root / 'assets'), 'assets'),
-    # certifi SSL certificates
+    # certifi SSL certificates（_internal内に配置）
     (certifi.where(), 'certifi'),
 ]
 
@@ -150,3 +148,6 @@ coll = COLLECT(
     upx_exclude=[],
     name='SplatReplay',
 )
+
+# Note: assetsは_internalの外（実行ファイルと同じ階層）に配置したいため、
+# COLLECTには含めず、ビルドスクリプトで手動コピーする
