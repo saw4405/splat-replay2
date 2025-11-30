@@ -141,10 +141,10 @@
     );
     const updatedSteps = setupSteps.map((step, index) => ({
       ...step,
-      // 手順1,2,3,4,6,7（インデックス0,1,2,3,5,6）は details のみから状態を取得
-      // 手順5（インデックス4）のみ credentialsInstalled も考慮
+      // 手順1〜5（インデックス0〜4）は credentialsInstalled も考慮
+      // 手順6,7（インデックス5,6）は details のみから状態を取得
       completed:
-        index === 4
+        index <= 4
           ? details[step.id] || credentialsInstalled
           : details[step.id] || false,
     }));
@@ -162,6 +162,17 @@
       !hasInitializedSubstep &&
       $installationState.current_step === InstallationStep.YOUTUBE_SETUP
     ) {
+      // ステップに入った時に認証情報ファイルの有無をチェック
+      checkSystem("youtube")
+        .then((result: SystemCheckResult) => {
+          if (result.is_installed) {
+            credentialsInstalled = true;
+          }
+        })
+        .catch((error) => {
+          console.error("Initial YouTube credentials check failed:", error);
+        });
+
       const savedIndex = loadSavedSubstepIndex(updatedSteps.length - 1);
       if (savedIndex !== null) {
         currentSubStepIndex = savedIndex;
@@ -294,11 +305,18 @@
           false
         );
       }
-    } else {
-      // 手順1, 2, 3, 4, 6, 7 (インデックス0, 1, 2, 3, 5, 6) はファイル確認せずに単純にトグルする
+    } else if (index <= 3) {
+      // 手順1〜4 (インデックス0〜3) はファイル確認せずに単純にトグルする
       // インストール済の場合はチェックを外せないようにする
       if (credentialsInstalled && step.completed) return;
 
+      await markSubstepCompleted(
+        InstallationStep.YOUTUBE_SETUP,
+        step.id,
+        !step.completed
+      );
+    } else {
+      // 手順6,7 (インデックス5,6) は認証情報ファイルの有無に関係なく独立して管理
       await markSubstepCompleted(
         InstallationStep.YOUTUBE_SETUP,
         step.id,
@@ -369,7 +387,7 @@
     <div
       class="step-card glass-card"
       class:completed={setupSteps[currentSubStepIndex].completed}
-      class:disabled={credentialsInstalled ||
+      class:disabled={(credentialsInstalled && currentSubStepIndex <= 4) ||
         (currentSubStepIndex === 4 && isChecking)}
       on:click={handleCardClick}
       on:keydown={handleKeyDown}
@@ -385,7 +403,7 @@
                 <h3 class="step-name-large">
                   {setupSteps[currentSubStepIndex].title}
                 </h3>
-                {#if credentialsInstalled}
+                {#if credentialsInstalled && currentSubStepIndex <= 4}
                   <span class="installed-badge">インストール済</span>
                 {/if}
               </div>
