@@ -77,18 +77,42 @@ hiddenimports = [
     'win32process',
     'pythoncom',
     'pywintypes',
+    # cyndilib (NDI capture support) - Cython compiled modules
+    'cyndilib',
+    'cyndilib.finder',
+    'cyndilib.receiver',
+    'cyndilib.video_frame',
+    'cyndilib.audio_frame',
+    'cyndilib.framesync',
+    'cyndilib.sender',
+    'cyndilib.wrapper',
+    'cyndilib.wrapper.common',
+    'cyndilib.wrapper.ndi_recv',
+    'cyndilib.wrapper.ndi_send',
+    'cyndilib.wrapper.ndi_structs',
 ]
+
+import glob
+
+# cyndilib の .pyd ファイルを収集
+cyndilib_binaries = []
+cyndilib_path = project_root / '.venv' / 'Lib' / 'site-packages' / 'cyndilib'
+if cyndilib_path.exists():
+    for pyd_file in cyndilib_path.glob('**/*.pyd'):
+        rel_path = pyd_file.relative_to(cyndilib_path.parent)
+        dest_dir = str(rel_path.parent)
+        cyndilib_binaries.append((str(pyd_file), dest_dir))
 
 a = Analysis(
     [str(project_root / 'src' / 'splat_replay' / 'gui' / 'webview_app.py')],
     pathex=[],
-    binaries=[],
+    binaries=cyndilib_binaries,
     datas=datas,
     hiddenimports=hiddenimports,
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
-    excludes=['cyndilib'],  # NDI support excluded - requires runtime libraries
+    excludes=[],
     win_no_prefer_redirects=False,
     win_private_assemblies=False,
     cipher=block_cipher,
