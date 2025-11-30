@@ -84,12 +84,6 @@
       description: "アップロードする動画のデフォルトの公開範囲を設定します。",
       completed: false,
     },
-    {
-      id: "youtube-initial-auth",
-      title: "初回認証",
-      description: "初回起動時の認証手順を確認します。",
-      completed: false,
-    },
   ];
 
   let currentSubStepIndex = 0;
@@ -143,11 +137,11 @@
       "[YouTubeSetup] Reactive update - details:",
       details,
       "credentialsInstalled:",
-      credentialsInstalled,
+      credentialsInstalled
     );
     const updatedSteps = setupSteps.map((step, index) => ({
       ...step,
-      // 手順1,2,3,4,6,7,8（インデックス0,1,2,3,5,6,7）は details のみから状態を取得
+      // 手順1,2,3,4,6,7（インデックス0,1,2,3,5,6）は details のみから状態を取得
       // 手順5（インデックス4）のみ credentialsInstalled も考慮
       completed:
         index === 4
@@ -160,7 +154,7 @@
         index: i,
         id: s.id,
         completed: s.completed,
-      })),
+      }))
     );
     setupSteps = updatedSteps;
 
@@ -183,7 +177,7 @@
   }
 
   export async function next(
-    options: { skip?: boolean } = {},
+    options: { skip?: boolean } = {}
   ): Promise<boolean> {
     const currentStep = setupSteps[currentSubStepIndex];
 
@@ -199,7 +193,7 @@
             await markSubstepCompleted(
               InstallationStep.YOUTUBE_SETUP,
               setupSteps[i].id,
-              true,
+              true
             );
           }
         } else {
@@ -227,7 +221,7 @@
         await markSubstepCompleted(
           InstallationStep.YOUTUBE_SETUP,
           currentStep.id,
-          true,
+          true
         );
       } catch (error) {
         console.error("Failed to save privacy status:", error);
@@ -235,15 +229,6 @@
         showError = true;
         return true;
       }
-    }
-
-    // 手順8(初回認証)の自動完了
-    if (currentSubStepIndex === 7 && !setupSteps[7].completed) {
-      await markSubstepCompleted(
-        InstallationStep.YOUTUBE_SETUP,
-        currentStep.id,
-        true,
-      );
     }
 
     if (currentSubStepIndex < setupSteps.length - 1) {
@@ -285,7 +270,7 @@
               await markSubstepCompleted(
                 InstallationStep.YOUTUBE_SETUP,
                 setupSteps[i].id,
-                true,
+                true
               );
             }
           } else {
@@ -306,18 +291,18 @@
         await markSubstepCompleted(
           InstallationStep.YOUTUBE_SETUP,
           step.id,
-          false,
+          false
         );
       }
     } else {
-      // 手順1, 2, 3, 4, 6, 7, 8 (インデックス0, 1, 2, 3, 5, 6, 7) はファイル確認せずに単純にトグルする
+      // 手順1, 2, 3, 4, 6, 7 (インデックス0, 1, 2, 3, 5, 6) はファイル確認せずに単純にトグルする
       // インストール済の場合はチェックを外せないようにする
       if (credentialsInstalled && step.completed) return;
 
       await markSubstepCompleted(
         InstallationStep.YOUTUBE_SETUP,
         step.id,
-        !step.completed,
+        !step.completed
       );
     }
   }
@@ -427,7 +412,7 @@
                       type="button"
                       on:click={() =>
                         openUrl(
-                          "https://console.cloud.google.com/projectcreate",
+                          "https://console.cloud.google.com/projectcreate"
                         )}
                     >
                       <ExternalLink class="icon" size={16} />
@@ -449,7 +434,7 @@
                       type="button"
                       on:click={() =>
                         openUrl(
-                          "https://console.cloud.google.com/apis/library/youtube.googleapis.com",
+                          "https://console.cloud.google.com/apis/library/youtube.googleapis.com"
                         )}
                     >
                       <ExternalLink class="icon" size={16} />
@@ -474,7 +459,7 @@
                       type="button"
                       on:click={() =>
                         openUrl(
-                          "https://console.cloud.google.com/apis/credentials/consent",
+                          "https://console.cloud.google.com/apis/credentials/consent"
                         )}
                     >
                       <ExternalLink class="icon" size={16} />
@@ -515,7 +500,7 @@
                       type="button"
                       on:click={() =>
                         openUrl(
-                          "https://console.cloud.google.com/apis/credentials",
+                          "https://console.cloud.google.com/apis/credentials"
                         )}
                     >
                       <Key class="icon" size={16} />
@@ -644,21 +629,6 @@
                   </div>
                 </label>
               </div>
-            {:else if currentSubStepIndex === 7}
-              <!-- Initial Auth -->
-              <p style="margin-bottom: 1rem;">
-                YouTube に初めてアップロードする際、
-                ブラウザが開いて認証画面が表示されます。
-              </p>
-              <ol class="instruction-list">
-                <li>
-                  Google アカウントでログインし、アクセスを許可してください。
-                </li>
-                <li>
-                  認証が完了すると、トークンファイルが自動的に保存され、
-                  次回以降は自動的にアップロードが行われます。
-                </li>
-              </ol>
             {/if}
           </div>
         </div>
