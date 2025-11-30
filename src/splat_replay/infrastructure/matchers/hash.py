@@ -3,10 +3,10 @@ import hashlib
 from pathlib import Path
 from typing import Optional, Tuple
 
-import cv2
 import numpy as np
 
 from .base import BaseMatcher
+from .utils import imread_unicode
 
 
 class HashMatcher(BaseMatcher):
@@ -20,10 +20,15 @@ class HashMatcher(BaseMatcher):
         name: str | None = None,
     ) -> None:
         super().__init__(None, roi, name)
-        self._hash_value = self._compute_hash(cv2.imread(str(image_path)))
+        loaded_image = imread_unicode(image_path)
+        if loaded_image is None:
+            raise FileNotFoundError(
+                f"画像ファイルの読み込みに失敗しました: {image_path}"
+            )
+        self._hash_value = self._compute_hash(loaded_image)
 
     def _compute_hash(self, image: np.ndarray) -> str:
-        return hashlib.sha1(image).hexdigest()
+        return hashlib.sha1(image.tobytes()).hexdigest()
 
     async def match(self, image: np.ndarray) -> bool:
         return await asyncio.to_thread(self._match, image)

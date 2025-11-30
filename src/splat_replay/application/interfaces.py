@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 from typing import (
+    TYPE_CHECKING,
     Any,
     Awaitable,
     Callable,
@@ -18,6 +19,9 @@ from typing import (
 )
 
 from splat_replay.domain.models import Frame, RecordingMetadata, VideoAsset
+
+if TYPE_CHECKING:
+    from splat_replay.shared.config import CaptureDeviceSettings, OBSSettings
 
 PrivacyStatus = Literal["public", "private", "unlisted"]
 
@@ -67,6 +71,8 @@ class TextToSpeechPort(Protocol):
 class CaptureDevicePort(Protocol):
     """キャプチャデバイスの接続確認を行うポート。"""
 
+    def update_settings(self, settings: CaptureDeviceSettings) -> None: ...
+
     def is_connected(self) -> bool: ...
 
 
@@ -108,6 +114,8 @@ class RecorderWithTranscriptionPort(Protocol):
 
 class VideoRecorderPort(Protocol):
     """録画を制御するアウトバウンドポート。"""
+
+    def update_settings(self, settings: OBSSettings) -> None: ...
 
     async def setup(self) -> None: ...
 
@@ -375,3 +383,50 @@ class FrameSource(Protocol):
     def add_listener(self, cb: Callable[[Frame], None]) -> None: ...
     def remove_listener(self, cb: Callable[[Frame], None]) -> None: ...
     def get_latest(self) -> Optional[Frame]: ...
+
+
+@dataclass(frozen=True)
+class CommandResult:
+    """コマンド実行結果。"""
+
+    return_code: int
+    stdout: str
+    stderr: str
+
+    @property
+    def success(self) -> bool:
+        """コマンドが成功したかどうか。"""
+        return self.return_code == 0
+
+
+class CommandExecutionError(Exception):
+    """コマンド実行エラー。"""
+
+    def __init__(
+        self,
+        message: str,
+        command: list[str],
+        cause: Optional[Exception] = None,
+    ) -> None:
+        """エラーを初期化する。
+
+        Args:
+            message: エラーメッセージ
+            command: 実行しようとしたコマンド
+            cause: 原因となった例外（オプション）
+        """
+        super().__init__(message)
+        self.command = command
+        self.cause = cause
+
+
+class SystemCommandPort(Protocol):
+    """システムコマンド実行のポートインターフェース。"""
+
+    def execute_command(
+        self,
+        command: list[str],
+        timeout: Optional[float] = None,
+    ) -> CommandResult: ...
+
+    def check_command_exists(self, command: str) -> bool: ...

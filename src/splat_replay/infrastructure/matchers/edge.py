@@ -6,6 +6,7 @@ import cv2
 import numpy as np
 
 from .base import BaseMatcher
+from .utils import imread_unicode
 
 
 class EdgeMatcher(BaseMatcher):
@@ -18,10 +19,10 @@ class EdgeMatcher(BaseMatcher):
         name: str | None = None,
     ) -> None:
         super().__init__(None, roi, name)
-        template = cv2.imread(str(template_path))
+        template = imread_unicode(template_path)
         if template is None:
-            raise ValueError(
-                f"テンプレート画像が読み込めません: {template_path}"
+            raise FileNotFoundError(
+                f"テンプレート画像の読み込みに失敗しました: {template_path}"
             )
         self._template_edge = self._canny(template)
         self._threshold = threshold

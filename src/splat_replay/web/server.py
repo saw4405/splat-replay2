@@ -35,7 +35,13 @@ from splat_replay.application.interfaces import CommandDispatcher
 from splat_replay.application.services import (
     AutoRecorder,
     DeviceChecker,
+    ErrorHandler,
     RecordingPreparationService,
+    SystemCheckService,
+    SystemSetupService,
+)
+from splat_replay.application.services.installer_service import (
+    InstallerService,
 )
 from splat_replay.application.services.settings_service import (
     FieldValue,
@@ -54,6 +60,7 @@ from splat_replay.domain.models import (
 from splat_replay.domain.models.rate import RateBase
 from splat_replay.infrastructure.runtime.events import EventBus
 from splat_replay.shared.paths import PROJECT_ROOT, RUNTIME_ROOT
+from splat_replay.web.installer_router import create_installer_router
 
 
 class SettingsUpdateSection(BaseModel):
@@ -161,6 +168,10 @@ class WebServer:
         settings_service: SettingsService,
         event_bus: EventBus,
         upload_use_case: UploadUseCase,
+        installer_service: InstallerService,
+        system_check_service: SystemCheckService,
+        system_setup_service: SystemSetupService,
+        error_handler: ErrorHandler,
     ) -> None:
         self.device_checker = device_checker
         self.recording_preparation_service = recording_preparation_service
@@ -170,6 +181,10 @@ class WebServer:
         self.settings_service = settings_service
         self.event_bus = event_bus
         self.upload_use_case = upload_use_case
+        self.installer_service = installer_service
+        self.system_check_service = system_check_service
+        self.system_setup_service = system_setup_service
+        self.error_handler = error_handler
         self.app = create_app(self)
         self._edit_upload_task: Optional[asyncio.Task[None]] = None
         self._edit_upload_state: EditUploadState = "idle"
@@ -1006,10 +1021,16 @@ def create_app(server: WebServer) -> FastAPI:
     """Create FastAPI application."""
     app = FastAPI(title="Splat Replay Web API")
 
-    # CORS設定 (開発時)
+    # CORS設定 (開発時 & pywebview)
+    # pywebview からのアクセスも許可するため、127.0.0.1:8000 と localhost:8000 を追加
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
+        allow_origins=[
+            "http://localhost:5173",
+            "http://127.0.0.1:5173",
+            "http://localhost:8000",
+            "http://127.0.0.1:8000",
+        ],
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
@@ -1032,6 +1053,19 @@ def create_app(server: WebServer) -> FastAPI:
     async def health() -> dict[str, str]:
         """ヘルスチェックエンドポイント"""
         return {"status": "ok"}
+
+    # インストーラールーターを登録
+    installer_router = create_installer_router(
+        installer_service=server.installer_service,
+        system_check_service=server.system_check_service,
+        system_setup_service=server.system_setup_service,
+        error_handler=server.error_handler,
+        logger=server.logger,
+        device_checker=server.device_checker,
+        recording_preparation_service=server.recording_preparation_service,
+        auto_uploader=server.upload_use_case.uploader,
+    )
+    app.include_router(installer_router)
 
     @app.get("/api/settings")
     async def get_settings() -> JSONResponse:
@@ -1074,14 +1108,84 @@ def create_app(server: WebServer) -> FastAPI:
 
     @app.get("/api/device/status")
     async def get_device_status() -> JSONResponse:
-        # status = await server.get_device_status()
-        status = True
+        status = await server.get_device_status()
         return JSONResponse(content=status)
+
+    @app.get("/api/settings/camera-permission-dialog")
+    async def get_camera_permission_dialog_status() -> JSONResponse:
+        """カメラ許可ダイアログの表示状態を取得する。"""
+        try:
+            shown = (
+                server.installer_service.is_camera_permission_dialog_shown()
+            )
+            return JSONResponse(content={"shown": shown})
+        except Exception as e:
+            server.logger.error(
+                "Failed to get camera permission dialog status", error=str(e)
+            )
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to get camera permission dialog status",
+            )
+
+    @app.post("/api/settings/camera-permission-dialog")
+    async def mark_camera_permission_dialog_shown(
+        request: dict[str, bool],
+    ) -> JSONResponse:
+        """カメラ許可ダイアログを表示済みとしてマークする。"""
+        try:
+            if request.get("shown", False):
+                server.installer_service.mark_camera_permission_dialog_shown()
+            return JSONResponse(content={"status": "ok"})
+        except Exception as e:
+            server.logger.error(
+                "Failed to mark camera permission dialog as shown",
+                error=str(e),
+            )
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to mark camera permission dialog as shown",
+            )
+
+    @app.get("/api/settings/youtube-permission-dialog")
+    async def get_youtube_permission_dialog_status() -> JSONResponse:
+        """YouTube権限ダイアログの表示状態を取得する。"""
+        try:
+            shown = (
+                server.installer_service.is_youtube_permission_dialog_shown()
+            )
+            return JSONResponse(content={"shown": shown})
+        except Exception as e:
+            server.logger.error(
+                "Failed to get youtube permission dialog status", error=str(e)
+            )
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to get youtube permission dialog status",
+            )
+
+    @app.post("/api/settings/youtube-permission-dialog")
+    async def mark_youtube_permission_dialog_shown(
+        request: dict[str, bool],
+    ) -> JSONResponse:
+        """YouTube権限ダイアログを表示済みとしてマークする。"""
+        try:
+            if request.get("shown", False):
+                server.installer_service.mark_youtube_permission_dialog_shown()
+            return JSONResponse(content={"status": "ok"})
+        except Exception as e:
+            server.logger.error(
+                "Failed to mark youtube permission dialog as shown",
+                error=str(e),
+            )
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to mark youtube permission dialog as shown",
+            )
 
     @app.post("/api/recording/prepare")
     async def prepare_recording() -> JSONResponse:
-        # result = await server.prepare_recording()
-        result = True
+        result = await server.prepare_recording()
         return JSONResponse(content={"success": result})
 
     @app.post("/api/recording/start")

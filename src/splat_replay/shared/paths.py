@@ -5,32 +5,25 @@ from pathlib import Path
 
 
 def _get_project_root() -> Path:
-    """プロジェクトルートを取得。
+    """プロジェクトルートを取得（_internal内のリソース用）。
 
-    PyInstaller環境では sys._MEIPASS をベースにし、
+    PyInstaller環境では sys._MEIPASS (_internal)、
     通常環境では __file__ から相対的に解決する。
+
+    Note:
+        frontend/distなど、_internalに配置されるリソース用。
     """
-    # PyInstaller環境の検出（堅牢化）
-    # - sys.frozen が True で、sys._MEIPASS が設定されている場合は
-    #   一時展開ディレクトリを候補とする。ただし、ビルド時に期待する
-    #   リソース（config/ や assets/）が含まれていないケースもあるため、
-    #   存在確認を行い、なければ実行ファイルの親フォルダへフォールバックする。
+    # PyInstaller環境の検出
     if getattr(sys, "frozen", False):
         meipass = getattr(sys, "_MEIPASS", None)
         if meipass:
-            cand = Path(meipass)
-            # 簡易的な存在確認: config または assets ディレクトリがあるか
-            if (cand / "config").exists() or (cand / "assets").exists():
-                return cand
-        # 上記がダメなら、実行ファイルの親ディレクトリをプロジェクトルート候補とする
+            return Path(meipass)
+        # フォールバック: 実行ファイルの親ディレクトリ
         try:
-            exe_parent = Path(sys.executable).resolve().parent
-            return exe_parent
+            return Path(sys.executable).resolve().parent
         except Exception:
-            # どれも取得できない場合は次のフォールバックへ進む
             pass
     # 最終フォールバック: このファイルから上位4階層を使用
-    # （通常環境と同じルールをここでも適用して型/静的解析エラーを避ける）
     return Path(__file__).resolve().parent.parent.parent.parent
 
 
@@ -53,15 +46,16 @@ def _get_runtime_root() -> Path:
     return _get_project_root()
 
 
-# プロジェクトルート（静的リソース用）
+# プロジェクトルート（_internal内の静的リソース用: frontend/dist等）
 PROJECT_ROOT = _get_project_root()
 
 # ランタイムルート（ユーザーデータ用）
 RUNTIME_ROOT = _get_runtime_root()
 
 # --- Top level directories ---
-# 静的リソース（PyInstallerでパッケージ化されたファイル）
-ASSETS_DIR = PROJECT_ROOT / "assets"
+# 静的リソース（実行ファイルと同じ階層に配置: assets）
+# PyInstaller環境では_internalではなく実行ファイル階層に展開される
+ASSETS_DIR = RUNTIME_ROOT / "assets"
 
 # ユーザーデータ（実行時に生成・変更されるファイル）
 CONFIG_DIR = RUNTIME_ROOT / "config"

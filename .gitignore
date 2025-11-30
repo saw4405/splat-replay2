@@ -214,6 +214,7 @@ $RECYCLE.BIN/
 
 
 settings.toml
+client_secret.json
 client_secrets.json
 token.pickle
 logs/
@@ -221,3 +222,4 @@ videos/
 ikamodoki1.ttf
 .specify/
 .serena/
+installation_state.toml

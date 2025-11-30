@@ -21,6 +21,8 @@ __all__ = [
     "SpeechTranscriber",
     "GoogleTextToSpeech",
     "FileVideoAssetRepository",
+    "InstallationStateFileAdapter",
+    "SystemCommandAdapter",
 ]
 
 from .adapters import (
@@ -33,12 +35,14 @@ from .adapters import (
     GuiRuntimePortAdapter,
     ImageDrawer,
     ImageEditor,
+    InstallationStateFileAdapter,
     IntegratedSpeechRecognizer,
     NDICapture,
     OBSController,
     RecorderWithTranscription,
     SpeechTranscriber,
     SubtitleEditor,
+    SystemCommandAdapter,
     SystemPower,
     TesseractOCR,
     YouTubeClient,

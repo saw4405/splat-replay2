@@ -23,6 +23,17 @@ class CaptureDeviceChecker(CaptureDevicePort):
         self.device_name = settings.name
         self.logger = logger
 
+    def update_settings(self, settings: CaptureDeviceSettings) -> None:
+        """設定を更新する。
+
+        Args:
+            settings: 新しい設定
+        """
+        self.device_name = settings.name
+        self.logger.info(
+            "Capture device settings updated", device_name=settings.name
+        )
+
     def is_connected(self) -> bool:
         """デバイスが接続済みかを返す。"""
 

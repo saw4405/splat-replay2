@@ -91,12 +91,19 @@ class AppSettings(BaseModel):
         """
         dictやリストの中のSecretStrやPathをstrに変換するヘルパー
         """
-        if isinstance(obj, SecretStr):
+        if obj is None:
+            return None  # Noneはそのまま返す（後で除外される）
+        elif isinstance(obj, SecretStr):
             return obj.get_secret_value()
         elif isinstance(obj, Path):
             return str(obj)
         elif isinstance(obj, dict):
-            return {k: self._convert_for_toml(v) for k, v in obj.items()}
+            # Noneの値を除外してから変換
+            return {
+                k: self._convert_for_toml(v)
+                for k, v in obj.items()
+                if v is not None
+            }
         elif isinstance(obj, list):
             return [self._convert_for_toml(v) for v in obj]
         else:

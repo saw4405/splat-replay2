@@ -24,12 +24,17 @@ if (Test-Path "build") {
 Write-Host "Cleanup completed" -ForegroundColor Green
 Write-Host ""
 
-# 3. Build with PyInstaller
+# 3. Ensure pyinstaller is installed in the project's virtual environment
+Write-Host "Installing PyInstaller in project virtual environment..." -ForegroundColor Yellow
+uv sync --group build
+
+# 4. Build with PyInstaller from the project's virtual environment
+Write-Host ""
 Write-Host "Building with PyInstaller..." -ForegroundColor Yellow
 Write-Host "This may take several minutes..." -ForegroundColor Gray
 Write-Host ""
 
-uv run pyinstaller splat-replay-webview.spec --clean
+.\.venv\Scripts\pyinstaller.exe splat-replay-webview.spec --clean
 
 if ($LASTEXITCODE -eq 0) {
     Write-Host ""
@@ -74,6 +79,40 @@ if ($LASTEXITCODE -eq 0) {
     }
     
     Write-Host "Runtime directories setup completed" -ForegroundColor Green
+    
+    # Copy assets to executable folder (not in _internal)
+    Write-Host ""
+    Write-Host "Copying assets to executable folder..." -ForegroundColor Yellow
+    $assetsDir = "$distDir\assets"
+    $internalAssetsDir = "$distDir\_internal\assets"
+    
+    # Remove assets from _internal if it exists
+    if (Test-Path $internalAssetsDir) {
+        Write-Host "  - Removing assets from _internal..." -ForegroundColor Gray
+        Remove-Item -Recurse -Force $internalAssetsDir
+    }
+    
+    # Copy assets to executable folder
+    if (Test-Path "assets") {
+        Write-Host "  - Copying assets..." -ForegroundColor Gray
+        Copy-Item -Recurse -Force "assets" "$distDir\assets"
+        Write-Host "  ✓ assets copied to executable folder" -ForegroundColor Green
+    } else {
+        Write-Host "  ✗ assets folder not found in project root" -ForegroundColor Red
+    }
+    
+    # Remove ikamodoki1.ttf (redistribution prohibited)
+    Write-Host ""
+    Write-Host "Removing redistribution-prohibited files..." -ForegroundColor Yellow
+    $ikamodokiPaths = @(
+        "$distDir\assets\thumbnail\ikamodoki1.ttf"
+    )
+    foreach ($path in $ikamodokiPaths) {
+        if (Test-Path $path) {
+            Remove-Item -Force $path
+            Write-Host "  - ikamodoki1.ttf removed from: $path" -ForegroundColor Gray
+        }
+    }
     
     Write-Host ""
     Write-Host "Executable location:" -ForegroundColor Cyan

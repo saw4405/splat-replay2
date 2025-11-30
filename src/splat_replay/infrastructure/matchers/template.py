@@ -6,6 +6,7 @@ import cv2
 import numpy as np
 
 from .base import BaseMatcher
+from .utils import imread_unicode
 
 
 class TemplateMatcher(BaseMatcher):
@@ -21,9 +22,9 @@ class TemplateMatcher(BaseMatcher):
         name: str | None = None,
     ) -> None:
         super().__init__(mask_path, roi, name)
-        template = cv2.imread(str(template_path))
+        template = imread_unicode(template_path)
         if template is None:
-            raise ValueError(
+            raise FileNotFoundError(
                 f"テンプレート画像の読み込みに失敗しました: {template_path}"
             )
         self._template = cv2.cvtColor(template, cv2.COLOR_BGR2GRAY)

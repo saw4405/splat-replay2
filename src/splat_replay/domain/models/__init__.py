@@ -17,10 +17,13 @@ __all__ = [
     "VideoAsset",
     "TIME_RANGES",
     "Judgement",
+    "InstallationState",
+    "InstallationStep",
 ]
 
 from .aliases import Frame, as_frame
 from .game_mode import GameMode
+from .installation_state import InstallationState, InstallationStep
 from .judgement import Judgement
 from .match import Match
 from .rate import XP, RateBase, Udemae
