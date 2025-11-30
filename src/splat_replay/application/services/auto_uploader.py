@@ -31,12 +31,23 @@ class AutoUploader:
         self.logger = logger
         self.uploader = uploader
         self.video_editor = video_editor
-        self.settings = settings
+        self._settings = settings
         self.progress = progress
         self._cancelled: bool = False
 
+    def update_settings(self, settings: UploadSettings) -> None:
+        """設定を更新する。
+
+        Args:
+            settings: 新しい設定
+        """
+        self._settings = settings
+        self.logger.info(
+            "Upload settings updated", privacy_status=settings.privacy_status
+        )
+
     def request_cancel(self) -> None:
-        """Request cancellation; effective between items/steps."""
+        """キャンセル要求。アイテム/ステップ間で有効。"""
         self._cancelled = True
 
     async def execute(self) -> None:
@@ -111,16 +122,16 @@ class AutoUploader:
                 path,
                 title=metadata.get("title", ""),
                 description=metadata.get("description", ""),
-                tags=self.settings.tags,
-                privacy_status=self.settings.privacy_status,
+                tags=self._settings.tags,
+                privacy_status=self._settings.privacy_status,
                 thumb=temp_thumb,
                 caption=Caption(
                     subtitle=temp_subtitle,
-                    caption_name=self.settings.caption_name,
+                    caption_name=self._settings.caption_name,
                 )
                 if temp_subtitle
                 else None,
-                playlist_id=self.settings.playlist_id,
+                playlist_id=self._settings.playlist_id,
             )
             self.logger.info("動画アップロードを完了しました")
             if temp_subtitle:

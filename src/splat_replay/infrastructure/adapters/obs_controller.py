@@ -53,9 +53,19 @@ class OBSController(VideoRecorderPort):
     """Adapter that controls OBS Studio via obs-ws."""
 
     def __init__(self, settings: OBSSettings, logger: BoundLogger) -> None:
-        self.obs_path = settings.executable_path
         self._logger = logger
+        self._monitor_task: asyncio.Task[None] | None = None
+        self._process: asyncio.subprocess.Process | None = None
+        self._status_listeners: list[StatusListener] = []
+        self._initialize_settings(settings)
 
+    def _initialize_settings(self, settings: OBSSettings) -> None:
+        """設定を初期化または更新する。
+
+        Args:
+            settings: 設定
+        """
+        self.obs_path = settings.executable_path
         url = f"ws://{settings.websocket_host}:{settings.websocket_port}"
         self._client = ObsWsClient(
             url=url, password=settings.websocket_password.get_secret_value()
@@ -69,9 +79,15 @@ class OBSController(VideoRecorderPort):
 
         self._client.reg_event_cb(_event_callback, "RecordStateChanged")
         self._is_connected = False
-        self._monitor_task: asyncio.Task[None] | None = None
-        self._process: asyncio.subprocess.Process | None = None
-        self._status_listeners: list[StatusListener] = []
+
+    def update_settings(self, settings: OBSSettings) -> None:
+        """設定を更新する。
+
+        Args:
+            settings: 新しい設定
+        """
+        self._initialize_settings(settings)
+        self._logger.info("OBS settings updated")
 
     async def is_running(self) -> bool:
         file_name = self.obs_path.name.lower()

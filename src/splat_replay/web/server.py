@@ -1061,6 +1061,9 @@ def create_app(server: WebServer) -> FastAPI:
         system_setup_service=server.system_setup_service,
         error_handler=server.error_handler,
         logger=server.logger,
+        device_checker=server.device_checker,
+        recording_preparation_service=server.recording_preparation_service,
+        auto_uploader=server.upload_use_case.uploader,
     )
     app.include_router(installer_router)
 

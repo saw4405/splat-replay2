@@ -74,21 +74,6 @@ class InstallerService:
         state.complete_installation()
         self._repository.save_installation_state(state)
 
-        # インストール完了後、設定ファイルを再読み込み
-        try:
-            from splat_replay.shared.config import AppSettings
-
-            # 設定ファイルを再読み込み（ファイルが更新されている可能性があるため）
-            AppSettings.load_from_toml()
-            self._logger.info(
-                "Settings file reloaded successfully after installation completion"
-            )
-        except Exception as e:
-            self._logger.warning(
-                "Failed to reload settings file after installation",
-                error=str(e),
-            )
-
         self._logger.info(
             "Installation completed",
             installation_date=state.installation_date,

@@ -9,8 +9,11 @@ from pydantic import BaseModel
 from structlog.stdlib import BoundLogger
 
 from splat_replay.application.services import (
+    AutoUploader,
+    DeviceChecker,
     ErrorHandler,
     InstallerService,
+    RecordingPreparationService,
     SystemCheckService,
     SystemSetupService,
 )
@@ -94,6 +97,9 @@ def create_installer_router(
     system_setup_service: SystemSetupService,
     error_handler: ErrorHandler,
     logger: BoundLogger,
+    device_checker: DeviceChecker,
+    recording_preparation_service: RecordingPreparationService,
+    auto_uploader: AutoUploader,
 ) -> APIRouter:
     """インストーラーAPIルーターを作成する。
 
@@ -103,6 +109,9 @@ def create_installer_router(
         system_setup_service: システムセットアップサービス
         error_handler: エラーハンドラー
         logger: ロガー
+        device_checker: デバイスチェッカー
+        recording_preparation_service: 録画準備サービス
+        auto_uploader: 自動アップローダー
 
     Returns:
         APIRouter
@@ -166,7 +175,7 @@ def create_installer_router(
             state = installer_service.complete_installation()
 
             logger.info(
-                "Installation completed successfully. Settings have been reloaded.",
+                "Installation completed successfully.",
                 is_completed=state.is_completed,
             )
 
@@ -600,6 +609,11 @@ def create_installer_router(
             # 設定を保存
             settings.save_to_toml(paths.SETTINGS_FILE)
 
+            # RecordingPreparationService経由でOBSControllerの設定を更新（アプリ再起動なしで反映）
+            recording_preparation_service._recorder.update_settings(
+                settings.obs
+            )
+
             logger.info("OBS WebSocket password saved successfully")
 
             return {
@@ -652,6 +666,9 @@ def create_installer_router(
             # 設定を保存
             settings.save_to_toml(paths.SETTINGS_FILE)
 
+            # DeviceCheckerの設定を更新（アプリ再起動なしで反映）
+            device_checker.device.update_settings(settings.capture_device)
+
             logger.info(
                 "Capture device name saved successfully",
                 device_name=request.device_name,
@@ -686,6 +703,9 @@ def create_installer_router(
 
             # 設定を保存
             settings.save_to_toml(paths.SETTINGS_FILE)
+
+            # AutoUploaderの設定を更新（アプリ再起動なしで反映）
+            auto_uploader.update_settings(settings.upload)
 
             logger.info(
                 "YouTube privacy status saved successfully",
