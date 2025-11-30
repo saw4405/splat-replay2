@@ -24,12 +24,17 @@ if (Test-Path "build") {
 Write-Host "Cleanup completed" -ForegroundColor Green
 Write-Host ""
 
-# 3. Build with PyInstaller
+# 3. Ensure pyinstaller is installed in the project's virtual environment
+Write-Host "Installing PyInstaller in project virtual environment..." -ForegroundColor Yellow
+uv sync --group build
+
+# 4. Build with PyInstaller from the project's virtual environment
+Write-Host ""
 Write-Host "Building with PyInstaller..." -ForegroundColor Yellow
 Write-Host "This may take several minutes..." -ForegroundColor Gray
 Write-Host ""
 
-uv run pyinstaller splat-replay-webview.spec --clean
+.\.venv\Scripts\pyinstaller.exe splat-replay-webview.spec --clean
 
 if ($LASTEXITCODE -eq 0) {
     Write-Host ""
@@ -82,16 +87,11 @@ if ($LASTEXITCODE -eq 0) {
         "$distDir\assets\thumbnail\ikamodoki1.ttf",
         "$distDir\_internal\assets\thumbnail\ikamodoki1.ttf"
     )
-    $removed = $false
     foreach ($path in $ikamodokiPaths) {
         if (Test-Path $path) {
             Remove-Item -Force $path
             Write-Host "  - ikamodoki1.ttf removed from: $path" -ForegroundColor Gray
-            $removed = $true
         }
-    }
-    if (-not $removed) {
-        Write-Host "  - ikamodoki1.ttf not found, skipping" -ForegroundColor Gray
     }
     
     Write-Host ""

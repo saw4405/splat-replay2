@@ -9,53 +9,74 @@ block_cipher = None
 project_root = Path(SPECPATH)
 
 # データファイルを収集
+import certifi
+
 datas = [
     # フロントエンドdist
     (str(project_root / 'frontend' / 'dist'), 'frontend/dist'),
     # アセット（アイコン等）
     (str(project_root / 'assets'), 'assets'),
-    # 設定ファイル例
-    (str(project_root / 'config' / 'settings.example.toml'), 'config'),
-    (str(project_root / 'config' / 'image_matching.yaml'), 'config'),
-    # cyndilib wrapper binaries (NDI support)
-    (str(project_root / '.venv' / 'Lib' / 'site-packages' / 'cyndilib' / 'wrapper' / 'bin'), 'cyndilib/wrapper/bin'),
-    (str(project_root / '.venv' / 'Lib' / 'site-packages' / 'cyndilib' / 'wrapper' / 'include'), 'cyndilib/wrapper/include'),
-    (str(project_root / '.venv' / 'Lib' / 'site-packages' / 'cyndilib' / 'wrapper' / 'lib'), 'cyndilib/wrapper/lib'),
+    # certifi SSL certificates
+    (certifi.where(), 'certifi'),
 ]
 
 # 隠しインポート（動的インポートされるモジュール）
 hiddenimports = [
     'splat_replay.web.app',
     'splat_replay.web.server',
+    # uvicorn関連 - 本体を先にインポート
+    'uvicorn',
+    'uvicorn.config',
+    'uvicorn.main',
+    'uvicorn.server',
     'uvicorn.logging',
     'uvicorn.loops',
     'uvicorn.loops.auto',
+    'uvicorn.loops.asyncio',
     'uvicorn.protocols',
     'uvicorn.protocols.http',
     'uvicorn.protocols.http.auto',
+    'uvicorn.protocols.http.h11_impl',
     'uvicorn.protocols.websockets',
     'uvicorn.protocols.websockets.auto',
+    'uvicorn.protocols.websockets.wsproto_impl',
     'uvicorn.lifespan',
     'uvicorn.lifespan.on',
-    # cyndilib (NDI キャプチャ用) - すべてのコンパイル済みモジュール
-    'cyndilib',
-    'cyndilib.audio_frame',
-    'cyndilib.audio_reference',
-    'cyndilib.buffertypes',
-    'cyndilib.callback',
-    'cyndilib.finder',
-    'cyndilib.framesync',
-    'cyndilib.locks',
-    'cyndilib.metadata_frame',
-    'cyndilib.receiver',
-    'cyndilib.send_frame_status',
-    'cyndilib.sender',
-    'cyndilib.video_frame',
-    'cyndilib.wrapper',
-    'cyndilib.wrapper.common',
-    'cyndilib.wrapper.ndi_recv',
-    'cyndilib.wrapper.ndi_send',
-    'cyndilib.wrapper.ndi_structs',
+    # httpx, h11などのuvicorn依存関係
+    'httpx',
+    'httpcore',
+    'h11',
+    'wsproto',
+    'websockets',
+    'websockets.asyncio',
+    'websockets.asyncio.client',
+    'websockets.asyncio.server',
+    'websockets.client',
+    'websockets.server',
+    'websockets.headers',
+    'websockets.imports',
+    'click',
+    'anyio',
+    'sniffio',
+    'certifi',
+    # obswsc依存関係
+    'obswsc',
+    'obswsc.client',
+    'obswsc.data',
+    # pydantic dependencies
+    'pydantic',
+    'pydantic.dataclasses',
+    'pydantic.fields',
+    'pydantic.main',
+    'pydantic.types',
+    'pydantic.validators',
+    # pywin32 dependencies (pre-import to reduce startup time)
+    'win32api',
+    'win32con',
+    'win32gui',
+    'win32process',
+    'pythoncom',
+    'pywintypes',
 ]
 
 a = Analysis(
@@ -67,7 +88,7 @@ a = Analysis(
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
-    excludes=[],
+    excludes=['cyndilib'],  # NDI support excluded - requires runtime libraries
     win_no_prefer_redirects=False,
     win_private_assemblies=False,
     cipher=block_cipher,
@@ -85,7 +106,7 @@ exe = EXE(
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
-    upx=True,
+    upx=False,  # UPX圧縮を無効化して起動速度を向上
     console=True,  # デバッグ用にコンソールを表示
     disable_windowed_traceback=False,
     argv_emulation=False,
@@ -101,7 +122,7 @@ coll = COLLECT(
     a.zipfiles,
     a.datas,
     strip=False,
-    upx=True,
+    upx=False,  # UPX圧縮を無効化して起動速度を向上
     upx_exclude=[],
     name='SplatReplay',
 )
