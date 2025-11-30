@@ -5,7 +5,7 @@
     installationState,
     fetchInstallationStatus,
   } from "./installer/store";
-  import MainApp from "./MainApp.svelte";
+  import MainApp from "./main/MainApp.svelte";
 
   let isCheckingInstallation = true;
 

@@ -1,8 +1,8 @@
 <script lang="ts">
   import { Settings } from "lucide-svelte";
-  import SettingsDialog from "./lib/SettingsDialog.svelte";
-  import VideoPreviewContainer from "./lib/VideoPreviewContainer.svelte";
-  import BottomDrawer from "./lib/BottomDrawer.svelte";
+  import SettingsDialog from "./components/SettingsDialog.svelte";
+  import VideoPreviewContainer from "./components/VideoPreviewContainer.svelte";
+  import BottomDrawer from "./components/BottomDrawer.svelte";
 
   let isSettingsOpen = false;
 

@@ -18,7 +18,7 @@
     getOBSConfig,
   } from "../../store";
   import { type SystemCheckResult, InstallationStep } from "../../types";
-  import AlertDialog from "../../../lib/AlertDialog.svelte";
+  import AlertDialog from "../../../main/components/AlertDialog.svelte";
 
   const SUBSTEP_STORAGE_KEY = "obs_substep_index";
 
