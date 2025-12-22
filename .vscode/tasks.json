@@ -46,6 +46,61 @@
         "showReuseMessage": true,
         "clear": false
       }
+    },
+    {
+      "label": "Task: Build",
+      "type": "shell",
+      "command": "task",
+      "args": ["build"],
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "Task: Verify",
+      "type": "shell",
+      "command": "task",
+      "args": ["verify"],
+      "group": "test",
+      "problemMatcher": []
+    },
+    {
+      "label": "Task: Format",
+      "type": "shell",
+      "command": "task",
+      "args": ["format"],
+      "problemMatcher": []
+    },
+    {
+      "label": "Task: Lint",
+      "type": "shell",
+      "command": "task",
+      "args": ["lint"],
+      "problemMatcher": []
+    },
+    {
+      "label": "Task: Type Check",
+      "type": "shell",
+      "command": "task",
+      "args": ["type-check"],
+      "problemMatcher": []
+    },
+    {
+      "label": "Task: Test",
+      "type": "shell",
+      "command": "task",
+      "args": ["test"],
+      "group": "test",
+      "problemMatcher": []
+    },
+    {
+      "label": "Task: Clean",
+      "type": "shell",
+      "command": "task",
+      "args": ["clean"],
+      "problemMatcher": []
     }
   ]
 }

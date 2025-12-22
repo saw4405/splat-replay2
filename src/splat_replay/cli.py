@@ -10,6 +10,9 @@ import punq
 import typer
 from structlog.stdlib import BoundLogger
 
+from splat_replay.application.services.system_setup_service import (
+    SystemSetupService,
+)
 from splat_replay.application.use_cases import AutoUseCase, UploadUseCase
 from splat_replay.shared.di import configure_container, resolve
 from splat_replay.shared.logger import buffer_console_logs
@@ -102,27 +105,6 @@ async def _upload() -> None:
 
 
 @app.command()
-def gui() -> None:
-    """GUI アプリケーションを起動する。"""
-    logger = get_logger()
-    logger.info("GUI アプリケーション開始")
-
-    try:
-        from splat_replay.gui.app import SplatReplayGUI
-
-        app_instance = SplatReplayGUI()
-        app_instance.run()
-    except ImportError as e:
-        logger.error(f"GUI の依存関係が不足しています: {e}")
-        typer.echo("GUI を使用するには追加の依存関係が必要です。")
-        raise typer.Exit(1)
-    except Exception as e:
-        logger.error(f"GUI アプリケーションでエラーが発生: {e}")
-        typer.echo(f"GUI アプリケーションの起動に失敗しました: {e}")
-        raise typer.Exit(1)
-
-
-@app.command()
 def web(
     host: str = typer.Option("127.0.0.1", help="Webサーバーのホスト"),
     port: int = typer.Option(8000, help="Webサーバーのポート"),
@@ -184,6 +166,7 @@ def web(
             upload_use_case=upload_use_case,
             installer_service=resolve(container, InstallerService),
             system_check_service=resolve(container, SystemCheckService),
+            system_setup_service=resolve(container, SystemSetupService),
             error_handler=resolve(container, ErrorHandler),
         )
 

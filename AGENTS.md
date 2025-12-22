@@ -1,86 +1,166 @@
-# AGENTS.md ガイド
+# AGENTS.md
 
-エージェント / Copilot が安全に変更するための最小限ルール集。詳細な設計や数値目標は別ドキュメントへ委譲し、ここでは原則のみを列挙する。
+このドキュメントは、コーディングエージェント（Copilot / Claude Code 等）が本リポジトリを安全に変更するための **最小ルール** を定義する。
+
+* ここに書くのは **行動ルール（Do / Don’t）** のみ
+* 背景・詳細設計・思想の解説は `docs/` に委譲
 
 ---
 
 ## 1. 目的
 
-Clean Architecture と型完全性を守りつつ自動化開発を高速化する共通リファレンス。
+変更を **素早く・安全に** 行い、品質（可読性・保守性・信頼性）を落とさないための共通ルールを提供する。
 
-## 2. アプリ概要
+---
 
-Nintendo Switch『スプラトゥーン 3』プレイを Windows 11 上で以下を自動化:
+## 2. エージェント行動原則
 
-- 録画準備 → 自動録画 (画面状態判定 + メタ情報抽出)
-- 自動編集 (不要区間トリミング等)
-- 自動アップロード (YouTube)
-- 終了後スリープ (オプション)
-  モード: フル自動 / 既存録画の編集+アップロード / GUI 手動操作 (開始・中断・再開・停止)。
+以下は、エージェントが変更を行う際の **思考順序と判断優先度** を定義する行動原則である。
 
-### 2.1 ランタイム
+### 原則1：変更前に「何をしているコードか」を言語化する
 
-- OS / Shell: Windows 11 + PowerShell
-- Python: `.python-version` を参照 (その記載バージョンに追随)
-- 仮想環境: `./.venv` を有効化後 `uv sync`
-- 主要コマンド:
+* 変更対象について、責務（役割）・所属レイヤ（domain / application / interface / infrastructure）・主な呼び出し元を把握する
+* それらが説明できない場合、大きな変更や構造変更は行わず、まず調査を優先する
 
-```
-uv sync
+### 原則2：設計判断がある場合は独断で確定しない
+
+* 複数の設計案が考えられる場合、少なくとも2案を意識する
+* 各案のトレードオフ（利点・欠点・影響範囲）を簡潔に整理する
+* 前提情報が不足している、または正解が一意に定まらない場合は、人間の判断に委ねる
+
+### 原則3：既存実装を尊重しつつ、問題があれば「提案」として示す
+
+* 既存実装には意図がある前提で扱い、不用意に設計を塗り替えない
+* ただし、一般的なベストプラクティスや慣習に明確に反している場合は、修正を押し付けず提案として可視化する
+* 提案には以下を含める
+
+  * 問題点（将来起きうる不具合・保守コスト）
+  * 改善案（1〜2案）
+  * 影響範囲（どこが変わるか）
+
+### 原則4：将来の変更者（人間）を前提に書く
+
+* 数か月後に第三者が読む前提でコードとコメントを書く
+* コメントは「何をしているか」ではなく「なぜそうしているか」を記載する
+* 一時的な前提や制約がある場合は、将来的な解消方針も示す
+
+### 原則5：迷ったら“止まる”ことを許可する
+
+* 次のような状況では、無理に完結させず判断材料を提示して止まる
+
+  * 仕様が未確定、または曖昧な場合
+  * 外部依存（API / 環境差）による挙動が読めない場合
+  * 影響範囲が広く、安全性を担保できない場合
+* 止まる際は、以下を簡潔に示す
+
+  * 不明点・仮定
+  * 考えられる選択肢
+  * 次に必要な情報
+
+---
+
+## 3. リポジトリ概要
+
+スプラトゥーン 3のプレイ映像を自動録画・自動編集・自動アップロードするアプリです。
+
+* アプリのセットアップ（関連アプリのインストールや設定）
+* 自動録画（画面状態判定 + メタ情報抽出）
+* 自動編集（サムネイル生成等）
+* 自動アップロード（YouTube）
+* 終了後スリープ（オプション）
+
+### 3.1 ランタイム / ツールチェーン
+
+* OS / Shell: Windows 11 + PowerShell
+* Python: `.python-version` 記載バージョンに追随
+* 仮想環境: `./.venv` を有効化後 `uv sync`
+* Node.js / npm: `frontend/` で `npm install`
+
+---
+
+## 4. 設計方針（アーキテクチャ）
+
+本リポジトリは Clean Architecture の考え方を採用する。
+
+### 4.1 レイヤ依存
+
+* 依存方向: `interface → application → domain`
+* `infrastructure` はポート実装として **DI により注入**
+* ビジネスルールは外部要因（I/O・FW・DB・UI）から独立させる
+
+### 4.2 Import 制約
+
+* `src/domain` は `application` / `infrastructure` を import 禁止
+* `src/application` は `infrastructure` を import 禁止
+* `src/interface` は application のユースケース呼び出しのみ（infrastructure 直接参照禁止）
+* ポート定義: `application.interfaces.*`
+* アダプタ実装: `infrastructure.adapters.*`
+
+---
+
+## 5. 品質ルール
+
+### 5.1 型・安全性
+
+* **Backend（Python）**: 型注釈 100% 必須（暗黙の Any を作らない）
+* **Frontend（TypeScript）**: `any` を避け、型で表現する
+* 公式型が無い場合のみ `typings/` に最小限の型スタブを追加する
+
+### 5.2 フォーマット / Lint / 静的解析
+
+* フォーマッター / リンター / 静的解析の警告・エラーは、まず **設計・実装の改善シグナル** として扱う
+* 可能な限り **根本原因の解消（設計/実装の修正）** を優先する
+
+#### 例外（抑制・無効化）が必要な場合
+
+* `# noqa` / `# type: ignore` / `eslint-disable` 等の抑制は **最後の手段** とする
+* 導入する場合は、該当箇所に **理由と将来の解消方針** をコメントで残す
+* ルール緩和（設定変更）での解決は原則しない（必要なら人間へ提案し、判断材料を添える）
+
+### 5.3 ログと設定
+
+* ログ: `structlog`（JSON）。高頻度ループ内の過剰ログ禁止
+* 設定: `config/` 配下の `*.toml` / `*.yaml` + Pydantic `BaseSettings`
+
+---
+
+## 6. 作業フロー
+
+### 6.1 着手前
+
+1. リポジトリルート確認（`pwd` / `Get-Location`）
+2. 仮想環境有効化 → `uv sync`
+3. 既存ポート・型定義・ユースケースの再利用可否を確認
+4. `docs/*.md` を軽く確認
+
+### 6.2 PR 前（必須）
+
+* 一時 / デバッグコード削除
+* フォーマッター / リンター / 静的解析実行・修正
+
+#### Backend
+
+```bash
+uv run ruff format .
 uv run ruff check .
-uv run mypy --strict src
+uv run ty check
 uv run pytest -q
 ```
 
-## 3. 基本原則
+#### Frontend
 
-- 層依存: interface → application → domain。infrastructure はポート実装として注入。
-- `uv` で依存管理。`pip install` 禁止。
-- 型注釈 100% 必須 (公開 / 非公開 / ローカル関数含む)。`Any` / 無理由 `# type: ignore` 禁止。
-- フォーマット & Lint: Ruff。型検査: `mypy --strict`。テスト: `pytest`。
-- ログ: `structlog` JSON。過剰ログ禁止。
-- 設定: `config/` 下の `*.toml` / `*.yaml`。Pydantic `BaseSettings` 使用。
-- 一時/デバッグコードをコミットしない。
+```bash
+cd frontend
+npm run verify  # format / lint / type-check / check
+```
 
-### 3.1 レイヤ / パス規則
+---
 
-- `src/domain` は `application` / `infrastructure` を import 禁止
-- `src/application` は `infrastructure` を import 禁止
-- `src/interface` は application のユースケース呼び出しのみ (infrastructure 直接参照禁止)
-- ポート定義: `application.interfaces.*`
-- アダプタ実装: `infrastructure.adapters.*`
+## 7. 禁止事項（明確に NG）
 
-### 3.2 ディレクトリ確認
-
-コマンド実行前に `pwd` / `Get-Location` でリポジトリルートにいることを必ず確認し、相対パスはルート基準で記述する。
-
-## 4. 作業フロー
-
-前 (着手前):
-
-1. ルートにいるか確認 (`pwd` / `Get-Location`)。
-2. 仮想環境有効化 → `uv sync`。
-3. `uv run pytest -q` Green。
-4. 既存ポート/型の再利用を検索。
-5. 仕様書 (`docs/*.md`) をざっと確認。
-
-後 (PR 前):
-
-1. `uv run ruff format .` 差分なし。
-2. `uv run ruff check .` / `uv run mypy --strict src` エラーゼロ。
-3. `uv run pytest -q` Green 維持。
-4. 変更が大きければ ADR & CHANGELOG 更新。
-5. 不要ファイル/ログ削除。
-
-## 5. 禁止事項
-
-- 無理由 `# type: ignore` / 安易な `Any`
-- `pip install` / グローバル環境前提コード
-- 層逆方向 import
-- 長時間ブロッキング I/O を主要ループへ直書き
-- 過剰ログ (特に高頻度ループ内)
-- 編集理由のみのコメントをコードへ残す行為
-
-## 6. キーワード
-
-Clean Architecture / uv / Ruff / mypy --strict / structlog / no Any / no type:ignore / Pydantic settings / adapters & ports
+* `pip install` やグローバル環境前提
+* レイヤ逆依存 import
+* 主要ループへ長時間ブロッキング I/O を直書き
+* 高頻度ループ内の過剰ログ
+* 「編集理由だけ」を残すコメント
+* フォーマッター / リンター / 静的解析の警告・エラーを放置

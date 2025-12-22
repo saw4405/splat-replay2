@@ -1,12 +1,12 @@
 ﻿<script lang="ts">
-  import BaseDialog from "./BaseDialog.svelte";
+  import BaseDialog from './BaseDialog.svelte';
 
   export let isOpen = false;
-  export let message = "";
+  export let message = '';
 
   function handleClose(): void {
     isOpen = false;
-    dispatchEvent(new CustomEvent("close"));
+    dispatchEvent(new CustomEvent('close'));
   }
 </script>
 

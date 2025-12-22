@@ -1,10 +1,10 @@
 <script lang="ts">
-  import { onMount, onDestroy } from "svelte";
-  import RecordedDataList from "./RecordedDataList.svelte";
-  import EditedDataList from "./EditedDataList.svelte";
-  import ProgressDialog from "./ProgressDialog.svelte";
-  import AlertDialog from "./AlertDialog.svelte";
-  import YouTubePermissionDialog from "./YouTubePermissionDialog.svelte";
+  import { onMount, onDestroy } from 'svelte';
+  import RecordedDataList from './RecordedDataList.svelte';
+  import EditedDataList from './EditedDataList.svelte';
+  import ProgressDialog from './ProgressDialog.svelte';
+  import AlertDialog from './AlertDialog.svelte';
+  import YouTubePermissionDialog from './YouTubePermissionDialog.svelte';
   import {
     fetchRecordedVideos,
     fetchEditedVideos,
@@ -13,18 +13,18 @@
     type RecordedVideo,
     type EditedVideo,
     type EditUploadStatus,
-  } from "./../api";
+  } from './../api';
 
   // 展開状態: "closed" | "half" | "full"
-  type DrawerState = "closed" | "half" | "full";
-  let drawerState: DrawerState = "closed";
+  type DrawerState = 'closed' | 'half' | 'full';
+  let drawerState: DrawerState = 'closed';
   let recordedCount = 0;
   let editedCount = 0;
   let isProcessing = false;
   let isModalOpen = false; // モーダルが開いているかどうか
   let showProgressDialog = false; // 進捗ダイアログ表示フラグ
   let showAlertDialog = false; // アラートダイアログ表示フラグ
-  let alertMessage = ""; // アラートメッセージ
+  let alertMessage = ''; // アラートメッセージ
   let showYouTubePermissionDialog = false; // YouTube権限ダイアログ表示フラグ
 
   let recordedVideos: RecordedVideo[] = [];
@@ -41,14 +41,14 @@
 
   $: recordedCount = recordedVideos.length;
   $: editedCount = editedVideos.length;
-  $: isProcessing = processStatus?.state === "running";
+  $: isProcessing = processStatus?.state === 'running';
 
   onMount(() => {
     // 初回データ取得
     void loadData();
     connectAssetEventStream();
     // グローバルクリックイベントリスナーを追加
-    document.addEventListener("click", handleOutsideClick);
+    document.addEventListener('click', handleOutsideClick);
   });
 
   onDestroy(() => {
@@ -68,7 +68,7 @@
       modalCloseTimer = null;
     }
     // グローバルクリックイベントリスナーを削除
-    document.removeEventListener("click", handleOutsideClick);
+    document.removeEventListener('click', handleOutsideClick);
   });
 
   async function loadData(): Promise<void> {
@@ -78,14 +78,11 @@
     }
     isLoadingData = true;
     try {
-      const [recorded, edited] = await Promise.all([
-        fetchRecordedVideos(),
-        fetchEditedVideos(),
-      ]);
+      const [recorded, edited] = await Promise.all([fetchRecordedVideos(), fetchEditedVideos()]);
       recordedVideos = recorded;
       editedVideos = edited;
     } catch (error) {
-      console.error("データ取得エラー:", error);
+      console.error('データ取得エラー:', error);
     } finally {
       isLoadingData = false;
       if (pendingDataReload) {
@@ -105,12 +102,12 @@
       assetEventRetryTimer = null;
     }
 
-    assetEventSource = new EventSource("/api/events/assets");
-    assetEventSource.addEventListener("asset_event", (event) => {
+    assetEventSource = new EventSource('/api/events/assets');
+    assetEventSource.addEventListener('asset_event', (event) => {
       handleAssetEvent(event as MessageEvent);
     });
     assetEventSource.onerror = () => {
-      console.error("SSE connection error (assets)");
+      console.error('SSE connection error (assets)');
       if (assetEventSource !== null) {
         assetEventSource.close();
         assetEventSource = null;
@@ -132,30 +129,30 @@
       }
       void loadData();
     } catch (error) {
-      console.error("アセットイベント処理エラー:", error);
+      console.error('アセットイベント処理エラー:', error);
     }
   }
 
   function handleOutsideClick(event: MouseEvent): void {
-    if (drawerState === "closed" || !drawerElement || isModalOpen) {
+    if (drawerState === 'closed' || !drawerElement || isModalOpen) {
       return;
     }
 
     const target = event.target as Node;
     // ドロワー要素の外側をクリックした場合のみ閉じる
     if (!drawerElement.contains(target)) {
-      drawerState = "closed";
+      drawerState = 'closed';
     }
   }
 
   function toggleDrawer(): void {
     // 閉じた状態 → 半分展開 → 全画面展開 → 閉じた状態
-    if (drawerState === "closed") {
-      drawerState = "half";
-    } else if (drawerState === "half") {
-      drawerState = "full";
+    if (drawerState === 'closed') {
+      drawerState = 'half';
+    } else if (drawerState === 'half') {
+      drawerState = 'full';
     } else {
-      drawerState = "closed";
+      drawerState = 'closed';
     }
   }
 
@@ -164,9 +161,7 @@
 
     try {
       // YouTube権限ダイアログを表示済みか確認
-      const dialogResponse = await fetch(
-        "/api/settings/youtube-permission-dialog"
-      );
+      const dialogResponse = await fetch('/api/settings/youtube-permission-dialog');
       const dialogStatus = (await dialogResponse.json()) as { shown: boolean };
 
       if (!dialogStatus.shown) {
@@ -178,7 +173,7 @@
       // 処理を開始
       await executeProcessing();
     } catch (error) {
-      console.error("処理開始エラー:", error);
+      console.error('処理開始エラー:', error);
       alertMessage = `処理開始に失敗しました: ${error}`;
       showAlertDialog = true;
     }
@@ -195,12 +190,11 @@
         startStatusPolling();
         await loadData(); // データを即座に再取得
       } else {
-        alertMessage =
-          response.message || "処理を開始できませんでした(既に実行中の可能性)";
+        alertMessage = response.message || '処理を開始できませんでした(既に実行中の可能性)';
         showAlertDialog = true;
       }
     } catch (error) {
-      console.error("処理開始エラー:", error);
+      console.error('処理開始エラー:', error);
       alertMessage = `処理開始に失敗しました: ${error}`;
       showAlertDialog = true;
     }
@@ -225,7 +219,7 @@
         processStatus = status;
 
         // 処理が完了したらポーリング停止
-        if (status.state === "succeeded" || status.state === "failed") {
+        if (status.state === 'succeeded' || status.state === 'failed') {
           if (statusPollingInterval !== null) {
             clearInterval(statusPollingInterval);
             statusPollingInterval = null;
@@ -233,16 +227,16 @@
           // データを再取得
           await loadData();
 
-          if (status.state === "succeeded") {
-            alertMessage = "編集・アップロード処理が完了しました!";
+          if (status.state === 'succeeded') {
+            alertMessage = '編集・アップロード処理が完了しました!';
             showAlertDialog = true;
-          } else if (status.state === "failed") {
-            alertMessage = `編集・アップロード処理が失敗しました: ${status.error || "不明なエラー"}`;
+          } else if (status.state === 'failed') {
+            alertMessage = `編集・アップロード処理が失敗しました: ${status.error || '不明なエラー'}`;
             showAlertDialog = true;
           }
         }
       } catch (error) {
-        console.error("状態取得エラー:", error);
+        console.error('状態取得エラー:', error);
       }
     }, 2000);
   }
@@ -255,10 +249,7 @@
 />
 
 <!-- 進捗ダイアログ -->
-<ProgressDialog
-  isOpen={showProgressDialog}
-  on:close={() => (showProgressDialog = false)}
-/>
+<ProgressDialog isOpen={showProgressDialog} on:close={() => (showProgressDialog = false)} />
 
 <!-- アラートダイアログ -->
 <AlertDialog
@@ -269,8 +260,8 @@
 
 <div
   class="bottom-drawer"
-  class:half={drawerState === "half"}
-  class:full={drawerState === "full"}
+  class:half={drawerState === 'half'}
+  class:full={drawerState === 'full'}
   bind:this={drawerElement}
 >
   <!-- ヘッダーバー (常時表示) -->
@@ -279,7 +270,7 @@
     role="button"
     tabindex="0"
     on:click={toggleDrawer}
-    on:keydown={(e) => e.key === "Enter" && toggleDrawer()}
+    on:keydown={(e) => e.key === 'Enter' && toggleDrawer()}
   >
     <div class="header-left">
       <div class="expand-hint">
@@ -297,14 +288,14 @@
             stroke-linecap="round"
             stroke-linejoin="round"
             class="expand-arrow"
-            class:half={drawerState === "half"}
-            class:full={drawerState === "full"}
+            class:half={drawerState === 'half'}
+            class:full={drawerState === 'full'}
           />
         </svg>
         <span class="hint-text">
-          {#if drawerState === "closed"}
+          {#if drawerState === 'closed'}
             詳細を表示
-          {:else if drawerState === "half"}
+          {:else if drawerState === 'half'}
             全画面表示
           {:else}
             閉じる
@@ -366,7 +357,7 @@
   </div>
 
   <!-- 展開コンテンツ -->
-  {#if drawerState !== "closed"}
+  {#if drawerState !== 'closed'}
     <div class="drawer-content">
       <div class="data-lists">
         <!-- 録画済データ -->
@@ -380,22 +371,18 @@
               videos={recordedVideos}
               on:refresh={loadData}
               on:modalOpen={() => {
-                console.log(
-                  "BottomDrawer: modalOpen event received from RecordedDataList"
-                );
-                drawerState = "full";
+                console.log('BottomDrawer: modalOpen event received from RecordedDataList');
+                drawerState = 'full';
                 isModalOpen = true;
                 console.log(
-                  "BottomDrawer: drawerState =",
+                  'BottomDrawer: drawerState =',
                   drawerState,
-                  ", isModalOpen =",
+                  ', isModalOpen =',
                   isModalOpen
                 );
               }}
               on:modalClose={() => {
-                console.log(
-                  "BottomDrawer: modalClose event received from RecordedDataList"
-                );
+                console.log('BottomDrawer: modalClose event received from RecordedDataList');
                 // モーダルが閉じた直後のクリックイベントを無視するため、少し遅延
                 if (modalCloseTimer !== null) {
                   window.clearTimeout(modalCloseTimer);
@@ -404,9 +391,9 @@
                   isModalOpen = false;
                   modalCloseTimer = null;
                   console.log(
-                    "BottomDrawer: drawerState =",
+                    'BottomDrawer: drawerState =',
                     drawerState,
-                    ", isModalOpen =",
+                    ', isModalOpen =',
                     isModalOpen
                   );
                 }, 100);
@@ -426,22 +413,18 @@
               videos={editedVideos}
               on:refresh={loadData}
               on:modalOpen={() => {
-                console.log(
-                  "BottomDrawer: modalOpen event received from EditedDataList"
-                );
-                drawerState = "full";
+                console.log('BottomDrawer: modalOpen event received from EditedDataList');
+                drawerState = 'full';
                 isModalOpen = true;
                 console.log(
-                  "BottomDrawer: drawerState =",
+                  'BottomDrawer: drawerState =',
                   drawerState,
-                  ", isModalOpen =",
+                  ', isModalOpen =',
                   isModalOpen
                 );
               }}
               on:modalClose={() => {
-                console.log(
-                  "BottomDrawer: modalClose event received from EditedDataList"
-                );
+                console.log('BottomDrawer: modalClose event received from EditedDataList');
                 // モーダルが閉じた直後のクリックイベントを無視するため、少し遅延
                 if (modalCloseTimer !== null) {
                   window.clearTimeout(modalCloseTimer);
@@ -450,9 +433,9 @@
                   isModalOpen = false;
                   modalCloseTimer = null;
                   console.log(
-                    "BottomDrawer: drawerState =",
+                    'BottomDrawer: drawerState =',
                     drawerState,
-                    ", isModalOpen =",
+                    ', isModalOpen =',
                     isModalOpen
                   );
                 }, 100);
@@ -523,7 +506,7 @@
   }
 
   .drawer-header::before {
-    content: "";
+    content: '';
     position: absolute;
     top: 0;
     left: 0;
@@ -609,7 +592,7 @@
   }
 
   .badge::before {
-    content: "";
+    content: '';
     position: absolute;
     top: 0;
     left: -100%;
@@ -633,11 +616,7 @@
     inset: -1px;
     border-radius: 12px;
     opacity: 0;
-    background: linear-gradient(
-      135deg,
-      rgba(25, 211, 199, 0.3) 0%,
-      rgba(25, 211, 199, 0.1) 100%
-    );
+    background: linear-gradient(135deg, rgba(25, 211, 199, 0.3) 0%, rgba(25, 211, 199, 0.1) 100%);
     filter: blur(8px);
     transition: opacity 0.3s ease;
     z-index: -1;
@@ -823,7 +802,7 @@
   }
 
   .drawer-content::after {
-    content: "";
+    content: '';
     flex: 0 0 0.5rem;
   }
 

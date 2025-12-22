@@ -1,9 +1,0 @@
-from __future__ import annotations
-
-from typing import Any
-
-class TesseractNotFoundError(Exception): ...
-
-def image_to_string(
-    image: Any, lang: str | None = ..., config: str | None = ...
-) -> str: ...

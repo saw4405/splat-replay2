@@ -1,6 +1,6 @@
 <script lang="ts">
-  import SelectField from "./SelectField.svelte";
-  import type { FieldValue, PrimitiveValue, SettingField } from "./types";
+  import SelectField from './SelectField.svelte';
+  import type { FieldValue, PrimitiveValue, SettingField } from './types';
 
   export let field: SettingField;
   export let sectionId: string;
@@ -14,14 +14,14 @@
   export let parentGroup: SettingField | null = null;
 
   const pathTokens = [...path, field.id];
-  const elementId = `${sectionId}-${pathTokens.join("-")}`;
+  const elementId = `${sectionId}-${pathTokens.join('-')}`;
   const labelElementId = `${elementId}-label`;
   const descriptionId = `${elementId}-description`;
 
-  let listText = "";
+  let listText = '';
 
-  $: if (field.type === "list") {
-    listText = Array.isArray(field.value) ? field.value.join("\n") : "";
+  $: if (field.type === 'list') {
+    listText = Array.isArray(field.value) ? field.value.join('\n') : '';
   }
 
   function commitPrimitive(value: PrimitiveValue): void {
@@ -32,7 +32,7 @@
     }
   }
 
-  function commitField(value: FieldValue): void {
+  function _commitField(value: FieldValue): void {
     if (parentGroup) {
       updateGroupField(parentGroup, field, value);
     } else {
@@ -58,14 +58,12 @@
       .split(/\r?\n/)
       .map((item) => item.trim())
       .filter((item) => item.length > 0);
-    listText = items.join("\n");
+    listText = items.join('\n');
     commitPrimitive(items);
   }
 
   function commitText(event: Event): void {
-    const target = event.currentTarget as
-      | HTMLInputElement
-      | HTMLTextAreaElement;
+    const target = event.currentTarget as HTMLInputElement | HTMLTextAreaElement;
     commitPrimitive(target.value);
   }
 
@@ -79,20 +77,18 @@
   }
 
   function shouldUseTextarea(value: unknown): boolean {
-    return (
-      typeof value === "string" && (value.includes("\n") || value.length > 80)
-    );
+    return typeof value === 'string' && (value.includes('\n') || value.length > 80);
   }
 
   function stringValue(current: FieldValue | null | undefined): string {
-    if (typeof current === "string") {
+    if (typeof current === 'string') {
       return current;
     }
-    return "";
+    return '';
   }
 </script>
 
-{#if field.type === "group" && field.children}
+{#if field.type === 'group' && field.children}
   <fieldset class="field-group">
     <legend class:recommended={field.recommended}>{field.label}</legend>
     {#if field.description}
@@ -114,18 +110,14 @@
 {:else}
   <div class="field-item" data-type={field.type}>
     <div class="field-header">
-      <label
-        id={labelElementId}
-        for={elementId}
-        class:recommended={field.recommended}
-      >
+      <label id={labelElementId} for={elementId} class:recommended={field.recommended}>
         {field.label}
       </label>
       {#if field.description}
         <p id={descriptionId} class="field-description">{field.description}</p>
       {/if}
     </div>
-    {#if field.type === "boolean"}
+    {#if field.type === 'boolean'}
       <label class="toggle-switch" for={elementId}>
         <input
           id={elementId}
@@ -136,35 +128,35 @@
         />
         <span class="toggle-slider"></span>
       </label>
-    {:else if field.type === "integer"}
+    {:else if field.type === 'integer'}
       <input
         id={elementId}
         aria-describedby={field.description ? descriptionId : undefined}
         type="number"
         step="1"
-        value={typeof field.value === "number" ? field.value : ""}
+        value={typeof field.value === 'number' ? field.value : ''}
         on:input={commitInteger}
       />
-    {:else if field.type === "float"}
+    {:else if field.type === 'float'}
       <input
         id={elementId}
         aria-describedby={field.description ? descriptionId : undefined}
         type="number"
         step="any"
-        value={typeof field.value === "number" ? field.value : ""}
+        value={typeof field.value === 'number' ? field.value : ''}
         on:input={commitFloat}
       />
-    {:else if field.type === "select"}
+    {:else if field.type === 'select'}
       <SelectField
         id={elementId}
         labelId={field.label ? labelElementId : undefined}
         descriptionId={field.description ? descriptionId : undefined}
         options={field.choices ?? []}
-        value={typeof field.value === "string" ? field.value : ""}
+        value={typeof field.value === 'string' ? field.value : ''}
         placeholder="選択してください"
         on:change={(event) => commitSelectValue(event.detail)}
       />
-    {:else if field.type === "list"}
+    {:else if field.type === 'list'}
       <textarea
         id={elementId}
         aria-describedby={field.description ? descriptionId : undefined}
@@ -173,7 +165,7 @@
         value={listText}
         on:input={commitList}
       />
-    {:else if field.type === "password"}
+    {:else if field.type === 'password'}
       <input
         id={elementId}
         aria-describedby={field.description ? descriptionId : undefined}
@@ -250,17 +242,12 @@
     color: #38bdf8;
   }
 
-  input[type="text"],
-  input[type="password"],
-  input[type="number"],
-  select,
+  input[type='text'],
+  input[type='password'],
+  input[type='number'],
   textarea {
     width: 100%;
-    background: linear-gradient(
-      135deg,
-      rgba(8, 11, 22, 0.65) 0%,
-      rgba(12, 22, 32, 0.45) 100%
-    );
+    background: linear-gradient(135deg, rgba(8, 11, 22, 0.65) 0%, rgba(12, 22, 32, 0.45) 100%);
     border: 1px solid rgba(255, 255, 255, 0.14);
     border-radius: 0.625rem;
     padding: 0.75rem 1rem;
@@ -275,18 +262,13 @@
       background 0.2s ease;
   }
 
-  input[type="text"]:focus,
-  input[type="password"]:focus,
-  input[type="number"]:focus,
-  select:focus,
+  input[type='text']:focus,
+  input[type='password']:focus,
+  input[type='number']:focus,
   textarea:focus {
     outline: none;
     border-color: rgba(25, 211, 199, 0.55);
-    background: linear-gradient(
-      135deg,
-      rgba(25, 211, 199, 0.14) 0%,
-      rgba(25, 211, 199, 0.06) 100%
-    );
+    background: linear-gradient(135deg, rgba(25, 211, 199, 0.14) 0%, rgba(25, 211, 199, 0.06) 100%);
     box-shadow:
       0 0 0 0.1875rem rgba(25, 211, 199, 0.18),
       0 0.35rem 0.9rem rgba(25, 211, 199, 0.22);
@@ -297,30 +279,7 @@
     color: rgba(148, 163, 184, 0.6);
   }
 
-  select {
-    cursor: pointer;
-    color-scheme: dark;
-  }
-  select option {
-    background: linear-gradient(
-      135deg,
-      rgba(12, 20, 32, 0.96) 0%,
-      rgba(4, 9, 18, 0.92) 100%
-    );
-    color: rgba(226, 232, 240, 0.95);
-  }
-  select option:checked,
-  select option:hover,
-  select option:focus {
-    background: linear-gradient(
-      135deg,
-      rgba(25, 211, 199, 0.28) 0%,
-      rgba(25, 211, 199, 0.16) 100%
-    );
-    color: #051a1d;
-  }
-
-  input[type="checkbox"] {
+  input[type='checkbox'] {
     position: absolute;
     opacity: 0;
     width: 0;
@@ -352,7 +311,7 @@
   }
 
   .toggle-slider::before {
-    content: "";
+    content: '';
     position: absolute;
     height: 1.5rem;
     width: 1.5rem;
@@ -370,31 +329,23 @@
       0 0.125rem 0.25rem rgba(0, 0, 0, 0.25);
   }
 
-  input[type="checkbox"]:checked + .toggle-slider {
-    background: linear-gradient(
-      135deg,
-      rgba(25, 211, 199, 0.92) 0%,
-      rgba(25, 211, 199, 0.78) 100%
-    );
+  input[type='checkbox']:checked + .toggle-slider {
+    background: linear-gradient(135deg, rgba(25, 211, 199, 0.92) 0%, rgba(25, 211, 199, 0.78) 100%);
     border-color: rgba(25, 211, 199, 0.65);
     box-shadow:
       inset 0 0.125rem 0.35rem rgba(0, 0, 0, 0.15),
       0 0.5rem 1rem rgba(25, 211, 199, 0.28);
   }
 
-  input[type="checkbox"]:checked + .toggle-slider::before {
+  input[type='checkbox']:checked + .toggle-slider::before {
     transform: translateX(1.5rem);
-    background: linear-gradient(
-      135deg,
-      rgba(255, 255, 255, 1) 0%,
-      rgba(240, 253, 250, 0.96) 100%
-    );
+    background: linear-gradient(135deg, rgba(255, 255, 255, 1) 0%, rgba(240, 253, 250, 0.96) 100%);
     box-shadow:
       0 0.3rem 0.6rem rgba(0, 0, 0, 0.28),
       0 0.125rem 0.5rem rgba(25, 211, 199, 0.4);
   }
 
-  input[type="checkbox"]:focus + .toggle-slider {
+  input[type='checkbox']:focus + .toggle-slider {
     outline: 0.125rem solid rgba(25, 211, 199, 0.55);
     outline-offset: 0.125rem;
   }
@@ -406,12 +357,8 @@
       0 0.25rem 0.75rem rgba(25, 211, 199, 0.24);
   }
 
-  input[type="checkbox"]:checked + .toggle-slider:hover {
-    background: linear-gradient(
-      135deg,
-      rgba(25, 211, 199, 1) 0%,
-      rgba(25, 211, 199, 0.86) 100%
-    );
+  input[type='checkbox']:checked + .toggle-slider:hover {
+    background: linear-gradient(135deg, rgba(25, 211, 199, 1) 0%, rgba(25, 211, 199, 0.86) 100%);
     box-shadow:
       inset 0 0.125rem 0.35rem rgba(0, 0, 0, 0.18),
       0 0.4rem 1.1rem rgba(25, 211, 199, 0.4);
@@ -424,10 +371,6 @@
 
   .list-input {
     min-height: 6rem;
-  }
-
-  select {
-    min-height: 2.75rem;
   }
 
   .field-description {

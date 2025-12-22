@@ -11,13 +11,13 @@ import time
 import uuid
 from collections import deque
 from dataclasses import dataclass, field
-from typing import Any, Deque, Iterable, Protocol
+from typing import Deque, Iterable, Protocol
 
 
 @dataclass(slots=True)
 class Event:
     type: str
-    payload: dict[str, Any] = field(default_factory=dict)
+    payload: dict[str, object] = field(default_factory=dict)
     id: uuid.UUID = field(default_factory=uuid.uuid4)
     ts: float = field(default_factory=time.time)
     severity: str = "info"

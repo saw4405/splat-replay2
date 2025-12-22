@@ -4,7 +4,6 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import (
     TYPE_CHECKING,
-    Any,
     Awaitable,
     Callable,
     Iterable,
@@ -234,6 +233,8 @@ class VideoEditorPort(Protocol):
 
 Color = Union[str, Tuple[int, ...]]
 
+T = TypeVar("T")
+
 
 class ImageDrawerPort(Protocol):
     """画像描画処理を提供するポート。"""
@@ -251,8 +252,6 @@ class ImageDrawerPort(Protocol):
         *args: object,
         **kwargs: object,
     ) -> ImageDrawerPort: ...
-
-    T = TypeVar("T")
 
     def for_each(
         self,
@@ -354,7 +353,7 @@ class PowerPort(Protocol):
 
 class EventPublisher(Protocol):
     def publish(
-        self, event_type: str, payload: Mapping[str, Any] | None = None
+        self, event_type: str, payload: Mapping[str, object] | None = None
     ) -> None: ...
 
 
@@ -364,12 +363,12 @@ class FramePublisher(Protocol):
 
 class CommandDispatcher(Protocol):
     def submit(
-        self, name: str, **payload: Any
-    ) -> Any: ...  # returns Future-like
+        self, name: str, **payload: object
+    ) -> object: ...  # returns Future-like
 
 
 class EventSubscription(Protocol):
-    def poll(self, max_items: int = 100) -> Any: ...  # returns list[Event]
+    def poll(self, max_items: int = 100) -> list[object]: ...
     def close(self) -> None: ...
 
 

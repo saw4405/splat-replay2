@@ -1,13 +1,6 @@
 <script lang="ts">
-  import { onMount } from "svelte";
-  import {
-    Download,
-    ExternalLink,
-    Settings,
-    RefreshCw,
-    Check,
-    Search,
-  } from "lucide-svelte";
+  import { onMount } from 'svelte';
+  import { Download, ExternalLink, RefreshCw, Check, Search } from 'lucide-svelte';
   import {
     checkSystem,
     markSubstepCompleted,
@@ -16,11 +9,11 @@
     listVideoDevices,
     saveCaptureDevice,
     getOBSConfig,
-  } from "../../store";
-  import { type SystemCheckResult, InstallationStep } from "../../types";
-  import AlertDialog from "../../../main/components/AlertDialog.svelte";
+  } from '../../store';
+  import { type SystemCheckResult, InstallationStep } from '../../types';
+  import AlertDialog from '../../../main/components/AlertDialog.svelte';
 
-  const SUBSTEP_STORAGE_KEY = "obs_substep_index";
+  const SUBSTEP_STORAGE_KEY = 'obs_substep_index';
 
   interface SetupStep {
     id: string;
@@ -33,68 +26,65 @@
   let obsInstalled = false;
   let obsVersion: string | null = null;
   let obsPath: string | null = null;
-  let isChecking = false;
-  let checkingIndex: number | null = null;
+  let _isChecking = false;
+  let _checkingIndex: number | null = null;
 
   let ndiInstalled = false;
   let ndiVersion: string | null = null;
   let ndiPath: string | null = null;
 
-  let websocketPassword = "";
+  let websocketPassword = '';
   let videoDevices: string[] = [];
-  let selectedCaptureDevice = "";
+  let selectedCaptureDevice = '';
   let isLoadingDevices = false;
 
   let dialogOpen = false;
-  let dialogMessage = "";
+  let dialogMessage = '';
 
   let setupSteps: SetupStep[] = [
     {
-      id: "obs-install",
-      title: "OBS Studio のインストール",
-      description:
-        "OBS Studio 公式サイトから最新版をダウンロードしてインストールします",
+      id: 'obs-install',
+      title: 'OBS Studio のインストール',
+      description: 'OBS Studio 公式サイトから最新版をダウンロードしてインストールします',
       completed: false,
-      url: "https://obsproject.com/ja/download",
+      url: 'https://obsproject.com/ja/download',
     },
     {
-      id: "obs-ndi",
-      title: "obs-ndi プラグインのインストール",
-      description:
-        "GitHubからobs-ndiプラグインをダウンロードしてインストールします",
+      id: 'obs-ndi',
+      title: 'obs-ndi プラグインのインストール',
+      description: 'GitHubからobs-ndiプラグインをダウンロードしてインストールします',
       completed: false,
-      url: "https://github.com/obs-ndi/obs-ndi/releases",
+      url: 'https://github.com/obs-ndi/obs-ndi/releases',
     },
     {
-      id: "ndi-runtime",
-      title: "NDI 6 Runtime のインストール",
-      description:
-        "NDI公式サイトからRuntimeをダウンロードしてインストールします",
+      id: 'ndi-runtime',
+      title: 'NDI 6 Runtime のインストール',
+      description: 'NDI公式サイトからRuntimeをダウンロードしてインストールします',
       completed: false,
-      url: "http://ndi.link/NDIRedistV6",
+      url: 'http://ndi.link/NDIRedistV6',
     },
     {
-      id: "video-capture-device",
-      title: "OBS キャプチャ設定",
-      description: "OBSで映像キャプチャデバイスを追加します",
+      id: 'video-capture-device',
+      title: 'OBS キャプチャ設定',
+      description: 'OBSで映像キャプチャデバイスを追加します',
       completed: false,
     },
     {
-      id: "recording-settings",
-      title: "OBS 録画設定",
-      description: "録画フォーマットや品質を設定します",
+      id: 'recording-settings',
+      title: 'OBS 録画設定',
+      description: '録画フォーマットや品質を設定します',
       completed: false,
     },
     {
-      id: "ndi-settings",
-      title: "OBS NDI 設定",
-      description: "OBSのNDI設定を有効にします",
+      id: 'ndi-settings',
+      title: 'OBS NDI 設定',
+      description: 'OBSのNDI設定を有効にします',
       completed: false,
     },
     {
-      id: "websocket-password",
-      title: "OBS WebSocket パスワード設定",
-      description: "OBS WebSocketのパスワードを設定します",
+      id: 'websocket-password',
+      title: 'OBS WebSocket パスワード設定',
+      description: 'OBS WebSocketのパスワードを設定します',
       completed: false,
     },
   ];
@@ -151,20 +141,17 @@
         selectedCaptureDevice = config.capture_device_name;
 
         // If devices are already loaded, ensure the selected device is in the list
-        if (
-          videoDevices.length > 0 &&
-          !videoDevices.includes(selectedCaptureDevice)
-        ) {
+        if (videoDevices.length > 0 && !videoDevices.includes(selectedCaptureDevice)) {
           videoDevices = [...videoDevices, selectedCaptureDevice];
         }
       }
     } catch (error) {
-      console.error("Failed to load OBS config:", error);
+      console.error('Failed to load OBS config:', error);
     }
   });
 
   function loadSavedSubstepIndex(maxIndex: number): number | null {
-    if (typeof window === "undefined") return null;
+    if (typeof window === 'undefined') return null;
     const stored = window.sessionStorage.getItem(SUBSTEP_STORAGE_KEY);
     if (stored === null) return null;
     const parsed = Number.parseInt(stored, 10);
@@ -173,11 +160,11 @@
   }
 
   function saveSubstepIndex(index: number): void {
-    if (typeof window === "undefined") return;
+    if (typeof window === 'undefined') return;
     window.sessionStorage.setItem(SUBSTEP_STORAGE_KEY, index.toString());
   }
 
-  function computeInitialSubstepIndex(steps: SetupStep[]): number {
+  function computeInitialSubstepIndex(_steps: SetupStep[]): number {
     // 常に最初の手順から開始する
     return 0;
   }
@@ -189,18 +176,14 @@
 
   // Sync with installation state
   $: if ($installationState && $installationState.step_details) {
-    const details =
-      $installationState.step_details[InstallationStep.OBS_SETUP] || {};
+    const details = $installationState.step_details[InstallationStep.OBS_SETUP] || {};
     const updatedSteps = setupSteps.map((step) => ({
       ...step,
       completed: details[step.id] || false,
     }));
     setupSteps = updatedSteps;
 
-    if (
-      !hasInitializedSubstep &&
-      $installationState.current_step === InstallationStep.OBS_SETUP
-    ) {
+    if (!hasInitializedSubstep && $installationState.current_step === InstallationStep.OBS_SETUP) {
       const savedIndex = loadSavedSubstepIndex(updatedSteps.length - 1);
       if (savedIndex !== null) {
         currentSubStepIndex = savedIndex;
@@ -248,18 +231,14 @@
     loadVideoDevices();
   }
 
-  export async function next(
-    options: { skip?: boolean } = {}
-  ): Promise<boolean> {
+  export async function next(options: { skip?: boolean } = {}): Promise<boolean> {
     const currentStep = setupSteps[currentSubStepIndex];
 
     // インストールチェックが必要なステップのバリデーション
     if (currentSubStepIndex === 0 && !obsInstalled) {
       await checkOBSInstallation(false);
       if (!obsInstalled) {
-        showDialog(
-          "OBS Studio が検出されませんでした。インストールしてから次へ進んでください。"
-        );
+        showDialog('OBS Studio が検出されませんでした。インストールしてから次へ進んでください。');
         return true;
       }
     }
@@ -267,16 +246,14 @@
     if (currentSubStepIndex === 2 && !ndiInstalled) {
       await checkNDIInstallation(false);
       if (!ndiInstalled) {
-        showDialog(
-          "NDI Runtime が検出されませんでした。インストールしてから次へ進んでください。"
-        );
+        showDialog('NDI Runtime が検出されませんでした。インストールしてから次へ進んでください。');
         return true;
       }
     }
 
     // キャプチャデバイスの選択チェック
     if (currentSubStepIndex === 3 && !selectedCaptureDevice) {
-      showDialog("キャプチャデバイスを選択してください。");
+      showDialog('キャプチャデバイスを選択してください。');
       return true;
     }
 
@@ -285,15 +262,15 @@
       try {
         await saveCaptureDevice(selectedCaptureDevice);
       } catch (error) {
-        console.error("Failed to save capture device:", error);
-        showDialog("キャプチャデバイスの保存に失敗しました。");
+        console.error('Failed to save capture device:', error);
+        showDialog('キャプチャデバイスの保存に失敗しました。');
         return true;
       }
     }
 
     // WebSocketパスワードの入力チェック
     if (currentSubStepIndex === 6 && !websocketPassword.trim()) {
-      showDialog("WebSocket パスワードを入力してください。");
+      showDialog('WebSocket パスワードを入力してください。');
       return true;
     }
 
@@ -302,18 +279,14 @@
       try {
         await saveOBSWebSocketPassword(websocketPassword);
       } catch (error) {
-        console.error("Failed to save WebSocket password:", error);
-        showDialog("WebSocket パスワードの保存に失敗しました。");
+        console.error('Failed to save WebSocket password:', error);
+        showDialog('WebSocket パスワードの保存に失敗しました。');
         return true;
       }
     }
 
     if (!options.skip && !currentStep.completed) {
-      await markSubstepCompleted(
-        InstallationStep.OBS_SETUP,
-        currentStep.id,
-        true
-      );
+      await markSubstepCompleted(InstallationStep.OBS_SETUP, currentStep.id, true);
     }
 
     if (currentSubStepIndex < setupSteps.length - 1) {
@@ -331,19 +304,17 @@
     return false;
   }
 
-  async function checkOBSInstallation(
-    showError: boolean = false
-  ): Promise<void> {
-    isChecking = true;
-    checkingIndex = 0;
+  async function checkOBSInstallation(showError: boolean = false): Promise<void> {
+    _isChecking = true;
+    _checkingIndex = 0;
 
     try {
-      const result: SystemCheckResult = await checkSystem("obs");
+      const result: SystemCheckResult = await checkSystem('obs');
       obsInstalled = result.is_installed;
       obsVersion = result.version || null;
       obsPath = result.installation_path || null;
 
-      console.log("[OBSSetup] OBS check result:", {
+      console.log('[OBSSetup] OBS check result:', {
         obsInstalled,
         obsVersion,
         obsPath,
@@ -352,41 +323,35 @@
 
       if (obsInstalled) {
         // インストール済みの場合は必ず状態を更新
-        await markSubstepCompleted(
-          InstallationStep.OBS_SETUP,
-          setupSteps[0].id,
-          true
-        );
-        console.log("[OBSSetup] Marked OBS as completed");
+        await markSubstepCompleted(InstallationStep.OBS_SETUP, setupSteps[0].id, true);
+        console.log('[OBSSetup] Marked OBS as completed');
       } else if (showError) {
         // ユーザーがチェックを入れようとした場合のみエラー表示
         showDialog(
-          "OBS Studio が検出されませんでした。インストールしてからチェックを入れてください。"
+          'OBS Studio が検出されませんでした。インストールしてからチェックを入れてください。'
         );
       }
     } catch (error) {
-      console.error("OBS check failed", error);
+      console.error('OBS check failed', error);
       if (showError) {
-        showDialog("OBSの確認中にエラーが発生しました。");
+        showDialog('OBSの確認中にエラーが発生しました。');
       }
     } finally {
-      isChecking = false;
-      checkingIndex = null;
+      _isChecking = false;
+      _checkingIndex = null;
     }
   }
 
-  async function checkNDIInstallation(
-    showError: boolean = false
-  ): Promise<void> {
-    isChecking = true;
-    checkingIndex = 2;
+  async function checkNDIInstallation(showError: boolean = false): Promise<void> {
+    _isChecking = true;
+    _checkingIndex = 2;
     try {
-      const result: SystemCheckResult = await checkSystem("ndi");
+      const result: SystemCheckResult = await checkSystem('ndi');
       ndiInstalled = result.is_installed;
       ndiVersion = result.version || null;
       ndiPath = result.installation_path || null;
 
-      console.log("[OBSSetup] NDI check result:", {
+      console.log('[OBSSetup] NDI check result:', {
         ndiInstalled,
         ndiVersion,
         ndiPath,
@@ -395,26 +360,22 @@
 
       if (ndiInstalled) {
         // インストール済みの場合は必ず状態を更新
-        await markSubstepCompleted(
-          InstallationStep.OBS_SETUP,
-          setupSteps[2].id,
-          true
-        );
-        console.log("[OBSSetup] Marked NDI as completed");
+        await markSubstepCompleted(InstallationStep.OBS_SETUP, setupSteps[2].id, true);
+        console.log('[OBSSetup] Marked NDI as completed');
       } else if (showError) {
         // ユーザーがチェックを入れようとした場合のみエラー表示
         showDialog(
-          "NDI Runtime が検出されませんでした。インストールしてからチェックを入れてください。"
+          'NDI Runtime が検出されませんでした。インストールしてからチェックを入れてください。'
         );
       }
     } catch (error) {
-      console.warn("NDI Runtime check failed:", error);
+      console.warn('NDI Runtime check failed:', error);
       if (showError) {
-        showDialog("NDI Runtimeの確認中にエラーが発生しました。");
+        showDialog('NDI Runtimeの確認中にエラーが発生しました。');
       }
     } finally {
-      isChecking = false;
-      checkingIndex = null;
+      _isChecking = false;
+      _checkingIndex = null;
     }
   }
 
@@ -422,22 +383,16 @@
     isLoadingDevices = true;
     try {
       videoDevices = await listVideoDevices();
-      console.log("[OBSSetup] Loaded video devices:", videoDevices);
+      console.log('[OBSSetup] Loaded video devices:', videoDevices);
 
       // 設定済みのデバイスが一覧にない場合、一覧に追加する
-      if (
-        selectedCaptureDevice &&
-        !videoDevices.includes(selectedCaptureDevice)
-      ) {
-        console.log(
-          "[OBSSetup] Adding saved device to list:",
-          selectedCaptureDevice
-        );
+      if (selectedCaptureDevice && !videoDevices.includes(selectedCaptureDevice)) {
+        console.log('[OBSSetup] Adding saved device to list:', selectedCaptureDevice);
         videoDevices = [...videoDevices, selectedCaptureDevice];
       }
     } catch (error) {
-      console.error("Failed to load video devices:", error);
-      showDialog("ビデオデバイスの取得に失敗しました。");
+      console.error('Failed to load video devices:', error);
+      showDialog('ビデオデバイスの取得に失敗しました。');
     } finally {
       isLoadingDevices = false;
     }
@@ -463,15 +418,11 @@
     }
 
     // その他のステップは通常通りトグル
-    await markSubstepCompleted(
-      InstallationStep.OBS_SETUP,
-      step.id,
-      !step.completed
-    );
+    await markSubstepCompleted(InstallationStep.OBS_SETUP, step.id, !step.completed);
   }
 
   function openUrl(url: string): void {
-    window.open(url, "_blank");
+    window.open(url, '_blank');
   }
 
   function handleCardClick(event: Event) {
@@ -487,12 +438,7 @@
     }
 
     // インタラクティブな要素のクリックは除外
-    if (
-      target &&
-      (target.closest("button") ||
-        target.closest("a") ||
-        target.closest("input"))
-    ) {
+    if (target && (target.closest('button') || target.closest('a') || target.closest('input'))) {
       return;
     }
 
@@ -500,7 +446,7 @@
   }
 
   function handleKeyDown(event: KeyboardEvent) {
-    if (event.key === "Enter") {
+    if (event.key === 'Enter') {
       handleCardClick(event);
     }
   }
@@ -509,14 +455,14 @@
     return (index === 0 && obsInstalled) || (index === 2 && ndiInstalled);
   }
 
-  function isStepChecked(index: number): boolean {
+  function _isStepChecked(index: number): boolean {
     // 手順1(OBS)と手順3(NDI)はAPIの結果を優先
     if (index === 0) {
-      console.log("[OBSSetup] isStepChecked(0):", obsInstalled);
+      console.log('[OBSSetup] isStepChecked(0):', obsInstalled);
       return obsInstalled;
     }
     if (index === 2) {
-      console.log("[OBSSetup] isStepChecked(2):", ndiInstalled);
+      console.log('[OBSSetup] isStepChecked(2):', ndiInstalled);
       return ndiInstalled;
     }
     // その他の手順はtomlの状態を使用
@@ -535,8 +481,7 @@
   <div class="step-header">
     <h2 class="step-title">OBS Studio セットアップ</h2>
     <p class="step-description">
-      ゲーム映像を録画するため、OBS Studio
-      と必要なプラグインをインストールし、録画設定を行います
+      ゲーム映像を録画するため、OBS Studio と必要なプラグインをインストールし、録画設定を行います
     </p>
   </div>
 
@@ -581,8 +526,7 @@
                     <button
                       class="link-button"
                       type="button"
-                      on:click={() =>
-                        openUrl("https://obsproject.com/ja/download")}
+                      on:click={() => openUrl('https://obsproject.com/ja/download')}
                     >
                       <Download class="icon" size={16} />
                       ダウンロードページを開く
@@ -602,8 +546,7 @@
                     <button
                       class="link-button"
                       type="button"
-                      on:click={() =>
-                        openUrl("https://github.com/obs-ndi/obs-ndi/releases")}
+                      on:click={() => openUrl('https://github.com/obs-ndi/obs-ndi/releases')}
                     >
                       <Download class="icon" size={16} />
                       ダウンロードページを開く
@@ -625,7 +568,7 @@
                     <button
                       class="link-button"
                       type="button"
-                      on:click={() => openUrl("http://ndi.link/NDIRedistV6")}
+                      on:click={() => openUrl('http://ndi.link/NDIRedistV6')}
                     >
                       <Download class="icon" size={16} />
                       ダウンロードする
@@ -645,9 +588,7 @@
                 <li>ゲーム映像が表示されていることを確認します</li>
                 <li style="margin-top: 1rem;">
                   OBSで設定したキャプチャーデバイスを選択します
-                  <div
-                    style="margin-top: 1rem; display: flex; gap: 0.5rem; align-items: center;"
-                  >
+                  <div style="margin-top: 1rem; display: flex; gap: 0.5rem; align-items: center;">
                     <select
                       class="device-select"
                       bind:value={selectedCaptureDevice}
@@ -681,17 +622,13 @@
                 <li>フレームレート: 30 FPS 以上</li>
               </ul>
               <p class="step-note">
-                ※
-                一度録画をしてみて、映像のカクツキや音声の乱れがないか確認することを推奨します。
+                ※ 一度録画をしてみて、映像のカクツキや音声の乱れがないか確認することを推奨します。
               </p>
-              <p class="search-note">
-                録画設定の詳細については、Webで調べてください:
-              </p>
+              <p class="search-note">録画設定の詳細については、Webで調べてください:</p>
               <button
                 class="search-box"
                 type="button"
-                on:click={() =>
-                  openUrl("https://www.google.com/search?q=OBS録画設定")}
+                on:click={() => openUrl('https://www.google.com/search?q=OBS録画設定')}
               >
                 <Search class="search-icon" size={18} />
                 <span class="search-keyword">OBS録画設定</span>
@@ -699,10 +636,7 @@
             {:else if currentSubStepIndex === 5}
               <!-- NDI Settings -->
               <ol class="instruction-list">
-                <li>
-                  OBS の「ツール」メニューから「DistroAV NDI
-                  Settings」をクリックします
-                </li>
+                <li>OBS の「ツール」メニューから「DistroAV NDI Settings」をクリックします</li>
                 <li>「Main Output」にチェックを入れます</li>
                 <li>OKボタンをクリックして設定画面を閉じます</li>
               </ol>
@@ -714,14 +648,9 @@
                 このパスワードは、アプリがOBSの録画制御をするために使用します
               </p>
               <ol class="instruction-list">
-                <li>
-                  OBS の「ツール」メニューから「WebSocket
-                  サーバー設定」をクリックします
-                </li>
+                <li>OBS の「ツール」メニューから「WebSocket サーバー設定」をクリックします</li>
                 <li>「WebSocket サーバーを有効にする」にチェックを入れます</li>
-                <li>
-                  「接続情報を表示」ボタンをクリックして、パスワードを確認します
-                </li>
+                <li>「接続情報を表示」ボタンをクリックして、パスワードを確認します</li>
                 <li>
                   確認したパスワードを下記の入力欄に入力してください
                   <div style="margin-top: 1rem;">
@@ -735,9 +664,7 @@
                   </div>
                 </li>
               </ol>
-              <p class="step-note">
-                ※ OBSのバージョンによって表記が異なる場合があります
-              </p>
+              <p class="step-note">※ OBSのバージョンによって表記が異なる場合があります</p>
             {/if}
           </div>
         </div>
@@ -897,11 +824,7 @@
     align-items: center;
     justify-content: center;
     border-radius: 50%;
-    background: linear-gradient(
-      135deg,
-      rgba(25, 211, 199, 0.2) 0%,
-      rgba(25, 211, 199, 0.05) 100%
-    );
+    background: linear-gradient(135deg, rgba(25, 211, 199, 0.2) 0%, rgba(25, 211, 199, 0.05) 100%);
     border: 2px solid rgba(25, 211, 199, 0.3);
     font-size: 1.25rem;
     font-weight: 700;
@@ -961,11 +884,7 @@
     font-size: 0.75rem;
     font-weight: 600;
     border-radius: 999px;
-    background: linear-gradient(
-      135deg,
-      var(--accent-color) 0%,
-      var(--accent-color-strong) 100%
-    );
+    background: linear-gradient(135deg, var(--accent-color) 0%, var(--accent-color-strong) 100%);
     color: white;
     box-shadow: 0 0 8px var(--accent-glow);
   }

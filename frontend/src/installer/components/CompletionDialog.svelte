@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { CheckCircle2, ArrowRight } from "lucide-svelte";
+  import { CheckCircle2, ArrowRight } from 'lucide-svelte';
 
   export let open = false;
   export let onContinue: (() => void) | undefined = undefined;
@@ -22,7 +22,7 @@
   <div
     class="dialog-backdrop"
     on:click={handleBackdropClick}
-    on:keydown={(e) => e.key === "Escape" && handleContinue()}
+    on:keydown={(e) => e.key === 'Escape' && handleContinue()}
     role="button"
     tabindex="0"
   >
@@ -37,17 +37,11 @@
           Splat Replay のセットアップが完了しました。<br />
           これでアプリケーションを使用する準備が整いました。
         </p>
-        <p class="dialog-submessage">
-          メインアプリケーション画面に移動します。
-        </p>
+        <p class="dialog-submessage">メインアプリケーション画面に移動します。</p>
       </div>
 
       <div class="dialog-actions">
-        <button
-          class="button button-primary"
-          type="button"
-          on:click={handleContinue}
-        >
+        <button class="button button-primary" type="button" on:click={handleContinue}>
           アプリケーションを開始
           <ArrowRight class="button-icon" size={20} />
         </button>
@@ -109,11 +103,7 @@
     align-items: center;
     justify-content: center;
     border-radius: 50%;
-    background: linear-gradient(
-      135deg,
-      rgba(25, 211, 199, 0.2) 0%,
-      rgba(25, 211, 199, 0.05) 100%
-    );
+    background: linear-gradient(135deg, rgba(25, 211, 199, 0.2) 0%, rgba(25, 211, 199, 0.05) 100%);
     border: 3px solid var(--accent-color);
     color: var(--accent-color);
     box-shadow: 0 0 40px var(--accent-glow);
@@ -181,11 +171,7 @@
   }
 
   .button-primary {
-    background: linear-gradient(
-      135deg,
-      var(--accent-color) 0%,
-      var(--accent-color-strong) 100%
-    );
+    background: linear-gradient(135deg, var(--accent-color) 0%, var(--accent-color-strong) 100%);
     color: white;
     border-color: var(--accent-color);
   }
@@ -193,11 +179,6 @@
   .button-primary:hover {
     transform: translateY(-2px);
     box-shadow: 0 8px 24px var(--accent-glow);
-  }
-
-  .button-icon {
-    display: block;
-    flex-shrink: 0;
   }
 
   @media (max-width: 768px) {

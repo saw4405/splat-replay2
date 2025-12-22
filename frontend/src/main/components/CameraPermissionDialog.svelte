@@ -1,5 +1,5 @@
 <script lang="ts">
-  import BaseDialog from "./BaseDialog.svelte";
+  import BaseDialog from './BaseDialog.svelte';
 
   export let open = false;
   let dontShowAgain = false;
@@ -7,13 +7,13 @@
   async function handleClose(): Promise<void> {
     if (dontShowAgain) {
       try {
-        await fetch("/api/settings/camera-permission-dialog", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
+        await fetch('/api/settings/camera-permission-dialog', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ shown: true }),
         });
       } catch (error) {
-        console.error("Failed to save camera permission dialog state:", error);
+        console.error('Failed to save camera permission dialog state:', error);
       }
     }
     open = false;
@@ -88,7 +88,7 @@
     user-select: none;
   }
 
-  .checkbox-label input[type="checkbox"] {
+  .checkbox-label input[type='checkbox'] {
     width: 1.1rem;
     height: 1.1rem;
     cursor: pointer;

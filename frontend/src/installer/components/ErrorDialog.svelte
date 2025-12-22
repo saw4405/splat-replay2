@@ -1,11 +1,11 @@
 <script lang="ts">
-  import { AlertCircle, X } from "lucide-svelte";
-  import type { ApiError } from "../types";
+  import { AlertCircle, X } from 'lucide-svelte';
+  import type { ApiError } from '../types';
 
   export let open = false;
   export let error: ApiError | null = null;
-  export let title = "エラーが発生しました";
-  export let message = "";
+  export let title = 'エラーが発生しました';
+  export let message = '';
   export let onClose: (() => void) | undefined = undefined;
   export let onRetry: (() => void) | undefined = undefined;
 
@@ -31,34 +31,20 @@
 </script>
 
 {#if open && (error || message)}
-  <div
-    class="dialog-backdrop"
-    on:click={handleBackdropClick}
-    role="presentation"
-  >
-    <div
-      class="dialog glass-surface"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="error-title"
-    >
+  <div class="dialog-backdrop" on:click={handleBackdropClick} role="presentation">
+    <div class="dialog glass-surface" role="dialog" aria-modal="true" aria-labelledby="error-title">
       <div class="dialog-header">
         <div class="header-icon">
           <AlertCircle class="icon error-icon" size={24} />
         </div>
         <h2 id="error-title" class="dialog-title">{title}</h2>
-        <button
-          class="close-button"
-          type="button"
-          aria-label="閉じる"
-          on:click={handleClose}
-        >
+        <button class="close-button" type="button" aria-label="閉じる" on:click={handleClose}>
           <X class="icon" size={20} />
         </button>
       </div>
 
       <div class="dialog-content">
-        <p class="error-message">{message || (error ? error.error : "")}</p>
+        <p class="error-message">{message || (error ? error.error : '')}</p>
 
         {#if error}
           {#if error.error_code}
@@ -76,19 +62,11 @@
 
       <div class="dialog-actions">
         {#if onRetry}
-          <button
-            class="button button-primary"
-            type="button"
-            on:click={handleRetry}
-          >
+          <button class="button button-primary" type="button" on:click={handleRetry}>
             再試行
           </button>
         {/if}
-        <button
-          class="button button-secondary"
-          type="button"
-          on:click={handleClose}
-        >
+        <button class="button button-secondary" type="button" on:click={handleClose}>
           閉じる
         </button>
       </div>
@@ -149,10 +127,6 @@
 
   .header-icon {
     flex-shrink: 0;
-  }
-
-  .error-icon {
-    color: #ff6b6b;
   }
 
   .dialog-title {
@@ -252,11 +226,7 @@
   }
 
   .button-primary {
-    background: linear-gradient(
-      135deg,
-      var(--accent-color) 0%,
-      var(--accent-color-strong) 100%
-    );
+    background: linear-gradient(135deg, var(--accent-color) 0%, var(--accent-color-strong) 100%);
     color: white;
     border-color: var(--accent-color);
   }
@@ -276,9 +246,5 @@
     background: rgba(255, 255, 255, 0.1);
     border-color: rgba(255, 255, 255, 0.2);
     transform: translateY(-1px);
-  }
-
-  .icon {
-    display: block;
   }
 </style>

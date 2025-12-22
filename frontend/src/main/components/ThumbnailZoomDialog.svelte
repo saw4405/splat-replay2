@@ -1,9 +1,9 @@
 <script lang="ts">
-  import BaseDialog from "./BaseDialog.svelte";
+  import BaseDialog from './BaseDialog.svelte';
 
   export let visible: boolean = false;
-  export let imageUrl: string = "";
-  export let imageTitle: string = "";
+  export let imageUrl: string = '';
+  export let imageTitle: string = '';
 </script>
 
 <BaseDialog

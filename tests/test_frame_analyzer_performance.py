@@ -14,9 +14,9 @@ from __future__ import annotations
 import os
 import time
 from dataclasses import dataclass
-from typing import Any, Awaitable, Callable, Sequence
+from typing import Awaitable, Callable, Protocol, Sequence
 
-import cv2  # type: ignore
+import cv2
 import pytest
 from test_frame_analyzer import (  # noqa: E402
     TEMPLATE_DIR,
@@ -38,8 +38,8 @@ class SpeedCase:
     name: str  # 表示名
     method: str  # analyzer のメソッド名
     image: str  # 使用画像
-    args: Sequence[Any] = ()
-    prepare: Callable[[Any, Any], Awaitable[Sequence[Any]]] | None = (
+    args: Sequence[object] = ()
+    prepare: Callable[..., Awaitable[Sequence[object]]] | None = (
         None  # 動的引数生成
     )
     enabled: bool = True
@@ -47,7 +47,13 @@ class SpeedCase:
     xfail: bool = False  # 現状達成不能な場合 True
 
 
-async def _prepare_extract_rate(analyzer, frame):  # noqa: ANN001
+class _RateAnalyzer(Protocol):
+    async def extract_game_mode(self, frame: object) -> GameMode | None: ...
+
+
+async def _prepare_extract_rate(
+    analyzer: _RateAnalyzer, frame: object
+) -> tuple[GameMode, ...]:
     mode = await analyzer.extract_game_mode(frame)
     return (mode,) if mode else (GameMode.BATTLE,)
 

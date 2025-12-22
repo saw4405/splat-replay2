@@ -1,16 +1,16 @@
 <script lang="ts">
-  import { onMount, onDestroy } from "svelte";
-  import { Circle, Pause, Square, Play, Eye, EyeOff } from "lucide-svelte";
+  import { onMount, onDestroy } from 'svelte';
+  import { Circle, Pause, Square, Play, Eye, EyeOff } from 'lucide-svelte';
 
   let eventSource: EventSource | null = null;
   let videoEl: HTMLVideoElement | null = null;
   let mediaStream: MediaStream | null = null;
   let devices: MediaDeviceInfo[] = [];
   let selectedDeviceId: string | null = null;
-  let recorderState: string = "STOPPED"; // STOPPED, RECORDING, PAUSED
+  let recorderState: string = 'STOPPED'; // STOPPED, RECORDING, PAUSED
   let isHovered = false;
   let previewVisible: boolean = true;
-  let previewToggleLabel: string = "プレビュー映像を非表示にする";
+  let previewToggleLabel: string = 'プレビュー映像を非表示にする';
   let cameraStartInFlight: boolean = false;
   let previewToggleFocused: boolean = false;
   let toggleVisible: boolean = true;
@@ -25,7 +25,7 @@
   }
 
   function isAbortError(error: unknown): error is DOMException {
-    return error instanceof DOMException && error.name === "AbortError";
+    return error instanceof DOMException && error.name === 'AbortError';
   }
 
   function togglePreviewVisibility(): void {
@@ -36,17 +36,17 @@
     if (eventSource) {
       eventSource.close();
     }
-    eventSource = new EventSource("/api/events/recorder-state");
-    eventSource.addEventListener("recorder_state", (event: MessageEvent) => {
+    eventSource = new EventSource('/api/events/recorder-state');
+    eventSource.addEventListener('recorder_state', (event: MessageEvent) => {
       try {
         const data = JSON.parse(event.data);
-        recorderState = data.state || "UNKNOWN";
+        recorderState = data.state || 'UNKNOWN';
       } catch (error) {
-        console.error("Failed to parse recorder state event:", error);
+        console.error('Failed to parse recorder state event:', error);
       }
     });
     eventSource.onerror = (error) => {
-      console.error("EventSource error:", error);
+      console.error('EventSource error:', error);
       eventSource?.close();
       eventSource = null;
     };
@@ -60,7 +60,7 @@
     try {
       let list = await navigator.mediaDevices.enumerateDevices();
       // ラベルが空だときは許可がない可能性がある -> 一度許可を要求して再列挙
-      const hasLabels = list.some((d) => d.kind === "videoinput" && d.label);
+      const hasLabels = list.some((d) => d.kind === 'videoinput' && d.label);
       if (!hasLabels && navigator.mediaDevices.getUserMedia) {
         try {
           const tempStream = await navigator.mediaDevices.getUserMedia({
@@ -69,13 +69,13 @@
           // stop tracks immediately
           tempStream.getTracks().forEach((t) => t.stop());
           list = await navigator.mediaDevices.enumerateDevices();
-        } catch (e) {
+        } catch {
           // permission denied or not available
         }
       }
-      devices = list.filter((d) => d.kind === "videoinput");
+      devices = list.filter((d) => d.kind === 'videoinput');
     } catch (err) {
-      console.error("enumerateDevices error:", err);
+      console.error('enumerateDevices error:', err);
       devices = [];
     }
   }
@@ -102,7 +102,7 @@
         // autoplay playsinline muted for preview
         try {
           await videoEl.play();
-        } catch (e) {
+        } catch {
           // ignore play errors
         }
       }
@@ -112,12 +112,11 @@
         await sleep(CAMERA_START_RETRY_DELAY_MS * nextAttempt);
         await enumerateVideoDevices();
         const useGenericConstraints =
-          forceGenericConstraints ||
-          nextAttempt === CAMERA_START_MAX_ATTEMPTS - 1;
+          forceGenericConstraints || nextAttempt === CAMERA_START_MAX_ATTEMPTS - 1;
         await startCamera(deviceId, nextAttempt, useGenericConstraints);
         return;
       }
-      console.error("startCamera error:", err);
+      console.error('startCamera error:', err);
       mediaStream = existingStream ?? null;
     }
   }
@@ -146,26 +145,27 @@
     if (videoEl) {
       try {
         videoEl.pause();
-      } catch (_) {}
+      } catch {}
       videoEl.srcObject = null;
     }
   }
 
   function sectionsToSettings(
-    sections: any[] | undefined
-  ): Record<string, Record<string, any>> {
-    const out: Record<string, Record<string, any>> = {};
+    sections: unknown[] | undefined
+  ): Record<string, Record<string, unknown>> {
+    const out: Record<string, Record<string, unknown>> = {};
     if (!Array.isArray(sections)) return out;
     for (const sec of sections) {
       try {
-        const id = sec.id;
-        const fields = sec.fields || [];
-        const obj: Record<string, any> = {};
+        const id = (sec as { id: string }).id;
+        const fields = (sec as { fields?: unknown[] }).fields || [];
+        const obj: Record<string, unknown> = {};
         for (const f of fields) {
-          obj[f.id] = f.hasOwnProperty("value") ? f.value : "";
+          const field = f as { id: string; value?: unknown };
+          obj[field.id] = Object.hasOwn(field, 'value') ? field.value : '';
         }
         out[id] = obj;
-      } catch (e) {
+      } catch {
         /* ignore malformed section */
       }
     }
@@ -177,34 +177,34 @@
       connectRecorderStateEvents();
 
       try {
-        const res = await fetch("/api/settings", { cache: "no-store" });
+        const res = await fetch('/api/settings', { cache: 'no-store' });
         if (res.ok) {
           const data = await res.json();
-          let web = null;
+          let web: Record<string, unknown> | null = null;
           if (Array.isArray(data?.sections)) {
             const all = sectionsToSettings(data.sections);
-            web = all["web_server"] || {};
+            web = all['web_server'] || {};
           }
-          const name = web?.virtual_camera_name || "OBS Virtual Camera";
-          console.log("Configured virtual camera name:", name);
+          const name = String(web?.virtual_camera_name || 'OBS Virtual Camera');
+          console.log('Configured virtual camera name:', name);
           await enumerateVideoDevices();
-          const found = devices.find((d) => (d.label || "").includes(name));
+          const found = devices.find((d) => (d.label || '').includes(name));
           if (found) {
             selectedDeviceId = found.deviceId;
-            console.log("Using virtual camera device:", found);
+            console.log('Using virtual camera device:', found);
             await ensureCameraStream(found.deviceId);
             return;
           } else {
             console.warn(
-              "Virtual camera not found:",
+              'Virtual camera not found:',
               name,
-              "available:",
+              'available:',
               devices.map((d) => d.label)
             );
           }
         }
       } catch (err) {
-        console.error("Failed to fetch preview_mode from settings:", err);
+        console.error('Failed to fetch preview_mode from settings:', err);
       }
     })();
   });
@@ -217,8 +217,8 @@
   });
 
   $: previewToggleLabel = previewVisible
-    ? "プレビュー映像を非表示にする"
-    : "プレビュー映像を表示する";
+    ? 'プレビュー映像を非表示にする'
+    : 'プレビュー映像を表示する';
   $: toggleVisible = previewVisible ? isHovered || previewToggleFocused : true;
 
   $: if (previewVisible) {
@@ -226,7 +226,7 @@
       if (selectedDeviceId) {
         void ensureCameraStream(selectedDeviceId);
       } else {
-        console.warn("No selected device ID for camera stream");
+        console.warn('No selected device ID for camera stream');
       }
     } else if (videoEl && videoEl.srcObject === null) {
       videoEl.srcObject = mediaStream;
@@ -236,7 +236,7 @@
     if (videoEl) {
       try {
         videoEl.pause();
-      } catch (_) {}
+      } catch {}
       videoEl.srcObject = null;
     }
   }
@@ -249,9 +249,9 @@
   };
 
   const defaultVisuals: RecorderVisuals = {
-    dotColor: "#9ca3af",
-    label: "Stopped",
-    borderColor: "#6b7280",
+    dotColor: '#9ca3af',
+    label: 'Stopped',
+    borderColor: '#6b7280',
   };
 
   let recorderVisuals: RecorderVisuals = defaultVisuals;
@@ -260,23 +260,23 @@
 
   function getRecorderVisuals(state: string): RecorderVisuals {
     switch (state) {
-      case "RECORDING":
+      case 'RECORDING':
         return {
-          dotColor: "#ef4444",
-          label: "Recording",
-          borderColor: "#ef4444",
+          dotColor: '#ef4444',
+          label: 'Recording',
+          borderColor: '#ef4444',
         };
-      case "PAUSED":
+      case 'PAUSED':
         return {
-          dotColor: "#eab308",
-          label: "Paused",
-          borderColor: "#eab308",
+          dotColor: '#eab308',
+          label: 'Paused',
+          borderColor: '#eab308',
         };
-      case "STOPPED":
+      case 'STOPPED':
         return {
-          dotColor: "#9ca3af",
-          label: "Stopped",
-          borderColor: "#6b7280",
+          dotColor: '#9ca3af',
+          label: 'Stopped',
+          borderColor: '#6b7280',
         };
       default:
         return defaultVisuals;
@@ -286,45 +286,45 @@
   // 手動録画操作の関数
   async function handleStartRecording(): Promise<void> {
     try {
-      const response = await fetch("/api/recorder/start", { method: "POST" });
+      const response = await fetch('/api/recorder/start', { method: 'POST' });
       if (!response.ok) {
-        console.error("Failed to start recording");
+        console.error('Failed to start recording');
       }
     } catch (error) {
-      console.error("Error starting recording:", error);
+      console.error('Error starting recording:', error);
     }
   }
 
   async function handlePauseRecording(): Promise<void> {
     try {
-      const response = await fetch("/api/recorder/pause", { method: "POST" });
+      const response = await fetch('/api/recorder/pause', { method: 'POST' });
       if (!response.ok) {
-        console.error("Failed to pause recording");
+        console.error('Failed to pause recording');
       }
     } catch (error) {
-      console.error("Error pausing recording:", error);
+      console.error('Error pausing recording:', error);
     }
   }
 
   async function handleResumeRecording(): Promise<void> {
     try {
-      const response = await fetch("/api/recorder/resume", { method: "POST" });
+      const response = await fetch('/api/recorder/resume', { method: 'POST' });
       if (!response.ok) {
-        console.error("Failed to resume recording");
+        console.error('Failed to resume recording');
       }
     } catch (error) {
-      console.error("Error resuming recording:", error);
+      console.error('Error resuming recording:', error);
     }
   }
 
   async function handleStopRecording(): Promise<void> {
     try {
-      const response = await fetch("/api/recorder/stop", { method: "POST" });
+      const response = await fetch('/api/recorder/stop', { method: 'POST' });
       if (!response.ok) {
-        console.error("Failed to stop recording");
+        console.error('Failed to stop recording');
       }
     } catch (error) {
-      console.error("Error stopping recording:", error);
+      console.error('Error stopping recording:', error);
     }
   }
 
@@ -358,42 +358,22 @@
     <div class="controls-section" class:visible={isHovered}>
       <div class="divider"></div>
 
-      {#if recorderState === "STOPPED"}
-        <button
-          class="control-btn start"
-          on:click={handleStartRecording}
-          title="録画開始"
-        >
+      {#if recorderState === 'STOPPED'}
+        <button class="control-btn start" on:click={handleStartRecording} title="録画開始">
           <Circle size={12} fill="currentColor" />
         </button>
-      {:else if recorderState === "RECORDING"}
-        <button
-          class="control-btn pause"
-          on:click={handlePauseRecording}
-          title="一時停止"
-        >
+      {:else if recorderState === 'RECORDING'}
+        <button class="control-btn pause" on:click={handlePauseRecording} title="一時停止">
           <Pause size={12} />
         </button>
-        <button
-          class="control-btn stop"
-          on:click={handleStopRecording}
-          title="停止"
-        >
+        <button class="control-btn stop" on:click={handleStopRecording} title="停止">
           <Square size={12} fill="currentColor" />
         </button>
-      {:else if recorderState === "PAUSED"}
-        <button
-          class="control-btn resume"
-          on:click={handleResumeRecording}
-          title="再開"
-        >
+      {:else if recorderState === 'PAUSED'}
+        <button class="control-btn resume" on:click={handleResumeRecording} title="再開">
           <Play size={12} fill="currentColor" />
         </button>
-        <button
-          class="control-btn stop"
-          on:click={handleStopRecording}
-          title="停止"
-        >
+        <button class="control-btn stop" on:click={handleStopRecording} title="停止">
           <Square size={12} fill="currentColor" />
         </button>
       {/if}

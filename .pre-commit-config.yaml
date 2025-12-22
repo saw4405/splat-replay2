@@ -1,0 +1,38 @@
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.14.6
+    hooks:
+      - id: ruff-check
+      - id: ruff-format
+  - repo: local
+    hooks:
+      - id: ty
+        name: ty check
+        entry: uv run ty check . --ignore unresolved-import
+        language: python
+        files: ^src/|^tests/
+        pass_filenames: false
+      - id: frontend-format
+        name: frontend format check
+        entry: npm run format:check --prefix frontend
+        language: system
+        files: ^frontend/
+        pass_filenames: false
+      - id: frontend-lint
+        name: frontend lint
+        entry: npm run lint --prefix frontend
+        language: system
+        files: ^frontend/
+        pass_filenames: false
+      - id: frontend-type-check
+        name: frontend type check
+        entry: npm run type-check --prefix frontend
+        language: system
+        files: ^frontend/
+        pass_filenames: false
+      - id: frontend-svelte-check
+        name: frontend svelte check
+        entry: npm run check --prefix frontend
+        language: system
+        files: ^frontend/
+        pass_filenames: false

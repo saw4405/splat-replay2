@@ -1,11 +1,11 @@
 ﻿<script lang="ts">
-  import { onDestroy } from "svelte";
-  import BaseDialog from "./BaseDialog.svelte";
-  import type { ProgressEvent } from "./../api";
+  import { onDestroy } from 'svelte';
+  import BaseDialog from './BaseDialog.svelte';
+  import type { ProgressEvent } from './../api';
 
-  type ConnectionState = "idle" | "connecting" | "open" | "error";
-  type TaskStatus = "idle" | "running" | "succeeded" | "failed";
-  type ItemStatus = "pending" | "active" | "success" | "failure";
+  type ConnectionState = 'idle' | 'connecting' | 'open' | 'error';
+  type TaskStatus = 'idle' | 'running' | 'succeeded' | 'failed';
+  type ItemStatus = 'pending' | 'active' | 'success' | 'failure';
   type StepStatus = ItemStatus;
 
   interface StepState {
@@ -47,84 +47,74 @@
   let reconnectAttempt = 0;
   let retryCountdown = 0;
 
-  let connectionState: ConnectionState = "idle";
+  let connectionState: ConnectionState = 'idle';
 
-  const dialogMinHeight = "min(70vh, 46rem)";
-  const dialogMaxHeight = "90vh";
+  const dialogMinHeight = 'min(70vh, 46rem)';
+  const dialogMaxHeight = '90vh';
 
-  const taskOrder = ["auto_edit", "auto_upload"];
+  const taskOrder = ['auto_edit', 'auto_upload'];
 
   const taskLabels: Record<string, string> = {
-    auto_edit: "自動編集",
-    auto_upload: "自動アップロード",
+    auto_edit: '自動編集',
+    auto_upload: '自動アップロード',
   };
 
-  const defaultTaskSteps: Record<
-    string,
-    Array<{ key: string; label: string }>
-  > = {
+  const defaultTaskSteps: Record<string, Array<{ key: string; label: string }>> = {
     auto_edit: [
-      { key: "edit_group", label: "グループ編集" },
-      { key: "concat", label: "動画結合" },
-      { key: "subtitle", label: "字幕編集" },
-      { key: "metadata", label: "メタデータ編集" },
-      { key: "thumbnail", label: "サムネイル編集" },
-      { key: "volume", label: "音量調整" },
-      { key: "save", label: "保存" },
+      { key: 'edit_group', label: 'グループ編集' },
+      { key: 'concat', label: '動画結合' },
+      { key: 'subtitle', label: '字幕編集' },
+      { key: 'metadata', label: 'メタデータ編集' },
+      { key: 'thumbnail', label: 'サムネイル編集' },
+      { key: 'volume', label: '音量調整' },
+      { key: 'save', label: '保存' },
     ],
     auto_upload: [
-      { key: "collect", label: "編集済み動画収集" },
-      { key: "upload", label: "動画アップロード" },
-      { key: "caption", label: "字幕アップロード" },
-      { key: "thumb", label: "サムネイルアップロード" },
-      { key: "playlist", label: "プレイリスト追加" },
-      { key: "delete", label: "編集済み動画削除" },
+      { key: 'collect', label: '編集済み動画収集' },
+      { key: 'upload', label: '動画アップロード' },
+      { key: 'caption', label: '字幕アップロード' },
+      { key: 'thumb', label: 'サムネイルアップロード' },
+      { key: 'playlist', label: 'プレイリスト追加' },
+      { key: 'delete', label: '編集済み動画削除' },
     ],
   };
-  const stageKeyMappings: Record<
-    string,
-    Record<string, { key: string; label: string }>
-  > = {
+  const stageKeyMappings: Record<string, Record<string, { key: string; label: string }>> = {
     auto_edit: {
-      edit_group: { key: "edit_group", label: "グループ編集" },
-      concat: { key: "concat", label: "動画結合" },
-      subtitle: { key: "subtitle", label: "字幕編集" },
-      metadata: { key: "metadata", label: "メタデータ編集" },
-      thumbnail: { key: "thumbnail", label: "サムネイル編集" },
-      volume: { key: "volume", label: "音量調整" },
-      save: { key: "save", label: "保存" },
+      edit_group: { key: 'edit_group', label: 'グループ編集' },
+      concat: { key: 'concat', label: '動画結合' },
+      subtitle: { key: 'subtitle', label: '字幕編集' },
+      metadata: { key: 'metadata', label: 'メタデータ編集' },
+      thumbnail: { key: 'thumbnail', label: 'サムネイル編集' },
+      volume: { key: 'volume', label: '音量調整' },
+      save: { key: 'save', label: '保存' },
     },
     auto_upload: {
-      prepare: { key: "collect", label: "編集済み動画収集" },
-      collect: { key: "collect", label: "編集済み動画収集" },
-      upload: { key: "upload", label: "動画アップロード" },
-      caption: { key: "caption", label: "字幕アップロード" },
-      thumb: { key: "thumb", label: "サムネイルアップロード" },
-      playlist: { key: "playlist", label: "プレイリスト追加" },
-      delete: { key: "delete", label: "編集済み動画削除" },
+      prepare: { key: 'collect', label: '編集済み動画収集' },
+      collect: { key: 'collect', label: '編集済み動画収集' },
+      upload: { key: 'upload', label: '動画アップロード' },
+      caption: { key: 'caption', label: '字幕アップロード' },
+      thumb: { key: 'thumb', label: 'サムネイルアップロード' },
+      playlist: { key: 'playlist', label: 'プレイリスト追加' },
+      delete: { key: 'delete', label: '編集済み動画削除' },
     },
   };
 
-  const streamEventNames = ["progress_event", "progress"];
+  const streamEventNames = ['progress_event', 'progress'];
 
   $: orderedTasks = taskOrder
     .map((id) => tasks[id])
     .filter((task): task is TaskState => Boolean(task));
 
-  $: extraTasks = Object.values(tasks).filter(
-    (task) => !taskOrder.includes(task.id)
-  );
+  $: extraTasks = Object.values(tasks).filter((task) => !taskOrder.includes(task.id));
 
   $: taskList = [...orderedTasks, ...extraTasks];
 
   $: allFinished =
     taskList.length > 0 &&
-    taskList.every(
-      (task) => task.status === "succeeded" || task.status === "failed"
-    );
+    taskList.every((task) => task.status === 'succeeded' || task.status === 'failed');
 
-  $: anyRunning = taskList.some((task) => task.status === "running");
-  $: anyFailure = taskList.some((task) => task.status === "failed");
+  $: anyRunning = taskList.some((task) => task.status === 'running');
+  $: anyFailure = taskList.some((task) => task.status === 'failed');
 
   $: if (isOpen) {
     ensureStream();
@@ -145,38 +135,38 @@
 
   function openStream(): void {
     shutdownStream(false);
-    connectionState = "connecting";
+    connectionState = 'connecting';
     try {
-      const source = new EventSource("/api/events/progress");
+      const source = new EventSource('/api/events/progress');
       messageHandler = (event: MessageEvent) => {
         try {
           const payload = JSON.parse(event.data) as ProgressEvent;
-          if (!payload || typeof payload.task_id !== "string") {
+          if (!payload || typeof payload.task_id !== 'string') {
             return;
           }
           applyEvent(payload);
         } catch (error) {
-          console.error("progress-event-parse-failed", error);
+          console.error('progress-event-parse-failed', error);
         }
       };
       streamEventNames.forEach((name) => {
         source.addEventListener(name, messageHandler as EventListener);
       });
       source.onopen = () => {
-        connectionState = "open";
+        connectionState = 'open';
         reconnectAttempt = 0;
         resetCountdown();
       };
       source.onerror = () => {
-        connectionState = "error";
+        connectionState = 'error';
         shutdownStream(false);
         if (isOpen) {
           scheduleReconnect();
         }
       };
       eventSource = source;
-    } catch (error) {
-      connectionState = "error";
+    } catch {
+      connectionState = 'error';
       shutdownStream(false);
       if (isOpen) {
         scheduleReconnect();
@@ -186,7 +176,7 @@
 
   function pauseStream(): void {
     shutdownStream(true);
-    connectionState = "idle";
+    connectionState = 'idle';
   }
 
   function disposeStream(): void {
@@ -197,10 +187,7 @@
     if (eventSource) {
       streamEventNames.forEach((name) => {
         if (messageHandler && eventSource) {
-          eventSource.removeEventListener(
-            name,
-            messageHandler as EventListener
-          );
+          eventSource.removeEventListener(name, messageHandler as EventListener);
         }
       });
       eventSource.onopen = null;
@@ -256,28 +243,28 @@
 
   function applyEvent(event: ProgressEvent): void {
     switch (event.kind) {
-      case "start":
+      case 'start':
         handleStart(event);
         break;
-      case "items":
+      case 'items':
         handleItems(event);
         break;
-      case "item_stage":
+      case 'item_stage':
         handleItemStage(event);
         break;
-      case "item_finish":
+      case 'item_finish':
         handleItemFinish(event);
         break;
-      case "stage":
+      case 'stage':
         handleStage(event);
         break;
-      case "total":
+      case 'total':
         handleTotal(event);
         break;
-      case "advance":
+      case 'advance':
         handleAdvance(event);
         break;
-      case "finish":
+      case 'finish':
         handleFinish(event);
         break;
       default:
@@ -288,15 +275,13 @@
     const taskId = event.task_id;
     const title = formatTaskTitle(taskId, event.task_name);
     const items = Array.isArray(event.items) ? event.items : [];
-    const createdItems = items.map((itemTitle, index) =>
-      makeItem(taskId, itemTitle, index === 0)
-    );
+    const createdItems = items.map((itemTitle, index) => makeItem(taskId, itemTitle, index === 0));
     const total =
-      typeof event.total === "number" && Number.isFinite(event.total)
+      typeof event.total === 'number' && Number.isFinite(event.total)
         ? Math.max(0, event.total)
         : createdItems.length;
     const completed =
-      typeof event.completed === "number" && Number.isFinite(event.completed)
+      typeof event.completed === 'number' && Number.isFinite(event.completed)
         ? Math.max(0, event.completed)
         : 0;
     const task: TaskState = {
@@ -304,7 +289,7 @@
       title,
       total,
       completed,
-      status: "running",
+      status: 'running',
       items: createdItems,
       activeIndex: createdItems.length > 0 ? 0 : null,
       errorMessage: null,
@@ -322,10 +307,7 @@
     updateTask(taskId, event.task_name ?? undefined, (draft) => {
       event.items!.forEach((title, index) => {
         if (draft.items[index]) {
-          if (
-            !draft.items[index].title ||
-            draft.items[index].title.startsWith("アイテム")
-          ) {
+          if (!draft.items[index].title || draft.items[index].title.startsWith('アイテム')) {
             draft.items[index].title = title;
           }
         } else {
@@ -342,7 +324,7 @@
     const taskId = event.task_id;
     updateTask(taskId, event.task_name ?? undefined, (draft) => {
       const index =
-        typeof event.item_index === "number" && event.item_index >= 0
+        typeof event.item_index === 'number' && event.item_index >= 0
           ? event.item_index
           : (draft.activeIndex ?? draft.items.length);
       if (index < 0) {
@@ -351,13 +333,11 @@
       ensureItemExists(draft, index, event.message ?? event.item_label ?? null);
       setActiveItem(draft, index);
       const item = draft.items[index];
-      const mapped = mapStageKey(taskId, event.item_key ?? "");
-      const stepKey =
-        mapped?.key ?? event.item_key ?? `step_${item.steps.length}`;
-      const stepLabel =
-        mapped?.label ?? event.item_label ?? defaultStepLabel(stepKey);
+      const mapped = mapStageKey(taskId, event.item_key ?? '');
+      const stepKey = mapped?.key ?? event.item_key ?? `step_${item.steps.length}`;
+      const stepLabel = mapped?.label ?? event.item_label ?? defaultStepLabel(stepKey);
       setActiveStep(item, stepKey, stepLabel, event.message ?? null);
-      draft.status = "running";
+      draft.status = 'running';
     });
   }
 
@@ -365,7 +345,7 @@
     const taskId = event.task_id;
     updateTask(taskId, event.task_name ?? undefined, (draft) => {
       const index =
-        typeof event.item_index === "number" && event.item_index >= 0
+        typeof event.item_index === 'number' && event.item_index >= 0
           ? event.item_index
           : (draft.activeIndex ?? -1);
       if (index < 0 || !draft.items[index]) {
@@ -384,33 +364,29 @@
 
   function handleStage(event: ProgressEvent): void {
     const taskId = event.task_id;
-    const stageKey = event.stage_key ?? "";
+    const stageKey = event.stage_key ?? '';
     updateTask(taskId, event.task_name ?? undefined, (draft) => {
-      if (taskId === "auto_edit" && stageKey === "edit_group") {
+      if (taskId === 'auto_edit' && stageKey === 'edit_group') {
         const title = pickStageTitle(event);
         const index = findItemIndexByTitle(draft, title);
         const targetIndex =
-          index >= 0
-            ? index
-            : draft.items.push(makeItem(taskId, title, false)) - 1;
+          index >= 0 ? index : draft.items.push(makeItem(taskId, title, false)) - 1;
         setActiveItem(draft, targetIndex);
         draft.items[targetIndex].title = title;
         return;
       }
-      if (taskId === "auto_upload" && stageKey === "prepare") {
+      if (taskId === 'auto_upload' && stageKey === 'prepare') {
         const title = pickStageTitle(event);
         const index = findItemIndexByTitle(draft, title);
         const targetIndex =
-          index >= 0
-            ? index
-            : draft.items.push(makeItem(taskId, title, false)) - 1;
+          index >= 0 ? index : draft.items.push(makeItem(taskId, title, false)) - 1;
         setActiveItem(draft, targetIndex);
         draft.items[targetIndex].title = title;
-        const mapped = mapStageKey(taskId, "collect");
+        const mapped = mapStageKey(taskId, 'collect');
         setActiveStep(
           draft.items[targetIndex],
-          mapped?.key ?? "collect",
-          mapped?.label ?? "編集済み動画収集",
+          mapped?.key ?? 'collect',
+          mapped?.label ?? '編集済み動画収集',
           event.message ?? null
         );
         return;
@@ -424,8 +400,7 @@
       }
       const mapped = mapStageKey(taskId, stageKey);
       const stepKey = mapped?.key ?? stageKey;
-      const stepLabel =
-        mapped?.label ?? event.stage_label ?? defaultStepLabel(stepKey);
+      const stepLabel = mapped?.label ?? event.stage_label ?? defaultStepLabel(stepKey);
       setActiveStep(current, stepKey, stepLabel, event.message ?? null);
     });
   }
@@ -433,7 +408,7 @@
   function handleTotal(event: ProgressEvent): void {
     const taskId = event.task_id;
     updateTask(taskId, event.task_name ?? undefined, (draft) => {
-      if (typeof event.total === "number" && Number.isFinite(event.total)) {
+      if (typeof event.total === 'number' && Number.isFinite(event.total)) {
         draft.total = Math.max(0, event.total);
       }
     });
@@ -442,10 +417,7 @@
   function handleAdvance(event: ProgressEvent): void {
     const taskId = event.task_id;
     updateTask(taskId, event.task_name ?? undefined, (draft) => {
-      if (
-        typeof event.completed === "number" &&
-        Number.isFinite(event.completed)
-      ) {
+      if (typeof event.completed === 'number' && Number.isFinite(event.completed)) {
         draft.completed = Math.max(0, event.completed);
       } else if (draft.total > 0) {
         draft.completed = Math.min(draft.total, draft.completed + 1);
@@ -461,62 +433,59 @@
     const taskId = event.task_id;
     updateTask(taskId, event.task_name ?? undefined, (draft) => {
       const success = event.success !== false;
-      draft.status = success ? "succeeded" : "failed";
+      draft.status = success ? 'succeeded' : 'failed';
       draft.completed =
-        typeof event.completed === "number" && Number.isFinite(event.completed)
+        typeof event.completed === 'number' && Number.isFinite(event.completed)
           ? Math.max(0, event.completed)
           : draft.total;
       if (success) {
-        draft.successMessage = event.message ?? "すべての処理が完了しました。";
+        draft.successMessage = event.message ?? 'すべての処理が完了しました。';
         draft.errorMessage = null;
         draft.items.forEach((item) => {
-          if (item.status !== "success") {
+          if (item.status !== 'success') {
             markItemSuccess(item);
           }
         });
         draft.activeIndex = null;
       } else {
-        draft.errorMessage = event.message ?? "処理に失敗しました。";
+        draft.errorMessage = event.message ?? '処理に失敗しました。';
         if (draft.activeIndex !== null && draft.items[draft.activeIndex]) {
-          markItemFailure(
-            draft.items[draft.activeIndex],
-            event.message ?? null
-          );
+          markItemFailure(draft.items[draft.activeIndex], event.message ?? null);
         }
         draft.successMessage = null;
       }
     });
   }
   function markItemSuccess(item: ItemState): void {
-    item.status = "success";
+    item.status = 'success';
     item.expanded = false;
     if (item.activeStepKey) {
       const step = item.steps.find((s) => s.key === item.activeStepKey);
       if (step) {
-        step.status = "success";
+        step.status = 'success';
       }
     }
     item.steps.forEach((step) => {
-      if (step.status === "active") {
-        step.status = "success";
+      if (step.status === 'active') {
+        step.status = 'success';
       }
     });
     item.activeStepKey = null;
   }
 
   function markItemFailure(item: ItemState, message: string | null): void {
-    item.status = "failure";
+    item.status = 'failure';
     item.expanded = true;
     if (item.activeStepKey) {
       const step = item.steps.find((s) => s.key === item.activeStepKey);
       if (step) {
-        step.status = "failure";
+        step.status = 'failure';
         step.message = message;
       }
     }
     item.steps.forEach((step) => {
-      if (step.status === "active") {
-        step.status = "failure";
+      if (step.status === 'active') {
+        step.status = 'failure';
         if (message && !step.message) {
           step.message = message;
         }
@@ -531,13 +500,13 @@
     }
     if (task.activeIndex !== null && task.activeIndex !== index) {
       const previous = task.items[task.activeIndex];
-      if (previous && previous.status === "active") {
-        previous.status = "pending";
+      if (previous && previous.status === 'active') {
+        previous.status = 'pending';
       }
     }
     task.activeIndex = index;
     const current = task.items[index];
-    current.status = "active";
+    current.status = 'active';
     current.expanded = true;
   }
 
@@ -548,36 +517,28 @@
     message: string | null
   ): void {
     if (item.activeStepKey && item.activeStepKey !== key) {
-      const previous = item.steps.find(
-        (step) => step.key === item.activeStepKey
-      );
-      if (previous && previous.status === "active") {
-        previous.status = "success";
+      const previous = item.steps.find((step) => step.key === item.activeStepKey);
+      if (previous && previous.status === 'active') {
+        previous.status = 'success';
       }
     }
     let step = item.steps.find((s) => s.key === key);
     if (!step) {
-      step = { key, label, status: "pending", message: null };
+      step = { key, label, status: 'pending', message: null };
       item.steps.push(step);
     }
     step.label = label;
     step.message = message;
-    step.status = "active";
+    step.status = 'active';
     item.activeStepKey = key;
-    if (item.status !== "success" && item.status !== "failure") {
-      item.status = "active";
+    if (item.status !== 'success' && item.status !== 'failure') {
+      item.status = 'active';
     }
   }
 
-  function ensureItemExists(
-    task: TaskState,
-    index: number,
-    titleHint: string | null
-  ): void {
+  function ensureItemExists(task: TaskState, index: number, titleHint: string | null): void {
     while (task.items.length <= index) {
-      task.items.push(
-        makeItem(task.id, defaultItemTitle(task.id, task.items.length), false)
-      );
+      task.items.push(makeItem(task.id, defaultItemTitle(task.id, task.items.length), false));
     }
     const item = task.items[index];
     if (titleHint && titleHint.trim().length > 0) {
@@ -591,7 +552,7 @@
   }
 
   function defaultItemTitle(taskId: string, index: number): string {
-    const base = taskLabels[taskId] ?? "アイテム";
+    const base = taskLabels[taskId] ?? 'アイテム';
     return `${base} ${index + 1}`;
   }
 
@@ -614,7 +575,7 @@
     return defs.map((def) => ({
       key: def.key,
       label: def.label,
-      status: "pending",
+      status: 'pending',
       message: null,
     }));
   }
@@ -622,17 +583,14 @@
   function makeItem(taskId: string, title: string, active: boolean): ItemState {
     return {
       title: title || defaultItemTitle(taskId, 0),
-      status: active ? "active" : "pending",
+      status: active ? 'active' : 'pending',
       steps: createDefaultSteps(taskId),
       activeStepKey: null,
       expanded: active,
     };
   }
 
-  function mapStageKey(
-    taskId: string,
-    key: string
-  ): { key: string; label: string } | null {
+  function mapStageKey(taskId: string, key: string): { key: string; label: string } | null {
     if (!key) {
       return null;
     }
@@ -645,9 +603,9 @@
 
   function defaultStepLabel(key: string): string {
     if (!key) {
-      return "処理";
+      return '処理';
     }
-    return key.replace(/_/g, " ");
+    return key.replace(/_/g, ' ');
   }
 
   function pickStageTitle(event: ProgressEvent): string {
@@ -685,7 +643,7 @@
       title: formatTaskTitle(taskId, fallbackTitle),
       total: 0,
       completed: 0,
-      status: "idle",
+      status: 'idle',
       items: [],
       activeIndex: null,
       errorMessage: null,
@@ -712,27 +670,27 @@
 
   function itemStatusLabel(status: ItemStatus): string {
     switch (status) {
-      case "active":
-        return "進行中";
-      case "success":
-        return "完了";
-      case "failure":
-        return "失敗";
+      case 'active':
+        return '進行中';
+      case 'success':
+        return '完了';
+      case 'failure':
+        return '失敗';
       default:
-        return "待機中";
+        return '待機中';
     }
   }
 
   function stepStatusLabel(status: StepStatus): string {
     switch (status) {
-      case "active":
-        return "進行中";
-      case "success":
-        return "完了";
-      case "failure":
-        return "失敗";
+      case 'active':
+        return '進行中';
+      case 'success':
+        return '完了';
+      case 'failure':
+        return '失敗';
       default:
-        return "待機中";
+        return '待機中';
     }
   }
 
@@ -771,26 +729,20 @@
   on:close={handleClose}
 >
   <section class="dialog-body">
-    {#if connectionState === "connecting"}
-      <div
-        class="connection-banner connecting"
-        role="status"
-        aria-live="polite"
-      >
+    {#if connectionState === 'connecting'}
+      <div class="connection-banner connecting" role="status" aria-live="polite">
         <span class="dot dot-1"></span>
         <span class="dot dot-2"></span>
         <span class="dot dot-3"></span>
         サーバーと接続中です…
       </div>
-    {:else if connectionState === "error"}
+    {:else if connectionState === 'error'}
       <div class="connection-banner error" role="alert">
         進捗ストリームへの接続に失敗しました。
         {#if retryCountdown > 0}
           {retryCountdown} 秒後に再接続を試行します。
         {/if}
-        <button type="button" class="retry-button" on:click={manualReconnect}>
-          再接続
-        </button>
+        <button type="button" class="retry-button" on:click={manualReconnect}> 再接続 </button>
       </div>
     {/if}
 
@@ -798,10 +750,8 @@
       {#if taskList.length === 0}
         <div class="empty-state">
           <p>まだ進捗データがありません。</p>
-          {#if connectionState === "open"}
-            <p class="hint">
-              自動編集または自動アップロードを開始すると表示されます。
-            </p>
+          {#if connectionState === 'open'}
+            <p class="hint">自動編集または自動アップロードを開始すると表示されます。</p>
           {/if}
         </div>
       {:else}
@@ -811,9 +761,7 @@
               <header class="task-header">
                 <div class="task-title-group">
                   <h3>{task.title}</h3>
-                  <span class="task-subtitle"
-                    >{task.completed}/{task.total}</span
-                  >
+                  <span class="task-subtitle">{task.completed}/{task.total}</span>
                 </div>
                 <div
                   class="task-progress"
@@ -822,19 +770,16 @@
                   aria-valuemax="100"
                   aria-valuenow={taskProgress(task)}
                 >
-                  <div
-                    class="task-progress-fill"
-                    style={`width: ${taskProgress(task)}%`}
-                  />
+                  <div class="task-progress-fill" style={`width: ${taskProgress(task)}%`} />
                   <span class="task-progress-label">{taskProgress(task)}%</span>
                 </div>
               </header>
 
-              {#if task.status === "failed" && task.errorMessage}
+              {#if task.status === 'failed' && task.errorMessage}
                 <div class="status-banner error" role="alert">
                   {task.errorMessage}
                 </div>
-              {:else if task.status === "succeeded" && task.successMessage}
+              {:else if task.status === 'succeeded' && task.successMessage}
                 <div class="status-banner success" role="status">
                   {task.successMessage}
                 </div>
@@ -842,9 +787,7 @@
 
               <div class="task-body">
                 {#if task.items.length === 0}
-                  <div class="empty-items">
-                    処理対象が見つかりませんでした。
-                  </div>
+                  <div class="empty-items">処理対象が見つかりませんでした。</div>
                 {:else}
                   {#each task.items as item, index (item.title + index)}
                     <section class="item" data-status={item.status}>
@@ -873,16 +816,11 @@
                                 <span class="step-marker"></span>
                                 <div class="step-content">
                                   <span class="step-label">{step.label}</span>
-                                  <span
-                                    class="step-chip"
-                                    data-status={step.status}
-                                  >
+                                  <span class="step-chip" data-status={step.status}>
                                     {stepStatusLabel(step.status)}
                                   </span>
                                   {#if step.message}
-                                    <span class="step-message"
-                                      >{step.message}</span
-                                    >
+                                    <span class="step-message">{step.message}</span>
                                   {/if}
                                 </div>
                               </li>
@@ -1039,20 +977,16 @@
     gap: 1rem;
     padding: 1.25rem;
     border-radius: 1rem;
-    background: linear-gradient(
-      155deg,
-      rgba(18, 26, 33, 0.9),
-      rgba(10, 14, 18, 0.96)
-    );
+    background: linear-gradient(155deg, rgba(18, 26, 33, 0.9), rgba(10, 14, 18, 0.96));
     border: 1px solid rgba(25, 211, 199, 0.08);
     box-shadow: 0 0.75rem 2.25rem rgba(0, 0, 0, 0.35);
   }
 
-  .task-card[data-status="succeeded"] {
+  .task-card[data-status='succeeded'] {
     border-color: rgba(25, 211, 199, 0.35);
   }
 
-  .task-card[data-status="failed"] {
+  .task-card[data-status='failed'] {
     border-color: rgba(255, 99, 132, 0.28);
     box-shadow: 0 0.75rem 2.5rem rgba(255, 99, 132, 0.15);
   }
@@ -1153,12 +1087,12 @@
     overflow: hidden;
   }
 
-  .item[data-status="active"] {
+  .item[data-status='active'] {
     border-color: rgba(25, 211, 199, 0.35);
     box-shadow: inset 0 0 0 1px rgba(25, 211, 199, 0.18);
   }
 
-  .item[data-status="failure"] {
+  .item[data-status='failure'] {
     border-color: rgba(255, 99, 132, 0.28);
     box-shadow: inset 0 0 0 1px rgba(255, 99, 132, 0.18);
   }
@@ -1210,13 +1144,13 @@
     color: rgba(255, 255, 255, 0.7);
   }
 
-  .item-chip[data-status="success"],
-  .item-chip[data-status="active"] {
+  .item-chip[data-status='success'],
+  .item-chip[data-status='active'] {
     background: rgba(25, 211, 199, 0.18);
     color: rgba(25, 211, 199, 0.95);
   }
 
-  .item-chip[data-status="failure"] {
+  .item-chip[data-status='failure'] {
     background: rgba(255, 99, 132, 0.18);
     color: rgba(255, 99, 132, 0.95);
   }
@@ -1284,13 +1218,13 @@
     color: rgba(255, 255, 255, 0.7);
   }
 
-  .step-chip[data-status="active"],
-  .step-chip[data-status="success"] {
+  .step-chip[data-status='active'],
+  .step-chip[data-status='success'] {
     background: rgba(25, 211, 199, 0.18);
     color: rgba(25, 211, 199, 0.95);
   }
 
-  .step-chip[data-status="failure"] {
+  .step-chip[data-status='failure'] {
     background: rgba(255, 99, 132, 0.2);
     color: rgba(255, 99, 132, 0.95);
   }
@@ -1351,11 +1285,7 @@
     font-weight: 600;
     border: 1px solid rgba(25, 211, 199, 0.35);
     color: rgba(25, 211, 199, 0.92);
-    background: linear-gradient(
-      135deg,
-      rgba(25, 211, 199, 0.15),
-      rgba(25, 211, 199, 0.05)
-    );
+    background: linear-gradient(135deg, rgba(25, 211, 199, 0.15), rgba(25, 211, 199, 0.05));
     cursor: pointer;
     transition: all 0.2s ease;
   }

@@ -1,20 +1,10 @@
 <script lang="ts">
-  import { onMount } from "svelte";
-  import {
-    Download,
-    ExternalLink,
-    Check,
-    RefreshCw,
-    FolderOpen,
-  } from "lucide-svelte";
-  import {
-    checkSystem,
-    markSubstepCompleted,
-    installationState,
-  } from "../../store";
-  import { type SystemCheckResult, InstallationStep } from "../../types";
+  import { onMount } from 'svelte';
+  import { Download, ExternalLink, Check, FolderOpen } from 'lucide-svelte';
+  import { checkSystem, markSubstepCompleted, installationState } from '../../store';
+  import { type SystemCheckResult, InstallationStep } from '../../types';
 
-  const SUBSTEP_STORAGE_KEY = "font_substep_index";
+  const SUBSTEP_STORAGE_KEY = 'font_substep_index';
 
   interface SetupStep {
     id: string;
@@ -24,23 +14,21 @@
   }
 
   let fontInstalled = false;
-  let fontPath: string | null = null;
+  let _fontPath: string | null = null;
   let isChecking = false;
   let hasInitializedSubstep = false;
 
   let setupSteps: SetupStep[] = [
     {
-      id: "font-download",
-      title: "イカモドキフォントをダウンロード",
-      description:
-        "サムネイル生成に使用するイカモドキフォントをダウンロードします。",
+      id: 'font-download',
+      title: 'イカモドキフォントをダウンロード',
+      description: 'サムネイル生成に使用するイカモドキフォントをダウンロードします。',
       completed: false,
     },
     {
-      id: "font-place",
-      title: "イカモドキフォントを配置",
-      description:
-        "ダウンロードしたフォントファイルをアプリケーションフォルダに配置します。",
+      id: 'font-place',
+      title: 'イカモドキフォントを配置',
+      description: 'ダウンロードしたフォントファイルをアプリケーションフォルダに配置します。',
       completed: false,
     },
   ];
@@ -60,7 +48,7 @@
   });
 
   function loadSavedSubstepIndex(maxIndex: number): number | null {
-    if (typeof window === "undefined") return null;
+    if (typeof window === 'undefined') return null;
     const stored = window.sessionStorage.getItem(SUBSTEP_STORAGE_KEY);
     if (stored === null) return null;
     const parsed = Number.parseInt(stored, 10);
@@ -69,26 +57,23 @@
   }
 
   function saveSubstepIndex(index: number): void {
-    if (typeof window === "undefined") return;
+    if (typeof window === 'undefined') return;
     window.sessionStorage.setItem(SUBSTEP_STORAGE_KEY, index.toString());
   }
 
-  function computeInitialSubstepIndex(steps: SetupStep[]): number {
+  function computeInitialSubstepIndex(_steps: SetupStep[]): number {
     // 常に最初の手順から開始する
     return 0;
   }
 
   // 現在のステップが変更されたときにhasInitializedSubstepをリセット
-  $: if (
-    $installationState?.current_step !== InstallationStep.FONT_INSTALLATION
-  ) {
+  $: if ($installationState?.current_step !== InstallationStep.FONT_INSTALLATION) {
     hasInitializedSubstep = false;
   }
 
   // Sync with installation state
   $: if ($installationState && $installationState.step_details) {
-    const details =
-      $installationState.step_details[InstallationStep.FONT_INSTALLATION] || {};
+    const details = $installationState.step_details[InstallationStep.FONT_INSTALLATION] || {};
     const updatedSteps = setupSteps.map((step) => ({
       ...step,
       completed: details[step.id] || false,
@@ -113,28 +98,20 @@
     saveSubstepIndex(currentSubStepIndex);
   }
 
-  export async function next(
-    options: { skip?: boolean } = {}
-  ): Promise<boolean> {
+  export async function next(options: { skip?: boolean } = {}): Promise<boolean> {
     const currentStep = setupSteps[currentSubStepIndex];
 
     // フォント配置ステップのバリデーション
     if (currentSubStepIndex === 1 && !fontInstalled) {
       await checkFontInstallation();
       if (!fontInstalled) {
-        alert(
-          "フォントファイルが見つかりませんでした。配置してから次へ進んでください。"
-        );
+        alert('フォントファイルが見つかりませんでした。配置してから次へ進んでください。');
         return true;
       }
     }
 
     if (!options.skip && !currentStep.completed) {
-      await markSubstepCompleted(
-        InstallationStep.FONT_INSTALLATION,
-        currentStep.id,
-        true
-      );
+      await markSubstepCompleted(InstallationStep.FONT_INSTALLATION, currentStep.id, true);
     }
 
     if (currentSubStepIndex < setupSteps.length - 1) {
@@ -156,24 +133,16 @@
     isChecking = true;
 
     try {
-      const result: SystemCheckResult = await checkSystem("font");
+      const result: SystemCheckResult = await checkSystem('font');
       fontInstalled = result.is_installed;
-      fontPath = result.installation_path || null;
+      _fontPath = result.installation_path || null;
 
       if (fontInstalled) {
-        await markSubstepCompleted(
-          InstallationStep.FONT_INSTALLATION,
-          setupSteps[0].id,
-          true
-        );
-        await markSubstepCompleted(
-          InstallationStep.FONT_INSTALLATION,
-          setupSteps[1].id,
-          true
-        );
+        await markSubstepCompleted(InstallationStep.FONT_INSTALLATION, setupSteps[0].id, true);
+        await markSubstepCompleted(InstallationStep.FONT_INSTALLATION, setupSteps[1].id, true);
       }
     } catch (error) {
-      console.error("Font check failed", error);
+      console.error('Font check failed', error);
     } finally {
       isChecking = false;
     }
@@ -189,14 +158,10 @@
     if (index === 1 && !step.completed) {
       await checkFontInstallation();
       if (!fontInstalled) {
-        alert("フォントファイルが見つかりませんでした。");
+        alert('フォントファイルが見つかりませんでした。');
       }
     } else {
-      await markSubstepCompleted(
-        InstallationStep.FONT_INSTALLATION,
-        step.id,
-        !step.completed
-      );
+      await markSubstepCompleted(InstallationStep.FONT_INSTALLATION, step.id, !step.completed);
     }
   }
 
@@ -215,10 +180,10 @@
     // インタラクティブな要素のクリックは除外
     if (
       target &&
-      (target.closest("button") ||
-        target.closest("a") ||
-        target.closest("input") ||
-        target.closest(".path-value"))
+      (target.closest('button') ||
+        target.closest('a') ||
+        target.closest('input') ||
+        target.closest('.path-value'))
     ) {
       return;
     }
@@ -227,30 +192,27 @@
   }
 
   function handleKeyDown(event: KeyboardEvent) {
-    if (event.key === "Enter") {
+    if (event.key === 'Enter') {
       handleCardClick(event);
     }
   }
 
   function openUrl(url: string): void {
-    window.open(url, "_blank");
+    window.open(url, '_blank');
   }
 </script>
 
 <div class="font-installation">
   <div class="step-header">
     <h2 class="step-title">イカモドキフォントのダウンロード</h2>
-    <p class="step-description">
-      サムネイル生成に使用するイカモドキフォントをダウンロードします
-    </p>
+    <p class="step-description">サムネイル生成に使用するイカモドキフォントをダウンロードします</p>
   </div>
 
   <div class="setup-steps-section">
     <div
       class="step-card glass-card"
       class:completed={setupSteps[currentSubStepIndex].completed}
-      class:disabled={fontInstalled ||
-        (currentSubStepIndex === 1 && isChecking)}
+      class:disabled={fontInstalled || (currentSubStepIndex === 1 && isChecking)}
       on:click={handleCardClick}
       on:keydown={handleKeyDown}
       role="button"
@@ -292,7 +254,7 @@
                       type="button"
                       on:click={() =>
                         openUrl(
-                          "https://web.archive.org/web/20150906013956/http://aramugi.com/?page_id=807"
+                          'https://web.archive.org/web/20150906013956/http://aramugi.com/?page_id=807'
                         )}
                     >
                       <Download class="icon" size={16} />
@@ -302,16 +264,12 @@
                   </div>
                 </li>
               </ol>
-              <p class="step-note">
-                ※ イカモドキフォントはシステムにインストールしません
-              </p>
+              <p class="step-note">※ イカモドキフォントはシステムにインストールしません</p>
             {:else if currentSubStepIndex === 1}
               <!-- Font Placement -->
               <ol class="instruction-list">
                 <li>
-                  ダウンロードした ZIP ファイルを展開し、ファイル名を <code
-                    >ikamodoki1.ttf</code
-                  >
+                  ダウンロードした ZIP ファイルを展開し、ファイル名を <code>ikamodoki1.ttf</code>
                   に変更して アプリケーションフォルダに配置します
                 </li>
                 <li>
@@ -320,9 +278,7 @@
                   <div class="path-box">
                     <FolderOpen class="icon" size={20} />
                     <div class="path-content">
-                      <code class="path-value"
-                        >SplatReplay\assets\thumbnail</code
-                      >
+                      <code class="path-value">SplatReplay\assets\thumbnail</code>
                     </div>
                   </div>
                 </li>
@@ -361,16 +317,6 @@
     margin: 0.5rem 0 0 0;
     font-size: 0.9rem;
     color: var(--text-secondary);
-  }
-
-  .icon.spinning {
-    animation: spin 1s linear infinite;
-  }
-
-  @keyframes spin {
-    to {
-      transform: rotate(360deg);
-    }
   }
 
   .setup-steps-section {
@@ -494,11 +440,7 @@
     align-items: center;
     justify-content: center;
     border-radius: 50%;
-    background: linear-gradient(
-      135deg,
-      rgba(25, 211, 199, 0.2) 0%,
-      rgba(25, 211, 199, 0.05) 100%
-    );
+    background: linear-gradient(135deg, rgba(25, 211, 199, 0.2) 0%, rgba(25, 211, 199, 0.05) 100%);
     border: 2px solid rgba(25, 211, 199, 0.3);
     font-size: 1.25rem;
     font-weight: 700;
@@ -558,11 +500,7 @@
     font-size: 0.75rem;
     font-weight: 600;
     border-radius: 999px;
-    background: linear-gradient(
-      135deg,
-      var(--accent-color) 0%,
-      var(--accent-color-strong) 100%
-    );
+    background: linear-gradient(135deg, var(--accent-color) 0%, var(--accent-color-strong) 100%);
     color: white;
     box-shadow: 0 0 8px var(--accent-glow);
   }
@@ -603,25 +541,11 @@
     margin-top: 0.5rem;
   }
 
-  .path-box .icon {
-    color: var(--accent-color);
-    flex-shrink: 0;
-    margin-top: 0.125rem;
-  }
-
   .path-content {
     flex: 1;
     display: flex;
     flex-direction: column;
     gap: 0.5rem;
-  }
-
-  .path-label {
-    margin: 0;
-    font-size: 0.875rem;
-    font-weight: 600;
-    color: var(--text-secondary);
-    text-align: left;
   }
 
   .path-value {
@@ -633,11 +557,6 @@
     color: var(--accent-color);
     font-size: 0.875rem;
     word-break: break-all;
-  }
-
-  .icon {
-    display: block;
-    flex-shrink: 0;
   }
 
   .instruction-list {

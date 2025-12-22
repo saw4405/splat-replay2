@@ -212,7 +212,7 @@ export interface MetadataUpdate {
 export interface SubtitleBlock {
   index: number;
   start_time: number; // 秒単位
-  end_time: number;   // 秒単位
+  end_time: number; // 秒単位
   text: string;
 }
 
@@ -223,16 +223,13 @@ export interface SubtitleData {
 
 export async function updateRecordedVideoMetadata(
   videoId: string,
-  metadata: MetadataUpdate,
+  metadata: MetadataUpdate
 ): Promise<RecordedVideo> {
-  const response = await fetch(
-    `/api/assets/recorded/${encodeURIComponent(videoId)}/metadata`,
-    {
-      method: 'PATCH',
-      headers: JSON_HEADERS,
-      body: JSON.stringify(metadata),
-    },
-  );
+  const response = await fetch(`/api/assets/recorded/${encodeURIComponent(videoId)}/metadata`, {
+    method: 'PATCH',
+    headers: JSON_HEADERS,
+    body: JSON.stringify(metadata),
+  });
   if (!response.ok) {
     const detail = await safeReadText(response);
     throw new Error(detail || 'Failed to update metadata');
@@ -241,15 +238,10 @@ export async function updateRecordedVideoMetadata(
   return mapRecordedVideo(body);
 }
 
-export async function getRecordedSubtitle(
-  videoId: string,
-): Promise<SubtitleData> {
-  const response = await fetch(
-    `/api/subtitles/recorded/${encodeURIComponent(videoId)}`,
-    {
-      headers: JSON_HEADERS,
-    },
-  );
+export async function getRecordedSubtitle(videoId: string): Promise<SubtitleData> {
+  const response = await fetch(`/api/subtitles/recorded/${encodeURIComponent(videoId)}`, {
+    headers: JSON_HEADERS,
+  });
   if (!response.ok) {
     const detail = await safeReadText(response);
     throw new Error(detail || 'Failed to fetch subtitle');
@@ -259,16 +251,13 @@ export async function getRecordedSubtitle(
 
 export async function updateRecordedSubtitle(
   videoId: string,
-  data: SubtitleData,
+  data: SubtitleData
 ): Promise<SubtitleData> {
-  const response = await fetch(
-    `/api/subtitles/recorded/${encodeURIComponent(videoId)}`,
-    {
-      method: 'PUT',
-      headers: JSON_HEADERS,
-      body: JSON.stringify(data),
-    },
-  );
+  const response = await fetch(`/api/subtitles/recorded/${encodeURIComponent(videoId)}`, {
+    method: 'PUT',
+    headers: JSON_HEADERS,
+    body: JSON.stringify(data),
+  });
   if (!response.ok) {
     const detail = await safeReadText(response);
     throw new Error(detail || 'Failed to update subtitle');
@@ -277,13 +266,10 @@ export async function updateRecordedSubtitle(
 }
 
 export async function deleteRecordedVideo(videoId: string): Promise<void> {
-  const response = await fetch(
-    `/api/assets/recorded/${encodeURIComponent(videoId)}`,
-    {
-      method: 'DELETE',
-      headers: JSON_HEADERS,
-    },
-  );
+  const response = await fetch(`/api/assets/recorded/${encodeURIComponent(videoId)}`, {
+    method: 'DELETE',
+    headers: JSON_HEADERS,
+  });
   if (!response.ok) {
     const detail = await safeReadText(response);
     throw new Error(detail || 'Failed to delete recorded video');
@@ -291,13 +277,10 @@ export async function deleteRecordedVideo(videoId: string): Promise<void> {
 }
 
 export async function deleteEditedVideo(videoId: string): Promise<void> {
-  const response = await fetch(
-    `/api/assets/edited/${encodeURIComponent(videoId)}`,
-    {
-      method: 'DELETE',
-      headers: JSON_HEADERS,
-    },
-  );
+  const response = await fetch(`/api/assets/edited/${encodeURIComponent(videoId)}`, {
+    method: 'DELETE',
+    headers: JSON_HEADERS,
+  });
   if (!response.ok) {
     const detail = await safeReadText(response);
     throw new Error(detail || 'Failed to delete edited video');
@@ -413,9 +396,7 @@ function mapEditUploadStatus(raw: RawEditUploadStatus): EditUploadStatus {
   };
 }
 
-function mapEditUploadTrigger(
-  raw: RawEditUploadTriggerResponse,
-): EditUploadTriggerResponse {
+function mapEditUploadTrigger(raw: RawEditUploadTriggerResponse): EditUploadTriggerResponse {
   return {
     accepted: raw.accepted,
     status: mapEditUploadStatus(raw.status),
@@ -425,7 +406,7 @@ function mapEditUploadTrigger(
 
 function normaliseNumber(
   value: number | string | null | undefined,
-  allowFloat = false,
+  allowFloat = false
 ): number | null {
   if (value === null || value === undefined) {
     return null;
@@ -451,4 +432,3 @@ async function safeReadText(response: Response): Promise<string> {
     return '';
   }
 }
-

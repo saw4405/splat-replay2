@@ -1,12 +1,12 @@
 ﻿<script lang="ts">
-  import { createEventDispatcher } from "svelte";
-  import BaseDialog from "./BaseDialog.svelte";
-  import MetadataForm from "./MetadataForm.svelte";
+  import { createEventDispatcher } from 'svelte';
+  import BaseDialog from './BaseDialog.svelte';
+  import MetadataForm from './MetadataForm.svelte';
 
   const dispatch = createEventDispatcher();
 
   export let visible: boolean = false;
-  export let videoId: string = "";
+  export let videoId: string = '';
   export let metadata: {
     match: string;
     rule: string;
@@ -19,11 +19,11 @@
   };
 
   let editedMetadata = {
-    match: "",
-    rule: "",
-    stage: "",
-    rate: "",
-    judgement: "",
+    match: '',
+    rule: '',
+    stage: '',
+    rate: '',
+    judgement: '',
     kill: 0,
     death: 0,
     special: 0,
@@ -39,7 +39,7 @@
   }
 
   function handleSave(): void {
-    dispatch("save", { videoId, metadata: editedMetadata });
+    dispatch('save', { videoId, metadata: editedMetadata });
     visible = false;
   }
 

@@ -1,6 +1,7 @@
 :root {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen,
-    Ubuntu, Cantarell, 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
+  font-family:
+    -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Fira Sans',
+    'Droid Sans', 'Helvetica Neue', sans-serif;
   line-height: 1.5;
   font-weight: 400;
 
@@ -26,11 +27,7 @@
   /* グラスモーフィズム用のカスタムプロパティ */
   --glass-radius: 18px;
   --glass-blur: blur(18px) saturate(180%);
-  --glass-bg: linear-gradient(
-    135deg,
-    rgba(255, 255, 255, 0.08) 0%,
-    rgba(255, 255, 255, 0.04) 100%
-  );
+  --glass-bg: linear-gradient(135deg, rgba(255, 255, 255, 0.08) 0%, rgba(255, 255, 255, 0.04) 100%);
   --glass-bg-strong: linear-gradient(
     145deg,
     rgba(10, 20, 30, 0.78) 0%,
@@ -73,10 +70,7 @@ body::before {
   left: -50%;
   width: 200%;
   height: 200%;
-  background: radial-gradient(circle at 50% 50%, 
-    rgba(25, 211, 199, 0.05) 0%,
-    transparent 50%
-  );
+  background: radial-gradient(circle at 50% 50%, rgba(25, 211, 199, 0.05) 0%, transparent 50%);
   animation: rotate-gradient 20s linear infinite;
   pointer-events: none;
   z-index: -1;
@@ -104,11 +98,7 @@ button {
   font-size: 1em;
   font-weight: 500;
   font-family: inherit;
-  background: linear-gradient(
-    135deg,
-    rgba(255, 255, 255, 0.08) 0%,
-    rgba(255, 255, 255, 0.02) 100%
-  );
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.08) 0%, rgba(255, 255, 255, 0.02) 100%);
   color: var(--text-primary);
   cursor: pointer;
   transition:
@@ -147,11 +137,7 @@ button.icon-button:active {
 button:hover {
   border-color: rgba(25, 211, 199, 0.35);
   transform: translateY(-1px);
-  background: linear-gradient(
-    135deg,
-    rgba(25, 211, 199, 0.12) 0%,
-    rgba(25, 211, 199, 0.06) 100%
-  );
+  background: linear-gradient(135deg, rgba(25, 211, 199, 0.12) 0%, rgba(25, 211, 199, 0.06) 100%);
   box-shadow:
     0 16px 40px rgba(0, 0, 0, 0.3),
     0 0 20px rgba(25, 211, 199, 0.25);
@@ -173,28 +159,19 @@ button:focus-visible {
 }
 
 ::-webkit-scrollbar-track {
-  background: linear-gradient(135deg, 
-    rgba(0, 0, 0, 0.3) 0%,
-    rgba(0, 0, 0, 0.2) 100%
-  );
+  background: linear-gradient(135deg, rgba(0, 0, 0, 0.3) 0%, rgba(0, 0, 0, 0.2) 100%);
   border-radius: 5px;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: linear-gradient(180deg,
-    rgba(25, 211, 199, 0.6) 0%,
-    rgba(25, 211, 199, 0.4) 100%
-  );
+  background: linear-gradient(180deg, rgba(25, 211, 199, 0.6) 0%, rgba(25, 211, 199, 0.4) 100%);
   border-radius: 5px;
   border: 2px solid rgba(0, 0, 0, 0.2);
   transition: background 0.3s ease;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: linear-gradient(180deg,
-    rgba(25, 211, 199, 0.8) 0%,
-    rgba(25, 211, 199, 0.6) 100%
-  );
+  background: linear-gradient(180deg, rgba(25, 211, 199, 0.8) 0%, rgba(25, 211, 199, 0.6) 100%);
   box-shadow: 0 0 10px rgba(25, 211, 199, 0.4);
 }
 
@@ -257,7 +234,7 @@ button:focus-visible {
 }
 
 .glass-card::before {
-  content: "";
+  content: '';
   position: absolute;
   inset: 0;
   border-radius: inherit;
@@ -336,11 +313,7 @@ button:focus-visible {
   gap: 0.35rem;
   padding: 0.35rem 0.75rem;
   border-radius: 999px;
-  background: linear-gradient(
-    135deg,
-    rgba(25, 211, 199, 0.15) 0%,
-    rgba(25, 211, 199, 0.05) 100%
-  );
+  background: linear-gradient(135deg, rgba(25, 211, 199, 0.15) 0%, rgba(25, 211, 199, 0.05) 100%);
   border: 1px solid rgba(25, 211, 199, 0.5);
   color: var(--accent-color);
   font-size: 0.85rem;

@@ -4,7 +4,6 @@ import tomllib
 from enum import Enum
 from pathlib import Path
 from typing import (
-    Any,
     Dict,
     List,
     Literal,
@@ -66,14 +65,14 @@ class AppSettings(BaseModel):
         """
         file_existed = path.exists()
 
-        raw: Dict[str, Dict[str, Any]] = {}
+        raw: Dict[str, Dict[str, object]] = {}
         if file_existed:
             with path.open("rb") as f:
                 raw = tomllib.load(f)
 
-        kwargs: Dict[str, Any] = {}
+        kwargs: Dict[str, BaseModel] = {}
         for section, section_cls in SECTION_CLASSES.items():
-            src_data: Dict[str, Any] = raw.get(section, {})
+            src_data: Dict[str, object] = raw.get(section, {})
             if src_data:
                 kwargs[section] = section_cls(**src_data)
             else:
@@ -87,7 +86,7 @@ class AppSettings(BaseModel):
 
         return settings
 
-    def _convert_for_toml(self, obj: Any) -> Any:
+    def _convert_for_toml(self, obj: object) -> object:
         """
         dictやリストの中のSecretStrやPathをstrに変換するヘルパー
         """
@@ -109,8 +108,8 @@ class AppSettings(BaseModel):
         else:
             return obj
 
-    def convert_to_serializable_dict(self) -> Dict[str, Dict[str, object]]:
-        toml_data: Dict[str, Dict[str, object]] = {}
+    def convert_to_serializable_dict(self) -> Dict[str, object]:
+        toml_data: Dict[str, object] = {}
 
         # 各セクションを辞書形式に変換し、SecretStrやPathをstrへ
         toml_data["behavior"] = self._convert_for_toml(self.behavior.dict())
@@ -139,19 +138,19 @@ class AppSettings(BaseModel):
         path.write_text(toml_text, encoding="utf-8")
 
     @staticmethod
-    def _is_list(field_type: Any) -> bool:
+    def _is_list(field_type: object) -> bool:
         return get_origin(field_type) in (list, List)
 
     @staticmethod
-    def _literal_choices(field_type: Any) -> Optional[List[str]]:
+    def _literal_choices(field_type: object) -> Optional[List[str]]:
         if get_origin(field_type) is Literal:
             return [str(v) for v in get_args(field_type)]
         return None
 
     @staticmethod
-    def _enum_choices(field_type: Any) -> Optional[List[str]]:
+    def _enum_choices(field_type: object) -> Optional[List[str]]:
         try:
-            if issubclass(field_type, Enum):
+            if isinstance(field_type, type) and issubclass(field_type, Enum):
                 return [str(m.value) for m in field_type]
         except Exception:
             pass
@@ -191,7 +190,7 @@ class AppSettings(BaseModel):
         return "text", None
 
     @classmethod
-    def get_setting_structure(cls) -> Dict[str, Any]:
+    def get_setting_structure(cls) -> Dict[str, object]:
         """
         AppSettings から GUI 用のメタデータを生成
         {
@@ -210,7 +209,7 @@ class AppSettings(BaseModel):
         }, ...
         }
         """
-        result: Dict[str, Any] = {}
+        result: Dict[str, object] = {}
 
         for sec_id, sec_field in cls.__fields__.items():
             sec_type = sec_field.type_
@@ -218,7 +217,7 @@ class AppSettings(BaseModel):
                 getattr(sec_type, "__doc__", None) or sec_id
             ).strip()
 
-            fields_meta: Dict[str, Any] = {}
+            fields_meta: Dict[str, object] = {}
             if issubclass(sec_type, BaseModel):
                 for f_id, f in sec_type.__fields__.items():
                     label = f.field_info.title or f_id

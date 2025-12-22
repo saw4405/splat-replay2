@@ -13,6 +13,7 @@ from typing import (
     Literal,
     Optional,
     Tuple,
+    cast,
 )
 
 from pydantic import BaseModel, Field, validator
@@ -123,18 +124,19 @@ class ImageMatchingSettings(BaseModel):
         if not isinstance(data, dict):
             raise ValueError("image matching config must be a mapping")
 
-        raw: Dict[str, object] = data
+        raw = cast(Dict[str, object], data)
 
         matchers: Dict[str, MatcherConfig] = {}
         simple_raw = raw.get("simple_matchers", {})
         if not isinstance(simple_raw, dict):
             raise ValueError("simple_matchers must be a mapping")
+
         for name, cfg in simple_raw.items():
             if not isinstance(name, str):
                 raise ValueError("simple_matchers keys must be strings")
             if not isinstance(cfg, dict):
                 raise ValueError("simple_matchers values must be mappings")
-            matchers[name] = MatcherConfig(**cfg)
+            matchers[name] = MatcherConfig.parse_obj(cfg)
 
         composites: Dict[str, CompositeMatcherConfig] = {}
         composite_raw = raw.get("composite_detection", {})

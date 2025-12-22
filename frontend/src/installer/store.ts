@@ -2,7 +2,7 @@
  * インストーラー状態管理ストア
  */
 
-import { writable, derived, get } from "svelte/store";
+import { writable, derived, get } from 'svelte/store';
 import type {
   InstallationState,
   InstallationStep,
@@ -10,10 +10,10 @@ import type {
   SystemCheckResult,
   ProgressInfo,
   ApiError,
-} from "./types";
+} from './types';
 
 // API ベース URL
-const API_BASE_URL = "http://localhost:8000";
+const API_BASE_URL = 'http://localhost:8000';
 
 // インストール状態ストア
 export const installationState = writable<InstallationState | null>(null);
@@ -35,57 +35,51 @@ const STEP_SUBSTEP_COUNTS: Record<string, number> = {
 };
 
 // 進行状況の計算（サブステップを含む）
-export const progressInfo = derived(
-  installationState,
-  ($state): ProgressInfo | null => {
-    if (!$state) return null;
+export const progressInfo = derived(installationState, ($state): ProgressInfo | null => {
+  if (!$state) return null;
 
-    const steps = [
-      "hardware_check",
-      "obs_setup",
-      "ffmpeg_setup",
-      "tesseract_setup",
-      "font_installation",
-      "youtube_setup",
-    ];
+  const steps = [
+    'hardware_check',
+    'obs_setup',
+    'ffmpeg_setup',
+    'tesseract_setup',
+    'font_installation',
+    'youtube_setup',
+  ];
 
-    const currentIndex = steps.indexOf($state.current_step);
+  const currentIndex = steps.indexOf($state.current_step);
 
-    // 総サブステップ数を計算
-    const totalSubsteps = steps.reduce(
-      (sum, step) => sum + (STEP_SUBSTEP_COUNTS[step] || 1),
-      0
-    );
+  // 総サブステップ数を計算
+  const totalSubsteps = steps.reduce((sum, step) => sum + (STEP_SUBSTEP_COUNTS[step] || 1), 0);
 
-    // 完了したサブステップ数を計算
-    let completedSubsteps = 0;
+  // 完了したサブステップ数を計算
+  let completedSubsteps = 0;
 
-    // 完了済みステップのサブステップをすべてカウント
-    for (const completedStep of $state.completed_steps) {
-      completedSubsteps += STEP_SUBSTEP_COUNTS[completedStep] || 1;
-    }
-
-    // 現在のステップの完了済みサブステップをカウント
-    if (currentIndex >= 0 && !$state.completed_steps.includes($state.current_step)) {
-      const currentStepDetails = $state.step_details[$state.current_step] || {};
-      const completedSubstepsInCurrentStep = Object.values(currentStepDetails).filter(
-        (completed) => completed === true
-      ).length;
-      completedSubsteps += completedSubstepsInCurrentStep;
-    }
-
-    const percentage = Math.round((completedSubsteps / totalSubsteps) * 100);
-
-    return {
-      current_step_index: currentIndex,
-      total_steps: steps.length,
-      percentage,
-      current_step_name: $state.current_step,
-      completed_substeps: completedSubsteps,
-      total_substeps: totalSubsteps,
-    };
+  // 完了済みステップのサブステップをすべてカウント
+  for (const completedStep of $state.completed_steps) {
+    completedSubsteps += STEP_SUBSTEP_COUNTS[completedStep] || 1;
   }
-);
+
+  // 現在のステップの完了済みサブステップをカウント
+  if (currentIndex >= 0 && !$state.completed_steps.includes($state.current_step)) {
+    const currentStepDetails = $state.step_details[$state.current_step] || {};
+    const completedSubstepsInCurrentStep = Object.values(currentStepDetails).filter(
+      (completed) => completed === true
+    ).length;
+    completedSubsteps += completedSubstepsInCurrentStep;
+  }
+
+  const percentage = Math.round((completedSubsteps / totalSubsteps) * 100);
+
+  return {
+    current_step_index: currentIndex,
+    total_steps: steps.length,
+    percentage,
+    current_step_name: $state.current_step,
+    completed_substeps: completedSubsteps,
+    total_substeps: totalSubsteps,
+  };
+});
 
 /**
  * API エラーハンドリング
@@ -119,7 +113,7 @@ export async function fetchInstallationStatus(): Promise<void> {
     const data: InstallationState = await response.json();
     installationState.set(data);
   } catch (err) {
-    console.error("Failed to fetch installation status:", err);
+    console.error('Failed to fetch installation status:', err);
     if (err instanceof Error && !get(error)) {
       error.set({ error: err.message });
     }
@@ -137,7 +131,7 @@ export async function startInstallation(): Promise<void> {
 
   try {
     const response = await fetch(`${API_BASE_URL}/installer/start`, {
-      method: "POST",
+      method: 'POST',
     });
     if (!response.ok) {
       await handleApiError(response);
@@ -145,7 +139,7 @@ export async function startInstallation(): Promise<void> {
 
     await fetchInstallationStatus();
   } catch (err) {
-    console.error("Failed to start installation:", err);
+    console.error('Failed to start installation:', err);
     if (err instanceof Error && !get(error)) {
       error.set({ error: err.message });
     }
@@ -163,7 +157,7 @@ export async function completeInstallation(): Promise<void> {
 
   try {
     const response = await fetch(`${API_BASE_URL}/installer/complete`, {
-      method: "POST",
+      method: 'POST',
     });
     if (!response.ok) {
       await handleApiError(response);
@@ -171,7 +165,7 @@ export async function completeInstallation(): Promise<void> {
 
     await fetchInstallationStatus();
   } catch (err) {
-    console.error("Failed to complete installation:", err);
+    console.error('Failed to complete installation:', err);
     if (err instanceof Error && !get(error)) {
       error.set({ error: err.message });
     }
@@ -185,12 +179,12 @@ export async function completeInstallation(): Promise<void> {
  */
 function getSubstepStorageKey(step: InstallationStep): string {
   const stepToKeyMap: Record<InstallationStep, string> = {
-    hardware_check: "hardware_substep_index",
-    obs_setup: "obs_substep_index",
-    ffmpeg_setup: "ffmpeg_substep_index",
-    tesseract_setup: "tesseract_substep_index",
-    font_installation: "font_substep_index",
-    youtube_setup: "youtube_substep_index",
+    hardware_check: 'hardware_substep_index',
+    obs_setup: 'obs_substep_index',
+    ffmpeg_setup: 'ffmpeg_substep_index',
+    tesseract_setup: 'tesseract_substep_index',
+    font_installation: 'font_substep_index',
+    youtube_setup: 'youtube_substep_index',
   };
   return stepToKeyMap[step];
 }
@@ -198,8 +192,8 @@ function getSubstepStorageKey(step: InstallationStep): string {
 /**
  * 指定したステップのサブステップインデックスをクリア
  */
-function clearStepSubstepIndex(step: InstallationStep): void {
-  if (typeof window === "undefined") return;
+function _clearStepSubstepIndex(step: InstallationStep): void {
+  if (typeof window === 'undefined') return;
   const key = getSubstepStorageKey(step);
   if (key) {
     console.log(`[SubstepStorage] Clearing substep index for ${step} (key: ${key})`);
@@ -211,18 +205,18 @@ function clearStepSubstepIndex(step: InstallationStep): void {
  * すべてのステップのサブステップインデックスをクリア
  */
 function clearAllSubstepSessionStorage(): void {
-  if (typeof window === "undefined") return;
+  if (typeof window === 'undefined') return;
 
   const substepKeys = [
-    "hardware_substep_index",
-    "obs_substep_index",
-    "ffmpeg_substep_index",
-    "tesseract_substep_index",
-    "font_substep_index",
-    "youtube_substep_index",
+    'hardware_substep_index',
+    'obs_substep_index',
+    'ffmpeg_substep_index',
+    'tesseract_substep_index',
+    'font_substep_index',
+    'youtube_substep_index',
   ];
 
-  console.log("[SubstepStorage] Clearing ALL substep indices");
+  console.log('[SubstepStorage] Clearing ALL substep indices');
   for (const key of substepKeys) {
     window.sessionStorage.removeItem(key);
   }
@@ -232,7 +226,7 @@ function clearAllSubstepSessionStorage(): void {
  * 指定したステップのサブステップインデックスを設定
  */
 function setStepSubstepIndex(step: InstallationStep, index: number): void {
-  if (typeof window === "undefined") return;
+  if (typeof window === 'undefined') return;
   const key = getSubstepStorageKey(step);
   if (key) {
     console.log(`[SubstepStorage] Setting substep index for ${step} to ${index} (key: ${key})`);
@@ -252,7 +246,7 @@ export async function goToNextStep(): Promise<void> {
     console.log(`[Navigation] goToNextStep: current step = ${currentState?.current_step}`);
 
     const response = await fetch(`${API_BASE_URL}/installer/navigation/next`, {
-      method: "POST",
+      method: 'POST',
     });
     if (!response.ok) {
       await handleApiError(response);
@@ -266,7 +260,7 @@ export async function goToNextStep(): Promise<void> {
     const newState = get(installationState);
     console.log(`[Navigation] goToNextStep: new step = ${newState?.current_step}`);
   } catch (err) {
-    console.error("Failed to go to next step:", err);
+    console.error('Failed to go to next step:', err);
     if (err instanceof Error && !get(error)) {
       error.set({ error: err.message });
     }
@@ -286,12 +280,9 @@ export async function goToPreviousStep(): Promise<void> {
     const currentState = get(installationState);
     console.log(`[Navigation] goToPreviousStep: current step = ${currentState?.current_step}`);
 
-    const response = await fetch(
-      `${API_BASE_URL}/installer/navigation/previous`,
-      {
-        method: "POST",
-      }
-    );
+    const response = await fetch(`${API_BASE_URL}/installer/navigation/previous`, {
+      method: 'POST',
+    });
     if (!response.ok) {
       await handleApiError(response);
     }
@@ -313,9 +304,8 @@ export async function goToPreviousStep(): Promise<void> {
 
     // 3. 最後に状態を更新
     installationState.set(newState);
-
   } catch (err) {
-    console.error("Failed to go to previous step:", err);
+    console.error('Failed to go to previous step:', err);
     if (err instanceof Error && !get(error)) {
       error.set({ error: err.message });
     }
@@ -334,22 +324,19 @@ export async function skipCurrentStep(): Promise<void> {
   try {
     const state = get(installationState);
     if (!state) {
-      throw new Error("Installation state not loaded");
+      throw new Error('Installation state not loaded');
     }
 
-    const response = await fetch(
-      `${API_BASE_URL}/installer/steps/${state.current_step}/skip`,
-      {
-        method: "POST",
-      }
-    );
+    const response = await fetch(`${API_BASE_URL}/installer/steps/${state.current_step}/skip`, {
+      method: 'POST',
+    });
     if (!response.ok) {
       await handleApiError(response);
     }
 
     await fetchInstallationStatus();
   } catch (err) {
-    console.error("Failed to skip step:", err);
+    console.error('Failed to skip step:', err);
     if (err instanceof Error && !get(error)) {
       error.set({ error: err.message });
     }
@@ -366,12 +353,9 @@ export async function executeStep(step: InstallationStep): Promise<StepResult> {
   error.set(null);
 
   try {
-    const response = await fetch(
-      `${API_BASE_URL}/installer/steps/${step}/complete`,
-      {
-        method: "POST",
-      }
-    );
+    const response = await fetch(`${API_BASE_URL}/installer/steps/${step}/complete`, {
+      method: 'POST',
+    });
     if (!response.ok) {
       await handleApiError(response);
     }
@@ -382,10 +366,10 @@ export async function executeStep(step: InstallationStep): Promise<StepResult> {
     // 成功レスポンスを返す
     return {
       success: true,
-      message: "Step completed successfully",
+      message: 'Step completed successfully',
     };
   } catch (err) {
-    console.error("Failed to complete step:", err);
+    console.error('Failed to complete step:', err);
     if (err instanceof Error && !get(error)) {
       error.set({ error: err.message });
     }
@@ -408,18 +392,18 @@ export async function markSubstepCompleted(
     const response = await fetch(
       `${API_BASE_URL}/installer/steps/${step}/substeps/${substepId}?completed=${completed}`,
       {
-        method: "POST",
+        method: 'POST',
       }
     );
     if (!response.ok) {
-      console.error("Failed to mark substep completed");
+      console.error('Failed to mark substep completed');
       return;
     }
 
     // サブステップの状態を更新した後、インストール状態を再取得
     await fetchInstallationStatus();
   } catch (err) {
-    console.error("Failed to mark substep completed:", err);
+    console.error('Failed to mark substep completed:', err);
   }
 }
 
@@ -427,7 +411,7 @@ export async function markSubstepCompleted(
  * システムチェックを実行
  */
 export async function checkSystem(
-  software: "obs" | "ffmpeg" | "tesseract" | "font" | "youtube" | "ndi"
+  software: 'obs' | 'ffmpeg' | 'tesseract' | 'font' | 'youtube' | 'ndi'
 ): Promise<SystemCheckResult> {
   isLoading.set(true);
   error.set(null);
@@ -460,7 +444,7 @@ export async function setupFFMPEG(): Promise<SystemCheckResult> {
 
   try {
     const response = await fetch(`${API_BASE_URL}/installer/system/setup/ffmpeg`, {
-      method: "POST",
+      method: 'POST',
     });
     if (!response.ok) {
       await handleApiError(response);
@@ -469,7 +453,7 @@ export async function setupFFMPEG(): Promise<SystemCheckResult> {
     const result: SystemCheckResult = await response.json();
     return result;
   } catch (err) {
-    console.error("Failed to setup FFMPEG:", err);
+    console.error('Failed to setup FFMPEG:', err);
     if (err instanceof Error && !get(error)) {
       error.set({ error: err.message });
     }
@@ -488,7 +472,7 @@ export async function setupTesseract(): Promise<SystemCheckResult> {
 
   try {
     const response = await fetch(`${API_BASE_URL}/installer/system/setup/tesseract`, {
-      method: "POST",
+      method: 'POST',
     });
     if (!response.ok) {
       await handleApiError(response);
@@ -497,7 +481,7 @@ export async function setupTesseract(): Promise<SystemCheckResult> {
     const result: SystemCheckResult = await response.json();
     return result;
   } catch (err) {
-    console.error("Failed to setup Tesseract:", err);
+    console.error('Failed to setup Tesseract:', err);
     if (err instanceof Error && !get(error)) {
       error.set({ error: err.message });
     }
@@ -517,7 +501,10 @@ export function clearError(): void {
 /**
  * OBS設定を取得
  */
-export async function getOBSConfig(): Promise<{ websocket_password: string; capture_device_name: string }> {
+export async function getOBSConfig(): Promise<{
+  websocket_password: string;
+  capture_device_name: string;
+}> {
   isLoading.set(true);
   error.set(null);
 
@@ -530,7 +517,7 @@ export async function getOBSConfig(): Promise<{ websocket_password: string; capt
     const result = await response.json();
     return result;
   } catch (err) {
-    console.error("Failed to get OBS config:", err);
+    console.error('Failed to get OBS config:', err);
     if (err instanceof Error && !get(error)) {
       error.set({ error: err.message });
     }
@@ -549,9 +536,9 @@ export async function saveOBSWebSocketPassword(password: string): Promise<void> 
 
   try {
     const response = await fetch(`${API_BASE_URL}/installer/config/obs/websocket-password`, {
-      method: "POST",
+      method: 'POST',
       headers: {
-        "Content-Type": "application/json",
+        'Content-Type': 'application/json',
       },
       body: JSON.stringify({ password }),
     });
@@ -560,9 +547,9 @@ export async function saveOBSWebSocketPassword(password: string): Promise<void> 
     }
 
     const result = await response.json();
-    console.log("OBS WebSocket password saved:", result.message);
+    console.log('OBS WebSocket password saved:', result.message);
   } catch (err) {
-    console.error("Failed to save OBS WebSocket password:", err);
+    console.error('Failed to save OBS WebSocket password:', err);
     if (err instanceof Error && !get(error)) {
       error.set({ error: err.message });
     }
@@ -588,7 +575,7 @@ export async function listVideoDevices(): Promise<string[]> {
     const result: { devices: string[] } = await response.json();
     return result.devices;
   } catch (err) {
-    console.error("Failed to list video devices:", err);
+    console.error('Failed to list video devices:', err);
     if (err instanceof Error && !get(error)) {
       error.set({ error: err.message });
     }
@@ -607,9 +594,9 @@ export async function saveCaptureDevice(deviceName: string): Promise<void> {
 
   try {
     const response = await fetch(`${API_BASE_URL}/installer/config/capture-device`, {
-      method: "POST",
+      method: 'POST',
       headers: {
-        "Content-Type": "application/json",
+        'Content-Type': 'application/json',
       },
       body: JSON.stringify({ device_name: deviceName }),
     });
@@ -618,9 +605,9 @@ export async function saveCaptureDevice(deviceName: string): Promise<void> {
     }
 
     const result = await response.json();
-    console.log("Capture device saved:", result.message);
+    console.log('Capture device saved:', result.message);
   } catch (err) {
-    console.error("Failed to save capture device:", err);
+    console.error('Failed to save capture device:', err);
     if (err instanceof Error && !get(error)) {
       error.set({ error: err.message });
     }
@@ -633,15 +620,17 @@ export async function saveCaptureDevice(deviceName: string): Promise<void> {
 /**
  * YouTube公開範囲を保存
  */
-export async function saveYouTubePrivacyStatus(privacyStatus: "public" | "unlisted" | "private"): Promise<void> {
+export async function saveYouTubePrivacyStatus(
+  privacyStatus: 'public' | 'unlisted' | 'private'
+): Promise<void> {
   isLoading.set(true);
   error.set(null);
 
   try {
     const response = await fetch(`${API_BASE_URL}/installer/config/youtube/privacy-status`, {
-      method: "POST",
+      method: 'POST',
       headers: {
-        "Content-Type": "application/json",
+        'Content-Type': 'application/json',
       },
       body: JSON.stringify({ privacy_status: privacyStatus }),
     });
@@ -650,9 +639,9 @@ export async function saveYouTubePrivacyStatus(privacyStatus: "public" | "unlist
     }
 
     const result = await response.json();
-    console.log("YouTube privacy status saved:", result.message);
+    console.log('YouTube privacy status saved:', result.message);
   } catch (err) {
-    console.error("Failed to save YouTube privacy status:", err);
+    console.error('Failed to save YouTube privacy status:', err);
     if (err instanceof Error && !get(error)) {
       error.set({ error: err.message });
     }

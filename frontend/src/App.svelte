@@ -1,11 +1,8 @@
 <script lang="ts">
-  import { onMount } from "svelte";
-  import { InstallerApp } from "./installer";
-  import {
-    installationState,
-    fetchInstallationStatus,
-  } from "./installer/store";
-  import MainApp from "./main/MainApp.svelte";
+  import { onMount } from 'svelte';
+  import { InstallerApp } from './installer';
+  import { installationState, fetchInstallationStatus } from './installer/store';
+  import MainApp from './main/MainApp.svelte';
 
   let isCheckingInstallation = true;
 
@@ -16,12 +13,8 @@
   });
 
   $: showInstaller =
-    !isCheckingInstallation &&
-    (!$installationState || !$installationState.is_completed);
-  $: showMainApp =
-    !isCheckingInstallation &&
-    $installationState &&
-    $installationState.is_completed;
+    !isCheckingInstallation && (!$installationState || !$installationState.is_completed);
+  $: showMainApp = !isCheckingInstallation && $installationState && $installationState.is_completed;
 </script>
 
 {#if isCheckingInstallation}

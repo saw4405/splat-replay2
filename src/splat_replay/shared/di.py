@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Optional, TypeVar, cast
+from typing import Optional, TypeVar, cast
 
 import punq
 from structlog.stdlib import BoundLogger
@@ -145,13 +145,13 @@ def register_adapters(container: punq.Container) -> None:
 
     # EventPublisherAdapter には AppRuntime の event_bus を注入する
     def _event_publisher_factory() -> EventPublisher:
-        rt = cast(AppRuntime, resolve(container, AppRuntime))
+        rt = resolve(container, AppRuntime)
         return cast(EventPublisher, EventPublisherAdapter(rt.event_bus))
 
     container.register(EventPublisher, factory=_event_publisher_factory)
 
     def _frame_publisher_factory() -> FramePublisher:
-        rt = cast(AppRuntime, resolve(container, AppRuntime))
+        rt = resolve(container, AppRuntime)
         return cast(FramePublisher, FramePublisherAdapter(rt.frame_hub))
 
     container.register(FramePublisher, factory=_frame_publisher_factory)
@@ -159,7 +159,7 @@ def register_adapters(container: punq.Container) -> None:
 
     # Aggregated GUI runtime ports (command/event/frame)
     def _gui_runtime_factory() -> GuiRuntimePortAdapter:
-        rt = cast(AppRuntime, resolve(container, AppRuntime))
+        rt = resolve(container, AppRuntime)
         return GuiRuntimePortAdapter(rt)
 
     container.register(GuiRuntimePortAdapter, factory=_gui_runtime_factory)
@@ -181,7 +181,7 @@ def register_adapters(container: punq.Container) -> None:
 
     # VideoAssetRepository は EventPublisher を利用するため factory で注入
     def _video_asset_repo_factory() -> VideoAssetRepositoryPort:
-        publisher = cast(EventPublisher, resolve(container, EventPublisher))
+        publisher = resolve(container, EventPublisher)
         return FileVideoAssetRepository(
             cast(
                 VideoStorageSettings, container.resolve(VideoStorageSettings)
@@ -269,10 +269,10 @@ def configure_container() -> punq.Container:
     register_app_usecases(container)
 
     try:
-        ar = cast(AutoRecorder, resolve(container, AutoRecorder))
+        ar = resolve(container, AutoRecorder)
         container.register(AutoRecorder, instance=ar)
 
-        rt = cast(AppRuntime, resolve(container, AppRuntime))
+        rt = resolve(container, AppRuntime)
         handlers = ar.command_handlers()
         for name, handler in handlers.items():
             rt.command_bus.register(name, handler)
@@ -281,8 +281,8 @@ def configure_container() -> punq.Container:
 
     # Register asset query commands
     try:
-        aq = cast(AssetQueryService, resolve(container, AssetQueryService))
-        rt = cast(AppRuntime, resolve(container, AppRuntime))
+        aq = resolve(container, AssetQueryService)
+        rt = resolve(container, AppRuntime)
         for name, handler in aq.command_handlers().items():
             rt.command_bus.register(name, handler)
     except Exception:
@@ -294,6 +294,6 @@ def configure_container() -> punq.Container:
 T = TypeVar("T")
 
 
-def resolve(container: punq.Container, cls: object) -> Any:
+def resolve(container: punq.Container, cls: type[T]) -> T:
     """DI コンテナから依存を解決する"""
     return container.resolve(cls)

@@ -1,12 +1,12 @@
 <script lang="ts">
-  import BaseDialog from "./BaseDialog.svelte";
-  import FieldItem from "./settings/FieldItem.svelte";
+  import BaseDialog from './BaseDialog.svelte';
+  import FieldItem from './settings/FieldItem.svelte';
   import type {
     FieldValue,
     SettingField,
     SettingsResponse,
     SettingsSection,
-  } from "./settings/types";
+  } from './settings/types';
 
   export let open = false;
 
@@ -14,12 +14,11 @@
   let loading = false;
   let saving = false;
   let loaded = false;
-  let errorMessage = "";
-  let successMessage = "";
+  let errorMessage = '';
+  let successMessage = '';
   let activeSectionId: string | null = null;
 
-  $: activeSection =
-    sections.find((section) => section.id === activeSectionId) ?? null;
+  $: activeSection = sections.find((section) => section.id === activeSectionId) ?? null;
 
   $: if (open && !loaded && !loading) {
     void loadSettings();
@@ -34,31 +33,30 @@
     loading = false;
     saving = false;
     loaded = false;
-    errorMessage = "";
-    successMessage = "";
+    errorMessage = '';
+    successMessage = '';
     activeSectionId = null;
   }
 
   async function loadSettings(): Promise<void> {
     loading = true;
-    errorMessage = "";
-    successMessage = "";
+    errorMessage = '';
+    successMessage = '';
     try {
-      const response = await fetch("/api/settings", { cache: "no-store" });
+      const response = await fetch('/api/settings', { cache: 'no-store' });
       if (!response.ok) {
         throw new Error(`failed with status ${response.status}`);
       }
       const data = (await response.json()) as SettingsResponse;
       const sectionsData = data.sections;
       sections =
-        typeof structuredClone === "function"
+        typeof structuredClone === 'function'
           ? structuredClone(sectionsData)
           : (JSON.parse(JSON.stringify(sectionsData)) as SettingsSection[]);
       activeSectionId = sections[0]?.id ?? null;
       loaded = true;
     } catch (error: unknown) {
-      errorMessage =
-        error instanceof Error ? error.message : "設定の取得に失敗しました。";
+      errorMessage = error instanceof Error ? error.message : '設定の取得に失敗しました。';
     } finally {
       loading = false;
     }
@@ -68,10 +66,7 @@
     activeSectionId = sectionId;
   }
 
-  function handleFieldValueChange(
-    field: SettingField,
-    value: FieldValue
-  ): void {
+  function handleFieldValueChange(field: SettingField, value: FieldValue): void {
     field.value = value;
     sections = sections;
   }
@@ -82,20 +77,14 @@
     value: FieldValue
   ): void {
     child.value = value;
-    if (
-      !group.value ||
-      typeof group.value !== "object" ||
-      Array.isArray(group.value)
-    ) {
+    if (!group.value || typeof group.value !== 'object' || Array.isArray(group.value)) {
       group.value = {};
     }
     (group.value as Record<string, FieldValue>)[child.id] = value;
     sections = sections;
   }
 
-  function collectSectionValues(
-    section: SettingsSection
-  ): Record<string, FieldValue> {
+  function collectSectionValues(section: SettingsSection): Record<string, FieldValue> {
     const values: Record<string, FieldValue> = {};
     for (const field of section.fields) {
       values[field.id] = collectFieldValue(field);
@@ -104,27 +93,25 @@
   }
 
   function collectFieldValue(field: SettingField): FieldValue {
-    if (field.type === "group" && field.children) {
+    if (field.type === 'group' && field.children) {
       return collectGroupValues(field.children);
     }
-    if (field.type === "list") {
+    if (field.type === 'list') {
       return Array.isArray(field.value) ? field.value : [];
     }
-    if (typeof field.value === "undefined" || field.value === null) {
-      if (field.type === "boolean") {
+    if (typeof field.value === 'undefined' || field.value === null) {
+      if (field.type === 'boolean') {
         return false;
       }
-      if (field.type === "integer" || field.type === "float") {
+      if (field.type === 'integer' || field.type === 'float') {
         return 0;
       }
-      return "";
+      return '';
     }
     return field.value;
   }
 
-  function collectGroupValues(
-    fields: SettingField[]
-  ): Record<string, FieldValue> {
+  function collectGroupValues(fields: SettingField[]): Record<string, FieldValue> {
     const result: Record<string, FieldValue> = {};
     for (const child of fields) {
       result[child.id] = collectFieldValue(child);
@@ -137,8 +124,8 @@
       return;
     }
     saving = true;
-    errorMessage = "";
-    successMessage = "";
+    errorMessage = '';
+    successMessage = '';
     try {
       const payload = {
         sections: sections.map((section) => ({
@@ -146,16 +133,16 @@
           values: collectSectionValues(section),
         })),
       };
-      const response = await fetch("/api/settings", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
+      const response = await fetch('/api/settings', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       });
       if (!response.ok) {
         let detail = `failed with status ${response.status}`;
         try {
           const body = await response.json();
-          if (typeof body.detail === "string") {
+          if (typeof body.detail === 'string') {
             detail = body.detail;
           }
         } catch {
@@ -163,10 +150,9 @@
         }
         throw new Error(detail);
       }
-      successMessage = "設定を保存しました。";
+      successMessage = '設定を保存しました。';
     } catch (error: unknown) {
-      errorMessage =
-        error instanceof Error ? error.message : "設定の保存に失敗しました。";
+      errorMessage = error instanceof Error ? error.message : '設定の保存に失敗しました。';
     } finally {
       saving = false;
     }
@@ -188,7 +174,7 @@
   bind:open
   title="設定"
   footerVariant="simple"
-  primaryButtonText={saving ? "保存中..." : "保存"}
+  primaryButtonText={saving ? '保存中...' : '保存'}
   secondaryButtonText="キャンセル"
   disablePrimaryButton={saving || loading}
   disableSecondaryButton={saving}
@@ -292,7 +278,7 @@
   }
 
   .tabs button::before {
-    content: "";
+    content: '';
     position: absolute;
     top: 0;
     left: -100%;
@@ -312,22 +298,14 @@
   }
 
   .tabs button:hover {
-    background: linear-gradient(
-      135deg,
-      rgba(25, 211, 199, 0.15) 0%,
-      rgba(25, 211, 199, 0.08) 100%
-    );
+    background: linear-gradient(135deg, rgba(25, 211, 199, 0.15) 0%, rgba(25, 211, 199, 0.08) 100%);
     border-color: rgba(25, 211, 199, 0.3);
     color: #19d3c7;
     transform: translateX(0.25rem);
   }
 
   .tabs button.selected {
-    background: linear-gradient(
-      135deg,
-      rgba(25, 211, 199, 0.25) 0%,
-      rgba(25, 211, 199, 0.15) 100%
-    );
+    background: linear-gradient(135deg, rgba(25, 211, 199, 0.25) 0%, rgba(25, 211, 199, 0.15) 100%);
     border-color: rgba(25, 211, 199, 0.4);
     color: #19d3c7;
     box-shadow:
@@ -381,21 +359,13 @@
   }
 
   .fields-scroll::-webkit-scrollbar-thumb {
-    background: linear-gradient(
-      180deg,
-      rgba(25, 211, 199, 0.5) 0%,
-      rgba(25, 211, 199, 0.3) 100%
-    );
+    background: linear-gradient(180deg, rgba(25, 211, 199, 0.5) 0%, rgba(25, 211, 199, 0.3) 100%);
     border-radius: 0.1875rem;
     transition: background 0.2s ease;
   }
 
   .fields-scroll::-webkit-scrollbar-thumb:hover {
-    background: linear-gradient(
-      180deg,
-      rgba(25, 211, 199, 0.7) 0%,
-      rgba(25, 211, 199, 0.5) 100%
-    );
+    background: linear-gradient(180deg, rgba(25, 211, 199, 0.7) 0%, rgba(25, 211, 199, 0.5) 100%);
   }
 
   .status {

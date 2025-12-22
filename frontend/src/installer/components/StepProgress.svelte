@@ -1,6 +1,6 @@
 <script lang="ts">
-  import { Check } from "lucide-svelte";
-  import type { ProgressInfo } from "../types";
+  import { Check } from 'lucide-svelte';
+  import type { ProgressInfo } from '../types';
 
   export let progress: ProgressInfo | null = null;
 </script>

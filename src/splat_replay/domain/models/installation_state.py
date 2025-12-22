@@ -55,15 +55,16 @@ class InstallationStep(Enum):
 
     def get_display_name(self) -> str:
         """ステップの表示名を取得する。"""
-        display_names = {
-            self.HARDWARE_CHECK: "ハードウェア確認",
-            self.FFMPEG_SETUP: "FFMPEGセットアップ",
-            self.OBS_SETUP: "OBSセットアップ",
-            self.TESSERACT_SETUP: "Tesseractセットアップ",
-            self.FONT_INSTALLATION: "フォントインストール",
-            self.YOUTUBE_SETUP: "YouTube API設定",
+        display_names: Dict[InstallationStep, str] = {
+            InstallationStep.HARDWARE_CHECK: "ハードウェア確認",
+            InstallationStep.FFMPEG_SETUP: "FFMPEGセットアップ",
+            InstallationStep.OBS_SETUP: "OBSセットアップ",
+            InstallationStep.TESSERACT_SETUP: "Tesseractセットアップ",
+            InstallationStep.FONT_INSTALLATION: "フォントインストール",
+            InstallationStep.YOUTUBE_SETUP: "YouTube API設定",
         }
-        return display_names.get(self, self.value)
+        result = display_names.get(self)
+        return result if result is not None else self.value
 
 
 class InstallationState(BaseModel):

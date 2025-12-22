@@ -1,8 +1,8 @@
 <script lang="ts">
-  import { Settings } from "lucide-svelte";
-  import SettingsDialog from "./components/SettingsDialog.svelte";
-  import VideoPreviewContainer from "./components/VideoPreviewContainer.svelte";
-  import BottomDrawer from "./components/BottomDrawer.svelte";
+  import { Settings } from 'lucide-svelte';
+  import SettingsDialog from './components/SettingsDialog.svelte';
+  import VideoPreviewContainer from './components/VideoPreviewContainer.svelte';
+  import BottomDrawer from './components/BottomDrawer.svelte';
 
   let isSettingsOpen = false;
 
@@ -163,22 +163,5 @@
   .settings-button:active {
     transform: translateY(0);
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
-  }
-
-  .icon {
-    display: block;
-    height: 1.5rem;
-    width: 1.5rem;
-    color: rgba(255, 255, 255, 0.92);
-    transition: opacity 0.2s ease;
-  }
-
-  .settings-button .icon {
-    opacity: 0.65;
-  }
-
-  .settings-button:hover .icon,
-  .settings-button:focus-visible .icon {
-    opacity: 0.85;
   }
 </style>

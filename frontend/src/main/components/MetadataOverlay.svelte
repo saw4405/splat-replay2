@@ -1,21 +1,21 @@
 <script lang="ts">
-  import { onMount, onDestroy } from "svelte";
-  import { slide } from "svelte/transition";
-  import AlertDialog from "./AlertDialog.svelte";
+  import { onMount, onDestroy } from 'svelte';
+  import { slide } from 'svelte/transition';
+  import AlertDialog from './AlertDialog.svelte';
 
   export let visible: boolean = false;
   let showAlertDialog = false; // アラートダイアログ表示フラグ
-  let alertMessage = ""; // アラートメッセージ
+  let alertMessage = ''; // アラートメッセージ
 
   // メタデータ (SSE経由で更新)
   let metadata = {
-    game_mode: "未取得",
-    started_at: "未開始",
-    match: "未取得",
-    rule: "未取得",
-    rate: "未検出",
-    judgement: "未判定",
-    stage: "未取得",
+    game_mode: '未取得',
+    started_at: '未開始',
+    match: '未取得',
+    rule: '未取得',
+    rate: '未検出',
+    judgement: '未判定',
+    stage: '未取得',
     kill: 0,
     death: 0,
     special: 0,
@@ -35,32 +35,32 @@
     special: false,
   };
 
-  const gameModes = ["バトルモード", "バイトモード"];
+  const gameModes = ['バトルモード', 'バイトモード'];
   const matches = [
-    "未取得",
-    "レギュラーマッチ",
-    "バンカラマッチ(チャレンジ)",
-    "バンカラマッチ(オープン)",
-    "Xマッチ",
-    "イベントマッチ",
-    "プライベートマッチ",
+    '未取得',
+    'レギュラーマッチ',
+    'バンカラマッチ(チャレンジ)',
+    'バンカラマッチ(オープン)',
+    'Xマッチ',
+    'イベントマッチ',
+    'プライベートマッチ',
   ];
   const rules = [
-    "未取得",
-    "ナワバリバトル",
-    "ガチエリア",
-    "ガチヤグラ",
-    "ガチホコバトル",
-    "ガチアサリ",
+    '未取得',
+    'ナワバリバトル',
+    'ガチエリア',
+    'ガチヤグラ',
+    'ガチホコバトル',
+    'ガチアサリ',
   ];
-  const judgements = ["未判定", "WIN", "LOSE"];
+  const judgements = ['未判定', 'WIN', 'LOSE'];
 
   let eventSource: EventSource | null = null;
   let hasLoadedInitial = false;
 
   function setNow(): void {
     const now = new Date();
-    metadata.started_at = now.toISOString().replace("T", " ").substring(0, 19);
+    metadata.started_at = now.toISOString().replace('T', ' ').substring(0, 19);
     manuallyEdited.started_at = true;
   }
 
@@ -68,103 +68,117 @@
   function markEdited(field: keyof typeof metadata): void {
     manuallyEdited[field] = true;
     console.log(`フィールド "${field}" が手動編集されました`);
-    console.log("手動編集フラグの状態:", manuallyEdited);
+    console.log('手動編集フラグの状態:', manuallyEdited);
   }
 
   async function fetchCurrentMetadata(): Promise<void> {
     try {
-      const response = await fetch("/api/recording/metadata");
+      const response = await fetch('/api/recording/metadata');
       if (!response.ok) {
-        console.error("Failed to fetch metadata:", response.status);
+        console.error('Failed to fetch metadata:', response.status);
         return;
       }
       const data = await response.json();
-      console.log("Fetched current metadata:", data);
+      console.log('Fetched current metadata:', data);
       updateMetadata(data);
       hasLoadedInitial = true;
     } catch (error) {
-      console.error("Failed to fetch current metadata:", error);
+      console.error('Failed to fetch current metadata:', error);
     }
   }
 
-  function updateMetadata(data: any): void {
+  function updateMetadata(data: {
+    game_mode?: string;
+    stage_name?: string;
+    stage?: string;
+    result?: string;
+    my_weapon?: string;
+    started_at?: string;
+    match?: string;
+    rule?: string;
+    rate?: string;
+    judgement?: string;
+    kill?: number;
+    death?: number;
+    special?: number;
+  }): void {
     // 手動編集されていないフィールドのみ更新
-    console.log("メタデータ自動更新を試行:", data);
+    console.log('メタデータ自動更新を試行:', data);
     let updatedFields: string[] = [];
     let skippedFields: string[] = [];
 
     if (!manuallyEdited.game_mode) {
-      metadata.game_mode = data.game_mode || "未取得";
-      updatedFields.push("game_mode");
+      metadata.game_mode = data.game_mode || '未取得';
+      updatedFields.push('game_mode');
     } else {
-      skippedFields.push("game_mode (手動編集済み)");
+      skippedFields.push('game_mode (手動編集済み)');
     }
     if (!manuallyEdited.started_at) {
-      metadata.started_at = data.started_at || "未開始";
-      updatedFields.push("started_at");
+      metadata.started_at = data.started_at || '未開始';
+      updatedFields.push('started_at');
     } else {
-      skippedFields.push("started_at (手動編集済み)");
+      skippedFields.push('started_at (手動編集済み)');
     }
     if (!manuallyEdited.match) {
-      metadata.match = data.match || "未取得";
-      updatedFields.push("match");
+      metadata.match = data.match || '未取得';
+      updatedFields.push('match');
     } else {
-      skippedFields.push("match (手動編集済み)");
+      skippedFields.push('match (手動編集済み)');
     }
     if (!manuallyEdited.rule) {
-      metadata.rule = data.rule || "未取得";
-      updatedFields.push("rule");
+      metadata.rule = data.rule || '未取得';
+      updatedFields.push('rule');
     } else {
-      skippedFields.push("rule (手動編集済み)");
+      skippedFields.push('rule (手動編集済み)');
     }
     if (!manuallyEdited.rate) {
-      metadata.rate = data.rate || "未検出";
-      updatedFields.push("rate");
+      metadata.rate = data.rate || '未検出';
+      updatedFields.push('rate');
     } else {
-      skippedFields.push("rate (手動編集済み)");
+      skippedFields.push('rate (手動編集済み)');
     }
     if (!manuallyEdited.judgement) {
-      metadata.judgement = data.judgement || "未判定";
-      updatedFields.push("judgement");
+      metadata.judgement = data.judgement || '未判定';
+      updatedFields.push('judgement');
     } else {
-      skippedFields.push("judgement (手動編集済み)");
+      skippedFields.push('judgement (手動編集済み)');
     }
     if (!manuallyEdited.stage) {
-      metadata.stage = data.stage || "未取得";
-      updatedFields.push("stage");
+      metadata.stage = data.stage || '未取得';
+      updatedFields.push('stage');
     } else {
-      skippedFields.push("stage (手動編集済み)");
+      skippedFields.push('stage (手動編集済み)');
     }
     if (!manuallyEdited.kill) {
       metadata.kill = data.kill ?? 0;
-      updatedFields.push("kill");
+      updatedFields.push('kill');
     } else {
-      skippedFields.push("kill (手動編集済み)");
+      skippedFields.push('kill (手動編集済み)');
     }
     if (!manuallyEdited.death) {
       metadata.death = data.death ?? 0;
-      updatedFields.push("death");
+      updatedFields.push('death');
     } else {
-      skippedFields.push("death (手動編集済み)");
+      skippedFields.push('death (手動編集済み)');
     }
     if (!manuallyEdited.special) {
       metadata.special = data.special ?? 0;
-      updatedFields.push("special");
+      updatedFields.push('special');
     } else {
-      skippedFields.push("special (手動編集済み)");
+      skippedFields.push('special (手動編集済み)');
     }
 
     if (updatedFields.length > 0) {
-      console.log("✓ 自動更新されたフィールド:", updatedFields);
+      console.log('✓ 自動更新されたフィールド:', updatedFields);
     }
     if (skippedFields.length > 0) {
-      console.log("⊗ スキップされたフィールド:", skippedFields);
+      console.log('⊗ スキップされたフィールド:', skippedFields);
     }
   }
 
   function resetManualEdits(): void {
     // すべての手動編集フラグをクリア
-    console.log("手動編集フラグをすべてリセット");
+    console.log('手動編集フラグをすべてリセット');
     manuallyEdited = {
       game_mode: false,
       started_at: false,
@@ -181,51 +195,51 @@
 
   async function saveMetadata(): Promise<void> {
     try {
-      const response = await fetch("/api/recording/metadata", {
-        method: "POST",
+      const response = await fetch('/api/recording/metadata', {
+        method: 'POST',
         headers: {
-          "Content-Type": "application/json",
+          'Content-Type': 'application/json',
         },
         body: JSON.stringify(metadata),
       });
 
       if (!response.ok) {
-        console.error("Failed to save metadata:", response.status);
-        alertMessage = "メタデータの保存に失敗しました";
+        console.error('Failed to save metadata:', response.status);
+        alertMessage = 'メタデータの保存に失敗しました';
         showAlertDialog = true;
         return;
       }
 
       const result = await response.json();
-      console.log("Metadata saved:", result);
-      alertMessage = "メタデータを保存しました";
+      console.log('Metadata saved:', result);
+      alertMessage = 'メタデータを保存しました';
       showAlertDialog = true;
     } catch (error) {
-      console.error("Failed to save metadata:", error);
-      alertMessage = "メタデータの保存に失敗しました";
+      console.error('Failed to save metadata:', error);
+      alertMessage = 'メタデータの保存に失敗しました';
       showAlertDialog = true;
     }
   }
 
   function connectSSE(): void {
-    eventSource = new EventSource("/api/events/metadata");
+    eventSource = new EventSource('/api/events/metadata');
 
-    eventSource.addEventListener("metadata_updated", (event) => {
+    eventSource.addEventListener('metadata_updated', (event) => {
       try {
         const data = JSON.parse(event.data);
         updateMetadata(data);
       } catch (error) {
-        console.error("Failed to parse metadata:", error);
+        console.error('Failed to parse metadata:', error);
       }
     });
 
-    eventSource.addEventListener("recorder_reset", () => {
-      console.log("Recorder reset detected - clearing manual edits");
+    eventSource.addEventListener('recorder_reset', () => {
+      console.log('Recorder reset detected - clearing manual edits');
       resetManualEdits();
     });
 
     eventSource.onerror = () => {
-      console.error("SSE connection error");
+      console.error('SSE connection error');
       eventSource?.close();
       // 再接続を試みる
       setTimeout(connectSSE, 5000);
@@ -254,7 +268,7 @@
 />
 
 {#if visible}
-  <div class="overlay" transition:slide={{ duration: 300, axis: "x" }}>
+  <div class="overlay" transition:slide={{ duration: 300, axis: 'x' }}>
     <div class="panel">
       <div class="panel-content glass-scroller">
         <div class="field-group">
@@ -262,7 +276,7 @@
           <select
             id="game_mode"
             bind:value={metadata.game_mode}
-            on:change={() => markEdited("game_mode")}
+            on:change={() => markEdited('game_mode')}
           >
             {#each gameModes as mode}
               <option value={mode}>{mode}</option>
@@ -277,7 +291,7 @@
               id="started_at"
               type="text"
               bind:value={metadata.started_at}
-              on:input={() => markEdited("started_at")}
+              on:input={() => markEdited('started_at')}
             />
             <button type="button" class="now-btn" on:click={setNow}>Now</button>
           </div>
@@ -285,11 +299,7 @@
 
         <div class="field-group">
           <label for="match">マッチタイプ</label>
-          <select
-            id="match"
-            bind:value={metadata.match}
-            on:change={() => markEdited("match")}
-          >
+          <select id="match" bind:value={metadata.match} on:change={() => markEdited('match')}>
             {#each matches as match}
               <option value={match}>{match}</option>
             {/each}
@@ -298,11 +308,7 @@
 
         <div class="field-group">
           <label for="rule">ルール</label>
-          <select
-            id="rule"
-            bind:value={metadata.rule}
-            on:change={() => markEdited("rule")}
-          >
+          <select id="rule" bind:value={metadata.rule} on:change={() => markEdited('rule')}>
             {#each rules as rule}
               <option value={rule}>{rule}</option>
             {/each}
@@ -315,7 +321,7 @@
             id="rate"
             type="text"
             bind:value={metadata.rate}
-            on:input={() => markEdited("rate")}
+            on:input={() => markEdited('rate')}
           />
         </div>
 
@@ -324,7 +330,7 @@
           <select
             id="judgement"
             bind:value={metadata.judgement}
-            on:change={() => markEdited("judgement")}
+            on:change={() => markEdited('judgement')}
           >
             {#each judgements as judgement}
               <option value={judgement}>{judgement}</option>
@@ -338,7 +344,7 @@
             id="stage"
             type="text"
             bind:value={metadata.stage}
-            on:input={() => markEdited("stage")}
+            on:input={() => markEdited('stage')}
           />
         </div>
 
@@ -349,7 +355,7 @@
               id="kill"
               type="number"
               bind:value={metadata.kill}
-              on:input={() => markEdited("kill")}
+              on:input={() => markEdited('kill')}
               min="0"
             />
           </div>
@@ -360,7 +366,7 @@
               id="death"
               type="number"
               bind:value={metadata.death}
-              on:input={() => markEdited("death")}
+              on:input={() => markEdited('death')}
               min="0"
             />
           </div>
@@ -371,7 +377,7 @@
               id="special"
               type="number"
               bind:value={metadata.special}
-              on:input={() => markEdited("special")}
+              on:input={() => markEdited('special')}
               min="0"
             />
           </div>
@@ -380,9 +386,7 @@
 
       <div class="panel-footer">
         <button type="button" class="reset-btn">リセット</button>
-        <button type="button" class="save-btn" on:click={saveMetadata}
-          >保存</button
-        >
+        <button type="button" class="save-btn" on:click={saveMetadata}>保存</button>
       </div>
     </div>
   </div>
@@ -445,11 +449,7 @@
     padding: 0.55rem 0.85rem;
     border-radius: calc(var(--glass-radius) - 8px);
     border: 1px solid rgba(255, 255, 255, 0.14);
-    background: linear-gradient(
-      145deg,
-      rgba(4, 12, 24, 0.75) 0%,
-      rgba(8, 18, 30, 0.68) 100%
-    );
+    background: linear-gradient(145deg, rgba(4, 12, 24, 0.75) 0%, rgba(8, 18, 30, 0.68) 100%);
     color: var(--text-primary);
     font-size: 0.875rem;
     transition: all 0.25s ease;
@@ -482,11 +482,7 @@
   .field-group select:focus {
     outline: none;
     border-color: rgba(25, 211, 199, 0.55);
-    background: linear-gradient(
-      135deg,
-      rgba(25, 211, 199, 0.22) 0%,
-      rgba(25, 211, 199, 0.08) 100%
-    );
+    background: linear-gradient(135deg, rgba(25, 211, 199, 0.22) 0%, rgba(25, 211, 199, 0.08) 100%);
     box-shadow:
       0 0 0 2px rgba(3, 12, 20, 0.75),
       0 0 0 4px rgba(25, 211, 199, 0.2),
@@ -519,11 +515,7 @@
 
   .now-btn {
     padding: 0.5rem 1rem;
-    background: linear-gradient(
-      135deg,
-      rgba(25, 211, 199, 0.24) 0%,
-      rgba(25, 211, 199, 0.14) 100%
-    );
+    background: linear-gradient(135deg, rgba(25, 211, 199, 0.24) 0%, rgba(25, 211, 199, 0.14) 100%);
     border: 1px solid rgba(25, 211, 199, 0.45);
     border-radius: 999px;
     color: var(--accent-color);
@@ -540,7 +532,7 @@
   }
 
   .now-btn::before {
-    content: "";
+    content: '';
     position: absolute;
     top: 50%;
     left: 50%;
@@ -560,11 +552,7 @@
   }
 
   .now-btn:hover {
-    background: linear-gradient(
-      135deg,
-      rgba(25, 211, 199, 0.38) 0%,
-      rgba(25, 211, 199, 0.24) 100%
-    );
+    background: linear-gradient(135deg, rgba(25, 211, 199, 0.38) 0%, rgba(25, 211, 199, 0.24) 100%);
     border-color: rgba(25, 211, 199, 0.6);
     transform: translateY(-2px);
     box-shadow:
@@ -594,11 +582,7 @@
     display: flex;
     gap: 0.75rem;
     justify-content: flex-end;
-    background: linear-gradient(
-      180deg,
-      rgba(6, 12, 18, 0.82) 0%,
-      rgba(6, 12, 22, 0.72) 100%
-    );
+    background: linear-gradient(180deg, rgba(6, 12, 18, 0.82) 0%, rgba(6, 12, 22, 0.72) 100%);
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
     border-bottom-right-radius: calc(var(--glass-radius) + 6px);
@@ -620,7 +604,7 @@
 
   .reset-btn::before,
   .save-btn::before {
-    content: "";
+    content: '';
     position: absolute;
     top: 50%;
     left: 50%;
@@ -667,11 +651,7 @@
   }
 
   .save-btn {
-    background: linear-gradient(
-      135deg,
-      rgba(25, 211, 199, 0.95) 0%,
-      rgba(18, 145, 137, 0.85) 100%
-    );
+    background: linear-gradient(135deg, rgba(25, 211, 199, 0.95) 0%, rgba(18, 145, 137, 0.85) 100%);
     color: #021015;
     border: 1px solid rgba(25, 211, 199, 0.55);
     font-weight: 700;
@@ -682,11 +662,7 @@
   }
 
   .save-btn:hover {
-    background: linear-gradient(
-      135deg,
-      rgba(25, 211, 199, 1) 0%,
-      rgba(18, 145, 137, 0.92) 100%
-    );
+    background: linear-gradient(135deg, rgba(25, 211, 199, 1) 0%, rgba(18, 145, 137, 0.92) 100%);
     border-color: rgba(25, 211, 199, 0.7);
     transform: translateY(-2px);
     box-shadow:

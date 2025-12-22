@@ -46,7 +46,7 @@ class SpeechTranscriber(SpeechTranscriberPort):
         self._speech_recognizer = speech_recognizer
         self._logger = logger
         self._stopwatch = StopWatch()
-        self._recognizer = sr.Recognizer()
+        self._recognizer: sr.Recognizer = sr.Recognizer()
         self._is_paused: bool = False
         self._segments: List[Segment] = []
         self._audio_queue: queue.Queue[Tuple[sr.AudioData, float, float]] = (

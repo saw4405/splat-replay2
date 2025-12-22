@@ -1,23 +1,23 @@
 <script lang="ts">
-  import { createEventDispatcher, onDestroy } from "svelte";
+  import { createEventDispatcher, onDestroy } from 'svelte';
 
   const dispatch = createEventDispatcher();
 
   export let open = false;
-  export let title = "";
+  export let title = '';
   export let showHeader = true;
   export let showFooter = true;
-  export let footerVariant: "simple" | "compact" | "custom" = "simple";
-  export let primaryButtonText = "保存";
-  export let secondaryButtonText = "キャンセル";
-  export let maxWidth = "60rem";
-  export let maxHeight = "90vh";
+  export let footerVariant: 'simple' | 'compact' | 'custom' = 'simple';
+  export let primaryButtonText = '保存';
+  export let secondaryButtonText = 'キャンセル';
+  export let maxWidth = '60rem';
+  export let maxHeight = '90vh';
   export let minHeight: string | undefined = undefined;
   export let disablePrimaryButton = false;
   export let disableSecondaryButton = false;
 
   const handleKeydown = (event: KeyboardEvent): void => {
-    if (event.key === "Escape") {
+    if (event.key === 'Escape') {
       closeDialog();
     }
   };
@@ -26,14 +26,14 @@
 
   $: {
     if (open) {
-      window.addEventListener("keydown", handleKeydown);
+      window.addEventListener('keydown', handleKeydown);
     } else {
-      window.removeEventListener("keydown", handleKeydown);
+      window.removeEventListener('keydown', handleKeydown);
     }
   }
 
   onDestroy(() => {
-    window.removeEventListener("keydown", handleKeydown);
+    window.removeEventListener('keydown', handleKeydown);
   });
 
   function closeDialog(): void {
@@ -41,22 +41,25 @@
   }
 
   function handlePrimaryClick(): void {
-    dispatch("primary-click", {});
+    dispatch('primary-click', {});
   }
 
   function handleSecondaryClick(): void {
-    dispatch("secondary-click", {});
+    dispatch('secondary-click', {});
     closeDialog();
   }
 </script>
 
 {#if open}
-  <div class="dialog-overlay" on:click={closeDialog}>
+  <!-- svelte-ignore a11y-click-events-have-key-events -->
+  <!-- svelte-ignore a11y-no-static-element-interactions -->
+  <!-- svelte-ignore a11y-no-noninteractive-element-interactions -->
+  <div class="dialog-overlay" role="presentation" on:click={closeDialog}>
     <div
       class="dialog-container"
       role="dialog"
       aria-modal="true"
-      aria-labelledby={showHeader ? "dialog-title" : undefined}
+      aria-labelledby={showHeader ? 'dialog-title' : undefined}
       on:click|stopPropagation
       style:max-width={maxWidth}
       style:max-height={maxHeight}
@@ -67,12 +70,7 @@
           <slot name="header">
             <h2 id="dialog-title">{title}</h2>
           </slot>
-          <button
-            class="icon-button"
-            type="button"
-            aria-label="閉じる"
-            on:click={closeDialog}
-          >
+          <button class="icon-button" type="button" aria-label="閉じる" on:click={closeDialog}>
             ✕
           </button>
         </header>
@@ -86,7 +84,7 @@
         <footer class="dialog-footer">
           <slot name="footer-status" />
 
-          {#if footerVariant === "simple"}
+          {#if footerVariant === 'simple'}
             <div class="actions">
               <button
                 type="button"
@@ -107,7 +105,7 @@
                 <span class="button-content">{primaryButtonText}</span>
               </button>
             </div>
-          {:else if footerVariant === "compact"}
+          {:else if footerVariant === 'compact'}
             <div class="actions">
               <button
                 type="button"
@@ -132,11 +130,7 @@
   .dialog-overlay {
     position: fixed;
     inset: 0;
-    background: linear-gradient(
-      135deg,
-      rgba(10, 10, 20, 0.85) 0%,
-      rgba(15, 15, 25, 0.9) 100%
-    );
+    background: linear-gradient(135deg, rgba(10, 10, 20, 0.85) 0%, rgba(15, 15, 25, 0.9) 100%);
     backdrop-filter: blur(16px) saturate(180%);
     -webkit-backdrop-filter: blur(16px) saturate(180%);
     display: flex;
@@ -193,11 +187,7 @@
     justify-content: space-between;
     padding: 1.5rem 2rem 1.25rem;
     border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-    background: linear-gradient(
-      to bottom,
-      rgba(255, 255, 255, 0.05) 0%,
-      transparent 100%
-    );
+    background: linear-gradient(to bottom, rgba(255, 255, 255, 0.05) 0%, transparent 100%);
     flex-shrink: 0;
   }
 
@@ -255,11 +245,7 @@
   }
 
   .dialog-footer {
-    background: linear-gradient(
-      180deg,
-      rgba(255, 255, 255, 0.02) 0%,
-      transparent 100%
-    );
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.02) 0%, transparent 100%);
     border-top: 1px solid rgba(255, 255, 255, 0.1);
     padding: 1.5rem 2rem;
     display: flex;

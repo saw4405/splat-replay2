@@ -1,7 +1,7 @@
 from typing import Optional
 
 import cv2
-from cyndilib.finder import Finder
+from cyndilib.finder import Finder, Source
 from cyndilib.receiver import Receiver
 from cyndilib.video_frame import VideoFrameSync
 from cyndilib.wrapper.ndi_recv import (
@@ -23,7 +23,7 @@ class NDICapture(CapturePort):
             color_format=RecvColorFormat.RGBX_RGBA,  # OpenCVへ渡しやすい（後でBGRに変換）
             bandwidth=RecvBandwidth.highest,  # ネットワーク/CPUに応じて後述の調整可
         )
-        self.source = None
+        self.source: Optional[Source] = None
         self.video_frame = VideoFrameSync()
         self.receiver.frame_sync.set_video_frame(self.video_frame)
         self.finder.set_change_callback(self.on_finder_change)
@@ -42,11 +42,12 @@ class NDICapture(CapturePort):
         if self.receiver.is_connected():
             self.receiver.frame_sync.capture_video()  # 同期キャプチャ（安定）
             if min(self.video_frame.xres, self.video_frame.yres) != 0:
-                frame = self.video_frame.get_array().reshape(
+                raw_frame = self.video_frame.get_array()
+                frame_reshaped = raw_frame.reshape(
                     self.video_frame.yres, self.video_frame.xres, 4
                 )
-                frame = cv2.cvtColor(frame, cv2.COLOR_RGBA2BGR)
-                return as_frame(frame)
+                frame_bgr = cv2.cvtColor(frame_reshaped, cv2.COLOR_RGBA2BGR)
+                return as_frame(frame_bgr)
         return None
 
     def teardown(self) -> None:

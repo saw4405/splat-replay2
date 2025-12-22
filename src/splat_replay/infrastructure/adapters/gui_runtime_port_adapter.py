@@ -5,20 +5,23 @@ from __future__ import annotations
 from concurrent.futures import Future as ThreadFuture
 from pathlib import Path
 from typing import (
-    Any,
+    TYPE_CHECKING,
     Callable,
     Dict,
     List,
     Literal,
     Optional,
     Tuple,
+    cast,
     overload,
 )
+
+if TYPE_CHECKING:
+    from splat_replay.application.interfaces import EventSubscription
 
 from splat_replay.application.interfaces import (
     CommandDispatcher,
     EventSubscriber,
-    EventSubscription,
     FrameSource,
 )
 from splat_replay.domain.models import Frame, RecordingMetadata, VideoAsset
@@ -34,42 +37,42 @@ class GuiRuntimePortAdapter(CommandDispatcher, EventSubscriber, FrameSource):
     # typed overloads (static typing aid only)
     @overload
     def submit(
-        self, name: Literal["recorder.get_metadata"], **payload: Any
+        self, name: Literal["recorder.get_metadata"], **payload: object
     ) -> ThreadFuture[CommandResult[Optional[RecordingMetadata]]]: ...
 
     @overload
     def submit(
-        self, name: Literal["recorder.start"], **payload: Any
+        self, name: Literal["recorder.start"], **payload: object
     ) -> ThreadFuture[CommandResult[None]]: ...
 
     @overload
     def submit(
-        self, name: Literal["recorder.pause"], **payload: Any
+        self, name: Literal["recorder.pause"], **payload: object
     ) -> ThreadFuture[CommandResult[None]]: ...
 
     @overload
     def submit(
-        self, name: Literal["recorder.resume"], **payload: Any
+        self, name: Literal["recorder.resume"], **payload: object
     ) -> ThreadFuture[CommandResult[None]]: ...
 
     @overload
     def submit(
-        self, name: Literal["recorder.stop"], **payload: Any
+        self, name: Literal["recorder.stop"], **payload: object
     ) -> ThreadFuture[CommandResult[None]]: ...
 
     @overload
     def submit(
-        self, name: Literal["recorder.cancel"], **payload: Any
+        self, name: Literal["recorder.cancel"], **payload: object
     ) -> ThreadFuture[CommandResult[None]]: ...
 
     @overload
     def submit(
-        self, name: Literal["asset.list"], **payload: Any
+        self, name: Literal["asset.list"], **payload: object
     ) -> ThreadFuture[CommandResult[List["VideoAsset"]]]: ...
 
     @overload
     def submit(
-        self, name: Literal["asset.list_with_length"], **payload: Any
+        self, name: Literal["asset.list_with_length"], **payload: object
     ) -> ThreadFuture[
         CommandResult[List[Tuple["VideoAsset", float | None]]]
     ]: ...
@@ -114,19 +117,19 @@ class GuiRuntimePortAdapter(CommandDispatcher, EventSubscriber, FrameSource):
 
     @overload
     def submit(
-        self, name: Literal["asset.get_recorded_dir"], **payload: Any
+        self, name: Literal["asset.get_recorded_dir"], **payload: object
     ) -> ThreadFuture[CommandResult["Path"]]: ...
 
     @overload
     def submit(
-        self, name: Literal["asset.list_edited_with_length"], **payload: Any
+        self, name: Literal["asset.list_edited_with_length"], **payload: object
     ) -> ThreadFuture[
         CommandResult[List[Tuple["Path", float | None, dict[str, str] | None]]]
     ]: ...
 
     @overload
     def submit(
-        self, name: Literal["asset.get_edited_dir"], **payload: Any
+        self, name: Literal["asset.get_edited_dir"], **payload: object
     ) -> ThreadFuture[CommandResult["Path"]]: ...
 
     @overload
@@ -136,19 +139,20 @@ class GuiRuntimePortAdapter(CommandDispatcher, EventSubscriber, FrameSource):
 
     @overload
     def submit(
-        self, name: str, **payload: Any
-    ) -> ThreadFuture[CommandResult[Any]]: ...
+        self, name: str, **payload: object
+    ) -> ThreadFuture[CommandResult[object]]: ...
 
     def submit(
-        self, name: str, **payload: Any
-    ) -> ThreadFuture[CommandResult[Any]]:
+        self, name: str, **payload: object
+    ) -> ThreadFuture[CommandResult[object]]:
         return self._rt.command_bus.submit(name, **payload)
 
     # EventSubscriber
     def subscribe(
         self, event_types: Optional[set[str]] = None
     ) -> EventSubscription:
-        return self._rt.event_bus.subscribe(event_types=event_types)
+        sub = self._rt.event_bus.subscribe(event_types=event_types)
+        return cast(EventSubscription, sub)
 
     # FrameSource proxy
     def add_listener(self, cb: Callable[[Frame], None]) -> None:

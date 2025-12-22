@@ -77,7 +77,9 @@ class OBSController(VideoRecorderPort):
             except Exception as exc:  # pragma: no cover - logging path
                 self._logger.warning("event listener error", error=str(exc))
 
-        self._client.reg_event_cb(_event_callback, "RecordStateChanged")
+        # reg_event_cb は Awaitable を期待するが、実際にはコルーチン関数を受け取る設計
+        # type: ignore で対処
+        self._client.reg_event_cb(_event_callback, "RecordStateChanged")  # type: ignore[arg-type]
         self._is_connected = False
 
     def update_settings(self, settings: OBSSettings) -> None:

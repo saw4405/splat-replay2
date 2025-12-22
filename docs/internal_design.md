@@ -503,30 +503,10 @@ websocket_port = 4455
 
 ## 12. GUI 設計
 
-### 12.1 メインウィンドウレイアウト
+### 12.1 WebViewベースのGUI
 
-```mermaid
-graph TD
-    subgraph MainWindow[メインウィンドウ]
-        SettingsBtn[設定ボタン]
-
-        subgraph CentralArea[中央エリア - QSplitter]
-            direction LR
-            GamePreview[ゲーム映像プレビュー<br/>OBS仮想カメラ映像<br/>最大1080p60表示]
-            MetadataPanel[メタデータパネル<br/>ルール・ステージ・勝敗<br/>レート等の表示・編集]
-        end
-
-        StatusBar[録画ステータスバー<br/>録画/停止/一時停止状態<br/>手動操作ボタン]
-
-        RecordTable[録画データ一覧<br/>サムネイル・詳細表示<br/>削除・除外トグル]
-    end
-
-    SettingsDialog[設定ダイアログ<br/>音量・タイトル・タグ<br/>公開範囲等の設定]
-
-    SettingsBtn -.-> SettingsDialog
-    CentralArea --> StatusBar
-    StatusBar --> RecordTable
-```
+現在のGUIは、pywebviewとFastAPI + Svelteを組み合わせたWebViewベースのデスクトップアプリケーションです。
+詳細は `frontend/` ディレクトリと `src/splat_replay/web/` を参照してください。
 
 - **最上部**: 設定ボタン
 - **中央 (QSplitter)**: 左に _ゲーム映像プレビュー_、右に _メタデータパネル_

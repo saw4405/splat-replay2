@@ -1,6 +1,6 @@
 export type PrimitiveValue = string | number | boolean | string[];
 
-export type FieldValue = PrimitiveValue | Record<string, FieldValue>;
+export type FieldValue = PrimitiveValue | Record<string, PrimitiveValue | Record<string, unknown>>;
 
 export type SettingField = {
   id: string;

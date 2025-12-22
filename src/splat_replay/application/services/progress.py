@@ -8,8 +8,9 @@ from __future__ import annotations
 
 import asyncio
 import inspect
+from collections.abc import Awaitable
 from dataclasses import dataclass
-from typing import List, Optional, Protocol
+from typing import List, Optional, Protocol, Union
 
 from structlog.stdlib import get_logger
 
@@ -39,7 +40,11 @@ class ProgressEvent:
 
 
 class ProgressListener(Protocol):
-    def __call__(self, event: ProgressEvent) -> None: ...
+    """Progress event listener (sync or async)."""
+
+    def __call__(
+        self, event: ProgressEvent
+    ) -> Union[None, Awaitable[None]]: ...
 
 
 class ProgressReporter:
@@ -238,10 +243,9 @@ class ProgressReporter:
         # notify listeners (sync/async safe)
         for listener in list(self._listeners):
             try:
-                if inspect.iscoroutinefunction(listener):
-                    asyncio.create_task(listener(event))
-                else:
-                    listener(event)
+                result = listener(event)
+                if inspect.iscoroutine(result):
+                    asyncio.create_task(result)
             except Exception as e:
                 logger.exception("Progress listener error", error=e)
 

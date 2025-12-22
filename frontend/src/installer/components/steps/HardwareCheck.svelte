@@ -1,52 +1,52 @@
 <script lang="ts">
-  import { Check, Gamepad, Cpu, HardDrive, Wifi, Cable } from "lucide-svelte";
-  import { markSubstepCompleted, installationState } from "../../store";
-  import { InstallationStep } from "../../types";
+  import { Check, Gamepad, Cpu, HardDrive, Wifi, Cable } from 'lucide-svelte';
+  import { markSubstepCompleted, installationState } from '../../store';
+  import { InstallationStep } from '../../types';
 
-  const SUBSTEP_STORAGE_KEY = "hardware_substep_index";
+  const SUBSTEP_STORAGE_KEY = 'hardware_substep_index';
 
   interface HardwareRequirement {
     id: string;
     name: string;
     spec: string;
-    icon: any;
+    icon: typeof Check;
     checked: boolean;
     isConnection?: boolean;
   }
 
   let requirements: HardwareRequirement[] = [
     {
-      id: "hardware-switch",
-      name: "Nintendo Switch",
-      spec: "スプラトゥーン 3 をプレイする本体",
+      id: 'hardware-switch',
+      name: 'Nintendo Switch',
+      spec: 'スプラトゥーン 3 をプレイする本体',
       icon: Gamepad,
       checked: false,
     },
     {
-      id: "hardware-capture",
-      name: "キャプチャーボード",
-      spec: "HDMI 入力対応、1080p/30fps 以上推奨",
+      id: 'hardware-capture',
+      name: 'キャプチャーボード',
+      spec: 'HDMI 入力対応、1080p/30fps 以上推奨',
       icon: Cpu,
       checked: false,
     },
     {
-      id: "hardware-pc",
-      name: "PC",
-      spec: "Windows 11、メモリ 8GB 以上、ストレージ 10GB 以上の空き容量",
+      id: 'hardware-pc',
+      name: 'PC',
+      spec: 'Windows 11、メモリ 8GB 以上、ストレージ 10GB 以上の空き容量',
       icon: HardDrive,
       checked: false,
     },
     {
-      id: "hardware-network",
-      name: "ネットワーク",
-      spec: "YouTube アップロード用の安定したインターネット接続",
+      id: 'hardware-network',
+      name: 'ネットワーク',
+      spec: 'YouTube アップロード用の安定したインターネット接続',
       icon: Wifi,
       checked: false,
     },
     {
-      id: "hardware-connection",
-      name: "接続",
-      spec: "Nintendo Switchの電源を入れ、以下のように接続してください",
+      id: 'hardware-connection',
+      name: '接続',
+      spec: 'Nintendo Switchの電源を入れ、以下のように接続してください',
       icon: Cable,
       checked: false,
       isConnection: true,
@@ -65,7 +65,7 @@
   $: canGoBack = currentSubStepIndex > 0;
 
   function loadSavedSubstepIndex(maxIndex: number): number | null {
-    if (typeof window === "undefined") return null;
+    if (typeof window === 'undefined') return null;
     const stored = window.sessionStorage.getItem(SUBSTEP_STORAGE_KEY);
     if (stored === null) return null;
     const parsed = Number.parseInt(stored, 10);
@@ -73,11 +73,11 @@
     return Math.max(0, Math.min(parsed, maxIndex));
   }
   function saveSubstepIndex(index: number): void {
-    if (typeof window === "undefined") return;
+    if (typeof window === 'undefined') return;
     window.sessionStorage.setItem(SUBSTEP_STORAGE_KEY, index.toString());
   }
 
-  function computeInitialSubstepIndex(steps: HardwareRequirement[]): number {
+  function computeInitialSubstepIndex(_steps: HardwareRequirement[]): number {
     // 常に最初の手順から開始する
     return 0;
   }
@@ -89,8 +89,7 @@
 
   // Sync with installation state
   $: if ($installationState && $installationState.step_details) {
-    const details =
-      $installationState.step_details[InstallationStep.HARDWARE_CHECK] || {};
+    const details = $installationState.step_details[InstallationStep.HARDWARE_CHECK] || {};
     const updatedRequirements = requirements.map((req) => ({
       ...req,
       checked: details[req.id] || false,
@@ -115,9 +114,7 @@
     saveSubstepIndex(currentSubStepIndex);
   }
 
-  export async function next(
-    options: { skip?: boolean } = {}
-  ): Promise<boolean> {
+  export async function next(options: { skip?: boolean } = {}): Promise<boolean> {
     // 現在のステップをチェック済みにする
     if (!options.skip && !requirements[currentSubStepIndex].checked) {
       await toggleRequirement(currentSubStepIndex);
@@ -143,16 +140,10 @@
     const updatedChecked = !req.checked;
 
     requirements = requirements.map((requirement, requirementIndex) =>
-      requirementIndex === index
-        ? { ...requirement, checked: updatedChecked }
-        : requirement
+      requirementIndex === index ? { ...requirement, checked: updatedChecked } : requirement
     );
 
-    await markSubstepCompleted(
-      InstallationStep.HARDWARE_CHECK,
-      req.id,
-      updatedChecked
-    );
+    await markSubstepCompleted(InstallationStep.HARDWARE_CHECK, req.id, updatedChecked);
   }
 
   function handleCardClick(event: Event) {
@@ -168,12 +159,7 @@
     }
 
     // インタラクティブな要素のクリックは除外
-    if (
-      target &&
-      (target.closest("button") ||
-        target.closest("a") ||
-        target.closest("input"))
-    ) {
+    if (target && (target.closest('button') || target.closest('a') || target.closest('input'))) {
       return;
     }
 
@@ -181,7 +167,7 @@
   }
 
   function handleKeyDown(event: KeyboardEvent) {
-    if (event.key === "Enter") {
+    if (event.key === 'Enter') {
       handleCardClick(event);
     }
   }
@@ -190,9 +176,7 @@
 <div class="hardware-check">
   <div class="step-header">
     <h2 class="step-title">準備するもの</h2>
-    <p class="step-description">
-      Splat Replay を使用するために以下のものを準備します
-    </p>
+    <p class="step-description">Splat Replay を使用するために以下のものを準備します</p>
   </div>
 
   <div class="requirements-section">
@@ -390,11 +374,7 @@
     align-items: center;
     justify-content: center;
     border-radius: 12px;
-    background: linear-gradient(
-      135deg,
-      rgba(25, 211, 199, 0.2) 0%,
-      rgba(25, 211, 199, 0.05) 100%
-    );
+    background: linear-gradient(135deg, rgba(25, 211, 199, 0.2) 0%, rgba(25, 211, 199, 0.05) 100%);
     border: 1px solid rgba(25, 211, 199, 0.3);
     color: var(--accent-color);
   }
@@ -457,14 +437,6 @@
     border: 1px solid rgba(255, 255, 255, 0.15);
   }
 
-  .connection-instruction {
-    font-size: 0.85rem;
-    color: var(--text-secondary);
-    margin-bottom: 1.5rem;
-    text-align: center;
-    font-weight: 500;
-  }
-
   .diagram-layout {
     display: flex;
     flex-direction: column;
@@ -514,34 +486,6 @@
     gap: 0.5rem;
   }
 
-  .connection-notes {
-    margin-top: 2rem;
-    display: flex;
-    flex-direction: column;
-    gap: 0.5rem;
-    width: 100%;
-    padding: 1rem 1.5rem;
-    background: rgba(255, 255, 255, 0.03);
-    border-radius: 8px;
-    border: 1px solid rgba(255, 255, 255, 0.1);
-  }
-
-  .note-item {
-    font-size: 0.8rem;
-    color: var(--text-secondary);
-    line-height: 1.6;
-    display: flex;
-    align-items: center;
-  }
-
-  .note-item::before {
-    content: "•";
-    color: var(--accent-color);
-    font-weight: bold;
-    font-size: 1.2rem;
-    margin-right: 0.5rem;
-  }
-
   .diagram-box {
     padding: 0.625rem 1.25rem;
     border-radius: 8px;
@@ -559,41 +503,25 @@
   }
 
   .diagram-box.switch {
-    background: linear-gradient(
-      135deg,
-      rgba(255, 69, 58, 0.15) 0%,
-      rgba(255, 69, 58, 0.05) 100%
-    );
+    background: linear-gradient(135deg, rgba(255, 69, 58, 0.15) 0%, rgba(255, 69, 58, 0.05) 100%);
     border-color: rgba(255, 69, 58, 0.6);
     color: #ff6b6b;
   }
 
   .diagram-box.capture {
-    background: linear-gradient(
-      135deg,
-      rgba(255, 159, 10, 0.15) 0%,
-      rgba(255, 159, 10, 0.05) 100%
-    );
+    background: linear-gradient(135deg, rgba(255, 159, 10, 0.15) 0%, rgba(255, 159, 10, 0.05) 100%);
     border-color: rgba(255, 159, 10, 0.6);
     color: #ffb347;
   }
 
   .diagram-box.pc {
-    background: linear-gradient(
-      135deg,
-      rgba(25, 211, 199, 0.15) 0%,
-      rgba(25, 211, 199, 0.05) 100%
-    );
+    background: linear-gradient(135deg, rgba(25, 211, 199, 0.15) 0%, rgba(25, 211, 199, 0.05) 100%);
     border-color: rgba(25, 211, 199, 0.6);
     color: #19d3c7;
   }
 
   .diagram-box.monitor {
-    background: linear-gradient(
-      135deg,
-      rgba(94, 92, 230, 0.15) 0%,
-      rgba(94, 92, 230, 0.05) 100%
-    );
+    background: linear-gradient(135deg, rgba(94, 92, 230, 0.15) 0%, rgba(94, 92, 230, 0.05) 100%);
     border-color: rgba(94, 92, 230, 0.6);
     color: #7b79e8;
   }
@@ -643,14 +571,6 @@
 
     .diagram-box {
       min-width: 130px;
-    }
-
-    .connection-notes {
-      padding: 1rem;
-    }
-
-    .note-item {
-      font-size: 0.75rem;
     }
   }
 

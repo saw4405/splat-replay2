@@ -1,14 +1,14 @@
 <script lang="ts">
-  import { AlertTriangle, X } from "lucide-svelte";
+  import { AlertTriangle, X } from 'lucide-svelte';
 
   export let open = false;
-  export let title = "確認";
-  export let message = "";
-  export let confirmText = "確認";
-  export let cancelText = "キャンセル";
+  export let title = '確認';
+  export let message = '';
+  export let confirmText = '確認';
+  export let cancelText = 'キャンセル';
   export let onConfirm: (() => void) | undefined = undefined;
   export let onCancel: (() => void) | undefined = undefined;
-  export let variant: "warning" | "info" = "info";
+  export let variant: 'warning' | 'info' = 'info';
 
   function handleConfirm(): void {
     if (onConfirm) {
@@ -33,20 +33,20 @@
 
 {#if open}
   <div class="dialog-backdrop" on:click={handleBackdropClick} role="presentation">
-    <div class="dialog glass-surface" role="dialog" aria-modal="true" aria-labelledby="confirm-title">
+    <div
+      class="dialog glass-surface"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="confirm-title"
+    >
       <div class="dialog-header">
-        {#if variant === "warning"}
+        {#if variant === 'warning'}
           <div class="header-icon">
             <AlertTriangle class="icon warning-icon" size={24} />
           </div>
         {/if}
         <h2 id="confirm-title" class="dialog-title">{title}</h2>
-        <button
-          class="close-button"
-          type="button"
-          aria-label="閉じる"
-          on:click={handleCancel}
-        >
+        <button class="close-button" type="button" aria-label="閉じる" on:click={handleCancel}>
           <X class="icon" size={20} />
         </button>
       </div>
@@ -56,18 +56,10 @@
       </div>
 
       <div class="dialog-actions">
-        <button
-          class="button button-primary"
-          type="button"
-          on:click={handleConfirm}
-        >
+        <button class="button button-primary" type="button" on:click={handleConfirm}>
           {confirmText}
         </button>
-        <button
-          class="button button-secondary"
-          type="button"
-          on:click={handleCancel}
-        >
+        <button class="button button-secondary" type="button" on:click={handleCancel}>
           {cancelText}
         </button>
       </div>
@@ -127,10 +119,6 @@
 
   .header-icon {
     flex-shrink: 0;
-  }
-
-  .warning-icon {
-    color: #ffa500;
   }
 
   .dialog-title {
@@ -214,9 +202,5 @@
     background: rgba(255, 255, 255, 0.1);
     border-color: rgba(255, 255, 255, 0.2);
     transform: translateY(-1px);
-  }
-
-  .icon {
-    display: block;
   }
 </style>

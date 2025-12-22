@@ -1,22 +1,11 @@
 <script lang="ts">
-  import { onMount } from "svelte";
-  import {
-    Download,
-    ExternalLink,
-    FolderOpen,
-    Info,
-    Check,
-  } from "lucide-svelte";
-  import {
-    checkSystem,
-    setupFFMPEG,
-    markSubstepCompleted,
-    installationState,
-  } from "../../store";
-  import { type SystemCheckResult, InstallationStep } from "../../types";
+  import { onMount } from 'svelte';
+  import { Download, ExternalLink, FolderOpen, Info, Check } from 'lucide-svelte';
+  import { checkSystem, setupFFMPEG, markSubstepCompleted, installationState } from '../../store';
+  import { type SystemCheckResult, InstallationStep } from '../../types';
 
   let ffmpegInstalled = false;
-  let ffmpegVersion: string | null = null;
+  let _ffmpegVersion: string | null = null;
   let isChecking = false;
   let checkError: string | null = null;
 
@@ -40,32 +29,23 @@
 
   // Sync with installation state
   $: if ($installationState && $installationState.step_details) {
-    const details =
-      $installationState.step_details[InstallationStep.FFMPEG_SETUP] || {};
+    const details = $installationState.step_details[InstallationStep.FFMPEG_SETUP] || {};
     setupCompleted = {
-      downloadAndExtract: details["ffmpeg-download-extract"] || false,
+      downloadAndExtract: details['ffmpeg-download-extract'] || false,
     };
   }
 
-  export async function next(
-    options: { skip?: boolean } = {}
-  ): Promise<boolean> {
+  export async function next(options: { skip?: boolean } = {}): Promise<boolean> {
     if (!ffmpegInstalled) {
       await handleSetup();
       if (!ffmpegInstalled) {
-        alert(
-          "FFMPEG が検出されませんでした。インストールしてから次へ進んでください。"
-        );
+        alert('FFMPEG が検出されませんでした。インストールしてから次へ進んでください。');
         return true;
       }
     }
 
     if (!options.skip && !setupCompleted.downloadAndExtract) {
-      await markSubstepCompleted(
-        InstallationStep.FFMPEG_SETUP,
-        "ffmpeg-download-extract",
-        true
-      );
+      await markSubstepCompleted(InstallationStep.FFMPEG_SETUP, 'ffmpeg-download-extract', true);
     }
 
     // Only one step, so return false to proceed to next page
@@ -82,22 +62,16 @@
     checkError = null;
 
     try {
-      const result: SystemCheckResult = await checkSystem("ffmpeg");
+      const result: SystemCheckResult = await checkSystem('ffmpeg');
       ffmpegInstalled = result.is_installed;
-      ffmpegVersion = result.version || null;
+      _ffmpegVersion = result.version || null;
 
       if (ffmpegInstalled) {
-        await markSubstepCompleted(
-          InstallationStep.FFMPEG_SETUP,
-          "ffmpeg-download-extract",
-          true
-        );
+        await markSubstepCompleted(InstallationStep.FFMPEG_SETUP, 'ffmpeg-download-extract', true);
       }
     } catch (error) {
       checkError =
-        error instanceof Error
-          ? error.message
-          : "FFMPEG のインストール確認に失敗しました";
+        error instanceof Error ? error.message : 'FFMPEG のインストール確認に失敗しました';
     } finally {
       isChecking = false;
     }
@@ -107,11 +81,7 @@
     if (setupCompleted.downloadAndExtract) {
       if (ffmpegInstalled) return;
 
-      await markSubstepCompleted(
-        InstallationStep.FFMPEG_SETUP,
-        "ffmpeg-download-extract",
-        false
-      );
+      await markSubstepCompleted(InstallationStep.FFMPEG_SETUP, 'ffmpeg-download-extract', false);
       return;
     }
 
@@ -123,23 +93,16 @@
 
       if (result.is_installed) {
         ffmpegInstalled = true;
-        ffmpegVersion = result.version || null;
+        _ffmpegVersion = result.version || null;
         setupCompleted.downloadAndExtract = true;
-        await markSubstepCompleted(
-          InstallationStep.FFMPEG_SETUP,
-          "ffmpeg-download-extract",
-          true
-        );
+        await markSubstepCompleted(InstallationStep.FFMPEG_SETUP, 'ffmpeg-download-extract', true);
       } else {
-        checkError = result.error_message || "セットアップに失敗しました";
+        checkError = result.error_message || 'セットアップに失敗しました';
         setupCompleted.downloadAndExtract = false;
         alert(checkError);
       }
     } catch (error) {
-      checkError =
-        error instanceof Error
-          ? error.message
-          : "セットアップ中にエラーが発生しました";
+      checkError = error instanceof Error ? error.message : 'セットアップ中にエラーが発生しました';
       setupCompleted.downloadAndExtract = false;
       alert(checkError);
     } finally {
@@ -148,7 +111,7 @@
   }
 
   function openUrl(url: string): void {
-    window.open(url, "_blank");
+    window.open(url, '_blank');
   }
 
   function handleCardClick(event: Event) {
@@ -170,10 +133,10 @@
     // インタラクティブな要素のクリックは除外
     if (
       target &&
-      (target.closest("button") ||
-        target.closest("a") ||
-        target.closest("input") ||
-        target.closest(".path-value"))
+      (target.closest('button') ||
+        target.closest('a') ||
+        target.closest('input') ||
+        target.closest('.path-value'))
     ) {
       return;
     }
@@ -182,7 +145,7 @@
   }
 
   function handleKeyDown(event: KeyboardEvent) {
-    if (event.key === "Enter") {
+    if (event.key === 'Enter') {
       handleCardClick(event);
     }
   }
@@ -198,23 +161,20 @@
           <h3 class="tooltip-title">FFMPEG について</h3>
           <p class="tooltip-text">
             FFMPEG は動画・音声ファイルの変換、編集、ストリーミングを行うための
-            オープンソースのマルチメディアフレームワークです。Splat Replay
-            では、 録画した動画のトリミングや形式変換に使用します。
+            オープンソースのマルチメディアフレームワークです。Splat Replay では、
+            録画した動画のトリミングや形式変換に使用します。
           </p>
         </div>
       </div>
     </div>
-    <p class="step-description">
-      動画編集に使用するため、 FFMPEG をインストールします
-    </p>
+    <p class="step-description">動画編集に使用するため、 FFMPEG をインストールします</p>
   </div>
 
   <div class="setup-steps-section">
     <div
       class="step-card glass-card"
       class:completed={setupCompleted.downloadAndExtract}
-      class:disabled={isChecking ||
-        (setupCompleted.downloadAndExtract && ffmpegInstalled)}
+      class:disabled={isChecking || (setupCompleted.downloadAndExtract && ffmpegInstalled)}
       on:click={handleCardClick}
       on:keydown={handleKeyDown}
       role="button"
@@ -231,10 +191,7 @@
               {/if}
             </div>
           </div>
-          <div
-            class="checkbox-indicator"
-            class:checked={setupCompleted.downloadAndExtract}
-          >
+          <div class="checkbox-indicator" class:checked={setupCompleted.downloadAndExtract}>
             {#if setupCompleted.downloadAndExtract}
               <Check size={20} />
             {/if}
@@ -250,9 +207,7 @@
                   class="link-button"
                   type="button"
                   on:click={() =>
-                    openUrl(
-                      "https://github.com/BtbN/FFmpeg-Builds/releases/tag/latest"
-                    )}
+                    openUrl('https://github.com/BtbN/FFmpeg-Builds/releases/tag/latest')}
                 >
                   <Download class="icon" size={16} />
                   FFMPEG をダウンロード
@@ -260,13 +215,9 @@
                 </button>
               </div>
             </li>
+            <li>「Assets」エリアから「ffmpeg-*-win64-gpl-shared.zip」をダウンロードします</li>
             <li>
-              「Assets」エリアから「ffmpeg-*-win64-gpl-shared.zip」をダウンロードします
-            </li>
-            <li>
-              ダウンロードした ZIP ファイルを展開し、フォルダ名を <code
-                >ffmpeg</code
-              >
+              ダウンロードした ZIP ファイルを展開し、フォルダ名を <code>ffmpeg</code>
               に変更して Cドライブ直下に配置します
             </li>
             <li>
@@ -503,11 +454,7 @@
     align-items: center;
     justify-content: center;
     border-radius: 50%;
-    background: linear-gradient(
-      135deg,
-      rgba(25, 211, 199, 0.2) 0%,
-      rgba(25, 211, 199, 0.05) 100%
-    );
+    background: linear-gradient(135deg, rgba(25, 211, 199, 0.2) 0%, rgba(25, 211, 199, 0.05) 100%);
     border: 2px solid rgba(25, 211, 199, 0.3);
     font-size: 1.25rem;
     font-weight: 700;
@@ -567,11 +514,7 @@
     font-size: 0.75rem;
     font-weight: 600;
     border-radius: 999px;
-    background: linear-gradient(
-      135deg,
-      var(--accent-color) 0%,
-      var(--accent-color-strong) 100%
-    );
+    background: linear-gradient(135deg, var(--accent-color) 0%, var(--accent-color-strong) 100%);
     color: white;
     box-shadow: 0 0 8px var(--accent-glow);
   }
@@ -605,25 +548,11 @@
     margin-top: 0.75rem;
   }
 
-  .path-box .icon {
-    color: var(--accent-color);
-    flex-shrink: 0;
-    margin-top: 0.125rem;
-  }
-
   .path-content {
     flex: 1;
     display: flex;
     flex-direction: column;
     gap: 0.4rem;
-  }
-
-  .path-label {
-    margin: 0;
-    font-size: 0.875rem;
-    font-weight: 600;
-    color: var(--text-secondary);
-    text-align: left;
   }
 
   .path-value {
@@ -635,12 +564,6 @@
     color: var(--accent-color);
     font-size: 0.9rem;
     word-break: break-all;
-  }
-
-  .path-hint {
-    margin: 0;
-    font-size: 0.85rem;
-    color: var(--text-secondary);
   }
 
   .step-note {
@@ -670,11 +593,6 @@
     font-family: monospace;
     color: var(--accent-color);
     font-size: 0.875rem;
-  }
-
-  .icon {
-    display: block;
-    flex-shrink: 0;
   }
 
   @media (max-width: 768px) {

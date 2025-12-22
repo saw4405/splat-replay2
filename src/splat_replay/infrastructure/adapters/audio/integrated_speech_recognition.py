@@ -30,7 +30,7 @@ class IntegratedSpeechRecognizer:
         self.primary_language = settings.language.split("-")[0]
         self.custom_dictionary = settings.custom_dictionary
         self._logger = logger
-        self._recognizer = sr.Recognizer()
+        self._recognizer: sr.Recognizer = sr.Recognizer()
         self._groq = AsyncGroq()
         self._vad = webrtcvad.Vad(settings.vad_aggressiveness)
 
@@ -130,7 +130,9 @@ class IntegratedSpeechRecognizer:
             f" The JSON object must use the schema: {RecognitionResult.schema_json(indent=2)}"
         )
 
-        chat_completion = await self._groq.chat.completions.create(
+        # Groq SDK: messages/response_formatの型定義が不完全なためtype:ignoreで対処
+        response_fmt: object = {"type": "json_object"}
+        chat_completion = await self._groq.chat.completions.create(  # type: ignore[arg-type]
             messages=[
                 {
                     "role": "system",
@@ -144,7 +146,7 @@ class IntegratedSpeechRecognizer:
             model=self.integrator_model,
             temperature=0,
             stream=False,
-            response_format={"type": "json_object"},
+            response_format=response_fmt,  # type: ignore[arg-type]
         )
         res = chat_completion.choices[0].message.content
         if res is None:

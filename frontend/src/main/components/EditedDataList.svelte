@@ -1,8 +1,8 @@
 <script lang="ts">
-  import { createEventDispatcher } from "svelte";
-  import type { EditedVideo } from "./../api";
-  import VideoPlayerDialog from "./VideoPlayerDialog.svelte";
-  import ThumbnailZoomDialog from "./ThumbnailZoomDialog.svelte";
+  import { createEventDispatcher } from 'svelte';
+  import type { EditedVideo } from './../api';
+  import VideoPlayerDialog from './VideoPlayerDialog.svelte';
+  import ThumbnailZoomDialog from './ThumbnailZoomDialog.svelte';
 
   export let videos: EditedVideo[] = [];
 
@@ -10,9 +10,9 @@
 
   let showVideoPlayer = false;
   let showThumbnailZoom = false;
-  let currentVideoUrl = "";
-  let currentThumbnailUrl = "";
-  let currentVideoTitle = "";
+  let currentVideoUrl = '';
+  let currentThumbnailUrl = '';
+  let _currentVideoTitle = '';
   let wasModalOpen = false; // モーダルが開いていたかどうかを追跡
   let deletingVideoId: string | null = null; // 削除中の動画ID
 
@@ -22,18 +22,18 @@
 
     if (isAnyModalOpen && !wasModalOpen) {
       // モーダルが開いた
-      dispatch("modalOpen");
+      dispatch('modalOpen');
       wasModalOpen = true;
     } else if (!isAnyModalOpen && wasModalOpen) {
       // モーダルが閉じた
-      dispatch("modalClose");
+      dispatch('modalClose');
       wasModalOpen = false;
     }
   }
 
   function getThumbnailUrl(filename: string): string {
     // ファイル名から拡張子を除去して .png を追加
-    const nameWithoutExt = filename.replace(/\.[^/.]+$/, "");
+    const nameWithoutExt = filename.replace(/\.[^/.]+$/, '');
     return `/api/thumbnails/edited/${encodeURIComponent(nameWithoutExt)}.png`;
   }
 
@@ -50,22 +50,19 @@
 
   function handlePlayVideo(video: EditedVideo): void {
     currentVideoUrl = getVideoUrl(video.id); // フルパスを使用
-    currentVideoTitle = video.filename;
+    _currentVideoTitle = video.filename;
     showVideoPlayer = true;
   }
 
   function handleZoomThumbnail(video: EditedVideo): void {
     currentThumbnailUrl = getThumbnailUrl(video.filename);
     // サムネイルファイル名を設定
-    const nameWithoutExt = video.filename.replace(/\.[^/.]+$/, "");
-    currentVideoTitle = `${nameWithoutExt}.png`;
+    const nameWithoutExt = video.filename.replace(/\.[^/.]+$/, '');
+    _currentVideoTitle = `${nameWithoutExt}.png`;
     showThumbnailZoom = true;
   }
 
-  async function handleDeleteVideo(
-    event: MouseEvent,
-    video: EditedVideo
-  ): Promise<void> {
+  async function handleDeleteVideo(event: MouseEvent, video: EditedVideo): Promise<void> {
     event.stopPropagation();
 
     const confirmed = confirm(
@@ -79,14 +76,14 @@
     deletingVideoId = video.id;
 
     try {
-      const { deleteEditedVideo } = await import("./../api");
+      const { deleteEditedVideo } = await import('./../api');
       await deleteEditedVideo(video.id);
-      console.log("Video deleted successfully:", video.id);
+      console.log('Video deleted successfully:', video.id);
 
       // ビデオリストを再読み込み
-      dispatch("refresh");
+      dispatch('refresh');
     } catch (error) {
-      console.error("Failed to delete video:", error);
+      console.error('Failed to delete video:', error);
       alert(`動画の削除に失敗しました: ${error}`);
     } finally {
       deletingVideoId = null;
@@ -231,11 +228,8 @@
               <div class="metadata-row">
                 <div class="metadata-item subtitle-item">
                   <span class="metadata-label">字幕:</span>
-                  <span
-                    class="metadata-value"
-                    class:has-subtitles={video.hasSubtitles}
-                  >
-                    {video.hasSubtitles ? "✓ あり" : "✗ なし"}
+                  <span class="metadata-value" class:has-subtitles={video.hasSubtitles}>
+                    {video.hasSubtitles ? '✓ あり' : '✗ なし'}
                   </span>
                 </div>
               </div>
@@ -342,11 +336,7 @@
     color: #fff;
     transform: scale(1.08);
     box-shadow: 0 10px 18px rgba(244, 67, 54, 0.35);
-    background: linear-gradient(
-      145deg,
-      rgba(244, 67, 54, 0.92) 0%,
-      rgba(190, 40, 28, 0.85) 100%
-    );
+    background: linear-gradient(145deg, rgba(244, 67, 54, 0.92) 0%, rgba(190, 40, 28, 0.85) 100%);
   }
 
   .delete-button:active {

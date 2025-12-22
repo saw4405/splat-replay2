@@ -5,7 +5,7 @@ from __future__ import annotations
 import gc
 import pickle
 from pathlib import Path
-from typing import List, Optional, Union, cast
+from typing import Any, List, Optional, Union, cast
 
 import google.auth.exceptions
 from google.auth.external_account_authorized_user import (
@@ -14,7 +14,7 @@ from google.auth.external_account_authorized_user import (
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials as Credentials2
 from google_auth_oauthlib.flow import InstalledAppFlow
-from googleapiclient.discovery import Resource, build
+from googleapiclient import discovery
 from googleapiclient.http import MediaFileUpload
 from structlog.stdlib import BoundLogger
 
@@ -47,7 +47,8 @@ class YouTubeClient(UploadPort, AuthenticatedClientPort):
         ]
 
         self._credentials: Optional[Credentials] = None
-        self._youtube: Optional[Resource] = None
+        # googleapiclient.discovery.Resource は動的に型を生成するため Any を使用
+        self._youtube: Any = None
 
     def _load_credentials(self) -> Optional[Credentials]:
         """認証情報をファイルからロードする
@@ -92,7 +93,11 @@ class YouTubeClient(UploadPort, AuthenticatedClientPort):
         credentials = self._load_credentials()
         if credentials:
             try:
-                if credentials.expired and credentials.refresh_token:
+                has_refresh_token = (
+                    isinstance(credentials, Credentials2)
+                    and credentials.refresh_token is not None
+                )
+                if credentials.expired and has_refresh_token:
                     credentials.refresh(Request())
                     self._save_credentials(credentials)
                 return credentials
@@ -120,7 +125,7 @@ class YouTubeClient(UploadPort, AuthenticatedClientPort):
             return
 
         self._credentials = self._get_credentials()
-        self._youtube = build(
+        self._youtube = discovery.build(
             self.API_NAME,
             self.API_VERSION,
             credentials=self._credentials,
@@ -204,10 +209,10 @@ class YouTubeClient(UploadPort, AuthenticatedClientPort):
                 media_body=media_file,
             )
             response = request.execute()
-            response_id = (
-                response.get("id") if isinstance(response, dict) else None
-            )
-            return cast(Optional[str], response_id)
+            # response の型を明示的にキャスト
+            response_dict = cast(dict[str, Any], response)
+            response_id: Optional[str] = response_dict.get("id")
+            return response_id
 
         except google.auth.exceptions.GoogleAuthError as e:
             self.logger.error(f"認証に失敗しました: {e}")

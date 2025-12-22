@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import tomllib
 from pathlib import Path
-from typing import Any, Dict
+from typing import Dict
 
 import tomli_w
 from structlog.stdlib import BoundLogger
@@ -237,7 +237,9 @@ class InstallationStateFileAdapter(InstallationStateRepository):
             self._logger.error(error_msg, exc_info=True)
             raise RepositoryError(error_msg, cause=e)
 
-    def _state_to_toml_dict(self, state: InstallationState) -> Dict[str, Any]:
+    def _state_to_toml_dict(
+        self, state: InstallationState
+    ) -> Dict[str, object]:
         """InstallationStateをTOML辞書形式に変換する。
 
         Args:
@@ -246,7 +248,7 @@ class InstallationStateFileAdapter(InstallationStateRepository):
         Returns:
             TOML辞書形式のデータ
         """
-        installer_data: Dict[str, Any] = {
+        installer_data: Dict[str, object] = {
             "is_completed": state.is_completed,
             "current_step": state.current_step.value,
             "completed_steps": [step.value for step in state.completed_steps],
@@ -265,7 +267,7 @@ class InstallationStateFileAdapter(InstallationStateRepository):
         return {"installer": installer_data}
 
     def _toml_dict_to_state(
-        self, toml_data: Dict[str, Any]
+        self, toml_data: Dict[str, object]
     ) -> InstallationState:
         """TOML辞書形式のデータをInstallationStateに変換する。
 
@@ -278,22 +280,69 @@ class InstallationStateFileAdapter(InstallationStateRepository):
         Raises:
             ValueError: データ形式が不正な場合
         """
-        installer_data = toml_data.get("installer", {})
+        from typing import Any, cast as type_cast
+
+        # TOMLパース結果は動的型のためAnyを使用
+        installer_data_raw = toml_data.get("installer", {})
+        if not isinstance(installer_data_raw, dict):
+            raise ValueError("installer data must be a mapping")
+        installer_data: Dict[str, Any] = type_cast(
+            Dict[str, Any], installer_data_raw
+        )
 
         # 基本データの取得
-        is_completed = installer_data.get("is_completed", False)
-        current_step_value = installer_data.get(
+        is_completed_raw = installer_data.get("is_completed", False)
+        is_completed = (
+            bool(is_completed_raw) if is_completed_raw is not None else False
+        )
+
+        current_step_value_raw = installer_data.get(
             "current_step", "hardware_check"
         )
-        completed_steps_values = installer_data.get("completed_steps", [])
-        skipped_steps_values = installer_data.get("skipped_steps", [])
-        step_details = installer_data.get("step_details", {})
-        installation_date_str = installer_data.get("installation_date")
-        camera_permission_dialog_shown = installer_data.get(
+        current_step_value = str(current_step_value_raw)
+
+        completed_steps_raw = installer_data.get("completed_steps", [])
+        completed_steps_values = (
+            list(completed_steps_raw)
+            if isinstance(completed_steps_raw, list)
+            else []
+        )
+
+        skipped_steps_raw = installer_data.get("skipped_steps", [])
+        skipped_steps_values = (
+            list(skipped_steps_raw)
+            if isinstance(skipped_steps_raw, list)
+            else []
+        )
+
+        step_details_raw = installer_data.get("step_details", {})
+        step_details = (
+            dict(step_details_raw)
+            if isinstance(step_details_raw, dict)
+            else {}
+        )
+
+        installation_date_raw = installer_data.get("installation_date")
+        installation_date_str = (
+            str(installation_date_raw) if installation_date_raw else None
+        )
+
+        camera_permission_raw = installer_data.get(
             "camera_permission_dialog_shown", False
         )
-        youtube_permission_dialog_shown = installer_data.get(
+        camera_permission_dialog_shown = (
+            bool(camera_permission_raw)
+            if camera_permission_raw is not None
+            else False
+        )
+
+        youtube_permission_raw = installer_data.get(
             "youtube_permission_dialog_shown", False
+        )
+        youtube_permission_dialog_shown = (
+            bool(youtube_permission_raw)
+            if youtube_permission_raw is not None
+            else False
         )
 
         # Enumに変換

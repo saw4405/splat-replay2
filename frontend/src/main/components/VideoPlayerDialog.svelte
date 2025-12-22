@@ -1,9 +1,9 @@
 <script lang="ts">
-  import BaseDialog from "./BaseDialog.svelte";
+  import BaseDialog from './BaseDialog.svelte';
 
   export let visible: boolean = false;
-  export let videoUrl: string = "";
-  export let videoTitle: string = "";
+  export let videoUrl: string = '';
+  export let videoTitle: string = '';
 </script>
 
 <BaseDialog

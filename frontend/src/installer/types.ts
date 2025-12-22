@@ -3,12 +3,12 @@
  */
 
 export enum InstallationStep {
-  HARDWARE_CHECK = "hardware_check",
-  FFMPEG_SETUP = "ffmpeg_setup",
-  OBS_SETUP = "obs_setup",
-  TESSERACT_SETUP = "tesseract_setup",
-  FONT_INSTALLATION = "font_installation",
-  YOUTUBE_SETUP = "youtube_setup",
+  HARDWARE_CHECK = 'hardware_check',
+  FFMPEG_SETUP = 'ffmpeg_setup',
+  OBS_SETUP = 'obs_setup',
+  TESSERACT_SETUP = 'tesseract_setup',
+  FONT_INSTALLATION = 'font_installation',
+  YOUTUBE_SETUP = 'youtube_setup',
 }
 
 export interface InstallationState {

@@ -1,6 +1,6 @@
 <script lang="ts">
-  import { onMount } from "svelte";
-  import { ChevronLeft, ChevronRight } from "lucide-svelte";
+  import { onMount } from 'svelte';
+  import { ChevronLeft, ChevronRight } from 'lucide-svelte';
   import {
     installationState,
     isLoading,
@@ -13,16 +13,16 @@
     completeInstallation,
     skipCurrentStep,
     clearError,
-  } from "../store";
-  import { InstallationStep } from "../types";
-  import ErrorDialog from "./ErrorDialog.svelte";
-  import CompletionDialog from "./CompletionDialog.svelte";
+  } from '../store';
+  import { InstallationStep } from '../types';
+  import ErrorDialog from './ErrorDialog.svelte';
+  import CompletionDialog from './CompletionDialog.svelte';
 
   // ステップコンポーネントのスロット
-  export let currentStepComponent: any = null;
+  export let currentStepComponent: unknown = null;
 
   // 現在のステップコンポーネントのインスタンス
-  let stepComponentInstance: any;
+  let stepComponentInstance: unknown;
 
   // 子コンポーネントが戻れるかどうか
   let childCanGoBack = false;
@@ -62,9 +62,12 @@
 
   async function handleNext(): Promise<void> {
     // コンポーネント側で次へ処理が実装されている場合はそれを優先
-    if (stepComponentInstance && stepComponentInstance.next) {
+    const instance = stepComponentInstance as {
+      next?: (opts: { skip: boolean }) => Promise<boolean>;
+    };
+    if (stepComponentInstance && instance.next) {
       const isSkipping = !childStepCompleted;
-      const handled = await stepComponentInstance.next({ skip: isSkipping });
+      const handled = await instance.next({ skip: isSkipping });
       if (handled) return;
 
       // スキップしている場合はステップ全体をスキップとしてマーク
@@ -81,7 +84,7 @@
         await executeStep($installationState.current_step);
       } catch (err) {
         // エラーは既にストアで処理されているので、ここでは何もしない
-        console.error("Failed to complete step:", err);
+        console.error('Failed to complete step:', err);
         return;
       }
 
@@ -97,17 +100,16 @@
 
   async function handleBack(): Promise<void> {
     // コンポーネント側で戻る処理が実装されている場合はそれを優先
-    if (stepComponentInstance && stepComponentInstance.back) {
-      const handled = await stepComponentInstance.back();
+    const instance = stepComponentInstance as { back?: () => Promise<boolean> };
+    if (stepComponentInstance && instance.back) {
+      const handled = await instance.back();
       if (handled) return;
     }
 
     await goToPreviousStep();
   }
 
-  function handleSubstepChange(
-    event: CustomEvent<{ isFinalSubstep: boolean }>
-  ): void {
+  function handleSubstepChange(event: CustomEvent<{ isFinalSubstep: boolean }>): void {
     childAtFinalSubstep = event.detail.isFinalSubstep;
   }
 
@@ -145,10 +147,7 @@
           <span class="progress-percentage">{$progressInfo.percentage}%</span>
         </div>
         <div class="progress-bar-wrapper">
-          <div
-            class="progress-bar"
-            style="width: {$progressInfo.percentage}%"
-          ></div>
+          <div class="progress-bar" style="width: {$progressInfo.percentage}%"></div>
         </div>
       </div>
     {/if}
@@ -208,11 +207,7 @@
         disabled={$isLoading}
         on:click={handleNext}
       >
-        {shouldShowCompletion
-          ? "完了"
-          : childStepCompleted
-            ? "次へ"
-            : "スキップ"}
+        {shouldShowCompletion ? '完了' : childStepCompleted ? '次へ' : 'スキップ'}
         <ChevronRight class="button-icon" size={20} />
       </button>
     </div>
@@ -226,10 +221,7 @@
   onRetry={handleErrorRetry}
 />
 
-<CompletionDialog
-  bind:open={showCompletionDialog}
-  onContinue={handleCompletionContinue}
-/>
+<CompletionDialog bind:open={showCompletionDialog} onContinue={handleCompletionContinue} />
 
 <style>
   .installer-wizard {
@@ -304,18 +296,14 @@
 
   .progress-bar {
     height: 100%;
-    background: linear-gradient(
-      90deg,
-      var(--accent-color) 0%,
-      var(--accent-color-strong) 100%
-    );
+    background: linear-gradient(90deg, var(--accent-color) 0%, var(--accent-color-strong) 100%);
     border-radius: 4px;
     transition: width 0.3s ease;
     position: relative;
   }
 
   .progress-bar::after {
-    content: "";
+    content: '';
     position: absolute;
     top: 0;
     left: 0;
@@ -454,11 +442,7 @@
   }
 
   .button-primary {
-    background: linear-gradient(
-      135deg,
-      var(--accent-color) 0%,
-      var(--accent-color-strong) 100%
-    );
+    background: linear-gradient(135deg, var(--accent-color) 0%, var(--accent-color-strong) 100%);
     color: white;
     border-color: var(--accent-color);
   }
@@ -498,11 +482,6 @@
     background: rgba(255, 255, 255, 0.1);
     border-color: rgba(255, 255, 255, 0.2);
     transform: translateY(-2px);
-  }
-
-  .button-icon {
-    display: block;
-    flex-shrink: 0;
   }
 
   @media (max-width: 768px) {

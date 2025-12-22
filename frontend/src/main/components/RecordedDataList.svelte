@@ -1,12 +1,12 @@
 <script lang="ts">
-  import { createEventDispatcher } from "svelte";
-  import type { RecordedVideo } from "./../api";
-  import MetadataEditDialog from "./MetadataEditDialog.svelte";
-  import VideoPlayerDialog from "./VideoPlayerDialog.svelte";
-  import ThumbnailZoomDialog from "./ThumbnailZoomDialog.svelte";
-  import SubtitleEditorDialog from "./SubtitleEditorDialog.svelte";
-  import AlertDialog from "./AlertDialog.svelte";
-  import ConfirmDialog from "./ConfirmDialog.svelte";
+  import { createEventDispatcher } from 'svelte';
+  import type { RecordedVideo } from './../api';
+  import MetadataEditDialog from './MetadataEditDialog.svelte';
+  import VideoPlayerDialog from './VideoPlayerDialog.svelte';
+  import ThumbnailZoomDialog from './ThumbnailZoomDialog.svelte';
+  import SubtitleEditorDialog from './SubtitleEditorDialog.svelte';
+  import AlertDialog from './AlertDialog.svelte';
+  import ConfirmDialog from './ConfirmDialog.svelte';
 
   export let videos: RecordedVideo[] = [];
 
@@ -19,12 +19,12 @@
   let showSubtitleEditor = false;
   let showAlertDialog = false;
   let showConfirmDialog = false;
-  let alertMessage = "";
-  let confirmMessage = "";
+  let alertMessage = '';
+  let confirmMessage = '';
   let pendingDeleteVideo: RecordedVideo | null = null;
-  let currentVideoUrl = "";
-  let currentThumbnailUrl = "";
-  let currentVideoTitle = "";
+  let currentVideoUrl = '';
+  let currentThumbnailUrl = '';
+  let currentVideoTitle = '';
   let wasModalOpen = false; // モーダルが開いていたかどうかを追跡
   let deletingVideoId: string | null = null; // 削除中の動画ID
 
@@ -40,20 +40,20 @@
 
     if (isAnyModalOpen && !wasModalOpen) {
       // モーダルが開いた
-      console.log("RecordedDataList: Modal opened, dispatching modalOpen");
-      dispatch("modalOpen");
+      console.log('RecordedDataList: Modal opened, dispatching modalOpen');
+      dispatch('modalOpen');
       wasModalOpen = true;
     } else if (!isAnyModalOpen && wasModalOpen) {
       // モーダルが閉じた
-      console.log("RecordedDataList: Modal closed, dispatching modalClose");
-      dispatch("modalClose");
+      console.log('RecordedDataList: Modal closed, dispatching modalClose');
+      dispatch('modalClose');
       wasModalOpen = false;
     }
   }
 
   function getThumbnailUrl(filename: string): string {
     // ファイル名から拡張子を除去して .png を追加
-    const nameWithoutExt = filename.replace(/\.[^/.]+$/, "");
+    const nameWithoutExt = filename.replace(/\.[^/.]+$/, '');
     return `/api/thumbnails/recorded/${encodeURIComponent(nameWithoutExt)}.png`;
   }
 
@@ -69,26 +69,26 @@
   }
 
   function formatTimestamp(timestamp: string | null): string {
-    if (!timestamp) return "未開始";
+    if (!timestamp) return '未開始';
 
     try {
       const date = new Date(timestamp);
       const year = date.getFullYear();
-      const month = String(date.getMonth() + 1).padStart(2, "0");
-      const day = String(date.getDate()).padStart(2, "0");
-      const hours = String(date.getHours()).padStart(2, "0");
-      const minutes = String(date.getMinutes()).padStart(2, "0");
-      const seconds = String(date.getSeconds()).padStart(2, "0");
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const day = String(date.getDate()).padStart(2, '0');
+      const hours = String(date.getHours()).padStart(2, '0');
+      const minutes = String(date.getMinutes()).padStart(2, '0');
+      const seconds = String(date.getSeconds()).padStart(2, '0');
       return `${year}/${month}/${day} ${hours}:${minutes}:${seconds}`;
-    } catch (error) {
+    } catch {
       return timestamp;
     }
   }
 
   function getJudgementClass(judgement: string): string {
-    if (judgement === "WIN") return "judgement-win";
-    if (judgement === "LOSE") return "judgement-lose";
-    return "";
+    if (judgement === 'WIN') return 'judgement-win';
+    if (judgement === 'LOSE') return 'judgement-lose';
+    return '';
   }
 
   function handlePlayVideo(video: RecordedVideo): void {
@@ -100,7 +100,7 @@
   function handleZoomThumbnail(video: RecordedVideo): void {
     currentThumbnailUrl = getThumbnailUrl(video.filename);
     // サムネイルファイル名を設定
-    const nameWithoutExt = video.filename.replace(/\.[^/.]+$/, "");
+    const nameWithoutExt = video.filename.replace(/\.[^/.]+$/, '');
     currentVideoTitle = `${nameWithoutExt}.png`;
     showThumbnailZoom = true;
   }
@@ -120,46 +120,43 @@
 
   async function handleSaveMetadata(event: CustomEvent): Promise<void> {
     const { videoId, metadata } = event.detail;
-    console.log("Saving metadata for video:", videoId, metadata);
+    console.log('Saving metadata for video:', videoId, metadata);
 
     try {
-      const { updateRecordedVideoMetadata } = await import("./../api");
+      const { updateRecordedVideoMetadata } = await import('./../api');
       const updatedVideo = await updateRecordedVideoMetadata(videoId, metadata);
-      console.log("Metadata saved successfully:", updatedVideo);
+      console.log('Metadata saved successfully:', updatedVideo);
 
       // ビデオリストを更新
       const index = videos.findIndex((v) => v.id === videoId);
-      console.log("Found video at index:", index, "out of", videos.length);
+      console.log('Found video at index:', index, 'out of', videos.length);
 
       if (index !== -1) {
         videos[index] = updatedVideo;
         videos = [...videos]; // 新しい配列を作成してリアクティビティを確実にトリガー
-        console.log("Video list updated");
+        console.log('Video list updated');
       } else {
-        console.warn("Video not found in list:", videoId);
+        console.warn('Video not found in list:', videoId);
       }
 
       showMetadataDialog = false;
       editingVideo = null;
     } catch (error) {
-      console.error("Failed to save metadata:", error);
+      console.error('Failed to save metadata:', error);
       alertMessage = `メタデータの保存に失敗しました: ${error}`;
       showAlertDialog = true;
     }
   }
 
   async function handleSaveSubtitle(): Promise<void> {
-    console.log("Subtitle saved");
+    console.log('Subtitle saved');
     // ビデオリストを再読み込みして hasSubtitles を更新
-    dispatch("refresh");
+    dispatch('refresh');
     showSubtitleEditor = false;
     editingVideo = null;
   }
 
-  async function handleDeleteVideo(
-    event: MouseEvent,
-    video: RecordedVideo
-  ): Promise<void> {
+  async function handleDeleteVideo(event: MouseEvent, video: RecordedVideo): Promise<void> {
     event.stopPropagation();
 
     confirmMessage = `「${video.filename}」を削除してもよろしいですか？\nこの操作は取り消せません。`;
@@ -176,14 +173,14 @@
     pendingDeleteVideo = null;
 
     try {
-      const { deleteRecordedVideo } = await import("./../api");
+      const { deleteRecordedVideo } = await import('./../api');
       await deleteRecordedVideo(video.path);
-      console.log("Video deleted successfully:", video.path);
+      console.log('Video deleted successfully:', video.path);
 
       // ビデオリストを再読み込み
-      dispatch("refresh");
+      dispatch('refresh');
     } catch (error) {
-      console.error("Failed to delete video:", error);
+      console.error('Failed to delete video:', error);
       alertMessage = `動画の削除に失敗しました: ${error}`;
       showAlertDialog = true;
     } finally {
@@ -259,9 +256,7 @@
         <div class="video-content">
           <!-- サムネイル -->
           <div class="video-thumbnail-container">
-            <span class="video-timestamp"
-              >{formatTimestamp(video.startedAt)}</span
-            >
+            <span class="video-timestamp">{formatTimestamp(video.startedAt)}</span>
             <div class="video-thumbnail">
               <img
                 src={getThumbnailUrl(video.filename)}
@@ -312,64 +307,56 @@
           <!-- メタデータと字幕のコンテナ -->
           <div class="metadata-container">
             <!-- メタデータ (クリック可能) -->
-            <button
-              class="video-metadata"
-              on:click={() => handleEditMetadata(video)}
-            >
+            <button class="video-metadata" on:click={() => handleEditMetadata(video)}>
               <div class="metadata-row">
                 <div
                   class="metadata-item"
-                  class:incomplete={!video.match || video.match === "未取得"}
+                  class:incomplete={!video.match || video.match === '未取得'}
                 >
                   <span class="metadata-label">マッチ:</span>
-                  <span class="metadata-value">{video.match ?? "未取得"}</span>
+                  <span class="metadata-value">{video.match ?? '未取得'}</span>
                 </div>
               </div>
               <div class="metadata-row">
                 <div
                   class="metadata-item"
-                  class:incomplete={!video.rule || video.rule === "未取得"}
+                  class:incomplete={!video.rule || video.rule === '未取得'}
                 >
                   <span class="metadata-label">ルール:</span>
-                  <span class="metadata-value">{video.rule ?? "未取得"}</span>
+                  <span class="metadata-value">{video.rule ?? '未取得'}</span>
                 </div>
               </div>
               <div class="metadata-row">
                 <div
                   class="metadata-item"
-                  class:incomplete={!video.stage || video.stage === "未取得"}
+                  class:incomplete={!video.stage || video.stage === '未取得'}
                 >
                   <span class="metadata-label">ステージ:</span>
-                  <span class="metadata-value">{video.stage ?? "未取得"}</span>
+                  <span class="metadata-value">{video.stage ?? '未取得'}</span>
                 </div>
               </div>
               <div class="metadata-row">
                 <div
                   class="metadata-item"
-                  class:incomplete={!video.rate || video.rate === "未検出"}
+                  class:incomplete={!video.rate || video.rate === '未検出'}
                 >
                   <span class="metadata-label">レート:</span>
-                  <span class="metadata-value">{video.rate ?? "未検出"}</span>
+                  <span class="metadata-value">{video.rate ?? '未検出'}</span>
                 </div>
               </div>
               <div class="metadata-row">
                 <div
                   class="metadata-item"
-                  class:incomplete={!video.judgement ||
-                    video.judgement === "未判定"}
+                  class:incomplete={!video.judgement || video.judgement === '未判定'}
                 >
                   <span class="metadata-label">判定:</span>
-                  <span
-                    class="metadata-value {getJudgementClass(
-                      video.judgement ?? '未判定'
-                    )}">{video.judgement ?? "未判定"}</span
+                  <span class="metadata-value {getJudgementClass(video.judgement ?? '未判定')}"
+                    >{video.judgement ?? '未判定'}</span
                   >
                 </div>
                 <div class="metadata-item stat-item">
                   <span class="stat-icon">💀</span>
-                  <span class="stat-value"
-                    >{video.kill ?? 0}K/{video.death ?? 0}D</span
-                  >
+                  <span class="stat-value">{video.kill ?? 0}K/{video.death ?? 0}D</span>
                 </div>
                 <div class="metadata-item stat-item">
                   <span class="stat-icon">✨</span>
@@ -391,11 +378,8 @@
               <div class="metadata-row">
                 <div class="metadata-item subtitle-item">
                   <span class="metadata-label">字幕:</span>
-                  <span
-                    class="metadata-value"
-                    class:has-subtitles={video.hasSubtitles}
-                  >
-                    {video.hasSubtitles ? "✓ あり" : "✗ なし"}
+                  <span class="metadata-value" class:has-subtitles={video.hasSubtitles}>
+                    {video.hasSubtitles ? '✓ あり' : '✗ なし'}
                   </span>
                 </div>
               </div>
@@ -413,11 +397,11 @@
     bind:visible={showMetadataDialog}
     videoId={editingVideo.path}
     metadata={{
-      match: editingVideo.match ?? "未取得",
-      rule: editingVideo.rule ?? "未取得",
-      stage: editingVideo.stage ?? "未取得",
-      rate: editingVideo.rate ?? "未検出",
-      judgement: editingVideo.judgement ?? "未判定",
+      match: editingVideo.match ?? '未取得',
+      rule: editingVideo.rule ?? '未取得',
+      stage: editingVideo.stage ?? '未取得',
+      rate: editingVideo.rate ?? '未検出',
+      judgement: editingVideo.judgement ?? '未判定',
       kill: editingVideo.kill ?? 0,
       death: editingVideo.death ?? 0,
       special: editingVideo.special ?? 0,
@@ -545,11 +529,7 @@
     color: #fff;
     transform: scale(1.08);
     box-shadow: 0 10px 18px rgba(244, 67, 54, 0.35);
-    background: linear-gradient(
-      145deg,
-      rgba(244, 67, 54, 0.92) 0%,
-      rgba(190, 40, 28, 0.85) 100%
-    );
+    background: linear-gradient(145deg, rgba(244, 67, 54, 0.92) 0%, rgba(190, 40, 28, 0.85) 100%);
   }
 
   .delete-button:active {

@@ -1,15 +1,15 @@
 <script lang="ts">
-  import { onMount } from "svelte";
-  import { Download, ExternalLink, FolderOpen, Check } from "lucide-svelte";
+  import { onMount } from 'svelte';
+  import { Download, ExternalLink, FolderOpen, Check } from 'lucide-svelte';
   import {
     checkSystem,
     setupTesseract,
     markSubstepCompleted,
     installationState,
-  } from "../../store";
-  import { type SystemCheckResult, InstallationStep } from "../../types";
+  } from '../../store';
+  import { type SystemCheckResult, InstallationStep } from '../../types';
 
-  const SUBSTEP_STORAGE_KEY = "tesseract_substep_index";
+  const SUBSTEP_STORAGE_KEY = 'tesseract_substep_index';
 
   interface SetupStep {
     id: string;
@@ -19,23 +19,21 @@
   }
 
   let tesseractInstalled = false;
-  let tesseractVersion: string | null = null;
+  let _tesseractVersion: string | null = null;
   let isChecking = false;
   let hasInitializedSubstep = false;
 
   let setupSteps: SetupStep[] = [
     {
-      id: "tesseract-install",
-      title: "Tesseractのインストール",
-      description:
-        "文字認識機能を使用するため、Tesseract OCR をインストールします。",
+      id: 'tesseract-install',
+      title: 'Tesseractのインストール',
+      description: '文字認識機能を使用するため、Tesseract OCR をインストールします。',
       completed: false,
     },
     {
-      id: "tesseract-lang-data",
-      title: "追加データの配置",
-      description:
-        "Tesseract OCR の追加言語データをダウンロードして配置します。",
+      id: 'tesseract-lang-data',
+      title: '追加データの配置',
+      description: 'Tesseract OCR の追加言語データをダウンロードして配置します。',
       completed: false,
     },
   ];
@@ -55,7 +53,7 @@
   });
 
   function loadSavedSubstepIndex(maxIndex: number): number | null {
-    if (typeof window === "undefined") return null;
+    if (typeof window === 'undefined') return null;
     const stored = window.sessionStorage.getItem(SUBSTEP_STORAGE_KEY);
     if (stored === null) return null;
     const parsed = Number.parseInt(stored, 10);
@@ -64,26 +62,23 @@
   }
 
   function saveSubstepIndex(index: number): void {
-    if (typeof window === "undefined") return;
+    if (typeof window === 'undefined') return;
     window.sessionStorage.setItem(SUBSTEP_STORAGE_KEY, index.toString());
   }
 
-  function computeInitialSubstepIndex(steps: SetupStep[]): number {
+  function computeInitialSubstepIndex(_steps: SetupStep[]): number {
     // 常に最初の手順から開始する
     return 0;
   }
 
   // 現在のステップが変更されたときにhasInitializedSubstepをリセット
-  $: if (
-    $installationState?.current_step !== InstallationStep.TESSERACT_SETUP
-  ) {
+  $: if ($installationState?.current_step !== InstallationStep.TESSERACT_SETUP) {
     hasInitializedSubstep = false;
   }
 
   // Sync with installation state
   $: if ($installationState && $installationState.step_details) {
-    const details =
-      $installationState.step_details[InstallationStep.TESSERACT_SETUP] || {};
+    const details = $installationState.step_details[InstallationStep.TESSERACT_SETUP] || {};
     const updatedSteps = setupSteps.map((step) => ({
       ...step,
       completed: details[step.id] || false,
@@ -108,28 +103,20 @@
     saveSubstepIndex(currentSubStepIndex);
   }
 
-  export async function next(
-    options: { skip?: boolean } = {}
-  ): Promise<boolean> {
+  export async function next(options: { skip?: boolean } = {}): Promise<boolean> {
     const currentStep = setupSteps[currentSubStepIndex];
 
     // インストールチェックが必要なステップのバリデーション
     if (currentSubStepIndex === 0 && !tesseractInstalled) {
       await checkTesseractInstallation();
       if (!tesseractInstalled) {
-        alert(
-          "Tesseract が検出されませんでした。インストールしてから次へ進んでください。"
-        );
+        alert('Tesseract が検出されませんでした。インストールしてから次へ進んでください。');
         return true;
       }
     }
 
     if (!options.skip && !currentStep.completed) {
-      await markSubstepCompleted(
-        InstallationStep.TESSERACT_SETUP,
-        currentStep.id,
-        true
-      );
+      await markSubstepCompleted(InstallationStep.TESSERACT_SETUP, currentStep.id, true);
     }
 
     if (currentSubStepIndex < setupSteps.length - 1) {
@@ -151,19 +138,15 @@
     isChecking = true;
 
     try {
-      const result: SystemCheckResult = await checkSystem("tesseract");
+      const result: SystemCheckResult = await checkSystem('tesseract');
       tesseractInstalled = result.is_installed;
-      tesseractVersion = result.version || null;
+      _tesseractVersion = result.version || null;
 
       if (tesseractInstalled) {
-        await markSubstepCompleted(
-          InstallationStep.TESSERACT_SETUP,
-          "tesseract-install",
-          true
-        );
+        await markSubstepCompleted(InstallationStep.TESSERACT_SETUP, 'tesseract-install', true);
       }
     } catch (error) {
-      console.error("Tesseract check failed", error);
+      console.error('Tesseract check failed', error);
     } finally {
       isChecking = false;
     }
@@ -184,27 +167,19 @@
 
         if (result.is_installed) {
           tesseractInstalled = true;
-          tesseractVersion = result.version || null;
-          await markSubstepCompleted(
-            InstallationStep.TESSERACT_SETUP,
-            step.id,
-            true
-          );
+          _tesseractVersion = result.version || null;
+          await markSubstepCompleted(InstallationStep.TESSERACT_SETUP, step.id, true);
         } else {
-          alert("Tesseract が検出されませんでした。");
+          alert('Tesseract が検出されませんでした。');
         }
       } catch (error) {
-        console.error("Tesseract setup failed", error);
-        alert("Tesseract のセットアップに失敗しました。");
+        console.error('Tesseract setup failed', error);
+        alert('Tesseract のセットアップに失敗しました。');
       } finally {
         isChecking = false;
       }
     } else {
-      await markSubstepCompleted(
-        InstallationStep.TESSERACT_SETUP,
-        step.id,
-        !step.completed
-      );
+      await markSubstepCompleted(InstallationStep.TESSERACT_SETUP, step.id, !step.completed);
     }
   }
 
@@ -223,10 +198,10 @@
     // インタラクティブな要素のクリックは除外
     if (
       target &&
-      (target.closest("button") ||
-        target.closest("a") ||
-        target.closest("input") ||
-        target.closest(".path-value"))
+      (target.closest('button') ||
+        target.closest('a') ||
+        target.closest('input') ||
+        target.closest('.path-value'))
     ) {
       return;
     }
@@ -235,22 +210,20 @@
   }
 
   function handleKeyDown(event: KeyboardEvent) {
-    if (event.key === "Enter") {
+    if (event.key === 'Enter') {
       handleCardClick(event);
     }
   }
 
   function openUrl(url: string): void {
-    window.open(url, "_blank");
+    window.open(url, '_blank');
   }
 </script>
 
 <div class="tesseract-setup">
   <div class="step-header">
     <h2 class="step-title">Tesseract OCR セットアップ</h2>
-    <p class="step-description">
-      文字認識機能を使用するため、Tesseract OCR をインストールします
-    </p>
+    <p class="step-description">文字認識機能を使用するため、Tesseract OCR をインストールします</p>
   </div>
 
   <div class="setup-steps-section">
@@ -298,10 +271,7 @@
                     <button
                       class="link-button"
                       type="button"
-                      on:click={() =>
-                        openUrl(
-                          "https://github.com/UB-Mannheim/tesseract/wiki"
-                        )}
+                      on:click={() => openUrl('https://github.com/UB-Mannheim/tesseract/wiki')}
                     >
                       <Download class="icon" size={16} />
                       ダウンロードページを開く
@@ -312,16 +282,14 @@
                 <li>インストーラーを実行してインストールします</li>
               </ol>
               <p class="step-note">
-                ※
-                インストール後、右のチェックボックスをオンにすると、自動的に環境変数
-                PATH の設定とインストール確認が行われます。
+                ※ インストール後、右のチェックボックスをオンにすると、自動的に環境変数 PATH
+                の設定とインストール確認が行われます。
               </p>
             {:else if currentSubStepIndex === 1}
               <!-- Language Data -->
               <ol class="instruction-list">
                 <li>
-                  下のボタンからデータ配布ページを開き、<span
-                    class="inline-icon-wrapper"
+                  下のボタンからデータ配布ページを開き、<span class="inline-icon-wrapper"
                     ><Download class="inline-icon" size={16} /></span
                   >(Download raw file)ボタンをクリックしてダウンロードします
                   <div style="margin-top: 1rem;">
@@ -330,7 +298,7 @@
                       type="button"
                       on:click={() =>
                         openUrl(
-                          "https://github.com/tesseract-ocr/tessdata_best/blob/main/eng.traineddata"
+                          'https://github.com/tesseract-ocr/tessdata_best/blob/main/eng.traineddata'
                         )}
                     >
                       <Download class="icon" size={16} />
@@ -340,14 +308,11 @@
                   </div>
                 </li>
                 <li>
-                  ダウンロードしたファイルを以下のフォルダに上書き保存します<br
-                  />
+                  ダウンロードしたファイルを以下のフォルダに上書き保存します<br />
                   <div class="path-box">
                     <FolderOpen class="icon" size={20} />
                     <div class="path-content">
-                      <code class="path-value">
-                        C:\Program Files\Tesseract-OCR\tessdata
-                      </code>
+                      <code class="path-value"> C:\Program Files\Tesseract-OCR\tessdata </code>
                       <p class="path-hint">※ ファイル名: eng.traineddata</p>
                     </div>
                   </div>
@@ -387,16 +352,6 @@
     margin: 0.5rem 0 0 0;
     font-size: 0.9rem;
     color: var(--text-secondary);
-  }
-
-  .icon.spinning {
-    animation: spin 1s linear infinite;
-  }
-
-  @keyframes spin {
-    to {
-      transform: rotate(360deg);
-    }
   }
 
   .setup-steps-section {
@@ -520,11 +475,7 @@
     align-items: center;
     justify-content: center;
     border-radius: 50%;
-    background: linear-gradient(
-      135deg,
-      rgba(25, 211, 199, 0.2) 0%,
-      rgba(25, 211, 199, 0.05) 100%
-    );
+    background: linear-gradient(135deg, rgba(25, 211, 199, 0.2) 0%, rgba(25, 211, 199, 0.05) 100%);
     border: 2px solid rgba(25, 211, 199, 0.3);
     font-size: 1.25rem;
     font-weight: 700;
@@ -584,11 +535,7 @@
     font-size: 0.75rem;
     font-weight: 600;
     border-radius: 999px;
-    background: linear-gradient(
-      135deg,
-      var(--accent-color) 0%,
-      var(--accent-color-strong) 100%
-    );
+    background: linear-gradient(135deg, var(--accent-color) 0%, var(--accent-color-strong) 100%);
     color: white;
     box-shadow: 0 0 8px var(--accent-glow);
   }
@@ -629,25 +576,11 @@
     margin-top: 0.75rem;
   }
 
-  .path-box .icon {
-    color: var(--accent-color);
-    flex-shrink: 0;
-    margin-top: 0.125rem;
-  }
-
   .path-content {
     flex: 1;
     display: flex;
     flex-direction: column;
     gap: 0.4rem;
-  }
-
-  .path-label {
-    margin: 0;
-    font-size: 0.875rem;
-    font-weight: 600;
-    color: var(--text-secondary);
-    text-align: left;
   }
 
   .path-value {
@@ -687,22 +620,6 @@
     font-family: monospace;
     color: var(--accent-color);
     font-size: 0.875rem;
-  }
-
-  .icon {
-    display: block;
-    flex-shrink: 0;
-  }
-
-  .inline-icon-wrapper {
-    display: inline-flex;
-    align-items: center;
-    vertical-align: middle;
-  }
-
-  .inline-icon {
-    display: inline-block;
-    vertical-align: middle;
   }
 
   @media (max-width: 768px) {

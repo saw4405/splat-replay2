@@ -1,19 +1,19 @@
 ﻿<script lang="ts">
-  import BaseDialog from "./BaseDialog.svelte";
+  import BaseDialog from './BaseDialog.svelte';
 
   export let isOpen = false;
-  export let message = "";
-  export let confirmText = "OK";
-  export let cancelText = "キャンセル";
+  export let message = '';
+  export let confirmText = 'OK';
+  export let cancelText = 'キャンセル';
 
   function handleConfirm(): void {
     isOpen = false;
-    dispatchEvent(new CustomEvent("confirm"));
+    dispatchEvent(new CustomEvent('confirm'));
   }
 
   function handleCancel(): void {
     isOpen = false;
-    dispatchEvent(new CustomEvent("cancel"));
+    dispatchEvent(new CustomEvent('cancel'));
   }
 </script>
 

@@ -1,16 +1,30 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Dict, List, Mapping, NotRequired, Required, TypedDict, Union
+from typing import (
+    Any,
+    Dict,
+    List,
+    Mapping,
+    NotRequired,
+    Required,
+    TypedDict,
+    Union,
+    cast,
+)
 
 from pydantic import BaseModel, SecretStr
 
 from splat_replay.shared import paths
 from splat_replay.shared.config.app import AppSettings, SECTION_CLASSES
 
+# PyInstaller環境での無限再帰を避けるため、再帰的型定義をAnyで置換
 PrimitiveValue = Union[str, int, float, bool, List[str]]
-CompositeFieldValue = Dict[str, "FieldValue"]
-FieldValue = Union[PrimitiveValue, CompositeFieldValue]
+# 後方互換性のため型エイリアスは維持するが、実質Anyとして扱う
+# CompositeFieldValue = Dict[str, "FieldValue"]  # 循環参照のため無効化
+# FieldValue = Union[PrimitiveValue, CompositeFieldValue]  # 循環参照のため無効化
+CompositeFieldValue = Dict[str, Any]
+FieldValue = Any  # PyInstallerでの問題を回避
 
 
 class SettingFieldData(TypedDict):
@@ -19,7 +33,7 @@ class SettingFieldData(TypedDict):
     description: Required[str]
     type: Required[str]
     recommended: Required[bool]
-    value: NotRequired[FieldValue | None]
+    value: NotRequired[Any]  # FieldValueをAnyに変更
     choices: NotRequired[List[str]]
     children: NotRequired[List["SettingFieldData"]]
 
@@ -32,7 +46,7 @@ class SettingSectionData(TypedDict):
 
 class SectionUpdate(TypedDict):
     id: str
-    values: Dict[str, FieldValue]
+    values: Dict[str, Any]  # FieldValueをAnyに変更
 
 
 class SettingsServiceError(Exception):
@@ -69,7 +83,9 @@ class SettingsService:
 
         sections: List[SettingSectionData] = []
         for section_id, section_meta in structure.items():
-            section_label = str(section_meta["display"])
+            # get_setting_structure()が返す動的メタデータ構造のためAnyを使用
+            section_meta_dict = cast(Dict[str, Any], section_meta)
+            section_label = str(section_meta_dict["display"])
             section_model = getattr(settings, section_id)
             if not isinstance(section_model, BaseModel):
                 raise SettingsServiceError(
@@ -165,8 +181,8 @@ class SettingsService:
 
     def _group_value_from_children(
         self, children: List[SettingFieldData]
-    ) -> CompositeFieldValue:
-        group_value: CompositeFieldValue = {}
+    ) -> Dict[str, Any]:  # CompositeFieldValue = Dict[str, Any]
+        group_value: Dict[str, Any] = {}
         for child in children:
             child_id = child["id"]
             if child["type"] == "group":
@@ -184,7 +200,11 @@ class SettingsService:
                     group_value[child_id] = value
         return group_value
 
-    def _serialize_value(self, value: object) -> FieldValue | None:
+    def _serialize_value(self, value: object) -> Any:
+        """Convert a Pydantic model field value to JSON-serializable format.
+
+        # PyInstaller環境での問題を回避するためAnyを使用
+        """
         if isinstance(value, SecretStr):
             return value.get_secret_value()
         if isinstance(value, Path):
@@ -203,7 +223,7 @@ class SettingsService:
     def _merge_section_values(
         self,
         current: BaseModel,
-        updates: Mapping[str, FieldValue],
+        updates: Mapping[str, Any],  # FieldValueをAnyに変更
         section_path: str,
     ) -> Dict[str, object]:
         merged: Dict[str, object] = current.dict()
@@ -215,7 +235,9 @@ class SettingsService:
             if isinstance(existing_value, BaseModel):
                 if not isinstance(new_value, dict):
                     raise UnknownSettingsFieldError(section_path, field_id)
-                nested_updates: Mapping[str, FieldValue] = new_value
+                nested_updates: Mapping[str, Any] = (
+                    new_value  # FieldValueをAnyに変更
+                )
                 merged[field_id] = self._merge_section_values(
                     existing_value,
                     nested_updates,

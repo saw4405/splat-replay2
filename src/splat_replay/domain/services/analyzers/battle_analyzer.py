@@ -260,27 +260,27 @@ class BattleFrameAnalyzer(AnalyzerPlugin):
                     col_active = (arr < 128).sum(axis=0) > 0
                     idx = np.where(col_active)[0]
                     if idx.size > 0:
-                        runs: List[Tuple[int, int]] = []
+                        ds_runs: List[Tuple[int, int]] = []
                         s = int(idx[0])
                         e = int(idx[0])
                         for p in map(int, idx[1:]):
                             if p == e + 1:
                                 e = p
                             else:
-                                runs.append((s, e))
+                                ds_runs.append((s, e))
                                 s = p
                                 e = p
-                        runs.append((s, e))
+                        ds_runs.append((s, e))
 
-                        if len(runs) >= 2:
+                        if len(ds_runs) >= 2:
                             # 複数のクラスタがある場合、最大幅との比率でノイズを除外
                             widths = [
-                                run_e - run_s + 1 for run_s, run_e in runs
+                                run_e - run_s + 1 for run_s, run_e in ds_runs
                             ]
                             max_width = max(widths)
 
-                            valid_runs: List[Tuple[int, int]] = []
-                            for (run_s, run_e), w in zip(runs, widths):
+                            ds_valid_runs: List[Tuple[int, int]] = []
+                            for (run_s, run_e), w in zip(ds_runs, widths):
                                 # ノイズ判定: 最大幅の40%未満かつ絶対幅が12未満は細いノイズ
                                 width_ratio = (
                                     w / max_width if max_width > 0 else 0
@@ -289,22 +289,22 @@ class BattleFrameAnalyzer(AnalyzerPlugin):
 
                                 if is_noise:
                                     continue
-                                valid_runs.append((run_s, run_e))
+                                ds_valid_runs.append((run_s, run_e))
 
-                            if len(valid_runs) == 0:
+                            if len(ds_valid_runs) == 0:
                                 # 全てノイズだった場合は元のまま
                                 proc = proc0
-                            elif len(valid_runs) == 1:
+                            elif len(ds_valid_runs) == 1:
                                 # 有効なクラスタが1つだけ
-                                rs, re_idx = valid_runs[0]
+                                rs, re_idx = ds_valid_runs[0]
                                 proc = proc0[:, rs : re_idx + 1]
                             else:
                                 # 複数の有効クラスタがある場合、全体の範囲を使用
-                                rs = valid_runs[0][0]
-                                re_idx = valid_runs[-1][1]
+                                rs = ds_valid_runs[0][0]
+                                re_idx = ds_valid_runs[-1][1]
                                 proc = proc0[:, rs : re_idx + 1]
                         else:
-                            rs, re_idx = runs[-1]
+                            rs, re_idx = ds_runs[-1]
                             proc = proc0[:, rs : re_idx + 1]
                     else:
                         proc = proc0
@@ -317,34 +317,34 @@ class BattleFrameAnalyzer(AnalyzerPlugin):
                     col_active = (arr < 128).sum(axis=0) > 0
                     idx = np.where(col_active)[0]
                     if idx.size > 0:
-                        runs: List[Tuple[int, int]] = []
+                        k_runs: List[Tuple[int, int]] = []
                         s = int(idx[0])
                         e = int(idx[0])
                         for p in map(int, idx[1:]):
                             if p == e + 1:
                                 e = p
                             else:
-                                runs.append((s, e))
+                                k_runs.append((s, e))
                                 s = p
                                 e = p
-                        runs.append((s, e))
+                        k_runs.append((s, e))
 
-                        if len(runs) >= 2:
+                        if len(k_runs) >= 2:
                             # 複数のクラスタがある場合、最大幅との比率でノイズを除外
                             widths = [
-                                run_e - run_s + 1 for run_s, run_e in runs
+                                run_e - run_s + 1 for run_s, run_e in k_runs
                             ]
                             max_width = max(widths)
 
                             # クラスタ間のギャップを計算
                             gaps: List[int] = []
-                            for i in range(len(runs) - 1):
-                                gap = runs[i + 1][0] - runs[i][1] - 1
+                            for i in range(len(k_runs) - 1):
+                                gap = k_runs[i + 1][0] - k_runs[i][1] - 1
                                 gaps.append(gap)
 
-                            valid_runs: List[Tuple[int, int]] = []
-                            for idx, ((run_s, run_e), w) in enumerate(
-                                zip(runs, widths)
+                            k_valid_runs: List[Tuple[int, int]] = []
+                            for idx_val, ((run_s, run_e), w) in enumerate(
+                                zip(k_runs, widths)
                             ):
                                 # ノイズ判定: 最大幅の50%未満かつ絶対幅が15未満は細いノイズ
                                 width_ratio = (
@@ -354,27 +354,29 @@ class BattleFrameAnalyzer(AnalyzerPlugin):
 
                                 if is_noise:
                                     continue
-                                valid_runs.append((run_s, run_e))
+                                k_valid_runs.append((run_s, run_e))
 
-                            if len(valid_runs) == 0:
+                            if len(k_valid_runs) == 0:
                                 # 全てノイズだった場合は元のまま
                                 proc = proc0
-                            elif len(valid_runs) == 1:
+                            elif len(k_valid_runs) == 1:
                                 # 有効なクラスタが1つだけ
-                                rs, re_idx = valid_runs[0]
+                                rs, re_idx = k_valid_runs[0]
                                 proc = proc0[:, rs : re_idx + 1]
                             else:
                                 # 複数の有効クラスタがある場合
                                 # まず全体範囲を設定(デフォルト)
                                 proc = proc0[
-                                    :, valid_runs[0][0] : valid_runs[-1][1] + 1
+                                    :,
+                                    k_valid_runs[0][0] : k_valid_runs[-1][1]
+                                    + 1,
                                 ]
 
                                 # killフィールドでは各クラスタを個別にOCRして結合を試みる
-                                if name == "kill" and len(valid_runs) == 2:
+                                if name == "kill" and len(k_valid_runs) == 2:
                                     # 2つのクラスタを個別にOCR
                                     cluster_results: List[str] = []
-                                    for run_s, run_e in valid_runs:
+                                    for run_s, run_e in k_valid_runs:
                                         cluster_img = proc0[
                                             :, run_s : run_e + 1
                                         ]
@@ -420,12 +422,12 @@ class BattleFrameAnalyzer(AnalyzerPlugin):
                                                 # 個別OCRの結果を使用
                                                 records[name] = val
                                                 # このnameのOCRタスクをスキップ
-                                                proc = None  # type: ignore
+                                                proc = None
 
                                 # 個別OCRが失敗した場合、または他のケースではprocを使用
                                 # (procは既に全体範囲で初期化済み)
                         else:
-                            rs, re_idx = runs[-1]
+                            rs, re_idx = k_runs[-1]
                             proc = proc0[:, rs : re_idx + 1]
                     else:
                         proc = proc0

@@ -1,0 +1,276 @@
+# https://taskfile.dev
+
+version: "3"
+
+vars:
+  FRONTEND_DIR: frontend
+  DIST_DIR: dist/SplatReplay
+  BUILD_DIR: build
+  VENV_PYTHON: .venv/Scripts/python.exe
+  VENV_PYINSTALLER: .venv/Scripts/pyinstaller.exe
+
+tasks:
+  # ========================================
+  # インストール
+  # ========================================
+  install:
+    desc: Install all dependencies (backend + frontend)
+    cmds:
+      - task: install:backend
+      - task: install:frontend
+
+  install:backend:
+    desc: Install backend dependencies
+    cmds:
+      - uv sync
+
+  install:frontend:
+    desc: Install frontend dependencies
+    dir: "{{.FRONTEND_DIR}}"
+    cmds:
+      - npm install
+
+  # ========================================
+  # ビルド
+  # ========================================
+  build:
+    desc: Build complete application (frontend + backend + package)
+    cmds:
+      - task: clean:dist
+      - task: build:frontend
+      - task: build:backend
+      - task: build:postprocess
+
+  build:frontend:
+    desc: Build frontend only
+    dir: "{{.FRONTEND_DIR}}"
+    deps:
+      - install:frontend
+    cmds:
+      - npm run build
+    sources:
+      - src/**/*.ts
+      - src/**/*.svelte
+      - src/**/*.css
+      - "*.html"
+      - "*.config.*"
+    generates:
+      - dist/**/*
+
+  build:backend:
+    desc: Build backend executable with PyInstaller
+    deps:
+      - install:backend
+    cmds:
+      - uv sync --group build
+      - "{{.VENV_PYINSTALLER}} splat-replay-webview.spec --clean"
+
+  build:postprocess:
+    desc: Post-process build artifacts (copy configs, assets, etc.)
+    cmds:
+      - task: build:copy-config
+      - task: build:copy-assets
+      - task: build:create-dirs
+      - task: build:remove-restricted
+      - task: build:show-info
+
+  build:copy-config:
+    desc: Copy selected config files to dist
+    cmds:
+      - cmd: powershell -NoProfile -Command "New-Item -ItemType Directory -Force -Path '{{.DIST_DIR}}\config' | Out-Null"
+        ignore_error: true
+      - cmd: powershell -NoProfile -Command "if (Test-Path 'config\image_matching.yaml') { Copy-Item -Force 'config\image_matching.yaml' '{{.DIST_DIR}}\config\image_matching.yaml' }"
+        ignore_error: true
+      - cmd: powershell -NoProfile -Command "if (Test-Path 'config\settings.example.toml') { Copy-Item -Force 'config\settings.example.toml' '{{.DIST_DIR}}\config\settings.toml' }"
+        ignore_error: true
+
+  build:copy-assets:
+    desc: Copy assets to dist (not in _internal)
+    cmds:
+      - cmd: powershell -NoProfile -Command "if (Test-Path '{{.DIST_DIR}}\_internal\assets') { Remove-Item -Recurse -Force '{{.DIST_DIR}}\_internal\assets' }"
+        ignore_error: true
+      - cmd: powershell -NoProfile -Command "if (Test-Path 'assets') { Copy-Item -Recurse -Force 'assets' '{{.DIST_DIR}}\assets' }"
+
+  build:create-dirs:
+    desc: Create empty video directories in dist
+    cmds:
+      - cmd: powershell -NoProfile -Command "New-Item -ItemType Directory -Force -Path '{{.DIST_DIR}}\videos\recorded' | Out-Null"
+        ignore_error: true
+      - cmd: powershell -NoProfile -Command "New-Item -ItemType Directory -Force -Path '{{.DIST_DIR}}\videos\edited' | Out-Null"
+        ignore_error: true
+
+  build:remove-restricted:
+    desc: Remove redistribution-prohibited files
+    cmds:
+      - cmd: powershell -NoProfile -Command "if (Test-Path '{{.DIST_DIR}}\assets\thumbnail\ikamodoki1.ttf') { Remove-Item -Force '{{.DIST_DIR}}\assets\thumbnail\ikamodoki1.ttf' }"
+        ignore_error: true
+
+  build:show-info:
+    desc: Show build information
+    cmds:
+      - cmd: 'powershell -NoProfile -Command "Write-Host ''''; Write-Host ''Build completed!'' -ForegroundColor Green; Write-Host ''''; Write-Host ''Executable location:'' -ForegroundColor Cyan; Write-Host ''  {{.DIST_DIR}}\SplatReplay.exe'' -ForegroundColor White; Write-Host ''''"'
+      - cmd: 'powershell -NoProfile -Command "if (Test-Path ''{{.DIST_DIR}}\SplatReplay.exe'') { Write-Host (''Executable size: '' + [math]::Round((Get-Item ''{{.DIST_DIR}}\SplatReplay.exe'').Length / 1MB, 2) + '' MB'') -ForegroundColor Gray }"'
+
+  # ========================================
+  # 開発サーバー
+  # ========================================
+  dev:
+    desc: Start both frontend and backend dev servers (in separate terminals)
+    cmds:
+      - cmd: echo "Please run 'task dev:frontend' and 'task dev:backend' in separate terminals"
+
+  dev:frontend:
+    desc: Start frontend dev server
+    dir: "{{.FRONTEND_DIR}}"
+    interactive: true
+    cmds:
+      - npm run dev
+
+  dev:backend:
+    desc: Start backend dev server (uvicorn with reload)
+    interactive: true
+    cmds:
+      - uv run python -m uvicorn splat_replay.web.app:app --host 127.0.0.1 --port 8000 --reload
+
+  # ========================================
+  # Lint / Format / Type Check
+  # ========================================
+  verify:
+    desc: Run all checks (format, lint, type-check, test)
+    cmds:
+      - task: format:check
+      - task: lint
+      - task: type-check
+      - task: test
+
+  lint:
+    desc: Lint all code (backend + frontend)
+    cmds:
+      - task: lint:backend
+      - task: lint:frontend
+
+  lint:backend:
+    desc: Lint backend code
+    cmds:
+      - uv run ruff check .
+
+  lint:backend:fix:
+    desc: Lint backend code with auto-fix
+    cmds:
+      - uv run ruff check . --fix
+
+  lint:frontend:
+    desc: Lint frontend code
+    dir: "{{.FRONTEND_DIR}}"
+    cmds:
+      - npm run lint
+
+  lint:frontend:fix:
+    desc: Lint frontend code with auto-fix
+    dir: "{{.FRONTEND_DIR}}"
+    cmds:
+      - npm run lint:fix
+
+  format:
+    desc: Format all code (backend + frontend)
+    cmds:
+      - task: format:backend
+      - task: format:frontend
+
+  format:check:
+    desc: Check formatting without modifying files
+    cmds:
+      - task: format:backend:check
+      - task: format:frontend:check
+
+  format:backend:
+    desc: Format backend code
+    cmds:
+      - uv run ruff format .
+
+  format:backend:check:
+    desc: Check backend code formatting
+    cmds:
+      - uv run ruff format . --check
+
+  format:frontend:
+    desc: Format frontend code
+    dir: "{{.FRONTEND_DIR}}"
+    cmds:
+      - npm run format
+
+  format:frontend:check:
+    desc: Check frontend code formatting
+    dir: "{{.FRONTEND_DIR}}"
+    cmds:
+      - npm run format:check
+
+  type-check:
+    desc: Type check all code (backend + frontend)
+    cmds:
+      - task: type-check:backend
+      - task: type-check:frontend
+
+  type-check:backend:
+    desc: Type check backend code
+    cmds:
+      - uv run ty check
+
+  type-check:frontend:
+    desc: Type check frontend code
+    dir: "{{.FRONTEND_DIR}}"
+    cmds:
+      - npm run type-check
+      - npm run check
+
+  # ========================================
+  # テスト
+  # ========================================
+  test:
+    desc: Run all tests
+    cmds:
+      - uv run pytest -q
+
+  test:verbose:
+    desc: Run all tests with verbose output
+    cmds:
+      - uv run pytest -v
+
+  # ========================================
+  # クリーンアップ
+  # ========================================
+  clean:
+    desc: Clean all build artifacts
+    cmds:
+      - task: clean:dist
+      - task: clean:frontend
+
+  clean:dist:
+    desc: Clean backend build artifacts (dist, build, spec artifacts)
+    cmds:
+      - cmd: powershell -NoProfile -Command "if (Test-Path '{{.DIST_DIR}}') { Remove-Item -Recurse -Force 'dist' }"
+        ignore_error: true
+      - cmd: powershell -NoProfile -Command "if (Test-Path '{{.BUILD_DIR}}') { Remove-Item -Recurse -Force '{{.BUILD_DIR}}' }"
+        ignore_error: true
+
+  clean:frontend:
+    desc: Clean frontend build artifacts
+    dir: "{{.FRONTEND_DIR}}"
+    cmds:
+      - cmd: powershell -NoProfile -Command "if (Test-Path 'dist') { Remove-Item -Recurse -Force 'dist' }"
+        ignore_error: true
+      - cmd: powershell -NoProfile -Command "if (Test-Path 'node_modules') { Remove-Item -Recurse -Force 'node_modules' }"
+        ignore_error: true
+
+  # ========================================
+  # ユーティリティ
+  # ========================================
+  run:
+    desc: Run the built executable
+    cmds:
+      - "{{.DIST_DIR}}\\SplatReplay.exe"
+
+  help:
+    desc: Show available tasks
+    cmds:
+      - task --list

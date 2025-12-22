@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="260" viewBox="0 0 1024 260">
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="240" viewBox="0 0 1024 240">
   <defs>
     <style>
       .label { font-family: sans-serif; fill: #FFD700; }
@@ -7,9 +7,6 @@
       .center { text-anchor: middle; dominant-baseline: middle; }
     </style>
   </defs>
-
-  <!-- 背景 -->
-  <rect x="0" y="0" width="1024" height="260" fill="#161616"/>
 
   <!-- 左：準備 -->
   <g transform="translate(0,0)">

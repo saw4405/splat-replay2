@@ -44,7 +44,6 @@ from splat_replay.application.services.installer_service import (
     InstallerService,
 )
 from splat_replay.application.services.settings_service import (
-    FieldValue,
     SectionUpdate,
     SettingsService,
     SettingsServiceError,
@@ -64,8 +63,10 @@ from splat_replay.web.installer_router import create_installer_router
 
 
 class SettingsUpdateSection(BaseModel):
+    """設定更新セクション。PyInstallerでの循環参照を避けるためAnyを使用。"""
+
     id: str
-    values: Dict[str, Any]
+    values: Dict[str, Any]  # FieldValueは再帰的型定義のためAnyに置換
 
 
 class SettingsUpdateRequest(BaseModel):
@@ -219,13 +220,17 @@ class WebServer:
             error=self._edit_upload_last_error,
         )
 
-    async def _dispatch_command(self, name: str, **payload: Any) -> Any:
+    async def _dispatch_command(self, name: str, **payload: object) -> object:
+        from concurrent.futures import Future as ConcurrentFuture
+        from splat_replay.infrastructure.runtime.commands import CommandResult
+
         future = self.command_dispatcher.submit(name, **payload)
+        future_typed = cast(ConcurrentFuture[object], future)
         try:
             loop = asyncio.get_running_loop()
-            result = await asyncio.wrap_future(future, loop=loop)
+            result_raw = await asyncio.wrap_future(future_typed, loop=loop)
         except RuntimeError:
-            result = await asyncio.wrap_future(future)
+            result_raw = await asyncio.wrap_future(future_typed)
         except Exception as exc:
             self.logger.error(
                 "Command dispatch failed",
@@ -236,6 +241,7 @@ class WebServer:
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail=f"Failed to execute command: {name}",
             ) from exc
+        result = cast(CommandResult[object], result_raw)
         if not result.ok:
             detail = str(result.error) if result.error else "unknown error"
             self.logger.error(
@@ -245,12 +251,13 @@ class WebServer:
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail=detail,
             )
-        return cast(Any, result.value)
+        return result.value
 
     async def list_recorded_assets(self) -> List[RecordedVideoItem]:
-        raw_assets: List[
-            Tuple[VideoAsset, float | None]
-        ] = await self._dispatch_command("asset.list_with_length")
+        raw_assets: List[Tuple[VideoAsset, float | None]] = cast(
+            List[Tuple[VideoAsset, float | None]],
+            await self._dispatch_command("asset.list_with_length"),
+        )
         items: List[RecordedVideoItem] = []
         for asset, duration in raw_assets:
             metadata = asset.metadata
@@ -341,9 +348,12 @@ class WebServer:
         return items
 
     async def list_edited_assets(self) -> List[EditedVideoItem]:
-        raw_assets: List[
-            Tuple[Path, float | None, Dict[str, Any] | None]
-        ] = await self._dispatch_command("asset.list_edited_with_length")
+        raw_assets: List[Tuple[Path, float | None, Dict[str, str] | None]] = (
+            cast(
+                List[Tuple[Path, float | None, Dict[str, str] | None]],
+                await self._dispatch_command("asset.list_edited_with_length"),
+            )
+        )
         items: List[EditedVideoItem] = []
         for video_path, duration, metadata in raw_assets:
             subtitle_path = video_path.with_suffix(".srt")
@@ -453,8 +463,9 @@ class WebServer:
                     break
 
         # 既存のアセットを取得
-        asset: VideoAsset | None = await self._dispatch_command(
-            "asset.get", video=video_path
+        asset: VideoAsset | None = cast(
+            VideoAsset | None,
+            await self._dispatch_command("asset.get", video=video_path),
         )
         if asset is None or asset.metadata is None:
             raise HTTPException(
@@ -520,8 +531,9 @@ class WebServer:
         )
 
         # 更新後のアセット情報を返す
-        updated_asset: VideoAsset | None = await self._dispatch_command(
-            "asset.get", video=video_path
+        updated_asset: VideoAsset | None = cast(
+            VideoAsset | None,
+            await self._dispatch_command("asset.get", video=video_path),
         )
         if updated_asset is None:
             raise HTTPException(
@@ -663,7 +675,7 @@ class WebServer:
             )
             return False
 
-    async def start_recording(self) -> dict[str, Any]:
+    async def start_recording(self) -> dict[str, object]:
         """Start auto recording process."""
         self.logger.info("録画開始リクエスト受信")
         try:
@@ -685,7 +697,7 @@ class WebServer:
         except Exception as e:
             self.logger.error("録画実行エラー", error=str(e))
 
-    async def manual_start_recording(self) -> dict[str, Any]:
+    async def manual_start_recording(self) -> dict[str, object]:
         """手動録画開始。"""
         try:
             await self.auto_recorder.start()
@@ -694,7 +706,7 @@ class WebServer:
             self.logger.error("手動録画開始エラー", error=str(e))
             return {"success": False, "error": str(e)}
 
-    async def manual_pause_recording(self) -> dict[str, Any]:
+    async def manual_pause_recording(self) -> dict[str, object]:
         """手動録画一時停止。"""
         try:
             await self.auto_recorder.pause()
@@ -703,7 +715,7 @@ class WebServer:
             self.logger.error("手動録画一時停止エラー", error=str(e))
             return {"success": False, "error": str(e)}
 
-    async def manual_resume_recording(self) -> dict[str, Any]:
+    async def manual_resume_recording(self) -> dict[str, object]:
         """手動録画再開。"""
         try:
             await self.auto_recorder.resume()
@@ -712,7 +724,7 @@ class WebServer:
             self.logger.error("手動録画再開エラー", error=str(e))
             return {"success": False, "error": str(e)}
 
-    async def manual_stop_recording(self) -> dict[str, Any]:
+    async def manual_stop_recording(self) -> dict[str, object]:
         """手動録画停止。"""
         try:
             await self.auto_recorder.stop()
@@ -1023,8 +1035,9 @@ def create_app(server: WebServer) -> FastAPI:
 
     # CORS設定 (開発時 & pywebview)
     # pywebview からのアクセスも許可するため、127.0.0.1:8000 と localhost:8000 を追加
+    # type: ignore[arg-type] - FastAPIのadd_middlewareとStarletteのCORSMiddlewareの型定義の不一致
     app.add_middleware(
-        CORSMiddleware,
+        CORSMiddleware,  # type: ignore[arg-type]
         allow_origins=[
             "http://localhost:5173",
             "http://127.0.0.1:5173",
@@ -1077,10 +1090,7 @@ def create_app(server: WebServer) -> FastAPI:
         request: SettingsUpdateRequest,
     ) -> JSONResponse:
         updates: List[SectionUpdate] = [
-            {
-                "id": section.id,
-                "values": cast(Dict[str, FieldValue], section.values),
-            }
+            SectionUpdate(id=section.id, values=section.values)
             for section in request.sections
         ]
         try:
@@ -1366,8 +1376,8 @@ def create_app(server: WebServer) -> FastAPI:
     async def get_recorded_thumbnail(filename: str) -> FileResponse:
         """録画済みビデオのサムネイルを取得する。"""
         # recorded ディレクトリからサムネイルを取得
-        recorded_dir: Path = await server._dispatch_command(
-            "asset.get_recorded_dir"
+        recorded_dir: Path = cast(
+            Path, await server._dispatch_command("asset.get_recorded_dir")
         )
         # ファイル名がそのまま使える場合とそうでない場合の両方に対応
         thumbnail_path = recorded_dir / filename
@@ -1406,8 +1416,8 @@ def create_app(server: WebServer) -> FastAPI:
     async def get_edited_thumbnail(filename: str) -> FileResponse:
         """編集済みビデオのサムネイルを取得する。"""
         # edited ディレクトリからサムネイルを取得
-        edited_dir: Path = await server._dispatch_command(
-            "asset.get_edited_dir"
+        edited_dir: Path = cast(
+            Path, await server._dispatch_command("asset.get_edited_dir")
         )
         # ファイル名がそのまま使える場合とそうでない場合の両方に対応
         thumbnail_path = edited_dir / filename

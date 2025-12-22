@@ -1,12 +1,12 @@
 <script lang="ts">
-  import { onMount } from "svelte";
-  import { Info, X } from "lucide-svelte";
-  import VideoPreview from "./VideoPreview.svelte";
-  import VideoPreviewMessage from "./VideoPreviewMessage.svelte";
-  import MetadataOverlay from "./MetadataOverlay.svelte";
-  import CameraPermissionDialog from "./CameraPermissionDialog.svelte";
+  import { onMount } from 'svelte';
+  import { Info, X } from 'lucide-svelte';
+  import VideoPreview from './VideoPreview.svelte';
+  import VideoPreviewMessage from './VideoPreviewMessage.svelte';
+  import MetadataOverlay from './MetadataOverlay.svelte';
+  import CameraPermissionDialog from './CameraPermissionDialog.svelte';
 
-  type PreviewState = "checking" | "connected" | "disconnected" | "error";
+  type PreviewState = 'checking' | 'connected' | 'disconnected' | 'error';
 
   type StartRecordingResponse = {
     success: boolean;
@@ -24,9 +24,9 @@
   let isRecording = false;
   let startPending = false;
   let preparePending = false;
-  let status = "デバイス確認中...";
-  let deviceState: PreviewState = "checking";
-  let deviceErrorMessage = "";
+  let _status = 'デバイス確認中...';
+  let deviceState: PreviewState = 'checking';
+  let deviceErrorMessage = '';
   let deviceStatusTimer: number | null = null;
   let isPrepared = false;
   let isMetadataOpen = false;
@@ -35,16 +35,16 @@
   let isCameraPermissionDialogOpen = false;
   type MetadataValue = string | number | null | undefined;
   type MetadataFieldKey =
-    | "game_mode"
-    | "rule"
-    | "stage"
-    | "match"
-    | "started_at"
-    | "rate"
-    | "judgement"
-    | "kill"
-    | "death"
-    | "special";
+    | 'game_mode'
+    | 'rule'
+    | 'stage'
+    | 'match'
+    | 'started_at'
+    | 'rate'
+    | 'judgement'
+    | 'kill'
+    | 'death'
+    | 'special';
   type MetadataEventPayload = Partial<Record<MetadataFieldKey, MetadataValue>>;
   type MetadataNotification = {
     id: number;
@@ -57,29 +57,29 @@
     format: (value: MetadataValue) => string | null;
     normalize?: (value: MetadataValue) => string | null;
   };
-  const PLACEHOLDER_VALUES = new Set(["未取得", ""]);
-  const startedAtFormatter = new Intl.DateTimeFormat("ja-JP", {
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
+  const PLACEHOLDER_VALUES = new Set(['未取得', '']);
+  const startedAtFormatter = new Intl.DateTimeFormat('ja-JP', {
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
   });
   const metadataFieldDescriptors: MetadataFieldDescriptor[] = [
-    { key: "game_mode", label: "モード", format: formatTextValue },
-    { key: "match", label: "マッチタイプ", format: formatTextValue },
-    { key: "rule", label: "ルール", format: formatTextValue },
-    { key: "stage", label: "ステージ", format: formatTextValue },
+    { key: 'game_mode', label: 'モード', format: formatTextValue },
+    { key: 'match', label: 'マッチタイプ', format: formatTextValue },
+    { key: 'rule', label: 'ルール', format: formatTextValue },
+    { key: 'stage', label: 'ステージ', format: formatTextValue },
     {
-      key: "started_at",
-      label: "マッチング開始時間",
+      key: 'started_at',
+      label: 'マッチング開始時間',
       format: formatStartedAtValue,
       normalize: normalizeStartedAtValue,
     },
-    { key: "rate", label: "レート", format: formatTextValue },
-    { key: "judgement", label: "判定", format: formatTextValue },
-    { key: "kill", label: "キル数", format: formatNumericValue },
-    { key: "death", label: "デス数", format: formatNumericValue },
-    { key: "special", label: "スペシャル", format: formatNumericValue },
+    { key: 'rate', label: 'レート', format: formatTextValue },
+    { key: 'judgement', label: '判定', format: formatTextValue },
+    { key: 'kill', label: 'キル数', format: formatNumericValue },
+    { key: 'death', label: 'デス数', format: formatNumericValue },
+    { key: 'special', label: 'スペシャル', format: formatNumericValue },
   ];
   let metadataNotifications: MetadataNotification[] = [];
   let notificationIdCounter = 0;
@@ -114,15 +114,11 @@
   }
 
   function removeMetadataNotification(id: number): void {
-    const target = metadataNotifications.find(
-      (notification) => notification.id === id
-    );
+    const target = metadataNotifications.find((notification) => notification.id === id);
     if (target) {
       window.clearTimeout(target.timer);
     }
-    metadataNotifications = metadataNotifications.filter(
-      (notification) => notification.id !== id
-    );
+    metadataNotifications = metadataNotifications.filter((notification) => notification.id !== id);
   }
 
   function clearMetadataNotifications(): void {
@@ -136,7 +132,7 @@
     if (value === null || value === undefined) {
       return null;
     }
-    if (typeof value === "number") {
+    if (typeof value === 'number') {
       return value.toString();
     }
     const trimmed = value.trim();
@@ -159,7 +155,7 @@
   }
 
   function formatStartedAtValue(value: MetadataValue): string | null {
-    if (typeof value !== "string") {
+    if (typeof value !== 'string') {
       return null;
     }
     const trimmed = value.trim();
@@ -174,7 +170,7 @@
   }
 
   function normalizeStartedAtValue(value: MetadataValue): string | null {
-    if (typeof value !== "string") {
+    if (typeof value !== 'string') {
       return null;
     }
     const trimmed = value.trim();
@@ -186,7 +182,7 @@
   }
 
   function handleMetadataUpdate(payload: MetadataEventPayload): void {
-    console.log("[handleMetadataUpdate] payload:", payload);
+    console.log('[handleMetadataUpdate] payload:', payload);
     const updates: string[] = [];
     const nextMetadata: Partial<Record<MetadataFieldKey, string>> = {
       ...lastMetadata,
@@ -200,8 +196,7 @@
         return;
       }
 
-      const normalizedForComparison =
-        normalize?.(rawValue) ?? normalizeRawValue(rawValue);
+      const normalizedForComparison = normalize?.(rawValue) ?? normalizeRawValue(rawValue);
       const previousValue = lastMetadata[key];
 
       console.log(`[handleMetadataUpdate] ${key}:`, {
@@ -217,23 +212,17 @@
 
       nextMetadata[key] = normalizedForComparison;
       if (previousValue === normalizedForComparison) {
-        console.log(
-          `[handleMetadataUpdate] ${key}: 値が変わっていないためスキップ`
-        );
+        console.log(`[handleMetadataUpdate] ${key}: 値が変わっていないためスキップ`);
         return;
       }
 
       const formatted = format(rawValue);
       if (formatted === null) {
-        console.log(
-          `[handleMetadataUpdate] ${key}: フォーマット結果がnullのためスキップ`
-        );
+        console.log(`[handleMetadataUpdate] ${key}: フォーマット結果がnullのためスキップ`);
         return;
       }
 
-      console.log(
-        `[handleMetadataUpdate] ${key}: 通知追加 - ${label}: ${formatted}`
-      );
+      console.log(`[handleMetadataUpdate] ${key}: 通知追加 - ${label}: ${formatted}`);
       updates.push(`${label}: ${formatted}`);
     });
 
@@ -246,19 +235,19 @@
   }
 
   function connectMetadataSSE(): void {
-    eventSource = new EventSource("/api/events/metadata");
+    eventSource = new EventSource('/api/events/metadata');
 
-    eventSource.addEventListener("metadata_updated", (event) => {
+    eventSource.addEventListener('metadata_updated', (event) => {
       try {
         const data = JSON.parse(event.data) as MetadataEventPayload;
         handleMetadataUpdate(data);
       } catch (error) {
-        console.error("Failed to parse metadata notification:", error);
+        console.error('Failed to parse metadata notification:', error);
       }
     });
 
     eventSource.onerror = () => {
-      console.error("SSE connection error (metadata)");
+      console.error('SSE connection error (metadata)');
       eventSource?.close();
       // 再接続を試みる
       setTimeout(connectMetadataSSE, 5000);
@@ -271,28 +260,27 @@
     }
     preparePending = true;
     try {
-      status = "録画準備中 (OBS起動＆仮想カメラ有効化)...";
-      const response = await fetch("/api/recording/prepare", {
-        method: "POST",
+      status = '録画準備中 (OBS起動＆仮想カメラ有効化)...';
+      const response = await fetch('/api/recording/prepare', {
+        method: 'POST',
       });
       if (!response.ok) {
         throw new Error(`status ${response.status}`);
       }
       const result = (await response.json()) as PrepareRecordingResponse;
-      console.log("prepare_recording result:", result);
+      console.log('prepare_recording result:', result);
       if (result.success === true) {
         isPrepared = true;
-        status = "録画準備完了";
-        console.log("録画準備完了 - 自動録画開始へ");
+        status = '録画準備完了';
+        console.log('録画準備完了 - 自動録画開始へ');
       } else {
-        status = `録画準備エラー: ${result.error ?? "原因不明のエラー"}`;
-        console.error("録画準備失敗:", result);
+        status = `録画準備エラー: ${result.error ?? '原因不明のエラー'}`;
+        console.error('録画準備失敗:', result);
       }
     } catch (error: unknown) {
-      const message =
-        error instanceof Error ? error.message : "原因不明のエラー";
+      const message = error instanceof Error ? error.message : '原因不明のエラー';
       status = `録画準備エラー: ${message}`;
-      console.error("録画準備エラー:", error);
+      console.error('録画準備エラー:', error);
     } finally {
       preparePending = false;
     }
@@ -300,37 +288,36 @@
 
   async function startRecording(): Promise<void> {
     if (isRecording || startPending) {
-      console.log("startRecording: すでに録画中またはペンディング中", {
+      console.log('startRecording: すでに録画中またはペンディング中', {
         isRecording,
         startPending,
       });
       return;
     }
-    console.log("startRecording: 開始");
+    console.log('startRecording: 開始');
     startPending = true;
     try {
-      status = "自動録画機能 ON 準備中...";
-      const response = await fetch("/api/recording/start", {
-        method: "POST",
+      status = '自動録画機能 ON 準備中...';
+      const response = await fetch('/api/recording/start', {
+        method: 'POST',
       });
       if (!response.ok) {
         throw new Error(`status ${response.status}`);
       }
       const result = (await response.json()) as StartRecordingResponse;
-      console.log("start_recording result:", result);
+      console.log('start_recording result:', result);
       if (result.success) {
         isRecording = true;
-        status = "自動録画機能 ON";
-        console.log("自動録画機能 ON 成功");
+        status = '自動録画機能 ON';
+        console.log('自動録画機能 ON 成功');
       } else {
-        status = `エラー: ${result.error ?? "原因不明のエラー"}`;
-        console.error("自動録画開始失敗:", result.error);
+        status = `エラー: ${result.error ?? '原因不明のエラー'}`;
+        console.error('自動録画開始失敗:', result.error);
       }
     } catch (error: unknown) {
-      const message =
-        error instanceof Error ? error.message : "原因不明のエラー";
+      const message = error instanceof Error ? error.message : '原因不明のエラー';
       status = `エラー: ${message}`;
-      console.error("自動録画開始エラー:", error);
+      console.error('自動録画開始エラー:', error);
     } finally {
       startPending = false;
     }
@@ -339,24 +326,23 @@
   async function refreshDeviceStatus(): Promise<void> {
     // 多重実行防止: すでに実行中の場合はスキップ
     if (isRefreshingDeviceStatus) {
-      console.log("[refreshDeviceStatus] すでに実行中のためスキップ");
+      console.log('[refreshDeviceStatus] すでに実行中のためスキップ');
       return;
     }
 
     isRefreshingDeviceStatus = true;
     try {
-      const response = await fetch("/api/device/status", {
-        cache: "no-store",
+      const response = await fetch('/api/device/status', {
+        cache: 'no-store',
       });
       if (!response.ok) {
         throw new Error(`status ${response.status}`);
       }
       const connected = (await response.json()) as boolean;
-      updateDeviceState(connected ? "connected" : "disconnected");
+      updateDeviceState(connected ? 'connected' : 'disconnected');
     } catch (error: unknown) {
-      const message =
-        error instanceof Error ? error.message : "device status unknown";
-      updateDeviceState("error", message);
+      const message = error instanceof Error ? error.message : 'device status unknown';
+      updateDeviceState('error', message);
     } finally {
       isRefreshingDeviceStatus = false;
     }
@@ -364,7 +350,7 @@
 
   async function checkAndShowCameraPermissionDialog(): Promise<void> {
     try {
-      const response = await fetch("/api/settings/camera-permission-dialog");
+      const response = await fetch('/api/settings/camera-permission-dialog');
       if (!response.ok) {
         throw new Error(`status ${response.status}`);
       }
@@ -373,25 +359,25 @@
         isCameraPermissionDialogOpen = true;
       }
     } catch (error) {
-      console.error("Failed to check camera permission dialog status:", error);
+      console.error('Failed to check camera permission dialog status:', error);
     }
   }
 
-  function updateDeviceState(nextState: PreviewState, message = ""): void {
+  function updateDeviceState(nextState: PreviewState, message = ''): void {
     const previous = deviceState;
     deviceState = nextState;
 
-    if (nextState === "error") {
+    if (nextState === 'error') {
       deviceErrorMessage = message;
-      const details = message ? ` (${message})` : "";
+      const details = message ? ` (${message})` : '';
       status = `エラー: キャプチャーデバイスの状態を取得できません${details}`;
       return;
     }
 
-    deviceErrorMessage = "";
+    deviceErrorMessage = '';
 
-    if (nextState === "connected" && previous !== "connected") {
-      console.log("デバイス接続を検出 - 録画準備を開始");
+    if (nextState === 'connected' && previous !== 'connected') {
+      console.log('デバイス接続を検出 - 録画準備を開始');
       if (deviceStatusTimer !== null) {
         window.clearInterval(deviceStatusTimer);
         deviceStatusTimer = null;
@@ -400,32 +386,27 @@
       void checkAndShowCameraPermissionDialog();
       // デバイス接続後、録画準備を実行
       void prepareRecording().then(() => {
-        console.log("prepareRecording完了 - isPrepared:", isPrepared);
+        console.log('prepareRecording完了 - isPrepared:', isPrepared);
         if (isPrepared) {
           // 録画準備完了後、自動録画機能をON
-          console.log("自動録画開始を呼び出し");
+          console.log('自動録画開始を呼び出し');
           void startRecording();
         } else {
-          console.warn("isPreparedがfalseのため自動録画開始をスキップ");
+          console.warn('isPreparedがfalseのため自動録画開始をスキップ');
         }
       });
       return;
     }
 
-    if (nextState === "disconnected") {
+    if (nextState === 'disconnected') {
       isRecording = false;
       isPrepared = false;
-      status = "キャプチャーデバイスを接続してください";
+      status = 'キャプチャーデバイスを接続してください';
       return;
     }
 
-    if (
-      nextState === "checking" &&
-      !isRecording &&
-      !startPending &&
-      !preparePending
-    ) {
-      status = "デバイス確認中...";
+    if (nextState === 'checking' && !isRecording && !startPending && !preparePending) {
+      status = 'デバイス確認中...';
     }
   }
 
@@ -452,14 +433,14 @@
 </script>
 
 <div class="preview-container glass-surface">
-  {#if deviceState === "connected"}
+  {#if deviceState === 'connected'}
     <div class="metadata-button-container">
       <button
         class="metadata-toggle-btn glass-icon-button"
         type="button"
         on:click={toggleMetadata}
-        aria-label={isMetadataOpen ? "メタデータを閉じる" : "メタデータを表示"}
-        title={isMetadataOpen ? "メタデータを閉じる" : "メタデータを表示"}
+        aria-label={isMetadataOpen ? 'メタデータを閉じる' : 'メタデータを表示'}
+        title={isMetadataOpen ? 'メタデータを閉じる' : 'メタデータを表示'}
       >
         {#if isMetadataOpen}
           <X class="icon" aria-hidden="true" stroke-width={1.75} />
@@ -479,21 +460,19 @@
     </div>
   {/if}
 
-  {#if deviceState === "connected"}
+  {#if deviceState === 'connected'}
     <VideoPreview />
-  {:else if deviceState === "checking"}
-    <VideoPreviewMessage
-      message="キャプチャーデバイスの接続状態を確認しています..."
-    />
-  {:else if deviceState === "disconnected"}
+  {:else if deviceState === 'checking'}
+    <VideoPreviewMessage message="キャプチャーデバイスの接続状態を確認しています..." />
+  {:else if deviceState === 'disconnected'}
     <VideoPreviewMessage message="キャプチャーデバイスが接続されていません" />
   {:else}
     <VideoPreviewMessage
-      message={`キャプチャーデバイスの状態を取得できません${deviceErrorMessage ? ` (${deviceErrorMessage})` : ""}`}
+      message={`キャプチャーデバイスの状態を取得できません${deviceErrorMessage ? ` (${deviceErrorMessage})` : ''}`}
     />
   {/if}
 
-  {#if deviceState === "connected"}
+  {#if deviceState === 'connected'}
     <MetadataOverlay bind:visible={isMetadataOpen} />
   {/if}
 </div>
@@ -589,20 +568,6 @@
       inset 0 1px 0 rgba(255, 255, 255, 0.18);
   }
 
-  .metadata-toggle-btn .icon {
-    display: block;
-    height: 1.25rem;
-    width: 1.25rem;
-    color: var(--text-primary);
-    opacity: 0.7;
-    transition: opacity 0.2s ease;
-  }
-
-  .metadata-toggle-btn:hover .icon,
-  .metadata-toggle-btn:focus-visible .icon {
-    opacity: 0.9;
-  }
-
   .metadata-notifications {
     display: flex;
     flex-direction: column;
@@ -612,11 +577,7 @@
   }
 
   .metadata-notification {
-    background: linear-gradient(
-      135deg,
-      rgba(25, 211, 199, 1) 0%,
-      rgba(18, 180, 170, 0.98) 100%
-    );
+    background: linear-gradient(135deg, rgba(25, 211, 199, 1) 0%, rgba(18, 180, 170, 0.98) 100%);
     backdrop-filter: blur(10px) saturate(160%);
     -webkit-backdrop-filter: blur(10px) saturate(160%);
     border: 1px solid rgba(25, 211, 199, 0.8);

@@ -1,12 +1,12 @@
 import queue
 import threading
 import time
-from typing import Any, Optional, Tuple, cast
+from typing import Optional, Tuple, cast
 
 from splat_replay.application.interfaces import EventPublisher
 from splat_replay.domain.models import Frame
 
-EventPayload = Tuple[str, dict[str, Any]]
+EventPayload = Tuple[str, dict[str, object]]
 QueueItem = Tuple[str, EventPayload | Frame]
 
 
@@ -51,7 +51,7 @@ class PublisherWorker:
         self._thread.join(timeout=1.0)
         self._thread = None
 
-    def enqueue_event(self, type_: str, payload: dict[str, Any]) -> None:
+    def enqueue_event(self, type_: str, payload: dict[str, object]) -> None:
         try:
             self._queue.put_nowait(("event", (type_, payload)))
         except queue.Full:

@@ -27,6 +27,7 @@
 - **Python**: 3.13 以上
 - **uv**: パッケージ管理用
 - **Node.js**: 18 以上
+- **Task**: タスクランナー（ビルド・開発用）
 - **OBS Studio**: 28.0 以上（WebSocket 機能を使用するため）
 - **obs-ndi プラグイン**: OBS で NDI 出力を有効にするため
 - **NDI 6 Runtime**: OBS の映像をアプリに取り込むため
@@ -51,37 +52,54 @@
    ```
 2. インストール後、`uv --version`で確認
 
-#### 2.1.3. Node.js のインストール
+#### 2.1.3. Task のインストール
+
+Task は本プロジェクトの標準ビルドツールです。以下のいずれかの方法でインストールしてください。
+
+```powershell
+# winget（推奨）
+winget install Task.Task
+
+# または Scoop
+scoop install task
+
+# または Chocolatey
+choco install go-task
+```
+
+インストール後、`task --version`で確認してください。
+
+#### 2.1.4. Node.js のインストール
 
 1. [Node.js 公式サイト](https://nodejs.org/en/download/)から LTS 版（18 以上）をダウンロード
 2. インストーラを実行し、デフォルト設定でインストール
 
-#### 2.1.4. OBS Studio のインストール
+#### 2.1.5. OBS Studio のインストール
 
 1. [OBS Studio 公式サイト](https://obsproject.com/)から最新版をダウンロード
 2. インストーラを実行し、デフォルト設定でインストール
 3. 初回起動時の最適化ウィザードは「録画向け設定」を選択
 
-#### 2.1.5. obs-ndi プラグインのインストール
+#### 2.1.6. obs-ndi プラグインのインストール
 
 参考サイト: [obs-ndi プラグインと NDI 6 Runtime のインストール手順](https://note.com/tkykmts/n/nb78d5fd2cd6c)
 
 1. [obs-ndi プラグインのリリースページ](https://github.com/Palakis/obs-ndi/releases)から最新のリリース(`Windows-x64-installer.exe`)をダウンロード
 2. インストーラを実行し、デフォルト設定でインストール
 
-#### 2.1.6. NDI 6 Runtime のインストール
+#### 2.1.7. NDI 6 Runtime のインストール
 
 1. [NDI 公式サイト](https://www.faronics.com/ja/apps/ndi-6-runtime)から NDI 6 Runtime をダウンロード
 2. インストーラを実行し、デフォルト設定でインストール
 
-#### 2.1.7. FFmpeg のインストール
+#### 2.1.8. FFmpeg のインストール
 
 1. [FFmpeg 公式サイト](https://ffmpeg.org/download.html)から最新の Windows 用ビルドをダウンロード
 2. ダウンロードした zip ファイルを解凍し、例えば`C:\ffmpeg`などの場所に配置
 3. システム環境変数 PATH に`C:\ffmpeg\bin`を追加
 4. コマンドプロンプトで`ffmpeg -version`を実行して確認
 
-#### 2.1.8. Tesseract のインストール
+#### 2.1.9. Tesseract のインストール
 
 1. [UB-Mannheim のリポジトリ](https://github.com/UB-Mannheim/tesseract/wiki)から最新の Tesseract-OCR をダウンロード
 2. インストーラを実行し、「Additional language data」で「English」を選択
@@ -116,21 +134,33 @@
 1. [Groq 公式サイト](https://console.groq.com/)でアカウント作成
 2. API キーを生成して安全な場所に保存（後で設定します）
 
-### 2.3. アプリケーションのインストール
+### 2.3. アプリケーションのセットアップ
 
-#### 2.3.1. アプリのダウンロード
+#### 2.3.1. リポジトリのクローンとビルド
 
-1. [Splat Replay リリースページ](https://github.com/saw4405/splat-replay2/releases)から最新のリリースをダウンロード
+1. Git リポジトリをクローンします：
 
-2. ダウンロードした zip ファイルを解凍し、任意の場所に配置
+   ```bash
+   git clone https://github.com/saw4405/splat-replay2.git
+   cd splat-replay2
+   ```
+
+2. アプリケーションをビルドします：
+
+   ```bash
+   task build
+   ```
+
+   ビルドが成功すると、`dist/SplatReplay/`ディレクトリに実行可能ファイルが生成されます。
+   詳細は [ビルドガイド](./build_guide.md) を参照してください。
 
 #### 2.3.2. イカモドキフォントの配置
 
-1. ダウンロードしたイカモドキフォントを`_internal\assets\thumbnail`フォルダに配置
+1. ダウンロードしたイカモドキフォントを`dist/SplatReplay/assets/thumbnail`フォルダに配置
 
 #### 2.3.3. YouTube API 認証情報の配置
 
-1. ダウンロードした`client_secret.json`を`_internal\config`フォルダに配置
+1. ダウンロードした`client_secret.json`を`dist/SplatReplay/config`フォルダに配置
 
 ## 4. 使用方法
 
@@ -152,23 +182,17 @@
 
 ### 4.2. アプリ起動
 
-1. 仮想環境を有効化する
+アプリケーションを起動します（2.3.1 でビルド済みの場合）：
 
-   ```
-   .venv\Scripts\activate
-   ```
+```bash
+# Task経由（推奨）
+task run
 
-2. ビルドする
+# または直接実行
+.\dist\SplatReplay\SplatReplay.exe
+```
 
-   ```
-   .\scripts\build_webview.ps1
-   ```
-
-3. アプリケーションを起動する
-
-   ```
-   dist\SplatReplay\SplatReplay.exe
-   ```
+> **Note**: ソースコードを変更した場合は、`task build` で再ビルドしてから起動してください。
 
 ### 4.3. 初回設定
 

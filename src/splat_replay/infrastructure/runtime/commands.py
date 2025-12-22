@@ -16,7 +16,6 @@ from concurrent.futures import Future as ThreadFuture
 from dataclasses import dataclass
 from pathlib import Path
 from typing import (
-    Any,
     Awaitable,
     Callable,
     Dict,
@@ -67,43 +66,43 @@ class CommandBus:
     # recorder controls (no payload, no return)
     @overload
     def submit(
-        self, name: Literal["recorder.get_metadata"], **payload: Any
+        self, name: Literal["recorder.get_metadata"], **payload: object
     ) -> ThreadFuture[CommandResult[Optional[RecordingMetadata]]]: ...
 
     @overload
     def submit(
-        self, name: Literal["recorder.start"], **payload: Any
+        self, name: Literal["recorder.start"], **payload: object
     ) -> ThreadFuture[CommandResult[None]]: ...
 
     @overload
     def submit(
-        self, name: Literal["recorder.pause"], **payload: Any
+        self, name: Literal["recorder.pause"], **payload: object
     ) -> ThreadFuture[CommandResult[None]]: ...
 
     @overload
     def submit(
-        self, name: Literal["recorder.resume"], **payload: Any
+        self, name: Literal["recorder.resume"], **payload: object
     ) -> ThreadFuture[CommandResult[None]]: ...
 
     @overload
     def submit(
-        self, name: Literal["recorder.stop"], **payload: Any
+        self, name: Literal["recorder.stop"], **payload: object
     ) -> ThreadFuture[CommandResult[None]]: ...
 
     @overload
     def submit(
-        self, name: Literal["recorder.cancel"], **payload: Any
+        self, name: Literal["recorder.cancel"], **payload: object
     ) -> ThreadFuture[CommandResult[None]]: ...
 
     # asset queries
     @overload
     def submit(
-        self, name: Literal["asset.list"], **payload: Any
+        self, name: Literal["asset.list"], **payload: object
     ) -> ThreadFuture[CommandResult[List["VideoAsset"]]]: ...
 
     @overload
     def submit(
-        self, name: Literal["asset.list_with_length"], **payload: Any
+        self, name: Literal["asset.list_with_length"], **payload: object
     ) -> ThreadFuture[
         CommandResult[List[Tuple["VideoAsset", float | None]]]
     ]: ...
@@ -148,20 +147,20 @@ class CommandBus:
 
     @overload
     def submit(
-        self, name: Literal["asset.get_recorded_dir"], **payload: Any
+        self, name: Literal["asset.get_recorded_dir"], **payload: object
     ) -> ThreadFuture[CommandResult["Path"]]: ...
 
     # edited assets
     @overload
     def submit(
-        self, name: Literal["asset.list_edited_with_length"], **payload: Any
+        self, name: Literal["asset.list_edited_with_length"], **payload: object
     ) -> ThreadFuture[
         CommandResult[List[Tuple["Path", float | None, dict[str, str] | None]]]
     ]: ...
 
     @overload
     def submit(
-        self, name: Literal["asset.get_edited_dir"], **payload: Any
+        self, name: Literal["asset.get_edited_dir"], **payload: object
     ) -> ThreadFuture[CommandResult["Path"]]: ...
 
     @overload
@@ -172,15 +171,15 @@ class CommandBus:
     # permissive dynamic overload for non-literal names
     @overload
     def submit(
-        self, name: str, **payload: Any
-    ) -> ThreadFuture[CommandResult[Any]]: ...
+        self, name: str, **payload: object
+    ) -> ThreadFuture[CommandResult[object]]: ...
 
     # fallback (dynamic)
     def submit(
-        self, name: str, **payload: Any
-    ) -> ThreadFuture[CommandResult[Any]]:
+        self, name: str, **payload: object
+    ) -> ThreadFuture[CommandResult[object]]:
         if self._loop is None or not self._loop.is_running():
-            tf: ThreadFuture[CommandResult[Any]] = ThreadFuture()
+            tf: ThreadFuture[CommandResult[object]] = ThreadFuture()
             tf.set_result(
                 CommandResult(False, error=RuntimeError("loop not running"))
             )
@@ -192,7 +191,7 @@ class CommandBus:
             tf.set_result(CommandResult(False, error=KeyError(name)))
             return tf
 
-        async def run() -> CommandResult[Any]:
+        async def run() -> CommandResult[object]:
             try:
                 val = await handler(**payload)
                 return CommandResult(True, value=val)

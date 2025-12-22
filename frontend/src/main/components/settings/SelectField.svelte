@@ -1,13 +1,13 @@
 <script lang="ts">
-  import { createEventDispatcher, onDestroy, onMount, tick } from "svelte";
+  import { createEventDispatcher, onDestroy, onMount, tick } from 'svelte';
 
   export let id: string;
   export let options: string[] = [];
-  export let value = "";
+  export let value = '';
   export let disabled = false;
   export let labelId: string | undefined;
   export let descriptionId: string | undefined;
-  export let placeholder = "選択してください";
+  export let placeholder = '選択してください';
 
   const dispatch = createEventDispatcher<{ change: string }>();
 
@@ -27,8 +27,7 @@
       highlightedIndex = -1;
       return;
     }
-    const normalized =
-      index < 0 ? options.length - 1 : index >= options.length ? 0 : index;
+    const normalized = index < 0 ? options.length - 1 : index >= options.length ? 0 : index;
     highlightedIndex = normalized;
   }
 
@@ -62,7 +61,7 @@
     if (disabled) {
       return;
     }
-    dispatch("change", option);
+    dispatch('change', option);
     closeDropdown();
     buttonElement?.focus();
   }
@@ -72,15 +71,15 @@
       return;
     }
 
-    if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
       event.preventDefault();
       void openDropdown();
-      if (event.key === "ArrowDown" && options.length > 0) {
+      if (event.key === 'ArrowDown' && options.length > 0) {
         setHighlightedIndexByValue(value);
-      } else if (event.key === "ArrowUp" && options.length > 0) {
+      } else if (event.key === 'ArrowUp' && options.length > 0) {
         setHighlightedIndexByValue(value);
       }
-    } else if (event.key === "Enter" || event.key === " ") {
+    } else if (event.key === 'Enter' || event.key === ' ') {
       event.preventDefault();
       void openDropdown();
     }
@@ -90,28 +89,28 @@
     if (!isOpen) {
       return;
     }
-    if (event.key === "ArrowDown") {
+    if (event.key === 'ArrowDown') {
       event.preventDefault();
       setHighlightedIndex(highlightedIndex + 1);
-    } else if (event.key === "ArrowUp") {
+    } else if (event.key === 'ArrowUp') {
       event.preventDefault();
       setHighlightedIndex(highlightedIndex - 1);
-    } else if (event.key === "Home") {
+    } else if (event.key === 'Home') {
       event.preventDefault();
       setHighlightedIndex(0);
-    } else if (event.key === "End") {
+    } else if (event.key === 'End') {
       event.preventDefault();
       setHighlightedIndex(options.length - 1);
-    } else if (event.key === "Enter" || event.key === " ") {
+    } else if (event.key === 'Enter' || event.key === ' ') {
       event.preventDefault();
       if (highlightedIndex >= 0 && highlightedIndex < options.length) {
         selectOption(options[highlightedIndex]);
       }
-    } else if (event.key === "Escape") {
+    } else if (event.key === 'Escape') {
       event.preventDefault();
       closeDropdown();
       buttonElement?.focus();
-    } else if (event.key === "Tab") {
+    } else if (event.key === 'Tab') {
       closeDropdown();
     }
   }
@@ -127,17 +126,14 @@
   }
 
   onMount(() => {
-    document.addEventListener("mousedown", handleOutsideClick);
+    document.addEventListener('mousedown', handleOutsideClick);
   });
 
   onDestroy(() => {
-    document.removeEventListener("mousedown", handleOutsideClick);
+    document.removeEventListener('mousedown', handleOutsideClick);
   });
 
-  $: displayValue =
-    value && options.includes(value)
-      ? value
-      : placeholder ?? (options[0] ?? "");
+  $: displayValue = value && options.includes(value) ? value : (placeholder ?? options[0] ?? '');
 </script>
 
 <div class="select-container" bind:this={containerElement}>
@@ -145,7 +141,7 @@
     class="select-trigger"
     bind:this={buttonElement}
     type="button"
-    id={id}
+    {id}
     role="combobox"
     aria-haspopup="listbox"
     aria-expanded={isOpen}
@@ -167,9 +163,7 @@
       bind:this={listboxElement}
       tabindex="-1"
       aria-labelledby={labelId}
-      aria-activedescendant={
-        highlightedIndex >= 0 ? `${id}-option-${highlightedIndex}` : undefined
-      }
+      aria-activedescendant={highlightedIndex >= 0 ? `${id}-option-${highlightedIndex}` : undefined}
       on:keydown={handleListboxKeydown}
     >
       {#each options as option, index}
@@ -204,11 +198,7 @@
     align-items: center;
     justify-content: space-between;
     gap: 0.75rem;
-    background: linear-gradient(
-      135deg,
-      rgba(8, 11, 22, 0.65) 0%,
-      rgba(12, 22, 32, 0.45) 100%
-    );
+    background: linear-gradient(135deg, rgba(8, 11, 22, 0.65) 0%, rgba(12, 22, 32, 0.45) 100%);
     border: 1px solid rgba(255, 255, 255, 0.14);
     border-radius: 0.625rem;
     padding: 0.75rem 1rem;
@@ -219,8 +209,11 @@
       inset 0 1px 2px rgba(0, 0, 0, 0.4),
       0 1px 2px rgba(0, 0, 0, 0.2);
     cursor: pointer;
-    transition: border-color 0.25s ease, box-shadow 0.25s ease,
-      background 0.25s ease, transform 0.25s ease;
+    transition:
+      border-color 0.25s ease,
+      box-shadow 0.25s ease,
+      background 0.25s ease,
+      transform 0.25s ease;
   }
 
   .select-trigger:disabled {
@@ -231,11 +224,7 @@
   .select-trigger:not(:disabled):hover,
   .select-trigger:not(:disabled):focus-visible {
     border-color: rgba(25, 211, 199, 0.55);
-    background: linear-gradient(
-      135deg,
-      rgba(25, 211, 199, 0.14) 0%,
-      rgba(25, 211, 199, 0.06) 100%
-    );
+    background: linear-gradient(135deg, rgba(25, 211, 199, 0.14) 0%, rgba(25, 211, 199, 0.06) 100%);
     box-shadow:
       0 0 0 0.1875rem rgba(25, 211, 199, 0.18),
       0 0.35rem 0.9rem rgba(25, 211, 199, 0.22);
@@ -252,10 +241,12 @@
     flex: 0 0 auto;
     font-size: 0.9rem;
     color: rgba(226, 232, 240, 0.7);
-    transition: transform 0.2s ease, color 0.2s ease;
+    transition:
+      transform 0.2s ease,
+      color 0.2s ease;
   }
 
-  .select-trigger[aria-expanded="true"] .chevron {
+  .select-trigger[aria-expanded='true'] .chevron {
     transform: rotate(180deg);
     color: #19d3c7;
   }
@@ -269,11 +260,7 @@
     margin: 0;
     padding: 0.35rem;
     list-style: none;
-    background: linear-gradient(
-      135deg,
-      rgba(12, 20, 32, 0.95) 0%,
-      rgba(6, 12, 22, 0.92) 100%
-    );
+    background: linear-gradient(135deg, rgba(12, 20, 32, 0.95) 0%, rgba(6, 12, 22, 0.92) 100%);
     border: 1px solid rgba(255, 255, 255, 0.12);
     border-radius: 0.75rem;
     box-shadow:
@@ -295,16 +282,15 @@
     border-radius: 0.6rem;
     color: rgba(226, 232, 240, 0.9);
     cursor: pointer;
-    transition: background 0.2s ease, color 0.2s ease,
-      transform 0.2s ease, box-shadow 0.2s ease;
+    transition:
+      background 0.2s ease,
+      color 0.2s ease,
+      transform 0.2s ease,
+      box-shadow 0.2s ease;
   }
 
   .select-dropdown li.highlighted {
-    background: linear-gradient(
-      135deg,
-      rgba(25, 211, 199, 0.24) 0%,
-      rgba(25, 211, 199, 0.12) 100%
-    );
+    background: linear-gradient(135deg, rgba(25, 211, 199, 0.24) 0%, rgba(25, 211, 199, 0.12) 100%);
     color: #041b1a;
     box-shadow:
       inset 0 1px 0 rgba(255, 255, 255, 0.2),
@@ -330,11 +316,7 @@
   }
 
   .select-dropdown::-webkit-scrollbar-thumb {
-    background: linear-gradient(
-      180deg,
-      rgba(25, 211, 199, 0.6) 0%,
-      rgba(25, 211, 199, 0.4) 100%
-    );
+    background: linear-gradient(180deg, rgba(25, 211, 199, 0.6) 0%, rgba(25, 211, 199, 0.4) 100%);
     border-radius: 999px;
   }
 </style>

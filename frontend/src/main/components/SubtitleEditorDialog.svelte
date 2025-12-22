@@ -1,14 +1,14 @@
 <script lang="ts">
-  import { onMount } from "svelte";
-  import BaseDialog from "./BaseDialog.svelte";
-  import type { SubtitleBlock, SubtitleData } from "./../api";
-  import { getRecordedSubtitle, updateRecordedSubtitle } from "./../api";
+  import { onMount } from 'svelte';
+  import BaseDialog from './BaseDialog.svelte';
+  import type { SubtitleBlock, SubtitleData } from './../api';
+  import { getRecordedSubtitle, updateRecordedSubtitle } from './../api';
 
   export let visible = false;
   export let videoId: string;
   export let videoUrl: string;
   // 外部参照用（現在は未使用だが、将来的にタイトル表示などで使用予定）
-  export const videoTitle: string = "";
+  export const videoTitle: string = '';
 
   let subtitleData: SubtitleData | null = null;
   let blocks: SubtitleBlock[] = [];
@@ -27,7 +27,7 @@
   let timelineWidth = 800; // デフォルト幅
   let timelineContainer: HTMLElement;
   let draggingBlock: number | null = null;
-  let draggingEdge: "start" | "end" | "move" | null = null;
+  let draggingEdge: 'start' | 'end' | 'move' | null = null;
   let dragStartX = 0;
   let dragStartTime = 0;
 
@@ -46,8 +46,7 @@
   let editedStartTime = 0;
   let editedEndTime = 0;
   $: hasTimeOverlap =
-    selectedBlockIndex !== null &&
-    hasOverlap(editedStartTime, editedEndTime, selectedBlockIndex);
+    selectedBlockIndex !== null && hasOverlap(editedStartTime, editedEndTime, selectedBlockIndex);
 
   $: if (visible && videoId) {
     loadSubtitle();
@@ -87,7 +86,7 @@
       };
 
       await updateRecordedSubtitle(videoId, updatedData);
-      dispatchEvent(new CustomEvent("saved"));
+      dispatchEvent(new CustomEvent('saved'));
       close();
     } catch (err) {
       error = `字幕の保存に失敗しました: ${err}`;
@@ -126,12 +125,12 @@
     playing = false;
   }
 
-  function togglePlay() {
+  function _togglePlay() {
     if (!videoElement) return;
     if (playing) {
       videoElement.pause();
     } else {
-      videoElement.play();
+      void videoElement.play();
     }
   }
 
@@ -142,22 +141,15 @@
 
   // 現在時刻に表示されている字幕を取得
   function getCurrentSubtitle(): string {
-    const block = blocks.find(
-      (b) => currentTime >= b.start_time && currentTime <= b.end_time
-    );
-    return block ? block.text : "";
+    const block = blocks.find((b) => currentTime >= b.start_time && currentTime <= b.end_time);
+    return block ? block.text : '';
   }
 
   // currentTimeまたはblocksが変更されたら再計算
-  $: currentSubtitleText =
-    blocks && currentTime >= 0 ? getCurrentSubtitle() : "";
+  $: currentSubtitleText = blocks && currentTime >= 0 ? getCurrentSubtitle() : '';
 
   // 時間重複チェック関数
-  function hasOverlap(
-    startTime: number,
-    endTime: number,
-    excludeIndex: number = -1
-  ): boolean {
+  function hasOverlap(startTime: number, endTime: number, excludeIndex: number = -1): boolean {
     return blocks.some((block, idx) => {
       if (idx === excludeIndex) return false;
       // 重複判定: (start1 < end2) && (start2 < end1)
@@ -167,9 +159,7 @@
 
   // 指定時間に既に字幕があるかチェック
   function hasSubtitleAt(time: number): boolean {
-    return blocks.some(
-      (block) => time >= block.start_time && time < block.end_time
-    );
+    return blocks.some((block) => time >= block.start_time && time < block.end_time);
   }
 
   function formatTime(seconds: number): string {
@@ -179,9 +169,9 @@
     const ms = Math.floor((seconds % 1) * 1000);
 
     if (h > 0) {
-      return `${h}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}.${String(ms).padStart(3, "0")}`;
+      return `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}.${String(ms).padStart(3, '0')}`;
     }
-    return `${m}:${String(s).padStart(2, "0")}.${String(ms).padStart(3, "0")}`;
+    return `${m}:${String(s).padStart(2, '0')}.${String(ms).padStart(3, '0')}`;
   }
 
   // mm:ss.000 形式から秒数に変換
@@ -204,7 +194,7 @@
     const m = Math.floor(seconds / 60);
     const s = Math.floor(seconds % 60);
     const ms = Math.floor((seconds % 1) * 1000);
-    return `${m}:${String(s).padStart(2, "0")}.${String(ms).padStart(3, "0")}`;
+    return `${m}:${String(s).padStart(2, '0')}.${String(ms).padStart(3, '0')}`;
   }
 
   function timeToPixel(time: number): number {
@@ -217,18 +207,15 @@
     return (pixel / timelineWidth) * videoDuration;
   }
 
-  function addBlock() {
+  function _addBlock() {
     const newStartTime = currentTime;
-    const newEndTime = Math.min(
-      currentTime + 2.5,
-      videoDuration || currentTime + 2.5
-    );
+    const newEndTime = Math.min(currentTime + 2.5, videoDuration || currentTime + 2.5);
 
     const newBlock: SubtitleBlock = {
       index: blocks.length + 1,
       start_time: newStartTime,
       end_time: newEndTime,
-      text: "新しい字幕",
+      text: '新しい字幕',
     };
 
     blocks = [...blocks, newBlock].sort((a, b) => a.start_time - b.start_time);
@@ -236,7 +223,7 @@
   }
 
   function deleteBlock(index: number) {
-    if (confirm("この字幕ブロックを削除しますか?")) {
+    if (confirm('この字幕ブロックを削除しますか?')) {
       blocks = blocks.filter((_, i) => i !== index);
       if (selectedBlockIndex === index) {
         selectedBlockIndex = null;
@@ -254,11 +241,9 @@
 
     // ポップアップの位置を計算
     if (event && timelineContainer) {
-      const containerRect = timelineContainer.getBoundingClientRect();
+      const _containerRect = timelineContainer.getBoundingClientRect();
       const blockLeft = timeToPixel(blocks[index].start_time);
-      const blockWidth = timeToPixel(
-        blocks[index].end_time - blocks[index].start_time
-      );
+      const blockWidth = timeToPixel(blocks[index].end_time - blocks[index].start_time);
 
       // ポップアップの幅を推定（実際の幅 = 300px + パディング）
       const popupWidth = 320;
@@ -295,7 +280,7 @@
   function handleTimelineMouseDown(
     event: MouseEvent,
     blockIndex: number,
-    edge: "start" | "end" | "move"
+    edge: 'start' | 'end' | 'move'
   ) {
     event.preventDefault();
     event.stopPropagation();
@@ -307,16 +292,16 @@
     draggingEdge = edge;
     dragStartX = event.clientX;
 
-    if (edge === "move") {
+    if (edge === 'move') {
       dragStartTime = blocks[blockIndex].start_time;
-    } else if (edge === "start") {
+    } else if (edge === 'start') {
       dragStartTime = blocks[blockIndex].start_time;
     } else {
       dragStartTime = blocks[blockIndex].end_time;
     }
 
-    window.addEventListener("mousemove", handleTimelineMouseMove);
-    window.addEventListener("mouseup", handleTimelineMouseUp);
+    window.addEventListener('mousemove', handleTimelineMouseMove);
+    window.addEventListener('mouseup', handleTimelineMouseUp);
   }
 
   function handleTimelineMouseMove(event: MouseEvent) {
@@ -328,7 +313,7 @@
     const block = blocks[draggingBlock];
     const duration = block.end_time - block.start_time;
 
-    if (draggingEdge === "start") {
+    if (draggingEdge === 'start') {
       let newStart = Math.max(0, dragStartTime + deltaTime);
       const newEnd = Math.max(newStart + 0.5, block.end_time);
 
@@ -340,11 +325,8 @@
           end_time: newEnd,
         };
       }
-    } else if (draggingEdge === "end") {
-      let newEnd = Math.min(
-        videoDuration || dragStartTime + deltaTime,
-        dragStartTime + deltaTime
-      );
+    } else if (draggingEdge === 'end') {
+      let newEnd = Math.min(videoDuration || dragStartTime + deltaTime, dragStartTime + deltaTime);
       const newStart = Math.min(block.start_time, newEnd - 0.5);
 
       // 他の字幕と重複しないかチェック
@@ -355,12 +337,9 @@
           end_time: newEnd,
         };
       }
-    } else if (draggingEdge === "move") {
+    } else if (draggingEdge === 'move') {
       let newStart = dragStartTime + deltaTime;
-      newStart = Math.max(
-        0,
-        Math.min(newStart, (videoDuration || 0) - duration)
-      );
+      newStart = Math.max(0, Math.min(newStart, (videoDuration || 0) - duration));
       const newEnd = newStart + duration;
 
       // 他の字幕と重複しないかチェック
@@ -379,8 +358,8 @@
   function handleTimelineMouseUp() {
     draggingBlock = null;
     draggingEdge = null;
-    window.removeEventListener("mousemove", handleTimelineMouseMove);
-    window.removeEventListener("mouseup", handleTimelineMouseUp);
+    window.removeEventListener('mousemove', handleTimelineMouseMove);
+    window.removeEventListener('mouseup', handleTimelineMouseUp);
   }
 
   function handleTimelineClick(event: MouseEvent) {
@@ -410,7 +389,7 @@
   function handleAddPopupClick(event: MouseEvent | KeyboardEvent) {
     event.stopPropagation();
     const time = addPopupTime;
-    const clickX = addPopupLeft;
+    const _clickX = addPopupLeft;
     showAddPopup = false;
 
     // 新しい字幕ブロックを追加
@@ -418,7 +397,7 @@
       index: blocks.length + 1,
       start_time: time,
       end_time: Math.min(time + 3, videoDuration || time + 3),
-      text: "",
+      text: '',
     };
     blocks = [...blocks, newBlock].sort((a, b) => a.start_time - b.start_time);
     blocks = blocks.map((b, i) => ({ ...b, index: i + 1 }));
@@ -432,9 +411,7 @@
 
       // ポップアップの位置を計算
       const blockLeft = timeToPixel(blocks[addedIndex].start_time);
-      const blockWidth = timeToPixel(
-        blocks[addedIndex].end_time - blocks[addedIndex].start_time
-      );
+      const blockWidth = timeToPixel(blocks[addedIndex].end_time - blocks[addedIndex].start_time);
 
       const popupWidth = 320;
       const halfPopupWidth = popupWidth / 2;
@@ -465,8 +442,8 @@
 
   onMount(() => {
     return () => {
-      window.removeEventListener("mousemove", handleTimelineMouseMove);
-      window.removeEventListener("mouseup", handleTimelineMouseUp);
+      window.removeEventListener('mousemove', handleTimelineMouseMove);
+      window.removeEventListener('mouseup', handleTimelineMouseUp);
     };
   });
 </script>
@@ -476,7 +453,7 @@
     bind:open={visible}
     title="字幕編集"
     footerVariant="simple"
-    primaryButtonText={saving ? "保存中..." : "保存"}
+    primaryButtonText={saving ? '保存中...' : '保存'}
     secondaryButtonText="キャンセル"
     on:primary-click={saveSubtitle}
     on:secondary-click={close}
@@ -521,10 +498,10 @@
             bind:clientWidth={timelineWidth}
             on:click={handleTimelineClick}
             on:keydown={(e) => {
-              if (e.key === "Enter" || e.key === " ") {
+              if (e.key === 'Enter' || e.key === ' ') {
                 e.preventDefault();
                 const rect = e.currentTarget.getBoundingClientRect();
-                const clickEvent = new MouseEvent("click", {
+                const clickEvent = new MouseEvent('click', {
                   clientX: rect.left + rect.width / 2,
                   clientY: rect.top + rect.height / 2,
                   bubbles: true,
@@ -553,10 +530,7 @@
             </div>
 
             <!-- 現在位置インジケーター -->
-            <div
-              class="playhead"
-              style="left: {timeToPixel(currentTime)}px"
-            ></div>
+            <div class="playhead" style="left: {timeToPixel(currentTime)}px"></div>
 
             <!-- 字幕ブロック -->
             <div class="timeline-blocks">
@@ -569,7 +543,7 @@
                   style="left: {left}px; width: {width}px"
                   on:click|stopPropagation={(e) => selectBlock(i, e)}
                   on:keydown={(e) => {
-                    if (e.key === "Enter" || e.key === " ") {
+                    if (e.key === 'Enter' || e.key === ' ') {
                       e.preventDefault();
                       e.stopPropagation();
                       selectBlock(i);
@@ -581,7 +555,7 @@
                   <!-- 左端ハンドル（開始時間調整） -->
                   <div
                     class="resize-handle left"
-                    on:mousedown={(e) => handleTimelineMouseDown(e, i, "start")}
+                    on:mousedown={(e) => handleTimelineMouseDown(e, i, 'start')}
                     role="button"
                     tabindex="-1"
                     aria-label="開始時間調整"
@@ -590,7 +564,7 @@
                   <!-- 本体（移動） -->
                   <div
                     class="block-body"
-                    on:mousedown={(e) => handleTimelineMouseDown(e, i, "move")}
+                    on:mousedown={(e) => handleTimelineMouseDown(e, i, 'move')}
                     role="button"
                     tabindex="-1"
                     aria-label="字幕ブロック移動"
@@ -602,7 +576,7 @@
                   <!-- 右端ハンドル（終了時間調整） -->
                   <div
                     class="resize-handle right"
-                    on:mousedown={(e) => handleTimelineMouseDown(e, i, "end")}
+                    on:mousedown={(e) => handleTimelineMouseDown(e, i, 'end')}
                     role="button"
                     tabindex="-1"
                     aria-label="終了時間調整"
@@ -624,8 +598,7 @@
                 aria-label="字幕編集"
               >
                 <div class="popup-header">
-                  <span class="popup-title">字幕 #{selectedBlockIndex + 1}</span
-                  >
+                  <span class="popup-title">字幕 #{selectedBlockIndex + 1}</span>
                   <button class="popup-close" on:click={closePopup}>✕</button>
                 </div>
                 <div class="popup-body">
@@ -635,21 +608,13 @@
                       <input
                         type="text"
                         placeholder="0:00.000"
-                        value={formatTimeForEdit(
-                          blocks[selectedBlockIndex].start_time
-                        )}
+                        value={formatTimeForEdit(blocks[selectedBlockIndex].start_time)}
                         class:error={hasTimeOverlap}
                         on:input={(e) => {
                           const parsed = parseTimeString(e.currentTarget.value);
                           if (parsed !== null && selectedBlockIndex !== null) {
                             editedStartTime = parsed;
-                            if (
-                              !hasOverlap(
-                                parsed,
-                                editedEndTime,
-                                selectedBlockIndex
-                              )
-                            ) {
+                            if (!hasOverlap(parsed, editedEndTime, selectedBlockIndex)) {
                               blocks[selectedBlockIndex].start_time = parsed;
                               blocks = [...blocks];
                             }
@@ -670,21 +635,13 @@
                       <input
                         type="text"
                         placeholder="0:00.000"
-                        value={formatTimeForEdit(
-                          blocks[selectedBlockIndex].end_time
-                        )}
+                        value={formatTimeForEdit(blocks[selectedBlockIndex].end_time)}
                         class:error={hasTimeOverlap}
                         on:input={(e) => {
                           const parsed = parseTimeString(e.currentTarget.value);
                           if (parsed !== null && selectedBlockIndex !== null) {
                             editedEndTime = parsed;
-                            if (
-                              !hasOverlap(
-                                editedStartTime,
-                                parsed,
-                                selectedBlockIndex
-                              )
-                            ) {
+                            if (!hasOverlap(editedStartTime, parsed, selectedBlockIndex)) {
                               blocks[selectedBlockIndex].end_time = parsed;
                               blocks = [...blocks];
                             }
@@ -702,9 +659,7 @@
                     </label>
                   </div>
                   {#if hasTimeOverlap}
-                    <div class="overlap-warning">
-                      ⚠️ 他の字幕と時間が重複しています
-                    </div>
+                    <div class="overlap-warning">⚠️ 他の字幕と時間が重複しています</div>
                   {/if}
                   <div class="popup-row">
                     <label class="full-width">
@@ -713,8 +668,7 @@
                         value={blocks[selectedBlockIndex].text}
                         on:input={(e) => {
                           if (selectedBlockIndex !== null) {
-                            blocks[selectedBlockIndex].text =
-                              e.currentTarget.value;
+                            blocks[selectedBlockIndex].text = e.currentTarget.value;
                             blocks = [...blocks];
                           }
                         }}
@@ -726,8 +680,7 @@
                     <button
                       class="delete-button"
                       on:click={() =>
-                        selectedBlockIndex !== null &&
-                        deleteBlock(selectedBlockIndex)}
+                        selectedBlockIndex !== null && deleteBlock(selectedBlockIndex)}
                     >
                       🗑️ 削除
                     </button>
@@ -743,7 +696,7 @@
                 style="left: {addPopupLeft}px;"
                 on:click={handleAddPopupClick}
                 on:keydown={(e) => {
-                  if (e.key === "Enter" || e.key === " ") {
+                  if (e.key === 'Enter' || e.key === ' ') {
                     e.preventDefault();
                     handleAddPopupClick(e);
                   }
@@ -882,7 +835,7 @@
   }
 
   .playhead::before {
-    content: "";
+    content: '';
     position: absolute;
     top: -6px;
     left: -4px;
@@ -1000,7 +953,7 @@
   }
 
   .popup-editor::after {
-    content: "";
+    content: '';
     position: absolute;
     bottom: -10px;
     left: var(--arrow-left, 50%);
