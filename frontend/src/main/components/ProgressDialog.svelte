@@ -1,6 +1,6 @@
 ﻿<script lang="ts">
   import { onDestroy } from 'svelte';
-  import BaseDialog from './BaseDialog.svelte';
+  import BaseDialog from '../../common/components/BaseDialog.svelte';
   import type { ProgressEvent } from './../api';
 
   type ConnectionState = 'idle' | 'connecting' | 'open' | 'error';

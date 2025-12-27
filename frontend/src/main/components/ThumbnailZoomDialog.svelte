@@ -1,5 +1,5 @@
 <script lang="ts">
-  import BaseDialog from './BaseDialog.svelte';
+  import BaseDialog from '../../common/components/BaseDialog.svelte';
 
   export let visible: boolean = false;
   export let imageUrl: string = '';

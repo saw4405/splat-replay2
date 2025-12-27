@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import BaseDialog from './BaseDialog.svelte';
+  import BaseDialog from '../../common/components/BaseDialog.svelte';
+  import ConfirmDialog from '../../common/components/ConfirmDialog.svelte';
   import type { SubtitleBlock, SubtitleData } from './../api';
   import { getRecordedSubtitle, updateRecordedSubtitle } from './../api';
 
@@ -36,6 +37,8 @@
   let popupTop = 0;
   let popupArrowLeft = 50; // 三角形の位置（%）
   let showPopup = false;
+  let showDeleteConfirm = false;
+  let pendingDeleteIndex: number | null = null;
 
   // 字幕追加用のポップアップ
   let showAddPopup = false;
@@ -223,12 +226,24 @@
   }
 
   function deleteBlock(index: number) {
-    if (confirm('この字幕ブロックを削除しますか?')) {
-      blocks = blocks.filter((_, i) => i !== index);
-      if (selectedBlockIndex === index) {
-        selectedBlockIndex = null;
-      }
+    pendingDeleteIndex = index;
+    showDeleteConfirm = true;
+  }
+
+  function confirmDeleteBlock(): void {
+    if (pendingDeleteIndex === null) return;
+    const index = pendingDeleteIndex;
+    blocks = blocks.filter((_, i) => i !== index);
+    if (selectedBlockIndex === index) {
+      selectedBlockIndex = null;
     }
+    pendingDeleteIndex = null;
+    showDeleteConfirm = false;
+  }
+
+  function cancelDeleteBlock(): void {
+    pendingDeleteIndex = null;
+    showDeleteConfirm = false;
   }
 
   function selectBlock(index: number, event?: MouseEvent) {
@@ -713,6 +728,13 @@
       </div>
     {/if}
   </BaseDialog>
+  <ConfirmDialog
+    isOpen={showDeleteConfirm}
+    message="この字幕ブロックを削除しますか?"
+    confirmText="削除"
+    on:confirm={confirmDeleteBlock}
+    on:cancel={cancelDeleteBlock}
+  />
 {/if}
 
 <style>

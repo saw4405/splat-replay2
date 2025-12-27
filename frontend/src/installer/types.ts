@@ -2,6 +2,9 @@
  * インストーラー関連の型定義
  */
 
+// 共通型は common/types.ts からインポート
+export type { ApiError } from '../common/types';
+
 export enum InstallationStep {
   HARDWARE_CHECK = 'hardware_check',
   FFMPEG_SETUP = 'ffmpeg_setup',
@@ -42,10 +45,4 @@ export interface ProgressInfo {
   current_step_name: string;
   completed_substeps: number;
   total_substeps: number;
-}
-
-export interface ApiError {
-  error: string;
-  error_code?: string;
-  recovery_action?: string;
 }

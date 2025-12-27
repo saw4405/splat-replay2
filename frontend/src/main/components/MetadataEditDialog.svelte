@@ -1,6 +1,6 @@
 ﻿<script lang="ts">
   import { createEventDispatcher } from 'svelte';
-  import BaseDialog from './BaseDialog.svelte';
+  import BaseDialog from '../../common/components/BaseDialog.svelte';
   import MetadataForm from './MetadataForm.svelte';
 
   const dispatch = createEventDispatcher();

@@ -11,7 +11,7 @@
     getOBSConfig,
   } from '../../store';
   import { type SystemCheckResult, InstallationStep } from '../../types';
-  import AlertDialog from '../../../main/components/AlertDialog.svelte';
+  import NotificationDialog from '../../../common/components/NotificationDialog.svelte';
 
   const SUBSTEP_STORAGE_KEY = 'obs_substep_index';
 
@@ -40,6 +40,7 @@
 
   let dialogOpen = false;
   let dialogMessage = '';
+  let dialogVariant: 'info' | 'success' | 'warning' | 'error' = 'info';
 
   let setupSteps: SetupStep[] = [
     {
@@ -238,7 +239,10 @@
     if (currentSubStepIndex === 0 && !obsInstalled) {
       await checkOBSInstallation(false);
       if (!obsInstalled) {
-        showDialog('OBS Studio が検出されませんでした。インストールしてから次へ進んでください。');
+        showDialog(
+          'OBS Studio が検出されませんでした。インストールしてから次へ進んでください。',
+          'error'
+        );
         return true;
       }
     }
@@ -246,14 +250,17 @@
     if (currentSubStepIndex === 2 && !ndiInstalled) {
       await checkNDIInstallation(false);
       if (!ndiInstalled) {
-        showDialog('NDI Runtime が検出されませんでした。インストールしてから次へ進んでください。');
+        showDialog(
+          'NDI Runtime が検出されませんでした。インストールしてから次へ進んでください。',
+          'error'
+        );
         return true;
       }
     }
 
     // キャプチャデバイスの選択チェック
     if (currentSubStepIndex === 3 && !selectedCaptureDevice) {
-      showDialog('キャプチャデバイスを選択してください。');
+      showDialog('キャプチャデバイスを選択してください。', 'warning');
       return true;
     }
 
@@ -263,14 +270,14 @@
         await saveCaptureDevice(selectedCaptureDevice);
       } catch (error) {
         console.error('Failed to save capture device:', error);
-        showDialog('キャプチャデバイスの保存に失敗しました。');
+        showDialog('キャプチャデバイスの保存に失敗しました。', 'error');
         return true;
       }
     }
 
     // WebSocketパスワードの入力チェック
     if (currentSubStepIndex === 6 && !websocketPassword.trim()) {
-      showDialog('WebSocket パスワードを入力してください。');
+      showDialog('WebSocket パスワードを入力してください。', 'warning');
       return true;
     }
 
@@ -280,7 +287,7 @@
         await saveOBSWebSocketPassword(websocketPassword);
       } catch (error) {
         console.error('Failed to save WebSocket password:', error);
-        showDialog('WebSocket パスワードの保存に失敗しました。');
+        showDialog('WebSocket パスワードの保存に失敗しました。', 'error');
         return true;
       }
     }
@@ -328,13 +335,14 @@
       } else if (showError) {
         // ユーザーがチェックを入れようとした場合のみエラー表示
         showDialog(
-          'OBS Studio が検出されませんでした。インストールしてからチェックを入れてください。'
+          'OBS Studio が検出されませんでした。インストールしてからチェックを入れてください。',
+          'error'
         );
       }
     } catch (error) {
       console.error('OBS check failed', error);
       if (showError) {
-        showDialog('OBSの確認中にエラーが発生しました。');
+        showDialog('OBSの確認中にエラーが発生しました。', 'error');
       }
     } finally {
       _isChecking = false;
@@ -365,13 +373,14 @@
       } else if (showError) {
         // ユーザーがチェックを入れようとした場合のみエラー表示
         showDialog(
-          'NDI Runtime が検出されませんでした。インストールしてからチェックを入れてください。'
+          'NDI Runtime が検出されませんでした。インストールしてからチェックを入れてください。',
+          'error'
         );
       }
     } catch (error) {
       console.warn('NDI Runtime check failed:', error);
       if (showError) {
-        showDialog('NDI Runtimeの確認中にエラーが発生しました。');
+        showDialog('NDI Runtimeの確認中にエラーが発生しました。', 'error');
       }
     } finally {
       _isChecking = false;
@@ -392,7 +401,7 @@
       }
     } catch (error) {
       console.error('Failed to load video devices:', error);
-      showDialog('ビデオデバイスの取得に失敗しました。');
+      showDialog('ビデオデバイスの取得に失敗しました。', 'error');
     } finally {
       isLoadingDevices = false;
     }
@@ -471,8 +480,12 @@
     return completed;
   }
 
-  function showDialog(message: string): void {
+  function showDialog(
+    message: string,
+    variant: 'info' | 'success' | 'warning' | 'error' = 'info'
+  ): void {
     dialogMessage = message;
+    dialogVariant = variant;
     dialogOpen = true;
   }
 </script>
@@ -673,7 +686,7 @@
   </div>
 </div>
 
-<AlertDialog bind:isOpen={dialogOpen} message={dialogMessage} />
+<NotificationDialog bind:isOpen={dialogOpen} variant={dialogVariant} message={dialogMessage} />
 
 <style>
   .obs-setup {

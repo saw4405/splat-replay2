@@ -3,6 +3,7 @@
   import { Download, ExternalLink, Check, FolderOpen } from 'lucide-svelte';
   import { checkSystem, markSubstepCompleted, installationState } from '../../store';
   import { type SystemCheckResult, InstallationStep } from '../../types';
+  import NotificationDialog from '../../../common/components/NotificationDialog.svelte';
 
   const SUBSTEP_STORAGE_KEY = 'font_substep_index';
 
@@ -17,6 +18,9 @@
   let _fontPath: string | null = null;
   let isChecking = false;
   let hasInitializedSubstep = false;
+  let dialogOpen = false;
+  let dialogMessage = '';
+  let dialogVariant: 'info' | 'success' | 'warning' | 'error' = 'info';
 
   let setupSteps: SetupStep[] = [
     {
@@ -105,7 +109,10 @@
     if (currentSubStepIndex === 1 && !fontInstalled) {
       await checkFontInstallation();
       if (!fontInstalled) {
-        alert('フォントファイルが見つかりませんでした。配置してから次へ進んでください。');
+        showDialog(
+          'フォントファイルが見つかりませんでした。配置してから次へ進んでください。',
+          'warning'
+        );
         return true;
       }
     }
@@ -158,7 +165,7 @@
     if (index === 1 && !step.completed) {
       await checkFontInstallation();
       if (!fontInstalled) {
-        alert('フォントファイルが見つかりませんでした。');
+        showDialog('フォントファイルが見つかりませんでした。', 'warning');
       }
     } else {
       await markSubstepCompleted(InstallationStep.FONT_INSTALLATION, step.id, !step.completed);
@@ -199,6 +206,15 @@
 
   function openUrl(url: string): void {
     window.open(url, '_blank');
+  }
+
+  function showDialog(
+    message: string,
+    variant: 'info' | 'success' | 'warning' | 'error' = 'info'
+  ): void {
+    dialogMessage = message;
+    dialogVariant = variant;
+    dialogOpen = true;
   }
 </script>
 
@@ -289,6 +305,13 @@
       {/key}
     </div>
   </div>
+
+  <NotificationDialog
+    isOpen={dialogOpen}
+    variant={dialogVariant}
+    message={dialogMessage}
+    on:close={() => (dialogOpen = false)}
+  />
 </div>
 
 <style>

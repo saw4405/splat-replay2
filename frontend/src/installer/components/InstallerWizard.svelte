@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
+  import type { ComponentType } from 'svelte';
   import { ChevronLeft, ChevronRight } from 'lucide-svelte';
   import {
     installationState,
@@ -15,11 +16,11 @@
     clearError,
   } from '../store';
   import { InstallationStep } from '../types';
-  import ErrorDialog from './ErrorDialog.svelte';
-  import CompletionDialog from './CompletionDialog.svelte';
+  import ErrorDialog from '../../common/components/ErrorDialog.svelte';
+  import NotificationDialog from '../../common/components/NotificationDialog.svelte';
 
   // ステップコンポーネントのスロット
-  export let currentStepComponent: unknown = null;
+  export let currentStepComponent: ComponentType | null = null;
 
   // 現在のステップコンポーネントのインスタンス
   let stepComponentInstance: unknown;
@@ -33,6 +34,9 @@
 
   let showErrorDialog = false;
   let showCompletionDialog = false;
+  let showWarningDialog = false;
+  let hasIncompleteTasksMessage = '';
+  let isAllTasksCompleted = true;
 
   $: if ($error) {
     showErrorDialog = true;
@@ -56,6 +60,74 @@
 
   $: shouldShowCompletion = isLastStep && childAtFinalSubstep;
 
+  $: {
+    console.log('[InstallerWizard] State update', {
+      isLastStep,
+      childAtFinalSubstep,
+      shouldShowCompletion,
+      childStepCompleted,
+      showCompletionDialog,
+    });
+  }
+
+  // 最後のステップの最後のサブステップに到達したら、次へボタンを押した時に完了処理を実行する
+  $: if (shouldShowCompletion && !showCompletionDialog) {
+    // フラグのみ設定し、実際の完了処理はhandleNext()で行う
+  }
+
+  /**
+   * すべてのタスクが完了しているかチェック
+   * すべてのステップのすべてのタスクが完了している必要がある
+   */
+  function checkAllTasksCompleted(): boolean {
+    if (!$installationState) return false;
+
+    const { step_details, current_step, skipped_steps } = $installationState;
+    const incompleteSteps: string[] = [];
+
+    // すべてのステップをチェック
+    const allSteps = [
+      InstallationStep.HARDWARE_CHECK,
+      InstallationStep.FFMPEG_SETUP,
+      InstallationStep.OBS_SETUP,
+      InstallationStep.TESSERACT_SETUP,
+      InstallationStep.FONT_INSTALLATION,
+      InstallationStep.YOUTUBE_SETUP,
+    ];
+
+    for (const step of allSteps) {
+      // まだ到達していないステップは除外
+      const currentStepIndex = allSteps.indexOf(current_step);
+      const stepIndex = allSteps.indexOf(step);
+      if (stepIndex > currentStepIndex) {
+        continue;
+      }
+
+      const details = step_details[step] || {};
+      const incompleteTasks = Object.entries(details)
+        .filter(([_key, completed]) => !completed)
+        .map(([key]) => key);
+
+      // タスクが存在しない、または一部でも未完了の場合
+      if (Object.keys(details).length === 0 || incompleteTasks.length > 0) {
+        // スキップされたステップかチェック
+        if (skipped_steps.includes(step)) {
+          incompleteSteps.push(`${step}: スキップされています`);
+        } else {
+          incompleteSteps.push(`${step}: ${incompleteTasks.join(', ')}`);
+        }
+      }
+    }
+
+    if (incompleteSteps.length > 0) {
+      hasIncompleteTasksMessage =
+        '以下のステップ・タスクが完了していません：\n\n' + incompleteSteps.join('\n');
+      return false;
+    }
+
+    return true;
+  }
+
   onMount(async () => {
     await fetchInstallationStatus();
   });
@@ -69,6 +141,21 @@
       const isSkipping = !childStepCompleted;
       const handled = await instance.next({ skip: isSkipping });
       if (handled) return;
+
+      // 最後のステップで完了ダイアログを表示
+      if (isLastStep) {
+        if (isSkipping) {
+          await skipCurrentStep();
+        }
+        // すべてのタスクが完了しているかチェック
+        isAllTasksCompleted = checkAllTasksCompleted();
+        if (isAllTasksCompleted) {
+          showCompletionDialog = true;
+        } else {
+          showWarningDialog = true;
+        }
+        return;
+      }
 
       // スキップしている場合はステップ全体をスキップとしてマーク
       if (isSkipping) {
@@ -88,10 +175,14 @@
         return;
       }
 
-      // 最後のステップの場合は完了処理
+      // 最後のステップの場合は完了ダイアログを表示
       if (isLastStep) {
-        await completeInstallation();
-        showCompletionDialog = true;
+        isAllTasksCompleted = checkAllTasksCompleted();
+        if (isAllTasksCompleted) {
+          showCompletionDialog = true;
+        } else {
+          showWarningDialog = true;
+        }
         return;
       }
     }
@@ -124,9 +215,14 @@
     await fetchInstallationStatus();
   }
 
-  function handleCompletionContinue(): void {
-    // ページをリロードしてメインアプリに遷移
+  async function handleCompletionContinue(): Promise<void> {
+    // インストール完了状態を保存してからページをリロードしてメインアプリに遷移
+    await completeInstallation();
     window.location.reload();
+  }
+
+  function handleWarningClose(): void {
+    showWarningDialog = false;
   }
 </script>
 
@@ -221,7 +317,24 @@
   onRetry={handleErrorRetry}
 />
 
-<CompletionDialog bind:open={showCompletionDialog} onContinue={handleCompletionContinue} />
+<NotificationDialog
+  bind:isOpen={showCompletionDialog}
+  variant="success"
+  title="セットアップ完了！"
+  message="Splat Replay のセットアップが完了しました。"
+  buttonText="アプリケーションを開始"
+  on:close={handleCompletionContinue}
+/>
+
+<NotificationDialog
+  bind:isOpen={showWarningDialog}
+  variant="warning"
+  title="未完了のタスクがあります"
+  message={hasIncompleteTasksMessage +
+    '\n\nセットアップを完了させるには、すべてのタスクを完了してください。'}
+  buttonText="閉じる"
+  on:close={handleWarningClose}
+/>
 
 <style>
   .installer-wizard {

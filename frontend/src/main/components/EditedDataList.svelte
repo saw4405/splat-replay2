@@ -3,6 +3,8 @@
   import type { EditedVideo } from './../api';
   import VideoPlayerDialog from './VideoPlayerDialog.svelte';
   import ThumbnailZoomDialog from './ThumbnailZoomDialog.svelte';
+  import NotificationDialog from '../../common/components/NotificationDialog.svelte';
+  import ConfirmDialog from '../../common/components/ConfirmDialog.svelte';
 
   export let videos: EditedVideo[] = [];
 
@@ -10,6 +12,12 @@
 
   let showVideoPlayer = false;
   let showThumbnailZoom = false;
+  let showAlertDialog = false;
+  let showConfirmDialog = false;
+  let alertMessage = '';
+  let alertVariant: 'info' | 'success' | 'warning' | 'error' = 'info';
+  let confirmMessage = '';
+  let pendingDeleteVideo: EditedVideo | null = null;
   let currentVideoUrl = '';
   let currentThumbnailUrl = '';
   let _currentVideoTitle = '';
@@ -18,7 +26,8 @@
 
   // モーダルの開閉状態を監視
   $: {
-    const isAnyModalOpen = showVideoPlayer || showThumbnailZoom;
+    const isAnyModalOpen =
+      showVideoPlayer || showThumbnailZoom || showAlertDialog || showConfirmDialog;
 
     if (isAnyModalOpen && !wasModalOpen) {
       // モーダルが開いた
@@ -65,15 +74,18 @@
   async function handleDeleteVideo(event: MouseEvent, video: EditedVideo): Promise<void> {
     event.stopPropagation();
 
-    const confirmed = confirm(
-      `「${video.filename}」を削除してもよろしいですか？\nこの操作は取り消せません。`
-    );
+    confirmMessage = `「${video.filename}」を削除してもよろしいですか？\nこの操作は取り消せません。`;
+    pendingDeleteVideo = video;
+    showConfirmDialog = true;
+  }
 
-    if (!confirmed) {
-      return;
-    }
+  async function confirmDelete(): Promise<void> {
+    if (!pendingDeleteVideo) return;
 
+    const video = pendingDeleteVideo;
     deletingVideoId = video.id;
+    showConfirmDialog = false;
+    pendingDeleteVideo = null;
 
     try {
       const { deleteEditedVideo } = await import('./../api');
@@ -84,10 +96,17 @@
       dispatch('refresh');
     } catch (error) {
       console.error('Failed to delete video:', error);
-      alert(`動画の削除に失敗しました: ${error}`);
+      alertMessage = `動画の削除に失敗しました: ${error}`;
+      alertVariant = 'error';
+      showAlertDialog = true;
     } finally {
       deletingVideoId = null;
     }
+  }
+
+  function cancelDelete(): void {
+    showConfirmDialog = false;
+    pendingDeleteVideo = null;
   }
 </script>
 
@@ -240,6 +259,20 @@
     {/each}
   {/if}
 </div>
+
+<NotificationDialog
+  isOpen={showAlertDialog}
+  variant={alertVariant}
+  message={alertMessage}
+  on:close={() => (showAlertDialog = false)}
+/>
+<ConfirmDialog
+  isOpen={showConfirmDialog}
+  message={confirmMessage}
+  confirmText="削除"
+  on:confirm={confirmDelete}
+  on:cancel={cancelDelete}
+/>
 
 <!-- モーダル -->
 <VideoPlayerDialog

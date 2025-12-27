@@ -8,6 +8,7 @@
     installationState,
   } from '../../store';
   import { type SystemCheckResult, InstallationStep } from '../../types';
+  import NotificationDialog from '../../../common/components/NotificationDialog.svelte';
 
   const SUBSTEP_STORAGE_KEY = 'tesseract_substep_index';
 
@@ -22,6 +23,9 @@
   let _tesseractVersion: string | null = null;
   let isChecking = false;
   let hasInitializedSubstep = false;
+  let dialogOpen = false;
+  let dialogMessage = '';
+  let dialogVariant: 'info' | 'success' | 'warning' | 'error' = 'info';
 
   let setupSteps: SetupStep[] = [
     {
@@ -110,7 +114,10 @@
     if (currentSubStepIndex === 0 && !tesseractInstalled) {
       await checkTesseractInstallation();
       if (!tesseractInstalled) {
-        alert('Tesseract が検出されませんでした。インストールしてから次へ進んでください。');
+        showDialog(
+          'Tesseract が検出されませんでした。インストールしてから次へ進んでください。',
+          'warning'
+        );
         return true;
       }
     }
@@ -170,11 +177,11 @@
           _tesseractVersion = result.version || null;
           await markSubstepCompleted(InstallationStep.TESSERACT_SETUP, step.id, true);
         } else {
-          alert('Tesseract が検出されませんでした。');
+          showDialog('Tesseract が検出されませんでした。', 'warning');
         }
       } catch (error) {
         console.error('Tesseract setup failed', error);
-        alert('Tesseract のセットアップに失敗しました。');
+        showDialog('Tesseract のセットアップに失敗しました。', 'error');
       } finally {
         isChecking = false;
       }
@@ -217,6 +224,15 @@
 
   function openUrl(url: string): void {
     window.open(url, '_blank');
+  }
+
+  function showDialog(
+    message: string,
+    variant: 'info' | 'success' | 'warning' | 'error' = 'info'
+  ): void {
+    dialogMessage = message;
+    dialogVariant = variant;
+    dialogOpen = true;
   }
 </script>
 
@@ -324,6 +340,13 @@
       {/key}
     </div>
   </div>
+
+  <NotificationDialog
+    isOpen={dialogOpen}
+    variant={dialogVariant}
+    message={dialogMessage}
+    on:close={() => (dialogOpen = false)}
+  />
 </div>
 
 <style>

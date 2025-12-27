@@ -3,11 +3,15 @@
   import { Download, ExternalLink, FolderOpen, Info, Check } from 'lucide-svelte';
   import { checkSystem, setupFFMPEG, markSubstepCompleted, installationState } from '../../store';
   import { type SystemCheckResult, InstallationStep } from '../../types';
+  import NotificationDialog from '../../../common/components/NotificationDialog.svelte';
 
   let ffmpegInstalled = false;
   let _ffmpegVersion: string | null = null;
   let isChecking = false;
   let checkError: string | null = null;
+  let dialogOpen = false;
+  let dialogMessage = '';
+  let dialogVariant: 'info' | 'success' | 'warning' | 'error' = 'info';
 
   let setupCompleted = {
     downloadAndExtract: false,
@@ -39,7 +43,10 @@
     if (!ffmpegInstalled) {
       await handleSetup();
       if (!ffmpegInstalled) {
-        alert('FFMPEG が検出されませんでした。インストールしてから次へ進んでください。');
+        showDialog(
+          'FFMPEG が検出されませんでした。インストールしてから次へ進んでください。',
+          'warning'
+        );
         return true;
       }
     }
@@ -99,12 +106,12 @@
       } else {
         checkError = result.error_message || 'セットアップに失敗しました';
         setupCompleted.downloadAndExtract = false;
-        alert(checkError);
+        showDialog(checkError, 'error');
       }
     } catch (error) {
       checkError = error instanceof Error ? error.message : 'セットアップ中にエラーが発生しました';
       setupCompleted.downloadAndExtract = false;
-      alert(checkError);
+      showDialog(checkError, 'error');
     } finally {
       isChecking = false;
     }
@@ -112,6 +119,16 @@
 
   function openUrl(url: string): void {
     window.open(url, '_blank');
+  }
+
+  function showDialog(
+    message: string | null,
+    variant: 'info' | 'success' | 'warning' | 'error' = 'info'
+  ): void {
+    if (!message) return;
+    dialogMessage = message;
+    dialogVariant = variant;
+    dialogOpen = true;
   }
 
   function handleCardClick(event: Event) {
@@ -238,6 +255,13 @@
       </div>
     </div>
   </div>
+
+  <NotificationDialog
+    isOpen={dialogOpen}
+    variant={dialogVariant}
+    message={dialogMessage}
+    on:close={() => (dialogOpen = false)}
+  />
 </div>
 
 <style>

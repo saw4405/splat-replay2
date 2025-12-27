@@ -31,7 +31,7 @@ const STEP_SUBSTEP_COUNTS: Record<string, number> = {
   ffmpeg_setup: 1, // FFMPEG: 1つのサブステップ
   tesseract_setup: 2, // Tesseract: 2つのサブステップ
   font_installation: 2, // Font: 2つのサブステップ
-  youtube_setup: 5, // YouTube: 5つのサブステップ
+  youtube_setup: 7, // YouTube: 7つのサブステップ
 };
 
 // 進行状況の計算（サブステップを含む）

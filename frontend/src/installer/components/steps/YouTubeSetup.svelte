@@ -8,7 +8,7 @@
     saveYouTubePrivacyStatus,
   } from '../../store';
   import { type SystemCheckResult, InstallationStep } from '../../types';
-  import ErrorDialog from '../ErrorDialog.svelte';
+  import NotificationDialog from '../../../common/components/NotificationDialog.svelte';
 
   const SUBSTEP_STORAGE_KEY = 'youtube_substep_index';
 
@@ -26,8 +26,9 @@
   let credentialsInstalled = false;
   let isChecking = false;
   let hasInitializedSubstep = false;
-  let showError = false;
-  let errorMessage = '';
+  let dialogOpen = false;
+  let dialogMessage = '';
+  let dialogVariant: 'info' | 'success' | 'warning' | 'error' = 'info';
   let privacyStatus: 'public' | 'unlisted' | 'private' = 'private';
 
   let setupSteps: SetupStep[] = [
@@ -121,26 +122,12 @@
   // Sync with installation state
   $: if ($installationState && $installationState.step_details) {
     const details = $installationState.step_details[InstallationStep.YOUTUBE_SETUP] || {};
-    console.log(
-      '[YouTubeSetup] Reactive update - details:',
-      details,
-      'credentialsInstalled:',
-      credentialsInstalled
-    );
     const updatedSteps = setupSteps.map((step, index) => ({
       ...step,
       // 手順1〜5（インデックス0〜4）は credentialsInstalled も考慮
       // 手順6,7（インデックス5,6）は details のみから状態を取得
       completed: index <= 4 ? details[step.id] || credentialsInstalled : details[step.id] || false,
     }));
-    console.log(
-      '[YouTubeSetup] Updated steps:',
-      updatedSteps.map((s, i) => ({
-        index: i,
-        id: s.id,
-        completed: s.completed,
-      }))
-    );
     setupSteps = updatedSteps;
 
     if (
@@ -172,11 +159,11 @@
     saveSubstepIndex(currentSubStepIndex);
   }
 
-  export async function next(options: { skip?: boolean } = {}): Promise<boolean> {
+  export async function next(_options: { skip?: boolean } = {}): Promise<boolean> {
     const currentStep = setupSteps[currentSubStepIndex];
 
     // ファイル配置ステップのバリデーション
-    if (!options.skip && currentSubStepIndex === 4 && !credentialsInstalled) {
+    if (currentSubStepIndex === 4) {
       isChecking = true;
       try {
         const result: SystemCheckResult = await checkSystem('youtube');
@@ -187,16 +174,16 @@
             await markSubstepCompleted(InstallationStep.YOUTUBE_SETUP, setupSteps[i].id, true);
           }
         } else {
-          errorMessage =
-            'client_secret.json ファイルが見つかりませんでした。配置してから次へ進んでください。';
-          showError = true;
+          showDialog(
+            'client_secret.json ファイルが見つかりませんでした。配置してから次へ進んでください。',
+            'warning'
+          );
           isChecking = false;
           return true;
         }
       } catch (error) {
         console.error('YouTube credentials check failed:', error);
-        errorMessage = '認証情報の確認に失敗しました。';
-        showError = true;
+        showDialog('認証情報の確認に失敗しました。', 'error');
         isChecking = false;
         return true;
       } finally {
@@ -211,8 +198,7 @@
         await markSubstepCompleted(InstallationStep.YOUTUBE_SETUP, currentStep.id, true);
       } catch (error) {
         console.error('Failed to save privacy status:', error);
-        errorMessage = '公開範囲の保存に失敗しました。';
-        showError = true;
+        showDialog('公開範囲の保存に失敗しました。', 'error');
         return true;
       }
     }
@@ -234,11 +220,6 @@
 
   async function toggleStep(index: number): Promise<void> {
     const step = setupSteps[index];
-    console.log('[YouTubeSetup] toggleStep called:', {
-      index,
-      stepId: step.id,
-      currentCompleted: step.completed,
-    });
 
     // 手順5(インデックス4、ファイル配置)の場合のみ、チェック時にファイル存在確認を行う
     if (index === 4) {
@@ -257,13 +238,11 @@
             }
           } else {
             // ファイルが存在しない場合、エラーダイアログを表示してチェックを入れない
-            errorMessage = 'client_secret.json ファイルが見つかりませんでした。';
-            showError = true;
+            showDialog('client_secret.json ファイルが見つかりませんでした。', 'warning');
           }
         } catch (error) {
           console.error('YouTube credentials check failed:', error);
-          errorMessage = '認証情報の確認に失敗しました。';
-          showError = true;
+          showDialog('認証情報の確認に失敗しました。', 'error');
         } finally {
           isChecking = false;
         }
@@ -317,6 +296,15 @@
 
   function openUrl(url: string): void {
     window.open(url, '_blank');
+  }
+
+  function showDialog(
+    message: string,
+    variant: 'info' | 'success' | 'warning' | 'error' = 'info'
+  ): void {
+    dialogMessage = message;
+    dialogVariant = variant;
+    dialogOpen = true;
   }
 </script>
 
@@ -583,7 +571,12 @@
   </div>
 </div>
 
-<ErrorDialog bind:open={showError} title="エラー" message={errorMessage} />
+<NotificationDialog
+  isOpen={dialogOpen}
+  variant={dialogVariant}
+  message={dialogMessage}
+  on:close={() => (dialogOpen = false)}
+/>
 
 <style>
   .youtube-setup {

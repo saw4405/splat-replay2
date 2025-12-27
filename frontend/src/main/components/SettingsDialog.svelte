@@ -1,5 +1,5 @@
 <script lang="ts">
-  import BaseDialog from './BaseDialog.svelte';
+  import BaseDialog from '../../common/components/BaseDialog.svelte';
   import FieldItem from './settings/FieldItem.svelte';
   import type {
     FieldValue,

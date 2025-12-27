@@ -15,9 +15,11 @@
   export let minHeight: string | undefined = undefined;
   export let disablePrimaryButton = false;
   export let disableSecondaryButton = false;
+  export let allowBackdropClose = false; // ダイアログ外クリックで閉じるかどうか
+  export let showCloseButton = false; // ×ボタンを表示するかどうか
 
   const handleKeydown = (event: KeyboardEvent): void => {
-    if (event.key === 'Escape') {
+    if (event.key === 'Escape' && allowBackdropClose) {
       closeDialog();
     }
   };
@@ -54,7 +56,11 @@
   <!-- svelte-ignore a11y-click-events-have-key-events -->
   <!-- svelte-ignore a11y-no-static-element-interactions -->
   <!-- svelte-ignore a11y-no-noninteractive-element-interactions -->
-  <div class="dialog-overlay" role="presentation" on:click={closeDialog}>
+  <div
+    class="dialog-overlay"
+    role="presentation"
+    on:click={allowBackdropClose ? closeDialog : undefined}
+  >
     <div
       class="dialog-container"
       role="dialog"
@@ -70,9 +76,11 @@
           <slot name="header">
             <h2 id="dialog-title">{title}</h2>
           </slot>
-          <button class="icon-button" type="button" aria-label="閉じる" on:click={closeDialog}>
-            ✕
-          </button>
+          {#if showCloseButton}
+            <button class="icon-button" type="button" aria-label="閉じる" on:click={closeDialog}>
+              ✕
+            </button>
+          {/if}
         </header>
       {/if}
 

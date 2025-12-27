@@ -5,8 +5,8 @@
   import VideoPlayerDialog from './VideoPlayerDialog.svelte';
   import ThumbnailZoomDialog from './ThumbnailZoomDialog.svelte';
   import SubtitleEditorDialog from './SubtitleEditorDialog.svelte';
-  import AlertDialog from './AlertDialog.svelte';
-  import ConfirmDialog from './ConfirmDialog.svelte';
+  import NotificationDialog from '../../common/components/NotificationDialog.svelte';
+  import ConfirmDialog from '../../common/components/ConfirmDialog.svelte';
 
   export let videos: RecordedVideo[] = [];
 
@@ -20,6 +20,7 @@
   let showAlertDialog = false;
   let showConfirmDialog = false;
   let alertMessage = '';
+  let alertVariant: 'info' | 'success' | 'warning' | 'error' = 'info';
   let confirmMessage = '';
   let pendingDeleteVideo: RecordedVideo | null = null;
   let currentVideoUrl = '';
@@ -144,6 +145,7 @@
     } catch (error) {
       console.error('Failed to save metadata:', error);
       alertMessage = `メタデータの保存に失敗しました: ${error}`;
+      alertVariant = 'error';
       showAlertDialog = true;
     }
   }
@@ -182,6 +184,7 @@
     } catch (error) {
       console.error('Failed to delete video:', error);
       alertMessage = `動画の削除に失敗しました: ${error}`;
+      alertVariant = 'error';
       showAlertDialog = true;
     } finally {
       deletingVideoId = null;
@@ -431,8 +434,9 @@
 />
 
 <!-- アラートダイアログ -->
-<AlertDialog
+<NotificationDialog
   isOpen={showAlertDialog}
+  variant={alertVariant}
   message={alertMessage}
   on:close={() => (showAlertDialog = false)}
 />

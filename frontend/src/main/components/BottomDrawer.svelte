@@ -3,7 +3,7 @@
   import RecordedDataList from './RecordedDataList.svelte';
   import EditedDataList from './EditedDataList.svelte';
   import ProgressDialog from './ProgressDialog.svelte';
-  import AlertDialog from './AlertDialog.svelte';
+  import NotificationDialog from '../../common/components/NotificationDialog.svelte';
   import YouTubePermissionDialog from './YouTubePermissionDialog.svelte';
   import {
     fetchRecordedVideos,
@@ -25,6 +25,7 @@
   let showProgressDialog = false; // 進捗ダイアログ表示フラグ
   let showAlertDialog = false; // アラートダイアログ表示フラグ
   let alertMessage = ''; // アラートメッセージ
+  let alertVariant: 'info' | 'success' | 'warning' | 'error' = 'info';
   let showYouTubePermissionDialog = false; // YouTube権限ダイアログ表示フラグ
 
   let recordedVideos: RecordedVideo[] = [];
@@ -175,6 +176,7 @@
     } catch (error) {
       console.error('処理開始エラー:', error);
       alertMessage = `処理開始に失敗しました: ${error}`;
+      alertVariant = 'error';
       showAlertDialog = true;
     }
   }
@@ -191,11 +193,13 @@
         await loadData(); // データを即座に再取得
       } else {
         alertMessage = response.message || '処理を開始できませんでした(既に実行中の可能性)';
+        alertVariant = 'warning';
         showAlertDialog = true;
       }
     } catch (error) {
       console.error('処理開始エラー:', error);
       alertMessage = `処理開始に失敗しました: ${error}`;
+      alertVariant = 'error';
       showAlertDialog = true;
     }
   }
@@ -229,9 +233,11 @@
 
           if (status.state === 'succeeded') {
             alertMessage = '編集・アップロード処理が完了しました!';
+            alertVariant = 'success';
             showAlertDialog = true;
           } else if (status.state === 'failed') {
             alertMessage = `編集・アップロード処理が失敗しました: ${status.error || '不明なエラー'}`;
+            alertVariant = 'error';
             showAlertDialog = true;
           }
         }
@@ -252,8 +258,9 @@
 <ProgressDialog isOpen={showProgressDialog} on:close={() => (showProgressDialog = false)} />
 
 <!-- アラートダイアログ -->
-<AlertDialog
+<NotificationDialog
   isOpen={showAlertDialog}
+  variant={alertVariant}
   message={alertMessage}
   on:close={() => (showAlertDialog = false)}
 />

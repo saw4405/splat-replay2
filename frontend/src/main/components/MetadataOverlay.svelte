@@ -1,11 +1,12 @@
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
   import { slide } from 'svelte/transition';
-  import AlertDialog from './AlertDialog.svelte';
+  import NotificationDialog from '../../common/components/NotificationDialog.svelte';
 
   export let visible: boolean = false;
   let showAlertDialog = false; // アラートダイアログ表示フラグ
   let alertMessage = ''; // アラートメッセージ
+  let alertVariant: 'info' | 'success' | 'warning' | 'error' = 'info';
 
   // メタデータ (SSE経由で更新)
   let metadata = {
@@ -206,6 +207,7 @@
       if (!response.ok) {
         console.error('Failed to save metadata:', response.status);
         alertMessage = 'メタデータの保存に失敗しました';
+        alertVariant = 'error';
         showAlertDialog = true;
         return;
       }
@@ -213,10 +215,12 @@
       const result = await response.json();
       console.log('Metadata saved:', result);
       alertMessage = 'メタデータを保存しました';
+      alertVariant = 'success';
       showAlertDialog = true;
     } catch (error) {
       console.error('Failed to save metadata:', error);
       alertMessage = 'メタデータの保存に失敗しました';
+      alertVariant = 'error';
       showAlertDialog = true;
     }
   }
@@ -261,8 +265,9 @@
 </script>
 
 <!-- アラートダイアログ -->
-<AlertDialog
+<NotificationDialog
   isOpen={showAlertDialog}
+  variant={alertVariant}
   message={alertMessage}
   on:close={() => (showAlertDialog = false)}
 />
