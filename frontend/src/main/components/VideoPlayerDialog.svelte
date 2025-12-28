@@ -12,6 +12,7 @@
   showFooter={false}
   maxWidth="90vw"
   maxHeight="90vh"
+  showCloseButton={true}
 >
   <div class="video-container">
     <video controls autoplay class="video-player">

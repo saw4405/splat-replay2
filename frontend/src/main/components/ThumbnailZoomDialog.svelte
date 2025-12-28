@@ -12,6 +12,7 @@
   showFooter={false}
   maxWidth="90vw"
   maxHeight="90vh"
+  showCloseButton={true}
 >
   <div class="image-container">
     <img src={imageUrl} alt={imageTitle} class="thumbnail-image" />
