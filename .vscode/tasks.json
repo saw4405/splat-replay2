@@ -29,13 +29,16 @@
         "python",
         "-m",
         "uvicorn",
-        "splat_replay.web.app:app",
+        "splat_replay.interface.web.app:app",
         "--host",
         "127.0.0.1",
         "--port",
         "8000",
         "--reload"
       ],
+      "options": {
+        "cwd": "${workspaceFolder}/backend"
+      },
       "isBackground": true,
       "problemMatcher": [],
       "presentation": {

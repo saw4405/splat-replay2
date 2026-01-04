@@ -3,7 +3,7 @@
 <!-- 将来の解消方針: GitHub の Markdown レンダリングが画像+テキストの flexbox 配置をサポートするか、別の表現方法を検討 -->
 <div align="center">
   <h1 style="display: flex; align-items: center; justify-content: center;">
-    <img src="assets/icon.png" alt="アプリアイコン" width="32" height="32" style="margin-right: 8px; position: relative; top: 4px;" />
+    <img src="backend/assets/icon.png" alt="アプリアイコン" width="32" height="32" style="margin-right: 8px; position: relative; top: 4px;" />
     Splat Replay
   </h1>
 </div>
@@ -11,7 +11,7 @@
 
 Splat Replay は、スプラトゥーン 3 のプレイ動画を自動で録画・編集・アップロードするアプリです。一連の処理を自動化することで、プレイに集中しながら記録を残せます。
 
-![コンセプト](./assets/concept.svg)
+![コンセプト](./backend/assets/concept.svg)
 
 ## 主な機能
 
@@ -24,7 +24,7 @@ Splat Replay は、スプラトゥーン 3 のプレイ動画を自動で録画�
 - **自動アップロード**:  
   編集した動画を YouTube にアップロードします。タイトル・説明・サムネイル・字幕を合わせて設定します。
 
-![画面](./assets/gui.png)
+![画面](./backend/assets/gui.png)
 
 ## 使い方
 
@@ -44,7 +44,7 @@ Splat Replay は、スプラトゥーン 3 のプレイ動画を自動で録画�
 ### システム要件
 
 - **OS**: Windows 11
-- **Python**: 3.13 以上（`.python-version`記載バージョンに追随）
+- **Python**: 3.13 以上（`backend/.python-version`記載バージョンに追随）
 - **uv**: Python パッケージマネージャー
 - **Node.js**: フロントエンドビルド用
 - **Task**: タスクランナー（ビルド・開発タスク管理）

@@ -3,14 +3,18 @@ repos:
     rev: v0.14.6
     hooks:
       - id: ruff-check
+        args: [--config, backend/pyproject.toml]
+        files: ^backend/
       - id: ruff-format
+        args: [--config, backend/pyproject.toml]
+        files: ^backend/
   - repo: local
     hooks:
       - id: ty
         name: ty check
-        entry: uv run ty check . --ignore unresolved-import
-        language: python
-        files: ^src/|^tests/
+        entry: uv --directory backend run ty check . --ignore unresolved-import
+        language: system
+        files: ^backend/src/|^backend/tests/
         pass_filenames: false
       - id: frontend-format
         name: frontend format check

@@ -104,7 +104,65 @@ npm run check       # svelte-check 実行
 
 ---
 
-## 6. ルートのAGENTS.mdとの関係
+## 6. ディレクトリ構成
+
+### 6.1 現在の構成（2025-12-31時点）
+
+```
+frontend/src/
+├── common/              # 共通コンポーネント・型
+│   ├── components/      # 共通ダイアログ（BaseDialog, NotificationDialog等）
+│   └── types.ts         # ApiError等の共通型
+├── main/                # メインアプリケーション
+│   ├── api/             # API通信層（機能別に分割）
+│   │   ├── types.ts          # API型定義
+│   │   ├── recording.ts      # 録画制御API
+│   │   ├── assets.ts         # アセット管理API
+│   │   ├── metadata.ts       # メタデータ・字幕API
+│   │   ├── mappers.ts        # データマッパー
+│   │   └── utils.ts          # 共通ユーティリティ
+│   ├── components/      # コンポーネント群（17個）
+│   │   └── settings/    # 設定関連コンポーネント
+│   ├── api.ts           # API re-export（互換性維持）
+│   ├── domainEvents.ts  # ドメインイベント購読
+│   └── MainApp.svelte   # メインアプリ
+└── setup/               # セットアップウィザード
+    ├── stores/          # 状態管理（機能別に分割）
+    │   ├── state.ts         # 基本状態管理
+    │   ├── navigation.ts    # ナビゲーション
+    │   ├── system.ts        # システムチェック
+    │   └── config.ts        # 設定管理
+    ├── components/      # コンポーネント群
+    │   └── steps/       # ステップコンポーネント
+    ├── store.ts         # Store re-export（互換性維持）
+    └── SetupApp.svelte  # セットアップアプリ
+```
+
+### 6.2 ファイル分割の原則
+
+- **1ファイルは100〜300行を目安**（絶対ではない）
+- **責務の単一性**: 1ファイルは1つの責務のみ
+- **Re-export維持**: 既存のimport文を変更しないよう、分割前のファイルをre-export用に残す
+
+### 6.3 API層（main/api/）の責務
+
+- `types.ts`: 全API共通の型定義
+- `recording.ts`: 録画制御（start/state/preview）
+- `assets.ts`: アセット管理（録画済み・編集済みビデオの一覧・削除）
+- `metadata.ts`: メタデータ更新、字幕取得・更新
+- `mappers.ts`: バックエンドのsnake_caseをfrontendのcamelCaseに変換
+- `utils.ts`: HTTPヘッダー、エラーハンドリング
+
+### 6.4 セットアップ状態管理（setup/stores/）の責務
+
+- `state.ts`: セットアップ状態の保持、ローディング・エラー管理、進行状況計算
+- `navigation.ts`: ステップ間の移動、サブステップ管理、ステップのスキップ・完了
+- `system.ts`: 外部ソフトウェアのチェック、FFmpeg/Tesseractセットアップ
+- `config.ts`: OBS設定、ビデオデバイス、YouTube設定の取得・保存
+
+---
+
+## 7. ルートのAGENTS.mdとの関係
 
 このドキュメントは、ルートの `AGENTS.md` を補完するものであり：
 

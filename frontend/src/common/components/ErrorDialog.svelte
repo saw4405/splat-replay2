@@ -1,4 +1,4 @@
-<script lang="ts">
+﻿<script lang="ts">
   import { AlertCircle } from 'lucide-svelte';
   import BaseDialog from './BaseDialog.svelte';
   import type { ApiError } from '../types';

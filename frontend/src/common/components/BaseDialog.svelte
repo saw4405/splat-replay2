@@ -1,4 +1,4 @@
-<script lang="ts">
+﻿<script lang="ts">
   import { createEventDispatcher, onDestroy } from 'svelte';
 
   const dispatch = createEventDispatcher();

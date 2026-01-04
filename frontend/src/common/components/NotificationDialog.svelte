@@ -1,4 +1,4 @@
-<script lang="ts">
+﻿<script lang="ts">
   import { createEventDispatcher } from 'svelte';
   import { Info, CircleCheck, TriangleAlert, CircleAlert } from 'lucide-svelte';
   import BaseDialog from './BaseDialog.svelte';

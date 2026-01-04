@@ -6,6 +6,9 @@ dist/
 # TypeScript
 *.tsbuildinfo
 
+# Generated
+src/generated/
+
 # Environment
 .env
 .env.local

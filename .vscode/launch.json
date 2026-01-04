@@ -16,52 +16,38 @@
       "name": "Auto",
       "type": "debugpy",
       "request": "launch",
-      "program": "${workspaceFolder}/src/splat_replay/cli.py",
+      "module": "splat_replay.interface.cli",
       "console": "integratedTerminal",
       "args": ["auto"],
       "cwd": "${workspaceFolder}",
       "justMyCode": false,
       "env": {
-        "PYTHONPATH": "${workspaceFolder}/src"
+        "PYTHONPATH": "${workspaceFolder}/backend/src"
       }
     },
     {
       "name": "Upload",
       "type": "debugpy",
       "request": "launch",
-      "program": "${workspaceFolder}/src/splat_replay/cli.py",
+      "module": "splat_replay.interface.cli",
       "console": "integratedTerminal",
       "args": ["upload"],
       "cwd": "${workspaceFolder}",
       "justMyCode": false,
       "env": {
-        "PYTHONPATH": "${workspaceFolder}/src"
+        "PYTHONPATH": "${workspaceFolder}/backend/src"
       }
-    },
-    {
-      "name": "GUI",
-      "type": "debugpy",
-      "request": "launch",
-      "program": "${workspaceFolder}/src/splat_replay/cli.py",
-      "args": ["gui"],
-      "console": "integratedTerminal",
-      "cwd": "${workspaceFolder}",
-      "justMyCode": false,
-      "env": {
-        "PYTHONPATH": "${workspaceFolder}/src"
-      },
-      "purpose": ["debug-in-terminal"]
     },
     {
       "name": "WebView",
       "type": "debugpy",
       "request": "launch",
-      "program": "${workspaceFolder}/src/splat_replay/gui/webview_app.py",
+      "module": "splat_replay.bootstrap.webview",
       "console": "integratedTerminal",
       "cwd": "${workspaceFolder}",
       "justMyCode": false,
       "env": {
-        "PYTHONPATH": "${workspaceFolder}/src"
+        "PYTHONPATH": "${workspaceFolder}/backend/src"
       }
     },
     {
@@ -70,7 +56,8 @@
       "request": "launch",
       "module": "uvicorn",
       "args": [
-        "splat_replay.web.app:app",
+        "splat_replay.bootstrap.web_app:app",
+        "--factory",
         "--host",
         "127.0.0.1",
         "--port",
@@ -81,27 +68,7 @@
       "justMyCode": false,
       "cwd": "${workspaceFolder}",
       "env": {
-        "PYTHONPATH": "${workspaceFolder}/src"
-      },
-      "console": "integratedTerminal"
-    },
-    {
-      "name": "Web: Backend Server (No Reload)",
-      "type": "debugpy",
-      "request": "launch",
-      "module": "uvicorn",
-      "args": [
-        "splat_replay.web.app:app",
-        "--host",
-        "127.0.0.1",
-        "--port",
-        "8000"
-      ],
-      "jinja": true,
-      "justMyCode": false,
-      "cwd": "${workspaceFolder}",
-      "env": {
-        "PYTHONPATH": "${workspaceFolder}/src"
+        "PYTHONPATH": "${workspaceFolder}/backend/src"
       },
       "console": "integratedTerminal"
     },
@@ -109,13 +76,13 @@
       "name": "Web: Dev Server (Frontend + Backend)",
       "type": "debugpy",
       "request": "launch",
-      "module": "splat_replay.cli",
+      "module": "splat_replay.interface.cli",
       "args": ["web", "--dev"],
       "jinja": true,
       "justMyCode": false,
       "cwd": "${workspaceFolder}",
       "env": {
-        "PYTHONPATH": "${workspaceFolder}/src"
+        "PYTHONPATH": "${workspaceFolder}/backend/src"
       },
       "console": "integratedTerminal"
     }

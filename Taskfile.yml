@@ -3,9 +3,13 @@
 version: "3"
 
 vars:
+  BACKEND_DIR: backend
   FRONTEND_DIR: frontend
+  DIST_ROOT: dist
   DIST_DIR: dist/SplatReplay
-  BUILD_DIR: build
+  BUILD_DIR: backend/build
+  BUILD_DIST_DIR: backend/dist/SplatReplay
+  BACKEND_SPEC: packaging/splat-replay-webview.spec
   VENV_PYTHON: .venv/Scripts/python.exe
   VENV_PYINSTALLER: .venv/Scripts/pyinstaller.exe
 
@@ -21,6 +25,7 @@ tasks:
 
   install:backend:
     desc: Install backend dependencies
+    dir: "{{.BACKEND_DIR}}"
     cmds:
       - uv sync
 
@@ -29,6 +34,43 @@ tasks:
     dir: "{{.FRONTEND_DIR}}"
     cmds:
       - npm install
+
+  # ========================================
+  # OpenAPI 型生成
+  # ========================================
+  generate:openapi:
+    desc: Generate OpenAPI schema from FastAPI
+    dir: "{{.BACKEND_DIR}}"
+    deps:
+      - install:backend
+    cmds:
+      - cmd: powershell -NoProfile -Command "New-Item -ItemType Directory -Force -Path '../{{.FRONTEND_DIR}}/src/generated' | Out-Null"
+        ignore_error: true
+      - uv run python -c "import json; from splat_replay.bootstrap.web_app import create_app; app = create_app(); print(json.dumps(app.openapi(), indent=2))" > ../{{.FRONTEND_DIR}}/src/generated/openapi.json
+    sources:
+      - src/splat_replay/bootstrap/**/*.py
+      - src/splat_replay/interface/web/**/*.py
+    generates:
+      - ../{{.FRONTEND_DIR}}/src/generated/openapi.json
+
+  generate:types:
+    desc: Generate TypeScript types from OpenAPI schema
+    dir: "{{.FRONTEND_DIR}}"
+    deps:
+      - install:frontend
+      - generate:openapi
+    cmds:
+      - npx openapi-typescript src/generated/openapi.json -o src/generated/api.d.ts
+    sources:
+      - src/generated/openapi.json
+    generates:
+      - src/generated/api.d.ts
+
+  generate:
+    desc: Generate all types and schemas
+    cmds:
+      - task: generate:openapi
+      - task: generate:types
 
   # ========================================
   # ビルド
@@ -59,11 +101,12 @@ tasks:
 
   build:backend:
     desc: Build backend executable with PyInstaller
+    dir: "{{.BACKEND_DIR}}"
     deps:
       - install:backend
     cmds:
       - uv sync --group build
-      - "{{.VENV_PYINSTALLER}} splat-replay-webview.spec --clean"
+      - "{{.VENV_PYINSTALLER}} {{.BACKEND_SPEC}} --clean"
 
   build:postprocess:
     desc: Post-process build artifacts (copy configs, assets, etc.)
@@ -72,44 +115,88 @@ tasks:
       - task: build:copy-assets
       - task: build:create-dirs
       - task: build:remove-restricted
+      - task: build:create-build-warning
+      - task: build:move-to-root
       - task: build:show-info
+
+  build:move-to-root:
+    desc: Move build artifacts from backend/dist to project root dist
+    cmds:
+      - cmd: powershell -NoProfile -Command "if (Test-Path '{{.BACKEND_DIR}}/dist/SplatReplay') { if (Test-Path '{{.DIST_ROOT}}') { Remove-Item -Recurse -Force '{{.DIST_ROOT}}' }; New-Item -ItemType Directory -Force -Path '{{.DIST_ROOT}}' | Out-Null; Move-Item -Force '{{.BACKEND_DIR}}/dist/SplatReplay' '{{.DIST_ROOT}}/'; Write-Host '✅ Moved build artifacts to {{.DIST_ROOT}}/SplatReplay' -ForegroundColor Green } else { Write-Host '❌ Build artifacts not found in {{.BACKEND_DIR}}/dist/SplatReplay' -ForegroundColor Red }"
 
   build:copy-config:
     desc: Copy selected config files to dist
     cmds:
-      - cmd: powershell -NoProfile -Command "New-Item -ItemType Directory -Force -Path '{{.DIST_DIR}}\config' | Out-Null"
+      - cmd: powershell -NoProfile -Command "New-Item -ItemType Directory -Force -Path '{{.BUILD_DIST_DIR}}\config' | Out-Null"
         ignore_error: true
-      - cmd: powershell -NoProfile -Command "if (Test-Path 'config\image_matching.yaml') { Copy-Item -Force 'config\image_matching.yaml' '{{.DIST_DIR}}\config\image_matching.yaml' }"
+      - cmd: powershell -NoProfile -Command "if (Test-Path '{{.BACKEND_DIR}}\config\image_matching.yaml') { Copy-Item -Force '{{.BACKEND_DIR}}\config\image_matching.yaml' '{{.BUILD_DIST_DIR}}\config\image_matching.yaml' }"
         ignore_error: true
-      - cmd: powershell -NoProfile -Command "if (Test-Path 'config\settings.example.toml') { Copy-Item -Force 'config\settings.example.toml' '{{.DIST_DIR}}\config\settings.toml' }"
+      - cmd: powershell -NoProfile -Command "if (Test-Path '{{.BACKEND_DIR}}\config\settings.example.toml') { Copy-Item -Force '{{.BACKEND_DIR}}\config\settings.example.toml' '{{.BUILD_DIST_DIR}}\config\settings.toml' }"
         ignore_error: true
 
   build:copy-assets:
     desc: Copy assets to dist (not in _internal)
     cmds:
-      - cmd: powershell -NoProfile -Command "if (Test-Path '{{.DIST_DIR}}\_internal\assets') { Remove-Item -Recurse -Force '{{.DIST_DIR}}\_internal\assets' }"
+      - cmd: powershell -NoProfile -Command "if (Test-Path '{{.BUILD_DIST_DIR}}\_internal\assets') { Remove-Item -Recurse -Force '{{.BUILD_DIST_DIR}}\_internal\assets' }"
         ignore_error: true
-      - cmd: powershell -NoProfile -Command "if (Test-Path 'assets') { Copy-Item -Recurse -Force 'assets' '{{.DIST_DIR}}\assets' }"
+      - cmd: powershell -NoProfile -Command "if (Test-Path '{{.BACKEND_DIR}}\assets') { Copy-Item -Recurse -Force '{{.BACKEND_DIR}}\assets' '{{.BUILD_DIST_DIR}}\assets' }"
 
   build:create-dirs:
     desc: Create empty video directories in dist
     cmds:
-      - cmd: powershell -NoProfile -Command "New-Item -ItemType Directory -Force -Path '{{.DIST_DIR}}\videos\recorded' | Out-Null"
+      - cmd: powershell -NoProfile -Command "New-Item -ItemType Directory -Force -Path '{{.BUILD_DIST_DIR}}\videos\recorded' | Out-Null"
         ignore_error: true
-      - cmd: powershell -NoProfile -Command "New-Item -ItemType Directory -Force -Path '{{.DIST_DIR}}\videos\edited' | Out-Null"
+      - cmd: powershell -NoProfile -Command "New-Item -ItemType Directory -Force -Path '{{.BUILD_DIST_DIR}}\videos\edited' | Out-Null"
         ignore_error: true
 
   build:remove-restricted:
     desc: Remove redistribution-prohibited files
     cmds:
-      - cmd: powershell -NoProfile -Command "if (Test-Path '{{.DIST_DIR}}\assets\thumbnail\ikamodoki1.ttf') { Remove-Item -Force '{{.DIST_DIR}}\assets\thumbnail\ikamodoki1.ttf' }"
+      - cmd: powershell -NoProfile -Command "if (Test-Path '{{.BUILD_DIST_DIR}}\assets\thumbnail\ikamodoki1.ttf') { Remove-Item -Force '{{.BUILD_DIST_DIR}}\assets\thumbnail\ikamodoki1.ttf' }"
+        ignore_error: true
+
+  build:create-build-warning:
+    desc: Create warning README in build folder
+    cmds:
+      - cmd: |
+          powershell -NoProfile -Command "@'
+          ========================================
+            警告: このフォルダは中間生成物です
+          ========================================
+
+          このフォルダ (backend\build) には、PyInstaller のビルドプロセスで生成される
+          中間ファイルが格納されています。
+
+          このフォルダ内の .exe ファイルは不完全で、正常に動作しません。
+
+          実行可能なアプリケーションは以下の場所にあります:
+
+            dist\SplatReplay\SplatReplay.exe
+
+          必ず上記のファイルを実行してください。
+
+          ========================================
+            WARNING: This folder contains intermediate build artifacts
+          ========================================
+
+          This folder (backend\build) contains intermediate files generated 
+          by the PyInstaller build process.
+
+          The .exe files in this folder are incomplete and will NOT work correctly.
+
+          The runnable application is located at:
+
+            dist\SplatReplay\SplatReplay.exe
+
+          Always use the file above to run the application.
+          '@ | Out-File -FilePath '{{.BUILD_DIR}}\README.txt' -Encoding UTF8"
         ignore_error: true
 
   build:show-info:
     desc: Show build information
     cmds:
-      - cmd: 'powershell -NoProfile -Command "Write-Host ''''; Write-Host ''Build completed!'' -ForegroundColor Green; Write-Host ''''; Write-Host ''Executable location:'' -ForegroundColor Cyan; Write-Host ''  {{.DIST_DIR}}\SplatReplay.exe'' -ForegroundColor White; Write-Host ''''"'
-      - cmd: 'powershell -NoProfile -Command "if (Test-Path ''{{.DIST_DIR}}\SplatReplay.exe'') { Write-Host (''Executable size: '' + [math]::Round((Get-Item ''{{.DIST_DIR}}\SplatReplay.exe'').Length / 1MB, 2) + '' MB'') -ForegroundColor Gray }"'
+      - cmd: 'powershell -NoProfile -Command "Write-Host ''''; Write-Host ''================================================='' -ForegroundColor Green; Write-Host ''  Build completed successfully!'' -ForegroundColor Green; Write-Host ''================================================='' -ForegroundColor Green; Write-Host ''''; Write-Host ''実行ファイルの場所:'' -ForegroundColor Cyan; Write-Host ''  {{.DIST_DIR}}\SplatReplay.exe'' -ForegroundColor Yellow; Write-Host ''''; Write-Host ''重要: このフォルダは配布用のパッケージです。'' -ForegroundColor Yellow; Write-Host ''      実行する場合は上記のファイルをダブルクリックしてください。'' -ForegroundColor Yellow; Write-Host ''''"'
+      - cmd: 'powershell -NoProfile -Command "if (Test-Path ''{{.DIST_DIR}}\SplatReplay.exe'') { Write-Host (''実行ファイルサイズ: '' + [math]::Round((Get-Item ''{{.DIST_DIR}}\SplatReplay.exe'').Length / 1MB, 2) + '' MB'') -ForegroundColor Gray; Write-Host '''' }"'
 
   # ========================================
   # 開発サーバー
@@ -128,19 +215,21 @@ tasks:
 
   dev:backend:
     desc: Start backend dev server (uvicorn with reload)
+    dir: "{{.BACKEND_DIR}}"
     interactive: true
     cmds:
-      - uv run python -m uvicorn splat_replay.web.app:app --host 127.0.0.1 --port 8000 --reload
+      - uv run python -m uvicorn splat_replay.bootstrap.web_app:app --factory --host 127.0.0.1 --port 8000 --reload
 
   # ========================================
   # Lint / Format / Type Check
   # ========================================
   verify:
-    desc: Run all checks (format, lint, type-check, test)
+    desc: Run all checks (format, lint, type-check, import-lint, test)
     cmds:
       - task: format:check
       - task: lint
       - task: type-check
+      - task: import-lint
       - task: test
 
   lint:
@@ -151,11 +240,13 @@ tasks:
 
   lint:backend:
     desc: Lint backend code
+    dir: "{{.BACKEND_DIR}}"
     cmds:
       - uv run ruff check .
 
   lint:backend:fix:
     desc: Lint backend code with auto-fix
+    dir: "{{.BACKEND_DIR}}"
     cmds:
       - uv run ruff check . --fix
 
@@ -171,6 +262,12 @@ tasks:
     cmds:
       - npm run lint:fix
 
+  import-lint:
+    desc: Check import dependencies (layer violations)
+    dir: "{{.BACKEND_DIR}}"
+    cmds:
+      - uv run lint-imports --no-cache
+
   format:
     desc: Format all code (backend + frontend)
     cmds:
@@ -185,11 +282,13 @@ tasks:
 
   format:backend:
     desc: Format backend code
+    dir: "{{.BACKEND_DIR}}"
     cmds:
       - uv run ruff format .
 
   format:backend:check:
     desc: Check backend code formatting
+    dir: "{{.BACKEND_DIR}}"
     cmds:
       - uv run ruff format . --check
 
@@ -213,6 +312,7 @@ tasks:
 
   type-check:backend:
     desc: Type check backend code
+    dir: "{{.BACKEND_DIR}}"
     cmds:
       - uv run ty check
 
@@ -228,11 +328,13 @@ tasks:
   # ========================================
   test:
     desc: Run all tests
+    dir: "{{.BACKEND_DIR}}"
     cmds:
       - uv run pytest -q
 
   test:verbose:
     desc: Run all tests with verbose output
+    dir: "{{.BACKEND_DIR}}"
     cmds:
       - uv run pytest -v
 
@@ -248,7 +350,7 @@ tasks:
   clean:dist:
     desc: Clean backend build artifacts (dist, build, spec artifacts)
     cmds:
-      - cmd: powershell -NoProfile -Command "if (Test-Path '{{.DIST_DIR}}') { Remove-Item -Recurse -Force 'dist' }"
+      - cmd: powershell -NoProfile -Command "if (Test-Path '{{.DIST_ROOT}}') { Remove-Item -Recurse -Force '{{.DIST_ROOT}}' }"
         ignore_error: true
       - cmd: powershell -NoProfile -Command "if (Test-Path '{{.BUILD_DIR}}') { Remove-Item -Recurse -Force '{{.BUILD_DIR}}' }"
         ignore_error: true

@@ -1,4 +1,4 @@
-<script lang="ts">
+﻿<script lang="ts">
   import { createEventDispatcher, onDestroy, onMount, tick } from 'svelte';
 
   export let id: string;

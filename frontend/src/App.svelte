@@ -1,7 +1,7 @@
-<script lang="ts">
+﻿<script lang="ts">
   import { onMount } from 'svelte';
-  import { InstallerApp } from './installer';
-  import { installationState, fetchInstallationStatus } from './installer/store';
+  import { SetupApp } from './setup';
+  import { setupState, fetchInstallationStatus } from './setup/stores/state';
   import MainApp from './main/MainApp.svelte';
 
   let isCheckingInstallation = true;
@@ -12,9 +12,8 @@
     isCheckingInstallation = false;
   });
 
-  $: showInstaller =
-    !isCheckingInstallation && (!$installationState || !$installationState.is_completed);
-  $: showMainApp = !isCheckingInstallation && $installationState && $installationState.is_completed;
+  $: showSetup = !isCheckingInstallation && (!$setupState || !$setupState.is_completed);
+  $: showMainApp = !isCheckingInstallation && $setupState && $setupState.is_completed;
 </script>
 
 {#if isCheckingInstallation}
@@ -22,8 +21,8 @@
     <div class="loading-spinner"></div>
     <p>読み込み中...</p>
   </div>
-{:else if showInstaller}
-  <InstallerApp />
+{:else if showSetup}
+  <SetupApp />
 {:else if showMainApp}
   <MainApp />
 {/if}

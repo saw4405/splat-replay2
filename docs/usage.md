@@ -151,16 +151,16 @@ choco install go-task
    task build
    ```
 
-   ビルドが成功すると、`dist/SplatReplay/`ディレクトリに実行可能ファイルが生成されます。
+   ビルドが成功すると、`backend/dist/SplatReplay/`ディレクトリに実行可能ファイルが生成されます。
    詳細は [ビルドガイド](./build_guide.md) を参照してください。
 
 #### 2.3.2. イカモドキフォントの配置
 
-1. ダウンロードしたイカモドキフォントを`dist/SplatReplay/assets/thumbnail`フォルダに配置
+1. ダウンロードしたイカモドキフォントを`backend/dist/SplatReplay/assets/thumbnail`フォルダに配置
 
 #### 2.3.3. YouTube API 認証情報の配置
 
-1. ダウンロードした`client_secret.json`を`dist/SplatReplay/config`フォルダに配置
+1. ダウンロードした`client_secret.json`を`backend/dist/SplatReplay/config`フォルダに配置
 
 ## 4. 使用方法
 
@@ -189,7 +189,7 @@ choco install go-task
 task run
 
 # または直接実行
-.\dist\SplatReplay\SplatReplay.exe
+.\backend\dist\SplatReplay\SplatReplay.exe
 ```
 
 > **Note**: ソースコードを変更した場合は、`task build` で再ビルドしてから起動してください。

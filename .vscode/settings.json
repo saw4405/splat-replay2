@@ -1,8 +1,9 @@
 {
   "python.analysis.extraPaths": [
-    "${workspaceFolder}/typings"
+    "${workspaceFolder}/backend/src",
+    "${workspaceFolder}/backend/typings"
   ],
-  "python.analysis.stubPath": "typings",
+  "python.analysis.stubPath": "backend/typings",
   "python.analysis.typeCheckingMode": "strict",
   
   // 保存時に自動フォーマット

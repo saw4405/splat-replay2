@@ -1,4 +1,4 @@
-<script lang="ts">
+﻿<script lang="ts">
   import SelectField from './SelectField.svelte';
   import type { FieldValue, PrimitiveValue, SettingField } from './types';
 
