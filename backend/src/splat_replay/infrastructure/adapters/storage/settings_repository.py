@@ -3,10 +3,9 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Dict, List, Mapping, cast
+from typing import TYPE_CHECKING, Any, Dict, List, Mapping, cast
 
 from pydantic import BaseModel, SecretStr
-
 from splat_replay.application.interfaces import (
     SectionUpdate,
     SettingFieldData,
@@ -27,12 +26,20 @@ from splat_replay.infrastructure.config import (
 )
 from splat_replay.infrastructure.filesystem import paths
 
+if TYPE_CHECKING:
+    from splat_replay.application.interfaces import CaptureDeviceEnumeratorPort
+
 
 class TomlSettingsRepository(SettingsRepositoryPort):
     """Persist and load settings metadata via AppSettings."""
 
-    def __init__(self, settings_path: Path | None = None) -> None:
+    def __init__(
+        self,
+        settings_path: Path | None = None,
+        device_enumerator: CaptureDeviceEnumeratorPort | None = None,
+    ) -> None:
         self._settings_path = settings_path or paths.SETTINGS_FILE
+        self._device_enumerator = device_enumerator
 
     def fetch_sections(self) -> List[SettingSectionData]:
         settings = load_settings_from_toml(self._settings_path)
@@ -49,7 +56,9 @@ class TomlSettingsRepository(SettingsRepositoryPort):
                     f"Settings section '{section_id}' is not a Pydantic model"
                 )
 
-            fields = self._build_fields(type(section_model), section_model)
+            fields = self._build_fields(
+                type(section_model), section_model, section_id
+            )
             sections.append(
                 SettingSectionData(
                     id=section_id,
@@ -88,6 +97,8 @@ class TomlSettingsRepository(SettingsRepositoryPort):
         self,
         model_cls: type[BaseModel],
         model_value: BaseModel,
+        section_id: str = "",
+        parent_field_id: str = "",
     ) -> List[SettingFieldData]:
         fields: List[SettingFieldData] = []
 
@@ -106,6 +117,8 @@ class TomlSettingsRepository(SettingsRepositoryPort):
                 child_fields = self._build_fields(
                     type(attribute_value),
                     attribute_value,
+                    section_id,
+                    field_name,
                 )
                 field_data: SettingFieldData = {
                     "id": field_name,
@@ -127,6 +140,41 @@ class TomlSettingsRepository(SettingsRepositoryPort):
                 type=field_type,
                 recommended=recommended,
             )
+
+            # キャプチャデバイスの場合は動的に選択肢を追加
+            should_add_device_choices = (
+                # record.capture_device フィールド
+                (section_id == "record" and field_name == "capture_device")
+                # capture_device.name フィールド
+                or (section_id == "capture_device" and field_name == "name")
+                # record グループ内の capture_device.name フィールド
+                or (
+                    section_id == "record"
+                    and parent_field_id == "capture_device"
+                    and field_name == "name"
+                )
+            )
+
+            if (
+                should_add_device_choices
+                and self._device_enumerator is not None
+            ):
+                try:
+                    devices = self._device_enumerator.list_video_devices()
+                    if devices:
+                        field_data["type"] = "select"
+                        field_data["choices"] = devices
+                        # 現在の値がリストにない場合は追加
+                        if (
+                            isinstance(serialized_value, str)
+                            and serialized_value
+                            and serialized_value not in devices
+                        ):
+                            field_data["choices"].append(serialized_value)
+                except Exception:
+                    # デバイス列挙に失敗した場合はテキスト入力にフォールバック
+                    pass
+
             if choices:
                 field_data["choices"] = list(choices)
 

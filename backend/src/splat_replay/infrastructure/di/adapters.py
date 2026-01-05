@@ -8,8 +8,6 @@ from __future__ import annotations
 from typing import Optional, cast
 
 import punq
-from structlog.stdlib import BoundLogger
-
 from splat_replay.application.interfaces import (
     AuthenticatedClientPort,
     CaptureDeviceEnumeratorPort,
@@ -67,6 +65,7 @@ from splat_replay.infrastructure import (
 )
 from splat_replay.infrastructure.filesystem import paths
 from splat_replay.infrastructure.runtime import AppRuntime
+from structlog.stdlib import BoundLogger
 
 
 def register_adapters(container: punq.Container) -> None:
@@ -159,8 +158,13 @@ def register_adapters(container: punq.Container) -> None:
         container.resolve(TextToSpeechPort)
     except Exception:
         container.register(TextToSpeechPort, factory=lambda: None)
+
+    def _settings_repository_factory() -> SettingsRepositoryPort:
+        device_enumerator = container.resolve(CaptureDeviceEnumeratorPort)
+        return TomlSettingsRepository(device_enumerator=device_enumerator)
+
     container.register(
-        SettingsRepositoryPort, factory=lambda: TomlSettingsRepository()
+        SettingsRepositoryPort, factory=_settings_repository_factory
     )
 
     # VideoAssetRepository は DomainEventPublisher を利用するため factory で注入
