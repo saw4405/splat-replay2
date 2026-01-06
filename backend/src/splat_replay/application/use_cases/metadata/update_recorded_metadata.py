@@ -47,12 +47,12 @@ class UpdateRecordedMetadataUseCase:
         self,
         repository: VideoAssetRepositoryPort,
         logger: LoggerPort,
-        runtime_root: Path,
+        base_dir: Path,
         video_editor: VideoEditorPort,
     ) -> None:
         self._repository = repository
         self._logger = logger
-        self._runtime_root = runtime_root
+        self._base_dir = base_dir
         self._video_editor = video_editor
 
     async def execute(
@@ -61,7 +61,7 @@ class UpdateRecordedMetadataUseCase:
         """録画メタデータを更新する。
 
         Args:
-            video_id: 更新する動画の ID（runtime_root からの相対パス）
+            video_id: 更新する動画の ID（base_dir からの相対パス、例: recorded/xxx.mp4）
             patch: 更新内容
 
         Returns:
@@ -71,7 +71,7 @@ class UpdateRecordedMetadataUseCase:
             FileNotFoundError: 指定された動画が存在しない場合
             ValueError: 更新に必要な情報が不足している場合
         """
-        video_path = self._runtime_root / video_id
+        video_path = self._base_dir / video_id
 
         if not video_path.exists():
             self._logger.warning(
@@ -94,7 +94,7 @@ class UpdateRecordedMetadataUseCase:
         return await build_recorded_video_dto(
             video_path=video_path,
             metadata=updated_metadata,
-            runtime_root=self._runtime_root,
+            base_dir=self._base_dir,
             repository=self._repository,
             video_editor=self._video_editor,
             logger=self._logger,

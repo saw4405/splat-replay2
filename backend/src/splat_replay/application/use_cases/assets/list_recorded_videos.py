@@ -31,12 +31,12 @@ class ListRecordedVideosUseCase:
         self,
         repository: VideoAssetRepositoryPort,
         logger: LoggerPort,
-        runtime_root: Path,
+        base_dir: Path,
         video_editor: VideoEditorPort,
     ) -> None:
         self._repository = repository
         self._logger = logger
-        self._runtime_root = runtime_root
+        self._base_dir = base_dir
         self._video_editor = video_editor
 
     async def execute(self) -> list[RecordedVideoDTO]:
@@ -67,7 +67,7 @@ class ListRecordedVideosUseCase:
                 await build_recorded_video_dto(
                     video_path=asset.video,
                     metadata=metadata,
-                    runtime_root=self._runtime_root,
+                    base_dir=self._base_dir,
                     repository=self._repository,
                     video_editor=self._video_editor,
                     logger=self._logger,

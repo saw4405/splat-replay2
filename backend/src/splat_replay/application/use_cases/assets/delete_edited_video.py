@@ -24,22 +24,22 @@ class DeleteEditedVideoUseCase:
         self,
         repository: VideoAssetRepositoryPort,
         logger: LoggerPort,
-        runtime_root: Path,
+        base_dir: Path,
     ) -> None:
         self._repository = repository
         self._logger = logger
-        self._runtime_root = runtime_root
+        self._base_dir = base_dir
 
     async def execute(self, video_id: str) -> None:
         """編集済みビデオを削除。
 
         Args:
-            video_id: 削除する動画の ID（runtime_root からの相対パス）
+            video_id: 削除する動画の ID（base_dir からの相対パス、例: edited/xxx.mkv）
 
         Raises:
             FileNotFoundError: 指定された動画が存在しない場合
         """
-        video_path = self._runtime_root / video_id
+        video_path = self._base_dir / video_id
 
         if not video_path.exists():
             self._logger.warning(

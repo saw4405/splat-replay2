@@ -27,19 +27,19 @@ class GetRecordedSubtitleStructuredUseCase:
         self,
         repository: VideoAssetRepositoryPort,
         logger: LoggerPort,
-        runtime_root: Path,
+        base_dir: Path,
         converter: SubtitleConverter,
     ) -> None:
         self._repository = repository
         self._logger = logger
-        self._runtime_root = runtime_root
+        self._base_dir = base_dir
         self._converter = converter
 
     async def execute(self, video_id: str) -> SubtitleDataDTO:
         """録画字幕を構造化データとして取得。
 
         Args:
-            video_id: 取得する動画の ID（runtime_root からの相対パス）
+            video_id: 取得する動画の ID（base_dir からの相対パス、例: recorded/xxx.mp4）
 
         Returns:
             SubtitleDataDTO: 字幕の構造化データ
@@ -48,7 +48,7 @@ class GetRecordedSubtitleStructuredUseCase:
             FileNotFoundError: 指定された動画が存在しない場合
             ValueError: 字幕のパースに失敗した場合
         """
-        video_path = self._runtime_root / video_id
+        video_path = self._base_dir / video_id
 
         if not video_path.exists():
             self._logger.warning(

@@ -27,12 +27,12 @@ class ListEditedVideosUseCase:
         self,
         repository: VideoAssetRepositoryPort,
         logger: LoggerPort,
-        runtime_root: Path,
+        base_dir: Path,
         video_editor: VideoEditorPort,
     ) -> None:
         self._repository = repository
         self._logger = logger
-        self._runtime_root = runtime_root
+        self._base_dir = base_dir
         self._video_editor = video_editor
 
     async def execute(self) -> list[EditedVideoDTO]:
@@ -46,12 +46,17 @@ class ListEditedVideosUseCase:
 
         items: list[EditedVideoDTO] = []
         for video_path in videos:
-            # runtimeルートからの相対パスに変換
+            # base_dir からの相対パスに変換（edited/xxx.mkv）
             try:
-                relative_path = video_path.relative_to(self._runtime_root)
+                relative_path = video_path.relative_to(self._base_dir)
             except ValueError:
-                # runtime_root 外のファイルはそのまま使用
-                relative_path = video_path
+                # base_dir 外のファイルは警告してスキップ
+                self._logger.warning(
+                    "base_dir 外のファイルはスキップします",
+                    video=str(video_path),
+                    base_dir=str(self._base_dir),
+                )
+                continue
 
             video_id = str(relative_path.as_posix())
 

@@ -21,16 +21,22 @@ async def build_recorded_video_dto(
     *,
     video_path: Path,
     metadata: RecordingMetadata,
-    runtime_root: Path,
+    base_dir: Path,
     repository: VideoAssetRepositoryPort,
     video_editor: VideoEditorPort,
     logger: LoggerPort,
 ) -> RecordedVideoDTO:
     """Build RecordedVideoDTO from a recorded asset."""
     try:
-        relative_path = video_path.relative_to(runtime_root)
+        relative_path = video_path.relative_to(base_dir)
     except ValueError:
-        relative_path = video_path
+        logger.warning(
+            "base_dir 外のファイルはスキップします",
+            video=str(video_path),
+            base_dir=str(base_dir),
+        )
+        # base_dir外の場合はファイル名のみを使用（後方互換性のため）
+        relative_path = Path("recorded") / video_path.name
 
     duration_seconds: float | None = None
     try:

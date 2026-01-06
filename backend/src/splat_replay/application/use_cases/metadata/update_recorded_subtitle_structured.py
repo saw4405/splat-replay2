@@ -27,12 +27,12 @@ class UpdateRecordedSubtitleStructuredUseCase:
         self,
         repository: VideoAssetRepositoryPort,
         logger: LoggerPort,
-        runtime_root: Path,
+        base_dir: Path,
         converter: SubtitleConverter,
     ) -> None:
         self._repository = repository
         self._logger = logger
-        self._runtime_root = runtime_root
+        self._base_dir = base_dir
         self._converter = converter
 
     async def execute(
@@ -41,13 +41,13 @@ class UpdateRecordedSubtitleStructuredUseCase:
         """録画字幕を構造化データから更新。
 
         Args:
-            video_id: 更新する動画の ID（runtime_root からの相対パス）
+            video_id: 更新する動画の ID（base_dir からの相対パス、例: recorded/xxx.mp4）
             subtitle_data: 字幕の構造化データ
 
         Raises:
             FileNotFoundError: 指定された動画が存在しない場合
         """
-        video_path = self._runtime_root / video_id
+        video_path = self._base_dir / video_id
 
         if not video_path.exists():
             self._logger.warning(

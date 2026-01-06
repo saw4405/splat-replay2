@@ -14,7 +14,6 @@ from typing import TYPE_CHECKING, List
 
 from fastapi import APIRouter, HTTPException, status
 from fastapi.responses import FileResponse, JSONResponse
-
 from splat_replay.interface.web.schemas import (
     EditedVideoItem,
     EditUploadStatus,
@@ -89,11 +88,14 @@ def create_assets_router(server: WebAPIServer) -> APIRouter:
 
     @router.get("/videos/recorded/{video_id:path}")
     async def get_recorded_video(video_id: str) -> FileResponse:
-        """録画済みビデオファイルを取得。"""
+        """録画済みビデオファイルを取得。
+
+        video_id は base_dir からの相対パス（例: recorded/xxx.mp4）
+        """
         video_path = Path(video_id)
-        # 相対パスの場合は base_dir/recorded からの相対として解決
+        # 絶対パスでない場合は base_dir からの相対として解決
         if not video_path.is_absolute():
-            video_path = server.base_dir / "recorded" / video_id
+            video_path = server.base_dir / video_id
 
         if not video_path.exists():
             raise HTTPException(
@@ -164,11 +166,14 @@ def create_assets_router(server: WebAPIServer) -> APIRouter:
 
     @router.get("/videos/edited/{video_id:path}")
     async def get_edited_video(video_id: str) -> FileResponse:
-        """編集済みビデオファイルを取得。"""
+        """編集済みビデオファイルを取得。
+
+        video_id は base_dir からの相対パス（例: edited/xxx.mkv）
+        """
         video_path = Path(video_id)
-        # 相対パスの場合は base_dir/edited からの相対として解決
+        # 絶対パスでない場合は base_dir からの相対として解決
         if not video_path.is_absolute():
-            video_path = server.base_dir / "edited" / video_id
+            video_path = server.base_dir / video_id
 
         if not video_path.exists():
             raise HTTPException(

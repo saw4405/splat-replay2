@@ -14,7 +14,7 @@ class RecordedVideoDTO:
     """録画済みビデオの情報を表すDTO。
 
     Attributes:
-        video_id: ビデオID（runtime_rootからの相対パス）
+        video_id: ビデオID（base_dirからの相対パス、例: recorded/xxx.mp4）
         path: 動画ファイルの絶対パス（文字列）
         filename: ファイル名
         started_at: 録画開始時刻（ISO形式）
@@ -67,7 +67,7 @@ class EditedVideoDTO:
     """編集済みビデオの情報を表すDTO。
 
     Attributes:
-        video_id: ビデオID（runtime_rootからの相対パス）
+        video_id: ビデオID（base_dirからの相対パス、例: edited/xxx.mkv）
         path: 動画ファイルの絶対パス（文字列）
         filename: ファイル名
         duration_seconds: 動画の長さ（秒）

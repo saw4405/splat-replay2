@@ -27,7 +27,7 @@ from splat_replay.application.use_cases.metadata import (
     UpdateRecordedMetadataUseCase,
     UpdateRecordedSubtitleStructuredUseCase,
 )
-from splat_replay.infrastructure.filesystem import RUNTIME_ROOT
+from splat_replay.domain.config import AppSettings
 
 
 def register_app_usecases(container: punq.Container) -> None:
@@ -40,12 +40,15 @@ def register_app_usecases(container: punq.Container) -> None:
     container.register(AutoUseCase, AutoUseCase)
     container.register(UploadUseCase, UploadUseCase)
 
-    # Assets Use Cases - runtime_root を注入する必要があるため factory で登録
+    # Assets Use Cases - base_dir を注入する必要があるため factory で登録
+    app_settings = container.resolve(AppSettings)
+    base_dir = app_settings.storage.base_dir
+
     def list_recorded_videos_factory() -> ListRecordedVideosUseCase:
         return ListRecordedVideosUseCase(
             repository=container.resolve(VideoAssetRepositoryPort),
             logger=container.resolve(LoggerPort),
-            runtime_root=RUNTIME_ROOT,
+            base_dir=base_dir,
             video_editor=container.resolve(VideoEditorPort),
         )
 
@@ -53,14 +56,14 @@ def register_app_usecases(container: punq.Container) -> None:
         return DeleteRecordedVideoUseCase(
             repository=container.resolve(VideoAssetRepositoryPort),
             logger=container.resolve(LoggerPort),
-            runtime_root=RUNTIME_ROOT,
+            base_dir=base_dir,
         )
 
     def list_edited_videos_factory() -> ListEditedVideosUseCase:
         return ListEditedVideosUseCase(
             repository=container.resolve(VideoAssetRepositoryPort),
             logger=container.resolve(LoggerPort),
-            runtime_root=RUNTIME_ROOT,
+            base_dir=base_dir,
             video_editor=container.resolve(VideoEditorPort),
         )
 
@@ -68,7 +71,7 @@ def register_app_usecases(container: punq.Container) -> None:
         return DeleteEditedVideoUseCase(
             repository=container.resolve(VideoAssetRepositoryPort),
             logger=container.resolve(LoggerPort),
-            runtime_root=RUNTIME_ROOT,
+            base_dir=base_dir,
         )
 
     container.register(
@@ -86,12 +89,12 @@ def register_app_usecases(container: punq.Container) -> None:
     container.register(GetEditUploadStatusUseCase, GetEditUploadStatusUseCase)
     container.register(StartEditUploadUseCase, StartEditUploadUseCase)
 
-    # Metadata Use Cases - runtime_root を注入する必要があるため factory で登録
+    # Metadata Use Cases - base_dir を注入する必要があるため factory で登録
     def update_recorded_metadata_factory() -> UpdateRecordedMetadataUseCase:
         return UpdateRecordedMetadataUseCase(
             repository=container.resolve(VideoAssetRepositoryPort),
             logger=container.resolve(LoggerPort),
-            runtime_root=RUNTIME_ROOT,
+            base_dir=base_dir,
             video_editor=container.resolve(VideoEditorPort),
         )
 
@@ -101,7 +104,7 @@ def register_app_usecases(container: punq.Container) -> None:
         return GetRecordedSubtitleStructuredUseCase(
             repository=container.resolve(VideoAssetRepositoryPort),
             logger=container.resolve(LoggerPort),
-            runtime_root=RUNTIME_ROOT,
+            base_dir=base_dir,
             converter=container.resolve(SubtitleConverter),
         )
 
@@ -111,7 +114,7 @@ def register_app_usecases(container: punq.Container) -> None:
         return UpdateRecordedSubtitleStructuredUseCase(
             repository=container.resolve(VideoAssetRepositoryPort),
             logger=container.resolve(LoggerPort),
-            runtime_root=RUNTIME_ROOT,
+            base_dir=base_dir,
             converter=container.resolve(SubtitleConverter),
         )
 
