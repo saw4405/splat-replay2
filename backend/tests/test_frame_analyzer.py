@@ -14,9 +14,9 @@ BASE = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(BASE / "src"))  # noqa: E402
 
 from splat_replay.domain.config import ImageMatchingSettings  # noqa: E402
-from splat_replay.domain.models import (  # noqa: E402
+from splat_replay.domain.models import (
     XP,
-    BattleResult,
+    BattleResult,  # noqa: E402
     GameMode,
     Judgement,
     Match,
@@ -31,8 +31,8 @@ from splat_replay.domain.services.analyzers import (  # noqa: E402
     FrameAnalyzer,
     SalmonFrameAnalyzer,
 )
-from splat_replay.infrastructure import (  # noqa: E402
-    MatcherRegistry,
+from splat_replay.infrastructure import (
+    MatcherRegistry,  # noqa: E402
     TesseractOCR,
 )
 

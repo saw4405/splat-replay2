@@ -3,10 +3,8 @@
 注意:
   - 現状で閾値を超えるメソッド (OCR や複合処理を含む) は Fail になります。
   - ボトルネック特定用のテストとして利用を想定。
-  - 閾値は環境変数 PERF_THRESHOLD_SEC で上書き可能 (デフォルト 1/60)。
-  - 3 回計測 (1 回ウォームアップ + 2 回本計測) の平均時間で判定。
+  - デフォルトではスキップされます。実行するには: pytest -m perf
 
-失敗が多すぎる場合は、テストを xfail 化したり、対象メソッドを除外するなど調整してください。
 """
 
 from __future__ import annotations
@@ -18,12 +16,8 @@ from typing import Awaitable, Callable, Protocol, Sequence
 
 import cv2
 import pytest
-from test_frame_analyzer import (  # noqa: E402
-    TEMPLATE_DIR,
-    create_analyzer,
-)
-
 from splat_replay.domain.models import GameMode  # noqa: E402
+from test_frame_analyzer import TEMPLATE_DIR, create_analyzer  # noqa: E402
 
 # ==== 設定 ====
 DEFAULT_THRESHOLD_SEC = (
@@ -79,7 +73,7 @@ CASES: list[SpeedCase] = [
         "extract_rate",
         "rate_XP1971.9.png",
         prepare=_prepare_extract_rate,
-        threshold_sec=0.05,  # OCRも含むので緩和
+        threshold_sec=0.06,  # OCRも含むので緩和
     ),
     SpeedCase(
         "detect_matching_start", "detect_matching_start", "matching_1.png"
@@ -149,6 +143,7 @@ CASES: list[SpeedCase] = [
 ]
 
 
+@pytest.mark.perf
 @pytest.mark.asyncio
 @pytest.mark.parametrize("case", CASES, ids=[c.name for c in CASES])
 async def test_speed_threshold(

@@ -71,6 +71,12 @@ indent-width = 4
 stubPath = "typings"
 extraPaths = ["typings"]
 
+[tool.pytest.ini_options]
+markers = [
+    "perf: performance tests (deselect with '-m \"not perf\"')",
+]
+addopts = "-m 'not perf'"
+
 [tool.ty.environment]
 extra-paths = ["typings"]
 

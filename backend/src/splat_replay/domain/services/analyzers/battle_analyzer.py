@@ -7,7 +7,6 @@ import re
 from typing import Dict, List, Optional, Tuple
 
 import numpy as np
-
 from splat_replay.domain.models import (
     XP,
     BattleResult,
@@ -338,11 +337,13 @@ class BattleFrameAnalyzer(AnalyzerPlugin):
                             for idx_val, ((run_s, run_e), w) in enumerate(
                                 zip(k_runs, widths)
                             ):
-                                # ノイズ判定: 最大幅の50%未満かつ絶対幅が15未満は細いノイズ
+                                # ノイズ判定を改善:
+                                # 1. 最大幅の60%未満かつ絶対幅が20未満は細いノイズ（以前は50%, 15）
+                                # 2. 複数クラスタがある場合、最大幅のクラスタのみを残す戦略も追加
                                 width_ratio = (
                                     w / max_width if max_width > 0 else 0
                                 )
-                                is_noise = width_ratio < 0.50 and w < 15
+                                is_noise = width_ratio < 0.60 and w < 20
 
                                 if is_noise:
                                     continue
@@ -352,9 +353,10 @@ class BattleFrameAnalyzer(AnalyzerPlugin):
                                 # 全てノイズだった場合は元のまま
                                 proc = proc0
                             elif len(k_valid_runs) == 1:
-                                # 有効なクラスタが1つだけ
-                                rs, re_idx = k_valid_runs[0]
-                                proc = proc0[:, rs : re_idx + 1]
+                                # 有効なクラスタが1つだけの場合
+                                # クラスタ切り出しは行わず、全体画像を使用
+                                # 理由: 小さく切り出すとOCRの精度が低下するため
+                                proc = proc0
                             else:
                                 # 複数の有効クラスタがある場合
                                 # まず全体範囲を設定(デフォルト)

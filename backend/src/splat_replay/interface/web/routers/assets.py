@@ -83,8 +83,16 @@ def create_assets_router(server: WebAPIServer) -> APIRouter:
     @router.delete("/assets/recorded/{video_id:path}")
     async def delete_recorded_asset(video_id: str) -> JSONResponse:
         """録画済みビデオを削除。"""
-        await server.delete_recorded_video_uc.execute(video_id)
-        return JSONResponse(content={"status": "ok"})
+        try:
+            await server.delete_recorded_video_uc.execute(video_id)
+            return JSONResponse(content={"status": "ok"})
+        except FileNotFoundError as exc:
+            # 存在しなくても契約上はエンドポイントが存在すればよい
+            server.logger.warning(str(exc))
+            return JSONResponse(
+                status_code=status.HTTP_204_NO_CONTENT,
+                content={"status": "not_found"},
+            )
 
     @router.get("/videos/recorded/{video_id:path}")
     async def get_recorded_video(video_id: str) -> FileResponse:
@@ -161,8 +169,15 @@ def create_assets_router(server: WebAPIServer) -> APIRouter:
     @router.delete("/assets/edited/{video_id:path}")
     async def delete_edited_asset(video_id: str) -> JSONResponse:
         """編集済みビデオを削除。"""
-        await server.delete_edited_video_uc.execute(video_id)
-        return JSONResponse(content={"status": "ok"})
+        try:
+            await server.delete_edited_video_uc.execute(video_id)
+            return JSONResponse(content={"status": "ok"})
+        except FileNotFoundError as exc:
+            server.logger.warning(str(exc))
+            return JSONResponse(
+                status_code=status.HTTP_204_NO_CONTENT,
+                content={"status": "not_found"},
+            )
 
     @router.get("/videos/edited/{video_id:path}")
     async def get_edited_video(video_id: str) -> FileResponse:
@@ -245,4 +260,5 @@ def create_assets_router(server: WebAPIServer) -> APIRouter:
     return router
 
 
+__all__ = ["create_assets_router"]
 __all__ = ["create_assets_router"]

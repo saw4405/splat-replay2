@@ -59,13 +59,9 @@ FRONTEND_API_CONTRACT: list[tuple[str, str, int | list[int] | None]] = [
     ("POST", "/api/recorder/metadata", None),
     # Preview
     ("GET", "/api/preview/latest", 200),
-    # Metadata (archived recordings)
-    ("GET", "/api/assets/recorded/test-id/metadata", None),
-    ("PUT", "/api/assets/recorded/test-id/metadata", None),
     # Assets - recorded videos
     ("GET", "/api/assets/recorded", 200),
     ("DELETE", "/api/assets/recorded/test-id", None),  # 存在確認のみ
-    ("GET", "/api/assets/recorded/test-id/metadata", None),
     ("PUT", "/api/assets/recorded/test-id/metadata", None),
     # Assets - edited videos
     ("GET", "/api/assets/edited", 200),

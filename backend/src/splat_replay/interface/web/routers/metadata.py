@@ -11,7 +11,6 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from fastapi import APIRouter, HTTPException, status
-
 from splat_replay.application.dto import RecordingMetadataPatchDTO
 from splat_replay.domain.exceptions import ValidationError
 from splat_replay.interface.web.converters import (
@@ -120,6 +119,10 @@ def create_metadata_router(server: WebAPIServer) -> APIRouter:
                 )
             )
             return to_interface_subtitle_data(subtitle_data)
+        except FileNotFoundError as e:
+            # ファイルなしの場合は空の字幕データを返す
+            server.logger.warning(f"字幕ファイルが見つかりません: {e}")
+            return SubtitleData(blocks=[], video_duration=None)
         except ValueError as e:
             # SRTパースエラー
             server.logger.error(f"字幕のパースに失敗しました: {e}")
