@@ -14,9 +14,9 @@ BASE = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(BASE / "src"))  # noqa: E402
 
 from splat_replay.domain.config import ImageMatchingSettings  # noqa: E402
+from splat_replay.domain.models import BattleResult  # noqa: E402
 from splat_replay.domain.models import (
     XP,
-    BattleResult,  # noqa: E402
     GameMode,
     Judgement,
     Match,
@@ -31,10 +31,8 @@ from splat_replay.domain.services.analyzers import (  # noqa: E402
     FrameAnalyzer,
     SalmonFrameAnalyzer,
 )
-from splat_replay.infrastructure import (
-    MatcherRegistry,  # noqa: E402
-    TesseractOCR,
-)
+from splat_replay.infrastructure import MatcherRegistry  # noqa: E402
+from splat_replay.infrastructure import TesseractOCR
 
 # config の YAML を読み込み、必要なパスをテスト用に上書きする
 BASE_DIR = Path(__file__).resolve().parent
@@ -325,7 +323,8 @@ async def test_detect_communication_error(
         ("battle_finish_10.png", True),
         ("battle_finish_11.png", True),
         ("battle_finish_12.png", True),
-        ("battle_finish_13.png", False),
+        ("battle_finish_13.png", True),
+        ("battle_finish_14.png", False),
         ("loading_1.png", False),
     ],
 )
