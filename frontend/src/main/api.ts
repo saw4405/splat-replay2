@@ -7,7 +7,6 @@
 // 型定義
 export type {
   RecorderState,
-  PreviewFrameResponse,
   RecorderStateResponse,
   EditUploadState,
   EditUploadStatus,
@@ -22,7 +21,7 @@ export type {
 } from './api/types';
 
 // 録画制御API
-export { startRecorder, getRecorderState, getPreviewFrame } from './api/recording';
+export { startRecorder, getRecorderState } from './api/recording';
 
 // アセットAPI
 export {

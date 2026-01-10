@@ -16,6 +16,8 @@ from splat_replay.interface.web.schemas.editing import (
     RecordedVideoItem,
 )
 from splat_replay.interface.web.schemas.metadata import (
+    MetadataOptionItem,
+    MetadataOptionsResponse,
     MetadataUpdateRequest,
     SubtitleBlock,
     SubtitleData,
@@ -46,6 +48,8 @@ __all__ = [
     "EditedVideoItem",
     "RecordedVideoItem",
     # Metadata
+    "MetadataOptionItem",
+    "MetadataOptionsResponse",
     "MetadataUpdateRequest",
     "SubtitleBlock",
     "SubtitleData",

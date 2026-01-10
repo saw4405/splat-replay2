@@ -67,11 +67,21 @@ def client(monkeypatch: pytest.MonkeyPatch) -> Iterator[TestClient]:
         """モック: 録画再開（何もしない）"""
         pass
 
+    async def mock_setup(self) -> None:
+        """モック: 録画準備（何もしない）"""
+        pass
+
+    async def mock_teardown(self) -> None:
+        """モック: 録画終了処理（何もしない）"""
+        pass
+
     # MonkeyPatchでメソッドを差し替え
     monkeypatch.setattr(OBSRecorderController, "start", mock_start)
     monkeypatch.setattr(OBSRecorderController, "stop", mock_stop)
     monkeypatch.setattr(OBSRecorderController, "pause", mock_pause)
     monkeypatch.setattr(OBSRecorderController, "resume", mock_resume)
+    monkeypatch.setattr(OBSRecorderController, "setup", mock_setup)
+    monkeypatch.setattr(OBSRecorderController, "teardown", mock_teardown)
 
     container = configure_container()
     app = create_app(container)

@@ -3,6 +3,8 @@
   import { slide } from 'svelte/transition';
   import NotificationDialog from '../../../common/components/NotificationDialog.svelte';
   import { subscribeDomainEvents, type DomainEvent } from '../../domainEvents';
+  import { getMetadataOptions } from '../../api/metadata';
+  import type { MetadataOptionItem } from '../../api/types';
 
   export let visible: boolean = false;
   let showAlertDialog = false; // アラートダイアログ表示フラグ
@@ -11,10 +13,7 @@
 
   type MetadataPayload = {
     game_mode?: string;
-    stage_name?: string;
     stage?: string;
-    result?: string;
-    my_weapon?: string;
     started_at?: string;
     match?: string;
     rule?: string;
@@ -23,6 +22,11 @@
     kill?: number;
     death?: number;
     special?: number;
+    hazard?: number;
+    golden_egg?: number;
+    power_egg?: number;
+    rescue?: number;
+    rescued?: number;
   };
 
   // SSE接続
@@ -30,13 +34,13 @@
 
   // メタデータ (SSE経由で更新)
   let metadata = {
-    game_mode: '未取得',
-    started_at: '未開始',
-    match: '未取得',
-    rule: '未取得',
-    rate: '未検出',
-    judgement: '未判定',
-    stage: '未取得',
+    game_mode: '',
+    started_at: '',
+    match: '',
+    rule: '',
+    rate: '',
+    judgement: '',
+    stage: '',
     kill: 0,
     death: 0,
     special: 0,
@@ -56,28 +60,36 @@
     special: false,
   };
 
-  const gameModes = ['バトルモード', 'バイトモード'];
-  const matches = [
-    '未取得',
-    'レギュラーマッチ',
-    'バンカラマッチ(チャレンジ)',
-    'バンカラマッチ(オープン)',
-    'Xマッチ',
-    'イベントマッチ',
-    'プライベートマッチ',
-  ];
-  const rules = [
-    '未取得',
-    'ナワバリバトル',
-    'ガチエリア',
-    'ガチヤグラ',
-    'ガチホコバトル',
-    'ガチアサリ',
-  ];
-  const judgements = ['未判定', 'WIN', 'LOSE'];
+  const placeholderLabel = {
+    gameMode: '未取得',
+    match: '未取得',
+    rule: '未取得',
+    stage: '未取得',
+    rate: '未検出',
+    judgement: '未判定',
+    startedAt: '未開始',
+  };
+  let gameModeOptions: MetadataOptionItem[] = [];
+  let matchOptions: MetadataOptionItem[] = [];
+  let ruleOptions: MetadataOptionItem[] = [];
+  let stageOptions: MetadataOptionItem[] = [];
+  let judgementOptions: MetadataOptionItem[] = [];
 
   let _eventSource: EventSource | null = null;
   let hasLoadedInitial = false;
+
+  async function loadMetadataOptions(): Promise<void> {
+    try {
+      const options = await getMetadataOptions();
+      gameModeOptions = options.gameModes;
+      matchOptions = options.matches;
+      ruleOptions = options.rules;
+      stageOptions = options.stages;
+      judgementOptions = options.judgements;
+    } catch (error) {
+      console.error('Failed to load metadata options:', error);
+    }
+  }
 
   function setNow(): void {
     const now = new Date();
@@ -108,64 +120,50 @@
     }
   }
 
-  function updateMetadata(data: {
-    game_mode?: string;
-    stage_name?: string;
-    stage?: string;
-    result?: string;
-    my_weapon?: string;
-    started_at?: string;
-    match?: string;
-    rule?: string;
-    rate?: string;
-    judgement?: string;
-    kill?: number;
-    death?: number;
-    special?: number;
-  }): void {
+  function updateMetadata(data: MetadataPayload): void {
     // 手動編集されていないフィールドのみ更新
     console.log('メタデータ自動更新を試行:', data);
     let updatedFields: string[] = [];
     let skippedFields: string[] = [];
 
     if (!manuallyEdited.game_mode) {
-      metadata.game_mode = data.game_mode || '未取得';
+      metadata.game_mode = data.game_mode ?? '';
       updatedFields.push('game_mode');
     } else {
       skippedFields.push('game_mode (手動編集済み)');
     }
     if (!manuallyEdited.started_at) {
-      metadata.started_at = data.started_at || '未開始';
+      metadata.started_at = data.started_at ?? '';
       updatedFields.push('started_at');
     } else {
       skippedFields.push('started_at (手動編集済み)');
     }
     if (!manuallyEdited.match) {
-      metadata.match = data.match || '未取得';
+      metadata.match = data.match ?? '';
       updatedFields.push('match');
     } else {
       skippedFields.push('match (手動編集済み)');
     }
     if (!manuallyEdited.rule) {
-      metadata.rule = data.rule || '未取得';
+      metadata.rule = data.rule ?? '';
       updatedFields.push('rule');
     } else {
       skippedFields.push('rule (手動編集済み)');
     }
     if (!manuallyEdited.rate) {
-      metadata.rate = data.rate || '未検出';
+      metadata.rate = data.rate ?? '';
       updatedFields.push('rate');
     } else {
       skippedFields.push('rate (手動編集済み)');
     }
     if (!manuallyEdited.judgement) {
-      metadata.judgement = data.judgement || '未判定';
+      metadata.judgement = data.judgement ?? '';
       updatedFields.push('judgement');
     } else {
       skippedFields.push('judgement (手動編集済み)');
     }
     if (!manuallyEdited.stage) {
-      metadata.stage = data.stage || '未取得';
+      metadata.stage = data.stage ?? '';
       updatedFields.push('stage');
     } else {
       skippedFields.push('stage (手動編集済み)');
@@ -218,13 +216,13 @@
     // メタデータを初期状態にリセット
     console.log('メタデータをリセット');
     metadata = {
-      game_mode: '未取得',
-      started_at: '未開始',
-      match: '未取得',
-      rule: '未取得',
-      rate: '未検出',
-      judgement: '未判定',
-      stage: '未取得',
+      game_mode: '',
+      started_at: '',
+      match: '',
+      rule: '',
+      rate: '',
+      judgement: '',
+      stage: '',
       kill: 0,
       death: 0,
       special: 0,
@@ -233,12 +231,49 @@
 
   async function saveMetadata(): Promise<void> {
     try {
+      const payload: Record<string, string | number> = {};
+      if (manuallyEdited.game_mode && metadata.game_mode) {
+        payload.game_mode = metadata.game_mode;
+      }
+      if (manuallyEdited.started_at && metadata.started_at) {
+        payload.started_at = metadata.started_at;
+      }
+      if (manuallyEdited.match && metadata.match) {
+        payload.match = metadata.match;
+      }
+      if (manuallyEdited.rule && metadata.rule) {
+        payload.rule = metadata.rule;
+      }
+      if (manuallyEdited.rate && metadata.rate) {
+        payload.rate = metadata.rate;
+      }
+      if (manuallyEdited.judgement && metadata.judgement) {
+        payload.judgement = metadata.judgement;
+      }
+      if (manuallyEdited.stage && metadata.stage) {
+        payload.stage = metadata.stage;
+      }
+      if (manuallyEdited.kill && metadata.kill !== null && metadata.kill !== undefined) {
+        payload.kill = metadata.kill;
+      }
+      if (manuallyEdited.death && metadata.death !== null && metadata.death !== undefined) {
+        payload.death = metadata.death;
+      }
+      if (manuallyEdited.special && metadata.special !== null && metadata.special !== undefined) {
+        payload.special = metadata.special;
+      }
+      if (Object.keys(payload).length === 0) {
+        alertMessage = '更新対象がありません';
+        alertVariant = 'info';
+        showAlertDialog = true;
+        return;
+      }
       const response = await fetch('/api/recorder/metadata', {
-        method: 'POST',
+        method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(metadata),
+        body: JSON.stringify(payload),
       });
 
       if (!response.ok) {
@@ -299,6 +334,7 @@
   }
 
   onMount(() => {
+    loadMetadataOptions();
     connectSSE();
   });
 
@@ -326,8 +362,9 @@
             bind:value={metadata.game_mode}
             on:change={() => markEdited('game_mode')}
           >
-            {#each gameModes as mode}
-              <option value={mode}>{mode}</option>
+            <option value="">{placeholderLabel.gameMode}</option>
+            {#each gameModeOptions as mode}
+              <option value={mode.key}>{mode.label}</option>
             {/each}
           </select>
         </div>
@@ -340,6 +377,7 @@
               type="text"
               bind:value={metadata.started_at}
               on:input={() => markEdited('started_at')}
+              placeholder={placeholderLabel.startedAt}
             />
             <button type="button" class="now-btn" on:click={setNow}>Now</button>
           </div>
@@ -348,8 +386,9 @@
         <div class="field-group">
           <label for="match">マッチタイプ</label>
           <select id="match" bind:value={metadata.match} on:change={() => markEdited('match')}>
-            {#each matches as match}
-              <option value={match}>{match}</option>
+            <option value="">{placeholderLabel.match}</option>
+            {#each matchOptions as match}
+              <option value={match.key}>{match.label}</option>
             {/each}
           </select>
         </div>
@@ -357,8 +396,9 @@
         <div class="field-group">
           <label for="rule">ルール</label>
           <select id="rule" bind:value={metadata.rule} on:change={() => markEdited('rule')}>
-            {#each rules as rule}
-              <option value={rule}>{rule}</option>
+            <option value="">{placeholderLabel.rule}</option>
+            {#each ruleOptions as rule}
+              <option value={rule.key}>{rule.label}</option>
             {/each}
           </select>
         </div>
@@ -370,6 +410,7 @@
             type="text"
             bind:value={metadata.rate}
             on:input={() => markEdited('rate')}
+            placeholder={placeholderLabel.rate}
           />
         </div>
 
@@ -380,20 +421,21 @@
             bind:value={metadata.judgement}
             on:change={() => markEdited('judgement')}
           >
-            {#each judgements as judgement}
-              <option value={judgement}>{judgement}</option>
+            <option value="">{placeholderLabel.judgement}</option>
+            {#each judgementOptions as judgement}
+              <option value={judgement.key}>{judgement.label}</option>
             {/each}
           </select>
         </div>
 
         <div class="field-group">
           <label for="stage">ステージ</label>
-          <input
-            id="stage"
-            type="text"
-            bind:value={metadata.stage}
-            on:input={() => markEdited('stage')}
-          />
+          <select id="stage" bind:value={metadata.stage} on:change={() => markEdited('stage')}>
+            <option value="">{placeholderLabel.stage}</option>
+            {#each stageOptions as stage}
+              <option value={stage.key}>{stage.label}</option>
+            {/each}
+          </select>
         </div>
 
         <div class="stats-row">

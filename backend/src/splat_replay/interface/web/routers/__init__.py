@@ -3,7 +3,7 @@
 from .assets import create_assets_router
 from .events import create_events_router
 from .metadata import create_metadata_router
-from .recording import create_preview_router, create_recording_router
+from .recording import create_recording_router
 from .settings import create_settings_router
 from .setup import create_setup_router
 
@@ -11,7 +11,6 @@ __all__ = [
     "create_assets_router",
     "create_events_router",
     "create_metadata_router",
-    "create_preview_router",
     "create_recording_router",
     "create_settings_router",
     "create_setup_router",

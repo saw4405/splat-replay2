@@ -8,12 +8,6 @@
 // 録画制御
 export type RecorderState = 'stopped' | 'recording' | 'paused';
 
-export interface PreviewFrameResponse {
-  has_frame: boolean;
-  image_data_url: string | null;
-  timestamp: number | null;
-}
-
 export interface RecorderStateResponse {
   state: RecorderState;
 }
@@ -84,6 +78,19 @@ export interface MetadataUpdate {
   kill?: number;
   death?: number;
   special?: number;
+}
+
+export interface MetadataOptionItem {
+  key: string;
+  label: string;
+}
+
+export interface MetadataOptions {
+  gameModes: MetadataOptionItem[];
+  matches: MetadataOptionItem[];
+  rules: MetadataOptionItem[];
+  stages: MetadataOptionItem[];
+  judgements: MetadataOptionItem[];
 }
 
 export interface SubtitleBlock {

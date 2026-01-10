@@ -10,10 +10,29 @@ from typing import List, Optional
 from pydantic import BaseModel
 
 __all__ = [
+    "MetadataOptionItem",
+    "MetadataOptionsResponse",
     "MetadataUpdateRequest",
     "SubtitleBlock",
     "SubtitleData",
 ]
+
+
+class MetadataOptionItem(BaseModel):
+    """メタデータ選択肢アイテム"""
+
+    key: str
+    label: str
+
+
+class MetadataOptionsResponse(BaseModel):
+    """メタデータ選択肢レスポンス"""
+
+    game_modes: List[MetadataOptionItem]
+    matches: List[MetadataOptionItem]
+    rules: List[MetadataOptionItem]
+    stages: List[MetadataOptionItem]
+    judgements: List[MetadataOptionItem]
 
 
 class MetadataUpdateRequest(BaseModel):

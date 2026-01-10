@@ -1,6 +1,7 @@
 ﻿<script lang="ts">
-  import { createEventDispatcher } from 'svelte';
+  import { createEventDispatcher, onMount } from 'svelte';
   import type { RecordedVideo } from '../../api/types';
+  import { buildMetadataOptionMap, getMetadataOptions } from '../../api/metadata';
   import MetadataEditDialog from '../metadata/MetadataEditDialog.svelte';
   import VideoPlayerDialog from '../media/VideoPlayerDialog.svelte';
   import ThumbnailZoomDialog from '../media/ThumbnailZoomDialog.svelte';
@@ -28,6 +29,16 @@
   let currentVideoTitle = '';
   let wasModalOpen = false; // モーダルが開いていたかどうかを追跡
   let deletingVideoId: string | null = null; // 削除中の動画ID
+  let metadataOptionMap: ReturnType<typeof buildMetadataOptionMap> | null = null;
+
+  async function loadMetadataOptions(): Promise<void> {
+    try {
+      const options = await getMetadataOptions();
+      metadataOptionMap = buildMetadataOptionMap(options);
+    } catch (error) {
+      console.error('Failed to load metadata options:', error);
+    }
+  }
 
   // モーダルの開閉状態を監視
   $: {
@@ -91,6 +102,24 @@
     if (judgement === 'LOSE') return 'judgement-lose';
     return '';
   }
+
+  function resolveMetadataLabel(
+    value: string | null,
+    map: Record<string, string> | null,
+    fallback: string
+  ): string {
+    if (!value) {
+      return fallback;
+    }
+    if (!map) {
+      return value;
+    }
+    return map[value] ?? value;
+  }
+
+  onMount(() => {
+    void loadMetadataOptions();
+  });
 
   function handlePlayVideo(video: RecordedVideo): void {
     currentVideoUrl = getVideoUrl(video.path); // フルパスを使用
@@ -312,50 +341,49 @@
             <!-- メタデータ (クリック可能) -->
             <button class="video-metadata" on:click={() => handleEditMetadata(video)}>
               <div class="metadata-row">
-                <div
-                  class="metadata-item"
-                  class:incomplete={!video.match || video.match === '未取得'}
-                >
+                <div class="metadata-item" class:incomplete={!video.match}>
                   <span class="metadata-label">マッチ:</span>
-                  <span class="metadata-value">{video.match ?? '未取得'}</span>
+                  <span class="metadata-value">
+                    {resolveMetadataLabel(
+                      video.match,
+                      metadataOptionMap?.matches ?? null,
+                      '未取得'
+                    )}
+                  </span>
                 </div>
               </div>
               <div class="metadata-row">
-                <div
-                  class="metadata-item"
-                  class:incomplete={!video.rule || video.rule === '未取得'}
-                >
+                <div class="metadata-item" class:incomplete={!video.rule}>
                   <span class="metadata-label">ルール:</span>
-                  <span class="metadata-value">{video.rule ?? '未取得'}</span>
+                  <span class="metadata-value">
+                    {resolveMetadataLabel(video.rule, metadataOptionMap?.rules ?? null, '未取得')}
+                  </span>
                 </div>
               </div>
               <div class="metadata-row">
-                <div
-                  class="metadata-item"
-                  class:incomplete={!video.stage || video.stage === '未取得'}
-                >
+                <div class="metadata-item" class:incomplete={!video.stage}>
                   <span class="metadata-label">ステージ:</span>
-                  <span class="metadata-value">{video.stage ?? '未取得'}</span>
+                  <span class="metadata-value">
+                    {resolveMetadataLabel(video.stage, metadataOptionMap?.stages ?? null, '未取得')}
+                  </span>
                 </div>
               </div>
               <div class="metadata-row">
-                <div
-                  class="metadata-item"
-                  class:incomplete={!video.rate || video.rate === '未検出'}
-                >
+                <div class="metadata-item" class:incomplete={!video.rate}>
                   <span class="metadata-label">レート:</span>
                   <span class="metadata-value">{video.rate ?? '未検出'}</span>
                 </div>
               </div>
               <div class="metadata-row">
-                <div
-                  class="metadata-item"
-                  class:incomplete={!video.judgement || video.judgement === '未判定'}
-                >
+                <div class="metadata-item" class:incomplete={!video.judgement}>
                   <span class="metadata-label">判定:</span>
-                  <span class="metadata-value {getJudgementClass(video.judgement ?? '未判定')}"
-                    >{video.judgement ?? '未判定'}</span
-                  >
+                  <span class="metadata-value {getJudgementClass(video.judgement ?? '')}">
+                    {resolveMetadataLabel(
+                      video.judgement,
+                      metadataOptionMap?.judgements ?? null,
+                      '未判定'
+                    )}
+                  </span>
                 </div>
                 <div class="metadata-item stat-item">
                   <span class="stat-icon">💀</span>
@@ -400,11 +428,11 @@
     bind:visible={showMetadataDialog}
     videoId={editingVideo.path}
     metadata={{
-      match: editingVideo.match ?? '未取得',
-      rule: editingVideo.rule ?? '未取得',
-      stage: editingVideo.stage ?? '未取得',
-      rate: editingVideo.rate ?? '未検出',
-      judgement: editingVideo.judgement ?? '未判定',
+      match: editingVideo.match ?? '',
+      rule: editingVideo.rule ?? '',
+      stage: editingVideo.stage ?? '',
+      rate: editingVideo.rate ?? '',
+      judgement: editingVideo.judgement ?? '',
       kill: editingVideo.kill ?? 0,
       death: editingVideo.death ?? 0,
       special: editingVideo.special ?? 0,

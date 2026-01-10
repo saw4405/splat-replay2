@@ -3,10 +3,9 @@
  *
  * 責務：
  * - 録画の開始・状態取得
- * - プレビューフレームの取得
  */
 
-import type { RecorderState, RecorderStateResponse, PreviewFrameResponse } from './types';
+import type { RecorderState, RecorderStateResponse } from './types';
 import { JSON_HEADERS, safeReadText } from './utils';
 
 /**
@@ -36,18 +35,4 @@ export async function getRecorderState(): Promise<RecorderState> {
   }
   const body: RecorderStateResponse = await response.json();
   return body.state;
-}
-
-/**
- * プレビューフレームを取得
- */
-export async function getPreviewFrame(): Promise<PreviewFrameResponse> {
-  const response = await fetch('/api/preview/latest', {
-    headers: JSON_HEADERS,
-  });
-  if (!response.ok) {
-    const detail = await safeReadText(response);
-    throw new Error(detail || 'Failed to fetch preview frame');
-  }
-  return response.json() as Promise<PreviewFrameResponse>;
 }

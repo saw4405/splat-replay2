@@ -55,9 +55,9 @@ async def build_recorded_video_dto(
     started_at = (
         metadata.started_at.isoformat() if metadata.started_at else None
     )
-    game_mode = metadata.game_mode.value
+    game_mode = metadata.game_mode.name
     rate_value = str(metadata.rate) if metadata.rate else None
-    judgement_value = metadata.judgement.value if metadata.judgement else None
+    judgement_value = metadata.judgement.name if metadata.judgement else None
 
     match_name: str | None = None
     rule_name: str | None = None
@@ -72,14 +72,14 @@ async def build_recorded_video_dto(
     rescued: int | None = None
 
     if isinstance(metadata.result, BattleResult):
-        match_name = metadata.result.match.value
-        rule_name = metadata.result.rule.value
-        stage_name = metadata.result.stage.value
+        match_name = metadata.result.match.name
+        rule_name = metadata.result.rule.name
+        stage_name = metadata.result.stage.name
         kill_value = metadata.result.kill
         death_value = metadata.result.death
         special_value = metadata.result.special
     elif isinstance(metadata.result, SalmonResult):
-        stage_name = metadata.result.stage.value
+        stage_name = metadata.result.stage.name
         hazard = metadata.result.hazard
         golden_egg = metadata.result.golden_egg
         power_egg = metadata.result.power_egg

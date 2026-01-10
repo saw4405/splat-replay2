@@ -1,0 +1,22 @@
+# 改行コード設定
+* text=auto eol=lf
+
+# Windows バッチファイルは CRLF
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+# PowerShell スクリプトは CRLF
+*.ps1 text eol=crlf
+
+# バイナリファイル
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.pdf binary
+*.zip binary
+*.tar binary
+*.gz binary
+*.mp4 binary
+*.mov binary

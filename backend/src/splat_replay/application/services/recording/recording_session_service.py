@@ -15,6 +15,9 @@ from splat_replay.application.interfaces import (
     RecorderWithTranscriptionPort,
     VideoAssetRepositoryPort,
 )
+from splat_replay.application.services.recording.metadata_merger import (
+    MetadataMerger,
+)
 from splat_replay.application.services.recording.recording_context import (
     RecordingContext,
 )
@@ -253,13 +256,37 @@ class RecordingSessionService:
             self._ctx.result_frame is not None
             and self._ctx.metadata.result is None
         ):
+            base_metadata = self._ctx.metadata
+            manual_fields = self._ctx.manual_fields
+            pending_result_updates = self._ctx.pending_result_updates
             result = await self.analyzer.extract_session_result(
                 self._ctx.result_frame, self._ctx.metadata.game_mode
             )
             if result is not None and isinstance(result, BattleResult):
+                merger = MetadataMerger()
+                updated_metadata = replace(base_metadata, result=result)
+                if manual_fields:
+                    updated_metadata = merger.apply_manual_overrides(
+                        current=base_metadata,
+                        updated=updated_metadata,
+                        manual_fields=manual_fields,
+                    )
+                if pending_result_updates:
+                    updated_metadata, applied_fields = (
+                        merger.apply_pending_result_updates(
+                            updated_metadata,
+                            pending_result_updates,
+                            manual_fields,
+                        )
+                    )
+                    if applied_fields:
+                        manual_fields = manual_fields.union(applied_fields)
+                    pending_result_updates = {}
                 self._ctx = replace(
                     self._ctx,
-                    metadata=replace(self._ctx.metadata, result=result),
+                    metadata=updated_metadata,
+                    manual_fields=manual_fields,
+                    pending_result_updates=pending_result_updates,
                 )
                 self.logger.info(
                     "結果詳細を取得",
@@ -313,7 +340,7 @@ class RecordingSessionService:
             event = RecordingStarted(
                 session_id="current",
                 game_mode=(
-                    str(self._ctx.metadata.game_mode)
+                    self._ctx.metadata.game_mode.name
                     if self._ctx.metadata.game_mode
                     else None
                 ),
@@ -345,6 +372,14 @@ class RecordingSessionService:
             return
 
         self._domain_publisher.publish_domain_event(event)
+
+    def publish_metadata_updated(self, metadata: RecordingMetadata) -> None:
+        """メタデータ更新イベントを発行する。"""
+        if self._domain_publisher is None:
+            return
+        self._domain_publisher.publish_domain_event(
+            RecordingMetadataUpdated(metadata=metadata.to_dict())
+        )
 
     # ================================================================
     # クエリ
