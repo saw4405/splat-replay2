@@ -106,6 +106,7 @@ class AutoEditor:
 
     async def execute(self) -> list[Path]:
         """編集を実行し、編集済み動画のパスリストを返す。"""
+        self.settings = self.config.get_video_edit_settings()
         self.logger.info("自動編集を開始します")
         self._state = self._state.with_running("編集処理を開始しています", 0)
         edited: list[Path] = []

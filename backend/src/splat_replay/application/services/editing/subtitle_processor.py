@@ -54,6 +54,7 @@ class SubtitleProcessor:
         self, target: Path, group: List[VideoAsset]
     ) -> None:
         """字幕を作成し、音声読み上げを動画に埋め込む。"""
+        self.settings = self.config.get_video_edit_settings()
         combined_srt = await self._create_subtitle(target, group)
         if combined_srt:
             await self._embed_subtitle_speech(target, combined_srt)

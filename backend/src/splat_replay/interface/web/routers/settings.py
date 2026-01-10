@@ -56,6 +56,13 @@ def create_settings_router(server: WebAPIServer) -> APIRouter:
         ]
         try:
             server.settings_service.update_sections(updates)
+            section_ids = {section.id for section in request.sections}
+            if "obs" in section_ids:
+                server.recording_preparation_service.reload_obs_settings()
+            if "capture_device" in section_ids:
+                server.device_checker.update_settings(
+                    server.recording_preparation_service.get_capture_device_settings()
+                )
         except UnknownSettingsSectionError as exc:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)
@@ -70,6 +77,11 @@ def create_settings_router(server: WebAPIServer) -> APIRouter:
                 detail=exc.errors(),
             ) from exc
         except SettingsServiceError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=str(exc),
+            ) from exc
+        except Exception as exc:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail=str(exc),

@@ -69,12 +69,18 @@ class OBSRecorderController(VideoRecorderPort):
             port=settings.websocket_port,
             password=settings.websocket_password.get_secret_value(),
             logger=logger,
+            on_reconnect=self._handle_ws_reconnect,
         )
 
         # 録画状態イベントを登録
         self._ws_client.register_event_callback(
             "RecordStateChanged", self._on_record_state_changed
         )
+
+    async def _handle_ws_reconnect(self) -> None:
+        """OBS再接続時に初期セットアップを再実行する。"""
+        self._logger.info("OBS再接続を検知しました。再セットアップします")
+        await self.setup()
 
     def update_settings(self, settings: OBSSettingsView) -> None:
         """設定を更新。

@@ -90,18 +90,21 @@ class VideoEditSettings(BaseModel):
         title="タイトルテンプレート",
         description="動画のタイトルに使用するテンプレート",
         recommended=False,
+        user_editable=True,
     )
     description_template: str = Field(
         default="{CHAPTERS}",
         title="説明テンプレート",
         description="動画の説明に使用するテンプレート",
         recommended=False,
+        user_editable=True,
     )
     chapter_template: str = Field(
         default="{RESULT:<5} {KILL:>3}k {DEATH:>3}d {SPECIAL:>3}s  {STAGE}",
         title="チャプターテンプレート",
         description="動画の説明欄に入るチャプターに使用するテンプレート",
         recommended=False,
+        user_editable=True,
     )
     speech: SubtitleSpeechSettings = Field(
         default_factory=SubtitleSpeechSettings,

@@ -8,6 +8,7 @@ export type SettingField = {
   description: string;
   type: string;
   recommended: boolean;
+  user_editable?: boolean;
   value?: FieldValue | null;
   choices?: string[] | null;
   children?: SettingField[];

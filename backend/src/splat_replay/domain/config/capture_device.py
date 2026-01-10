@@ -9,6 +9,7 @@ class CaptureDeviceSettings(BaseModel):
         title="キャプチャボード名",
         description="OSが認識しているキャプチャボードの名称",
         recommended=True,
+        user_editable=True,
     )
 
     class Config:

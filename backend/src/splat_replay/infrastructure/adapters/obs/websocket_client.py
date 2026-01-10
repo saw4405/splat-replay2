@@ -39,6 +39,7 @@ class OBSWebSocketClient:
         port: int,
         password: str,
         logger: BoundLogger,
+        on_reconnect: Callable[[], Awaitable[None]] | None = None,
     ) -> None:
         """初期化。
 
@@ -54,6 +55,8 @@ class OBSWebSocketClient:
         self._client = ObsWsClient(url=self._url, password=password)
         self._is_connected = False
         self._monitor_task: asyncio.Task[None] | None = None
+        self._on_reconnect = on_reconnect
+        self._event_callbacks: list[tuple[str, EventCallback]] = []
 
     def update_settings(self, host: str, port: int, password: str) -> None:
         """接続設定を更新。
@@ -67,6 +70,8 @@ class OBSWebSocketClient:
         self._password = password
         self._client = ObsWsClient(url=self._url, password=password)
         self._is_connected = False
+        for event_type, callback in self._event_callbacks:
+            self._register_event_callback(event_type, callback)
         self._logger.info("OBS WebSocket設定更新", url=self._url)
 
     def register_event_callback(
@@ -89,8 +94,14 @@ class OBSWebSocketClient:
                     error=str(exc),
                 )
 
+        self._event_callbacks.append((event_type, _wrapper))
+        self._register_event_callback(event_type, _wrapper)
+
+    def _register_event_callback(
+        self, event_type: str, callback: EventCallback
+    ) -> None:
         # reg_event_cb は Awaitable を期待するが、実際にはコルーチン関数を受け取る設計
-        self._client.reg_event_cb(_wrapper, event_type)  # type: ignore[arg-type]
+        self._client.reg_event_cb(callback, event_type)  # type: ignore[arg-type]
 
     @property
     def is_connected(self) -> bool:
@@ -183,6 +194,14 @@ class OBSWebSocketClient:
                     await self._client.connect()
                     self._is_connected = True
                     self._logger.info("OBS WebSocket 再接続完了")
+                    if self._on_reconnect is not None:
+                        try:
+                            await self._on_reconnect()
+                        except Exception as exc:  # noqa: BLE001
+                            self._logger.warning(
+                                "OBS 再接続後セットアップ失敗",
+                                error=str(exc),
+                            )
                     backoff = 1.0
                     break
                 except Exception as exc:

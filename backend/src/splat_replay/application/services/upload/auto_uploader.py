@@ -75,6 +75,7 @@ class AutoUploader:
 
     async def execute(self) -> None:
         self.logger.info("自動アップロードを開始します")
+        self._cached_settings = self.config.get_upload_settings()
 
         videos = self.repo.list_edited()
 

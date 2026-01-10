@@ -43,6 +43,10 @@ class RecordingPreparationService:
         self._logger.info("Updating OBS recorder settings")
         self._recorder.update_settings(settings)
 
+    def reload_obs_settings(self) -> None:
+        """設定ファイルからOBS設定を再読み込みして反映する。"""
+        self.update_settings(self._config.get_obs_settings())
+
     def get_obs_config(self) -> OBSConfig:
         """OBS設定を取得する。"""
         obs_settings = self._config.get_obs_settings()

@@ -33,6 +33,32 @@
     activeSectionId = null;
   }
 
+  function filterEditableFields(fields: SettingField[]): SettingField[] {
+    const result: SettingField[] = [];
+    for (const field of fields) {
+      if (field.type === 'group' && field.children) {
+        const children = filterEditableFields(field.children);
+        if (children.length > 0) {
+          result.push({ ...field, children });
+        }
+        continue;
+      }
+      if (field.user_editable) {
+        result.push(field);
+      }
+    }
+    return result;
+  }
+
+  function filterEditableSections(sectionsData: SettingsSection[]): SettingsSection[] {
+    return sectionsData
+      .map((section) => {
+        const fields = filterEditableFields(section.fields);
+        return { ...section, fields };
+      })
+      .filter((section) => section.fields.length > 0);
+  }
+
   async function loadSettings(): Promise<void> {
     loading = true;
     errorMessage = '';
@@ -44,10 +70,11 @@
       }
       const data = (await response.json()) as SettingsResponse;
       const sectionsData = data.sections;
-      sections =
+      const sectionsClone =
         typeof structuredClone === 'function'
           ? structuredClone(sectionsData)
           : (JSON.parse(JSON.stringify(sectionsData)) as SettingsSection[]);
+      sections = filterEditableSections(sectionsClone);
       activeSectionId = sections[0]?.id ?? null;
       loaded = true;
     } catch (error: unknown) {
