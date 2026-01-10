@@ -147,7 +147,7 @@ frontend/src/
 ### 6.3 API層（main/api/）の責務
 
 - `types.ts`: 全API共通の型定義
-- `recording.ts`: 録画制御（start/state/preview）
+- `recording.ts`: 録画制御（start/state）
 - `assets.ts`: アセット管理（録画済み・編集済みビデオの一覧・削除）
 - `metadata.ts`: メタデータ更新、字幕取得・更新
 - `mappers.ts`: バックエンドのsnake_caseをfrontendのcamelCaseに変換

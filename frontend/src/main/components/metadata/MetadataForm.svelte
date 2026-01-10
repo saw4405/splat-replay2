@@ -1,4 +1,6 @@
 ﻿<script lang="ts">
+  import type { MetadataOptionItem } from '../../api/types';
+
   export let metadata: {
     match: string;
     rule: string;
@@ -9,36 +11,27 @@
     death: number;
     special: number;
   };
+  export let matchOptions: MetadataOptionItem[] = [];
+  export let ruleOptions: MetadataOptionItem[] = [];
+  export let stageOptions: MetadataOptionItem[] = [];
+  export let judgementOptions: MetadataOptionItem[] = [];
 
-  const matches = [
-    '未取得',
-    'レギュラーマッチ',
-    'バンカラマッチ(チャレンジ)',
-    'バンカラマッチ(オープン)',
-    'Xマッチ',
-    'イベントマッチ',
-    'プライベートマッチ',
-  ];
-
-  const rules = [
-    '未取得',
-    'ナワバリ',
-    'ガチエリア',
-    'ガチヤグラ',
-    'ガチホコ',
-    'ガチアサリ',
-    'トリカラ',
-  ];
-
-  const judgements = ['未判定', 'WIN', 'LOSE'];
+  const placeholderLabel = {
+    match: '未取得',
+    rule: '未取得',
+    stage: '未取得',
+    judgement: '未判定',
+    rate: '未検出',
+  };
 </script>
 
 <div class="metadata-form">
   <div class="form-group">
     <label for="match">マッチ</label>
     <select id="match" bind:value={metadata.match}>
-      {#each matches as match}
-        <option value={match}>{match}</option>
+      <option value="">{placeholderLabel.match}</option>
+      {#each matchOptions as match}
+        <option value={match.key}>{match.label}</option>
       {/each}
     </select>
   </div>
@@ -46,27 +39,34 @@
   <div class="form-group">
     <label for="rule">ルール</label>
     <select id="rule" bind:value={metadata.rule}>
-      {#each rules as rule}
-        <option value={rule}>{rule}</option>
+      <option value="">{placeholderLabel.rule}</option>
+      {#each ruleOptions as rule}
+        <option value={rule.key}>{rule.label}</option>
       {/each}
     </select>
   </div>
 
   <div class="form-group">
     <label for="stage">ステージ</label>
-    <input id="stage" type="text" bind:value={metadata.stage} />
+    <select id="stage" bind:value={metadata.stage}>
+      <option value="">{placeholderLabel.stage}</option>
+      {#each stageOptions as stage}
+        <option value={stage.key}>{stage.label}</option>
+      {/each}
+    </select>
   </div>
 
   <div class="form-group">
     <label for="rate">レート</label>
-    <input id="rate" type="text" bind:value={metadata.rate} />
+    <input id="rate" type="text" bind:value={metadata.rate} placeholder={placeholderLabel.rate} />
   </div>
 
   <div class="form-group">
     <label for="judgement">判定</label>
     <select id="judgement" bind:value={metadata.judgement}>
-      {#each judgements as judgement}
-        <option value={judgement}>{judgement}</option>
+      <option value="">{placeholderLabel.judgement}</option>
+      {#each judgementOptions as judgement}
+        <option value={judgement.key}>{judgement.label}</option>
       {/each}
     </select>
   </div>

@@ -6,6 +6,7 @@
   import MetadataOverlay from '../metadata/MetadataOverlay.svelte';
   import CameraPermissionDialog from '../permission/CameraPermissionDialog.svelte';
   import { subscribeDomainEvents, type DomainEvent } from '../../domainEvents';
+  import { buildMetadataOptionMap, getMetadataOptions } from '../../api/metadata';
 
   type PreviewState = 'checking' | 'connected' | 'disconnected' | 'error';
 
@@ -64,11 +65,28 @@
     hour: '2-digit',
     minute: '2-digit',
   });
+  let metadataOptionMap: ReturnType<typeof buildMetadataOptionMap> | null = null;
   const metadataFieldDescriptors: MetadataFieldDescriptor[] = [
-    { key: 'game_mode', label: 'モード', format: formatTextValue },
-    { key: 'match', label: 'マッチタイプ', format: formatTextValue },
-    { key: 'rule', label: 'ルール', format: formatTextValue },
-    { key: 'stage', label: 'ステージ', format: formatTextValue },
+    {
+      key: 'game_mode',
+      label: 'モード',
+      format: (value) => formatEnumValue(value, metadataOptionMap?.gameModes ?? null),
+    },
+    {
+      key: 'match',
+      label: 'マッチタイプ',
+      format: (value) => formatEnumValue(value, metadataOptionMap?.matches ?? null),
+    },
+    {
+      key: 'rule',
+      label: 'ルール',
+      format: (value) => formatEnumValue(value, metadataOptionMap?.rules ?? null),
+    },
+    {
+      key: 'stage',
+      label: 'ステージ',
+      format: (value) => formatEnumValue(value, metadataOptionMap?.stages ?? null),
+    },
     {
       key: 'started_at',
       label: 'マッチング開始時間',
@@ -76,14 +94,57 @@
       normalize: normalizeStartedAtValue,
     },
     { key: 'rate', label: 'レート', format: formatTextValue },
-    { key: 'judgement', label: '判定', format: formatTextValue },
+    {
+      key: 'judgement',
+      label: '判定',
+      format: (value) => formatEnumValue(value, metadataOptionMap?.judgements ?? null),
+    },
     { key: 'kill', label: 'キル数', format: formatNumericValue },
     { key: 'death', label: 'デス数', format: formatNumericValue },
     { key: 'special', label: 'スペシャル', format: formatNumericValue },
   ];
+
+  async function readApiErrorMessage(response: Response): Promise<string> {
+    const responseClone = response.clone();
+    try {
+      const data = (await response.json()) as {
+        detail?: string | { message?: string };
+        message?: string;
+      };
+      if (typeof data?.detail === 'string') {
+        return data.detail;
+      }
+      if (typeof data?.detail === 'object' && data?.detail?.message) {
+        return data.detail.message;
+      }
+      if (typeof data?.message === 'string') {
+        return data.message;
+      }
+    } catch {
+      // ignore JSON parse errors
+    }
+    try {
+      const text = await responseClone.text();
+      if (text) {
+        return text;
+      }
+    } catch {
+      // ignore text read errors
+    }
+    return `status ${response.status}`;
+  }
   let metadataNotifications: MetadataNotification[] = [];
   let notificationIdCounter = 0;
   let lastMetadata: Partial<Record<MetadataFieldKey, string>> = {};
+
+  async function loadMetadataOptions(): Promise<void> {
+    try {
+      const options = await getMetadataOptions();
+      metadataOptionMap = buildMetadataOptionMap(options);
+    } catch (error) {
+      console.error('Failed to load metadata options:', error);
+    }
+  }
 
   function toggleMetadata(): void {
     isMetadataOpen = !isMetadataOpen;
@@ -148,6 +209,20 @@
       return null;
     }
     return normalized;
+  }
+
+  function formatEnumValue(
+    value: MetadataValue,
+    optionMap: Record<string, string> | null
+  ): string | null {
+    const normalized = normalizeRawValue(value);
+    if (normalized === null) {
+      return null;
+    }
+    if (!optionMap) {
+      return normalized;
+    }
+    return optionMap[normalized] ?? normalized;
   }
 
   function formatNumericValue(value: MetadataValue): string | null {
@@ -245,7 +320,8 @@
         method: 'POST',
       });
       if (!response.ok) {
-        throw new Error(`status ${response.status}`);
+        const message = await readApiErrorMessage(response);
+        throw new Error(message);
       }
       const result = (await response.json()) as PrepareRecordingResponse;
       console.log('prepare_recording result:', result);
@@ -282,7 +358,8 @@
         method: 'POST',
       });
       if (!response.ok) {
-        throw new Error(`status ${response.status}`);
+        const message = await readApiErrorMessage(response);
+        throw new Error(message);
       }
       const result = (await response.json()) as StartRecordingResponse;
       console.log('enable_auto_recording result:', result);
@@ -318,7 +395,8 @@
         method: 'POST',
       });
       if (!response.ok) {
-        throw new Error(`status ${response.status}`);
+        const message = await readApiErrorMessage(response);
+        throw new Error(message);
       }
       const result = (await response.json()) as StartRecordingResponse;
       console.log('start_recording result:', result);
@@ -427,6 +505,7 @@
   }
 
   onMount(() => {
+    void loadMetadataOptions();
     void refreshDeviceStatus();
     deviceStatusTimer = window.setInterval(() => {
       void refreshDeviceStatus();

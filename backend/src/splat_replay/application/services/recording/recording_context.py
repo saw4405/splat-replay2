@@ -31,6 +31,8 @@ class RecordingContext:
     """
 
     metadata: RecordingMetadata = field(default_factory=RecordingMetadata)
+    manual_fields: frozenset[str] = field(default_factory=frozenset)
+    pending_result_updates: dict[str, object] = field(default_factory=dict)
     battle_started_at: float = 0.0
     finish: bool = False
     result_frame: Optional[Frame] = None

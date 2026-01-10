@@ -13,11 +13,20 @@ from typing import TYPE_CHECKING
 from fastapi import APIRouter, HTTPException, status
 from splat_replay.application.dto import RecordingMetadataPatchDTO
 from splat_replay.domain.exceptions import ValidationError
+from splat_replay.domain.models import (
+    GameMode,
+    Judgement,
+    Match,
+    Rule,
+    Stage,
+)
 from splat_replay.interface.web.converters import (
     to_application_subtitle_data,
     to_interface_subtitle_data,
 )
 from splat_replay.interface.web.schemas import (
+    MetadataOptionItem,
+    MetadataOptionsResponse,
     MetadataUpdateRequest,
     RecordedVideoItem,
     SubtitleData,
@@ -40,7 +49,36 @@ def create_metadata_router(server: WebAPIServer) -> APIRouter:
 
     # === 録画済みビデオのメタデータ ===
 
-    @router.put(
+    @router.get(
+        "/metadata/options",
+        response_model=MetadataOptionsResponse,
+    )
+    async def get_metadata_options() -> MetadataOptionsResponse:
+        """メタデータの選択肢を取得。"""
+        return MetadataOptionsResponse(
+            game_modes=[
+                MetadataOptionItem(key=mode.name, label=mode.value)
+                for mode in GameMode
+            ],
+            matches=[
+                MetadataOptionItem(key=match.name, label=match.value)
+                for match in Match
+            ],
+            rules=[
+                MetadataOptionItem(key=rule.name, label=rule.value)
+                for rule in Rule
+            ],
+            stages=[
+                MetadataOptionItem(key=stage.name, label=stage.value)
+                for stage in Stage
+            ],
+            judgements=[
+                MetadataOptionItem(key=judgement.name, label=judgement.value)
+                for judgement in Judgement
+            ],
+        )
+
+    @router.patch(
         "/assets/recorded/{video_id:path}/metadata",
         response_model=RecordedVideoItem,
     )

@@ -28,30 +28,31 @@ class MetadataParser:
     """Service for parsing and updating metadata from external sources."""
 
     @staticmethod
-    def parse_battle_result_updates(
+    def _parse_battle_result_updates_with_applied_fields(
         current: BattleResult, data: Mapping[str, object]
-    ) -> BattleResult:
-        """Parse updates for BattleResult from external data.
-
-        Invalid values are silently ignored (lenient parsing).
-        """
+    ) -> tuple[BattleResult, set[str]]:
+        """BattleResult の更新をパースし、適用できたフィールドを返す。"""
         updates = {}
+        applied_fields: set[str] = set()
 
         if "match" in data and isinstance(data["match"], str):
             try:
-                updates["match"] = Match(data["match"])
+                updates["match"] = Match[data["match"]]
+                applied_fields.add("match")
             except Exception:
                 pass
 
         if "rule" in data and isinstance(data["rule"], str):
             try:
-                updates["rule"] = Rule(data["rule"])
+                updates["rule"] = Rule[data["rule"]]
+                applied_fields.add("rule")
             except Exception:
                 pass
 
         if "stage" in data and isinstance(data["stage"], str):
             try:
-                updates["stage"] = Stage(data["stage"])
+                updates["stage"] = Stage[data["stage"]]
+                applied_fields.add("stage")
             except Exception:
                 pass
 
@@ -61,26 +62,28 @@ class MetadataParser:
                     value = data[field]
                     if isinstance(value, int):
                         updates[field] = value
+                        applied_fields.add(field)
                     elif isinstance(value, str):
                         updates[field] = int(value)
+                        applied_fields.add(field)
                 except Exception:
                     pass
 
-        return replace(current, **updates) if updates else current
+        updated = replace(current, **updates) if updates else current
+        return updated, applied_fields
 
     @staticmethod
-    def parse_salmon_result_updates(
+    def _parse_salmon_result_updates_with_applied_fields(
         current: SalmonResult, data: Mapping[str, object]
-    ) -> SalmonResult:
-        """Parse updates for SalmonResult from external data.
-
-        Invalid values are silently ignored (lenient parsing).
-        """
+    ) -> tuple[SalmonResult, set[str]]:
+        """SalmonResult の更新をパースし、適用できたフィールドを返す。"""
         updates = {}
+        applied_fields: set[str] = set()
 
         if "stage" in data and isinstance(data["stage"], str):
             try:
                 updates["stage"] = Stage[data["stage"]]
+                applied_fields.add("stage")
             except Exception:
                 pass
 
@@ -96,12 +99,107 @@ class MetadataParser:
                     value = data[field]
                     if isinstance(value, int):
                         updates[field] = value
+                        applied_fields.add(field)
                     elif isinstance(value, str):
                         updates[field] = int(value)
+                        applied_fields.add(field)
                 except Exception:
                     pass
 
-        return replace(current, **updates) if updates else current
+        updated = replace(current, **updates) if updates else current
+        return updated, applied_fields
+
+    @staticmethod
+    def parse_battle_result_updates(
+        current: BattleResult, data: Mapping[str, object]
+    ) -> BattleResult:
+        """Parse updates for BattleResult from external data.
+
+        Invalid values are silently ignored (lenient parsing).
+        """
+        updated, _ = (
+            MetadataParser._parse_battle_result_updates_with_applied_fields(
+                current, data
+            )
+        )
+        return updated
+
+    @staticmethod
+    def parse_salmon_result_updates(
+        current: SalmonResult, data: Mapping[str, object]
+    ) -> SalmonResult:
+        """Parse updates for SalmonResult from external data.
+
+        Invalid values are silently ignored (lenient parsing).
+        """
+        updated, _ = (
+            MetadataParser._parse_salmon_result_updates_with_applied_fields(
+                current, data
+            )
+        )
+        return updated
+
+    @staticmethod
+    def parse_metadata_updates_with_applied_fields(
+        current: RecordingMetadata, data: Mapping[str, object]
+    ) -> tuple[RecordingMetadata, frozenset[str]]:
+        """更新内容をパースし、適用できたフィールドを返す。"""
+        updates: dict[str, object] = {}
+        applied_fields: set[str] = set()
+
+        # game_mode
+        if "game_mode" in data and isinstance(data["game_mode"], str):
+            try:
+                updates["game_mode"] = GameMode[data["game_mode"]]
+                applied_fields.add("game_mode")
+            except Exception:
+                pass
+
+        # started_at
+        if "started_at" in data and isinstance(data["started_at"], str):
+            try:
+                updates["started_at"] = datetime.fromisoformat(
+                    data["started_at"]
+                )
+                applied_fields.add("started_at")
+            except Exception:
+                pass
+
+        # rate
+        if "rate" in data and isinstance(data["rate"], str):
+            try:
+                updates["rate"] = RateBase.create(data["rate"])
+                applied_fields.add("rate")
+            except Exception:
+                pass
+
+        # judgement
+        if "judgement" in data and isinstance(data["judgement"], str):
+            try:
+                updates["judgement"] = Judgement[data["judgement"]]
+                applied_fields.add("judgement")
+            except Exception:
+                pass
+
+        # result (delegate to specialized parsers)
+        if current.result is not None:
+            if isinstance(current.result, BattleResult):
+                result, result_fields = (
+                    MetadataParser._parse_battle_result_updates_with_applied_fields(
+                        current.result, data
+                    )
+                )
+            else:  # SalmonResult
+                result, result_fields = (
+                    MetadataParser._parse_salmon_result_updates_with_applied_fields(
+                        current.result, data
+                    )
+                )
+            updates["result"] = result
+            applied_fields.update(result_fields)
+
+        updated = replace(current, **updates) if updates else current
+        return updated, frozenset(applied_fields)
 
     @staticmethod
     def parse_metadata_updates(
@@ -112,50 +210,10 @@ class MetadataParser:
         Invalid values are silently ignored (lenient parsing).
         Delegates result parsing to specialized methods.
         """
-        updates = {}
-
-        # game_mode
-        if "game_mode" in data and isinstance(data["game_mode"], str):
-            try:
-                updates["game_mode"] = GameMode(data["game_mode"])
-            except Exception:
-                pass
-
-        # started_at
-        if "started_at" in data and isinstance(data["started_at"], str):
-            try:
-                updates["started_at"] = datetime.fromisoformat(
-                    data["started_at"]
-                )
-            except Exception:
-                pass
-
-        # rate
-        if "rate" in data and isinstance(data["rate"], str):
-            try:
-                updates["rate"] = RateBase.create(data["rate"])
-            except Exception:
-                pass
-
-        # judgement
-        if "judgement" in data and isinstance(data["judgement"], str):
-            try:
-                updates["judgement"] = Judgement(data["judgement"])
-            except Exception:
-                pass
-
-        # result (delegate to specialized parsers)
-        if current.result is not None:
-            if isinstance(current.result, BattleResult):
-                updates["result"] = MetadataParser.parse_battle_result_updates(
-                    current.result, data
-                )
-            else:  # SalmonResult
-                updates["result"] = MetadataParser.parse_salmon_result_updates(
-                    current.result, data
-                )
-
-        return replace(current, **updates) if updates else current
+        updated, _ = MetadataParser.parse_metadata_updates_with_applied_fields(
+            current, data
+        )
+        return updated
 
     @staticmethod
     def from_dict(data: Mapping[str, object]) -> RecordingMetadata:
@@ -174,7 +232,7 @@ class MetadataParser:
                 error_code="METADATA_GAME_MODE_REQUIRED",
             )
         try:
-            game_mode = GameMode(game_mode_raw)
+            game_mode = GameMode[game_mode_raw]
         except Exception as e:
             raise ValidationError(
                 f"Invalid game_mode value: {game_mode_raw}",
@@ -208,7 +266,7 @@ class MetadataParser:
         judgement: Judgement | None
         try:
             if isinstance(judgement_raw, str) and judgement_raw:
-                judgement = Judgement(judgement_raw)
+                judgement = Judgement[judgement_raw]
             else:
                 judgement = None
         except Exception:

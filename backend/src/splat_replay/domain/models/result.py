@@ -48,14 +48,14 @@ class BattleResult:
     death: int
     special: int
 
-    def to_dict(self) -> dict[str, str]:
+    def to_dict(self) -> dict[str, str | int]:
         return {
-            "match": self.match.value,
-            "rule": self.rule.value,
-            "stage": self.stage.value,
-            "kill": str(self.kill),
-            "death": str(self.death),
-            "special": str(self.special),
+            "match": self.match.name,
+            "rule": self.rule.name,
+            "stage": self.stage.name,
+            "kill": self.kill,
+            "death": self.death,
+            "special": self.special,
         }
 
     @classmethod
@@ -67,9 +67,9 @@ class BattleResult:
         death = _as_int(data["death"], "death")
         special = _as_int(data["special"], "special")
         return cls(
-            match=Match(match_str),
-            rule=Rule(rule_str),
-            stage=Stage(stage_str),
+            match=Match[match_str],
+            rule=Rule[rule_str],
+            stage=Stage[stage_str],
             kill=kill,
             death=death,
             special=special,

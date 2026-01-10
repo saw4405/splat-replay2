@@ -1,7 +1,9 @@
 ﻿<script lang="ts">
-  import { createEventDispatcher } from 'svelte';
+  import { createEventDispatcher, onMount } from 'svelte';
   import BaseDialog from '../../../common/components/BaseDialog.svelte';
   import MetadataForm from './MetadataForm.svelte';
+  import { getMetadataOptions } from '../../api/metadata';
+  import type { MetadataOptionItem } from '../../api/types';
 
   const dispatch = createEventDispatcher();
 
@@ -28,6 +30,10 @@
     death: 0,
     special: 0,
   };
+  let matchOptions: MetadataOptionItem[] = [];
+  let ruleOptions: MetadataOptionItem[] = [];
+  let stageOptions: MetadataOptionItem[] = [];
+  let judgementOptions: MetadataOptionItem[] = [];
 
   let previousVisible = false;
 
@@ -37,6 +43,22 @@
   } else if (!visible) {
     previousVisible = false;
   }
+
+  async function loadMetadataOptions(): Promise<void> {
+    try {
+      const options = await getMetadataOptions();
+      matchOptions = options.matches;
+      ruleOptions = options.rules;
+      stageOptions = options.stages;
+      judgementOptions = options.judgements;
+    } catch (error) {
+      console.error('Failed to load metadata options:', error);
+    }
+  }
+
+  onMount(() => {
+    void loadMetadataOptions();
+  });
 
   function handleSave(): void {
     dispatch('save', { videoId, metadata: editedMetadata });
@@ -59,5 +81,11 @@
   maxWidth="37.5rem"
   maxHeight="85vh"
 >
-  <MetadataForm bind:metadata={editedMetadata} />
+  <MetadataForm
+    bind:metadata={editedMetadata}
+    {matchOptions}
+    {ruleOptions}
+    {stageOptions}
+    {judgementOptions}
+  />
 </BaseDialog>

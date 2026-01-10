@@ -11,7 +11,6 @@ from splat_replay.interface.web.routers import (
     create_assets_router,
     create_events_router,
     create_metadata_router,
-    create_preview_router,
     create_recording_router,
     create_settings_router,
     create_setup_router,
@@ -84,9 +83,6 @@ def create_app(server: WebAPIServer) -> FastAPI:
 
     recording_router = create_recording_router(server)
     app.include_router(recording_router)
-
-    preview_router = create_preview_router(server)
-    app.include_router(preview_router)
 
     assets_router = create_assets_router(server)
     app.include_router(assets_router)

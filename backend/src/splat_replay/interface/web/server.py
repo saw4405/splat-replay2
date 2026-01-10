@@ -37,6 +37,7 @@ from splat_replay.application.use_cases.metadata import (
     UpdateRecordedMetadataUseCase,
     UpdateRecordedSubtitleStructuredUseCase,
 )
+from splat_replay.interface.web.error_handler import WebErrorHandler
 
 
 class WebAPIServer:
@@ -53,6 +54,7 @@ class WebAPIServer:
     system_check_service: SystemCheckService
     system_setup_service: SystemSetupService
     error_handler: ErrorHandler
+    web_error_handler: WebErrorHandler
     logger: BoundLogger
     device_checker: DeviceChecker
     recording_preparation_service: RecordingPreparationService
@@ -141,6 +143,7 @@ class WebAPIServer:
         self.system_check_service = system_check_service
         self.system_setup_service = system_setup_service
         self.error_handler = error_handler
+        self.web_error_handler = WebErrorHandler(logger)
         self.logger = logger
         self.device_checker = device_checker
         self.recording_preparation_service = recording_preparation_service
