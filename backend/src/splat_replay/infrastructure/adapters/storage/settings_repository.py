@@ -108,6 +108,9 @@ class TomlSettingsRepository(SettingsRepositoryPort):
             recommended = bool(
                 model_field.field_info.extra.get("recommended", False)
             )
+            user_editable = bool(
+                model_field.field_info.extra.get("user_editable", False)
+            )
 
             field_type, choices = _ui_type_of(model_field)
 
@@ -120,12 +123,16 @@ class TomlSettingsRepository(SettingsRepositoryPort):
                     section_id,
                     field_name,
                 )
+                group_editable = user_editable or any(
+                    child.get("user_editable", False) for child in child_fields
+                )
                 field_data: SettingFieldData = {
                     "id": field_name,
                     "label": label,
                     "description": description,
                     "type": "group",
                     "recommended": recommended,
+                    "user_editable": group_editable,
                     "children": child_fields,
                     "value": self._group_value_from_children(child_fields),
                 }
@@ -139,6 +146,7 @@ class TomlSettingsRepository(SettingsRepositoryPort):
                 description=description,
                 type=field_type,
                 recommended=recommended,
+                user_editable=user_editable,
             )
 
             # キャプチャデバイスの場合は動的に選択肢を追加

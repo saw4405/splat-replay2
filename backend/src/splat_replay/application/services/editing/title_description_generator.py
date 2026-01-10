@@ -47,6 +47,7 @@ class TitleDescriptionGenerator:
         Returns:
             (title, description)
         """
+        self.settings = self.config.get_video_edit_settings()
         first = next(
             (
                 a.metadata.result

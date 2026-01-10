@@ -95,6 +95,7 @@ class SettingFieldData(TypedDict):
     description: Required[str]
     type: Required[str]
     recommended: Required[bool]
+    user_editable: NotRequired[bool]
     value: NotRequired[Any]
     choices: NotRequired[List[str]]
     children: NotRequired[List["SettingFieldData"]]
