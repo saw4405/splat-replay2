@@ -347,8 +347,9 @@ async def test_detect_battle_finish(
         ("battle_judgement_1.png", True),
         ("battle_judgement_2.png", True),
         ("battle_judgement_3.png", True),
-        ("battle_judgement_4.png", False),
+        ("battle_judgement_4.png", True),
         ("battle_judgement_5.png", False),
+        ("battle_judgement_6.png", False),
     ],
 )
 async def test_detect_battle_finish_end(
@@ -370,8 +371,9 @@ async def test_detect_battle_finish_end(
         ("battle_judgement_1.png", True),
         ("battle_judgement_2.png", True),
         ("battle_judgement_3.png", True),
-        ("battle_judgement_4.png", False),
+        ("battle_judgement_4.png", True),
         ("battle_judgement_5.png", False),
+        ("battle_judgement_6.png", False),
         ("loading_1.png", False),
     ],
 )
@@ -395,7 +397,8 @@ async def test_detect_battle_judgement(
         ("battle_judgement_2.png", Judgement.LOSE),
         ("battle_judgement_3.png", Judgement.LOSE),
         ("battle_judgement_4.png", Judgement.LOSE),
-        ("battle_judgement_5.png", None),
+        ("battle_judgement_5.png", Judgement.LOSE),
+        ("battle_judgement_6.png", None),
     ],
 )
 async def test_extract_battle_judgement(
@@ -697,5 +700,13 @@ if __name__ == "__main__":
     result = asyncio.run(
         analyzer_.detect_communication_error(frame, GameMode.BATTLE)
     )
+    print(result == expected)
+    print(result)
+    print(result == expected)
+    print(result)
+    print(result == expected)
+    print(result)
+    print(result == expected)
+    print(result)
     print(result == expected)
     print(result)

@@ -413,7 +413,7 @@ simple_matchers:
     type: "hsv_ratio"
     lower_bound: [0, 0, 0]
     upper_bound: [179, 255, 10]
-    threshold: 0.3
+    threshold: 0.28
     description: "ジャッジ画面(後半)は黒い箇所が多い"
 
   battle_judgement_win:
