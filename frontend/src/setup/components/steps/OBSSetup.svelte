@@ -1,6 +1,6 @@
 ﻿<script lang="ts">
   import { onMount } from 'svelte';
-  import { Download, ExternalLink, RefreshCw, Check, Search } from 'lucide-svelte';
+  import { Download, ExternalLink, RefreshCw, Check, Search, Eye, EyeOff } from 'lucide-svelte';
   import { checkSystem } from '../../stores/system';
   import { markSubstepCompleted } from '../../stores/navigation';
   import { setupState } from '../../stores/state';
@@ -34,6 +34,7 @@
   let ndiPath: string | null = null;
 
   let websocketPassword = '';
+  let showWebsocketPassword = false;
   let videoDevices: string[] = [];
   let selectedCaptureDevice = '';
   let isLoadingDevices = false;
@@ -667,13 +668,31 @@
                 <li>
                   確認したパスワードを下記の入力欄に入力してください
                   <div style="margin-top: 1rem;">
-                    <input
-                      type="password"
-                      class="password-input"
-                      placeholder="WebSocket サーバーパスワードを入力"
-                      bind:value={websocketPassword}
-                      on:click={(e) => e.stopPropagation()}
-                    />
+                    <div class="password-field">
+                      <input
+                        type={showWebsocketPassword ? 'text' : 'password'}
+                        class="password-input"
+                        placeholder="WebSocket サーバーパスワードを入力"
+                        value={websocketPassword}
+                        on:input={(e) => (websocketPassword = e.currentTarget.value)}
+                        on:click={(e) => e.stopPropagation()}
+                      />
+                      <button
+                        type="button"
+                        class="password-toggle"
+                        on:click={(e) => {
+                          e.stopPropagation();
+                          showWebsocketPassword = !showWebsocketPassword;
+                        }}
+                        aria-label={showWebsocketPassword ? 'パスワードを隠す' : 'パスワードを表示'}
+                      >
+                        {#if showWebsocketPassword}
+                          <EyeOff size={18} />
+                        {:else}
+                          <Eye size={18} />
+                        {/if}
+                      </button>
+                    </div>
                   </div>
                 </li>
               </ol>
@@ -947,9 +966,17 @@
     margin-top: 0.5rem;
   }
 
+  .password-field {
+    position: relative;
+    display: flex;
+    align-items: center;
+    width: 100%;
+  }
+
   .password-input {
     width: 100%;
     padding: 0.75rem 1rem;
+    padding-right: 3rem;
     font-size: 1rem;
     font-family: inherit;
     border-radius: 8px;
@@ -958,6 +985,30 @@
     color: var(--text-primary);
     transition: all 0.2s ease;
     box-sizing: border-box;
+  }
+
+  .password-toggle {
+    position: absolute;
+    right: 0.75rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0.25rem;
+    border: none;
+    background: transparent;
+    color: rgba(255, 255, 255, 0.5);
+    cursor: pointer;
+    transition: color 0.2s ease;
+    border-radius: 0.375rem;
+  }
+
+  .password-toggle:hover {
+    color: var(--text-primary);
+  }
+
+  .password-toggle:focus {
+    outline: none;
+    color: var(--accent-color);
   }
 
   .device-select {

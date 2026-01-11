@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { Check, ExternalLink, RefreshCw } from 'lucide-svelte';
+  import { Check, ExternalLink, RefreshCw, Eye, EyeOff } from 'lucide-svelte';
   import { markSubstepCompleted } from '../../stores/navigation';
   import { setupState } from '../../stores/state';
   import {
@@ -57,6 +57,7 @@
 
   let micDeviceName = '';
   let groqApiKey = '';
+  let showApiKey = false;
   let language = 'ja-JP';
   let customDictionaryText = '';
   let microphoneDevices: string[] = [];
@@ -471,13 +472,31 @@
                 <li>
                   発行したキーを入力します。
                   <div class="input-block">
-                    <input
-                      class="text-input"
-                      type="password"
-                      placeholder="gsk_..."
-                      bind:value={groqApiKey}
-                      on:click={(e) => e.stopPropagation()}
-                    />
+                    <div class="password-field">
+                      <input
+                        class="text-input"
+                        type={showApiKey ? 'text' : 'password'}
+                        placeholder="gsk_..."
+                        value={groqApiKey}
+                        on:input={(e) => (groqApiKey = e.currentTarget.value)}
+                        on:click={(e) => e.stopPropagation()}
+                      />
+                      <button
+                        type="button"
+                        class="password-toggle"
+                        on:click={(e) => {
+                          e.stopPropagation();
+                          showApiKey = !showApiKey;
+                        }}
+                        aria-label={showApiKey ? 'APIキーを隠す' : 'APIキーを表示'}
+                      >
+                        {#if showApiKey}
+                          <EyeOff size={18} />
+                        {:else}
+                          <Eye size={18} />
+                        {/if}
+                      </button>
+                    </div>
                   </div>
                 </li>
               </ol>
@@ -922,5 +941,41 @@
     .step-card {
       padding: 1rem;
     }
+  }
+
+  .password-field {
+    position: relative;
+    display: flex;
+    align-items: center;
+    width: 100%;
+  }
+
+  .password-field :global(.text-input) {
+    padding-right: 3rem !important;
+  }
+
+  .password-toggle {
+    position: absolute;
+    right: 0.75rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0.25rem;
+    border: none;
+    background: transparent;
+    color: rgba(255, 255, 255, 0.5);
+    cursor: pointer;
+    transition: color 0.2s ease;
+    border-radius: 0.375rem;
+    z-index: 5;
+  }
+
+  .password-toggle:hover {
+    color: var(--text-primary);
+  }
+
+  .password-toggle:focus {
+    outline: none;
+    color: var(--accent-color);
   }
 </style>

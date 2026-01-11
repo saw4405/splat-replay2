@@ -1,4 +1,5 @@
 ﻿<script lang="ts">
+  import { Eye, EyeOff } from 'lucide-svelte';
   import SelectField from './SelectField.svelte';
   import type { FieldValue, PrimitiveValue, SettingField } from './types';
 
@@ -18,6 +19,7 @@
   const labelElementId = `${elementId}-label`;
   const descriptionId = `${elementId}-description`;
 
+  let showPassword = false;
   let listText = '';
 
   $: if (field.type === 'list') {
@@ -166,14 +168,28 @@
         on:input={commitList}
       />
     {:else if field.type === 'password'}
-      <input
-        id={elementId}
-        aria-describedby={field.description ? descriptionId : undefined}
-        type="password"
-        value={stringValue(field.value)}
-        on:input={commitText}
-        autocomplete="current-password"
-      />
+      <div class="password-field">
+        <input
+          id={elementId}
+          aria-describedby={field.description ? descriptionId : undefined}
+          type={showPassword ? 'text' : 'password'}
+          value={stringValue(field.value)}
+          on:input={commitText}
+          autocomplete="current-password"
+        />
+        <button
+          type="button"
+          class="password-toggle"
+          on:click={() => (showPassword = !showPassword)}
+          aria-label={showPassword ? 'パスワードを隠す' : 'パスワードを表示'}
+        >
+          {#if showPassword}
+            <EyeOff size={18} />
+          {:else}
+            <Eye size={18} />
+          {/if}
+        </button>
+      </div>
     {:else if shouldUseTextarea(field.value)}
       <textarea
         id={elementId}
@@ -415,5 +431,40 @@
 
   .field-group .field-description {
     margin-top: 0;
+  }
+
+  .password-field {
+    position: relative;
+    display: flex;
+    align-items: center;
+    width: 100%;
+  }
+
+  .password-field input {
+    padding-right: 3rem;
+  }
+
+  .password-toggle {
+    position: absolute;
+    right: 0.75rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0.25rem;
+    border: none;
+    background: transparent;
+    color: rgba(148, 163, 184, 0.7);
+    cursor: pointer;
+    transition: color 0.2s ease;
+    border-radius: 0.375rem;
+  }
+
+  .password-toggle:hover {
+    color: rgba(226, 232, 240, 0.95);
+  }
+
+  .password-toggle:focus {
+    outline: none;
+    color: rgba(25, 211, 199, 0.9);
   }
 </style>
