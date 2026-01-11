@@ -10,6 +10,7 @@ from splat_replay.application.interfaces import (
     CaptureDevicePort,
     CaptureDeviceSettingsView,
     LoggerPort,
+    MicrophoneEnumeratorPort,
 )
 
 
@@ -20,10 +21,12 @@ class DeviceChecker:
         self,
         device: CaptureDevicePort,
         enumerator: CaptureDeviceEnumeratorPort,
+        microphone_enumerator: MicrophoneEnumeratorPort,
         logger: LoggerPort,
     ) -> None:
         self.device = device
         self._enumerator = enumerator
+        self._microphone_enumerator = microphone_enumerator
         self.logger = logger
 
     def is_connected(self) -> bool:
@@ -42,6 +45,12 @@ class DeviceChecker:
         """ビデオキャプチャデバイス一覧を取得する。"""
         devices = self._enumerator.list_video_devices()
         self.logger.info("Video capture devices listed", count=len(devices))
+        return devices
+
+    def list_microphone_devices(self) -> list[str]:
+        """マイクデバイス一覧を取得する。"""
+        devices = self._microphone_enumerator.list_microphones()
+        self.logger.info("Microphone devices listed", count=len(devices))
         return devices
 
     async def wait_for_device_connection(

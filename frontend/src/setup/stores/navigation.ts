@@ -30,6 +30,7 @@ function getSubstepStorageKey(step: SetupStep): string {
     ffmpeg_setup: 'ffmpeg_substep_index',
     tesseract_setup: 'tesseract_substep_index',
     font_installation: 'font_substep_index',
+    transcription_setup: 'transcription_substep_index',
     youtube_setup: 'youtube_substep_index',
   };
   return stepToKeyMap[step];
@@ -59,6 +60,7 @@ function clearAllSubstepSessionStorage(): void {
     'ffmpeg_substep_index',
     'tesseract_substep_index',
     'font_substep_index',
+    'transcription_substep_index',
     'youtube_substep_index',
   ];
 

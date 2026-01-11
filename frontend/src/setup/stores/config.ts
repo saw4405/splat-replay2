@@ -5,10 +5,42 @@
  * - OBS設定の取得・保存
  * - ビデオデバイスの取得・保存
  * - YouTube設定の保存
+ * - 文字起こし設定の取得・保存
+ * - マイクデバイスの取得
  */
 
 import { API_BASE_URL, isLoading, error, handleApiError, safeParseJson } from './state';
+import type { SettingsResponse } from '../../main/components/settings/types';
 import type { MessageResponse } from '../types';
+
+export type TranscriptionConfig = {
+  enabled: boolean;
+  micDeviceName: string;
+  groqApiKey: string;
+  language: string;
+  customDictionary: string[];
+};
+
+function getSectionFieldValue(
+  response: SettingsResponse,
+  sectionId: string,
+  fieldId: string
+): unknown {
+  const section = response.sections.find((item) => item.id === sectionId);
+  const field = section?.fields.find((item) => item.id === fieldId);
+  return field?.value;
+}
+
+function asString(value: unknown, fallback: string = ''): string {
+  return typeof value === 'string' ? value : fallback;
+}
+
+function asStringList(value: unknown): string[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value.filter((item): item is string => typeof item === 'string');
+}
 
 /**
  * OBS設定を取得
@@ -101,6 +133,32 @@ export async function listVideoDevices(): Promise<string[]> {
 }
 
 /**
+ * マイクデバイス一覧を取得
+ */
+export async function listMicrophones(): Promise<string[]> {
+  isLoading.set(true);
+  error.set(null);
+
+  try {
+    const response = await fetch(`${API_BASE_URL}/setup/devices/audio`);
+    if (!response.ok) {
+      await handleApiError(response);
+    }
+
+    const result = await safeParseJson<{ devices: string[] }>(response);
+    return result.devices;
+  } catch (err) {
+    console.error('Failed to list microphones:', err);
+    if (err instanceof Error) {
+      error.set({ error: err.message });
+    }
+    throw err;
+  } finally {
+    isLoading.set(false);
+  }
+}
+
+/**
  * キャプチャデバイス名を保存
  */
 export async function saveCaptureDevice(deviceName: string): Promise<void> {
@@ -157,6 +215,87 @@ export async function saveYouTubePrivacyStatus(
     console.log('YouTube privacy status saved:', result.message);
   } catch (err) {
     console.error('Failed to save YouTube privacy status:', err);
+    if (err instanceof Error) {
+      error.set({ error: err.message });
+    }
+    throw err;
+  } finally {
+    isLoading.set(false);
+  }
+}
+
+/**
+ * 文字起こし設定を取得
+ */
+export async function getTranscriptionConfig(): Promise<TranscriptionConfig> {
+  isLoading.set(true);
+  error.set(null);
+
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/settings`, { cache: 'no-store' });
+    if (!response.ok) {
+      await handleApiError(response);
+    }
+
+    const data = await safeParseJson<SettingsResponse>(response);
+    const enabledValue = getSectionFieldValue(data, 'speech_transcriber', 'enabled');
+    return {
+      enabled: typeof enabledValue === 'boolean' ? enabledValue : true,
+      micDeviceName: asString(getSectionFieldValue(data, 'speech_transcriber', 'mic_device_name')),
+      groqApiKey: asString(getSectionFieldValue(data, 'speech_transcriber', 'groq_api_key')),
+      language: asString(getSectionFieldValue(data, 'speech_transcriber', 'language'), 'ja-JP'),
+      customDictionary: asStringList(
+        getSectionFieldValue(data, 'speech_transcriber', 'custom_dictionary')
+      ),
+    };
+  } catch (err) {
+    console.error('Failed to get transcription config:', err);
+    if (err instanceof Error) {
+      error.set({ error: err.message });
+    }
+    throw err;
+  } finally {
+    isLoading.set(false);
+  }
+}
+
+/**
+ * 文字起こし設定を保存
+ */
+export async function saveTranscriptionConfig(config: TranscriptionConfig): Promise<void> {
+  isLoading.set(true);
+  error.set(null);
+
+  try {
+    const payload = {
+      sections: [
+        {
+          id: 'speech_transcriber',
+          values: {
+            enabled: config.enabled,
+            mic_device_name: config.micDeviceName,
+            groq_api_key: config.groqApiKey,
+            language: config.language,
+            custom_dictionary: config.customDictionary,
+          },
+        },
+      ],
+    };
+    const response = await fetch(`${API_BASE_URL}/api/settings`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload),
+    });
+    if (!response.ok) {
+      await handleApiError(response);
+    }
+
+    const result = await safeParseJson<{ status: string }>(response);
+    console.log('Transcription config saved:', result.status);
+  } catch (err) {
+    console.error('Failed to save transcription config:', err);
     if (err instanceof Error) {
       error.set({ error: err.message });
     }

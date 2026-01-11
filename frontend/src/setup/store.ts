@@ -33,6 +33,9 @@ export {
   getOBSConfig,
   saveOBSWebSocketPassword,
   listVideoDevices,
+  listMicrophones,
   saveCaptureDevice,
   saveYouTubePrivacyStatus,
+  getTranscriptionConfig,
+  saveTranscriptionConfig,
 } from './stores/config';

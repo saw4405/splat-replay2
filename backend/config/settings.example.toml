@@ -17,6 +17,7 @@ width = 1920
 height = 1080
 
 [speech_transcriber]
+enabled = true
 mic_device_name = "マイク (USB Audio Device)"
 groq_api_key = ""
 groq_model = "whisper-large-v3"

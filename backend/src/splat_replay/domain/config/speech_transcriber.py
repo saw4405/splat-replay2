@@ -6,22 +6,31 @@ from pydantic import BaseModel, Field, SecretStr
 class SpeechTranscriberSettings(BaseModel):
     """文字起こし"""
 
+    enabled: bool = Field(
+        default=True,
+        title="文字起こしを有効にする",
+        description="文字起こし機能を使用するかどうかを切り替えます",
+        recommended=True,
+        user_editable=True,
+    )
     mic_device_name: str = Field(
         default="マイク (USB Audio Device)",
         title="マイクデバイス名",
-        description="OSが認識しているマイクの名称\n文字起こししない場合は空文字列",
+        description="OSが認識しているマイクの名称",
         recommended=True,
+        user_editable=True,
     )
     groq_api_key: SecretStr = Field(
         default=SecretStr(""),
-        title="Grok API キー",
-        description="Grok API の認証に使用するキー",
+        title="Groq API キー",
+        description="Groq API の認証に使用するキー",
         recommended=True,
+        user_editable=True,
     )
     groq_model: str = Field(
         default="whisper-large-v3",
-        title="Grok音声認識モデル",
-        description="使用するGrok音声認識モデル",
+        title="Groq音声認識モデル",
+        description="使用するGroq音声認識モデル",
         recommended=False,
     )
     integrator_model: str = Field(
@@ -35,6 +44,7 @@ class SpeechTranscriberSettings(BaseModel):
         title="言語",
         description="音声認識に使用する言語",
         recommended=False,
+        user_editable=False,
     )
     phrase_time_limit: float = Field(
         default=3.0,
@@ -45,8 +55,9 @@ class SpeechTranscriberSettings(BaseModel):
     custom_dictionary: List[str] = Field(
         default=["ナイス", "キル", "デス"],
         title="カスタム辞書",
-        description="音声認識に使用するカスタム辞書",
+        description="音声認識の精度を向上させるための単語リスト",
         recommended=True,
+        user_editable=True,
     )
     vad_aggressiveness: int = Field(
         default=2,

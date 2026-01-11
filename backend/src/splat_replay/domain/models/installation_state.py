@@ -16,6 +16,7 @@ class SetupStep(Enum):
     OBS_SETUP = "obs_setup"
     TESSERACT_SETUP = "tesseract_setup"
     FONT_INSTALLATION = "font_installation"
+    TRANSCRIPTION_SETUP = "transcription_setup"
     YOUTUBE_SETUP = "youtube_setup"
 
     @classmethod
@@ -27,6 +28,7 @@ class SetupStep(Enum):
             cls.OBS_SETUP,
             cls.TESSERACT_SETUP,
             cls.FONT_INSTALLATION,
+            cls.TRANSCRIPTION_SETUP,
             cls.YOUTUBE_SETUP,
         ]
 
@@ -60,6 +62,7 @@ class SetupStep(Enum):
             SetupStep.OBS_SETUP: "OBSセットアップ",
             SetupStep.TESSERACT_SETUP: "Tesseractセットアップ",
             SetupStep.FONT_INSTALLATION: "フォントインストール",
+            SetupStep.TRANSCRIPTION_SETUP: "文字起こし設定",
             SetupStep.YOUTUBE_SETUP: "YouTube API設定",
         }
         result = display_names.get(self)

@@ -31,6 +31,7 @@ from splat_replay.interface.web.schemas import (
     OBSWebSocketPasswordRequest,
     SystemCheckResponse,
     VideoDeviceListResponse,
+    MicrophoneDeviceListResponse,
     YouTubePrivacyStatusRequest,
 )
 
@@ -472,6 +473,20 @@ def create_setup_router(
             return VideoDeviceListResponse(devices=devices)
         except Exception as e:
             logger.error("Failed to list video devices", error=str(e))
+            error_response = error_handler.handle_error(e)
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=error_response.user_message,
+            )
+
+    @router.get("/devices/audio", response_model=MicrophoneDeviceListResponse)
+    async def list_microphone_devices() -> MicrophoneDeviceListResponse:
+        """マイクデバイス一覧を取得する。"""
+        try:
+            devices = device_checker.list_microphone_devices()
+            return MicrophoneDeviceListResponse(devices=devices)
+        except Exception as e:
+            logger.error("Failed to list microphone devices", error=str(e))
             error_response = error_handler.handle_error(e)
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,

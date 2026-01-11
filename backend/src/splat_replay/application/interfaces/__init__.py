@@ -17,6 +17,7 @@
 
 # Re-export all interfaces as public API
 from splat_replay.application.interfaces.audio import (
+    MicrophoneEnumeratorPort,
     SpeechTranscriberPort,
     TextToSpeechPort,
 )
@@ -122,6 +123,7 @@ __all__ = [
     "RecorderWithTranscriptionPort",
     "VideoRecorderPort",
     # Audio
+    "MicrophoneEnumeratorPort",
     "SpeechTranscriberPort",
     "TextToSpeechPort",
     # Video

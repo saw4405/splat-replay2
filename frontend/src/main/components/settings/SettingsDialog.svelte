@@ -204,6 +204,7 @@
   on:secondary-click={handleSecondaryClick}
   maxWidth="60rem"
   maxHeight="90vh"
+  minHeight="90vh"
 >
   {#if loading}
     <p class="status">読み込み中です...</p>

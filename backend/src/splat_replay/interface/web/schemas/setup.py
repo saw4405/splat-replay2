@@ -18,6 +18,7 @@ __all__ = [
     "OBSConfigResponse",
     "OBSWebSocketPasswordRequest",
     "VideoDeviceListResponse",
+    "MicrophoneDeviceListResponse",
     "CaptureDeviceRequest",
     "YouTubePrivacyStatusRequest",
 ]
@@ -84,6 +85,12 @@ class OBSWebSocketPasswordRequest(BaseModel):
 
 class VideoDeviceListResponse(BaseModel):
     """ビデオデバイスリストレスポンス"""
+
+    devices: list[str]
+
+
+class MicrophoneDeviceListResponse(BaseModel):
+    """マイクデバイスリストレスポンス"""
 
     devices: list[str]
 

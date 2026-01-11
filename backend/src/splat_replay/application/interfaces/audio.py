@@ -38,3 +38,11 @@ class SpeechTranscriberPort(Protocol):
     def resume(self) -> None:
         """Resume transcription."""
         ...
+
+
+class MicrophoneEnumeratorPort(Protocol):
+    """マイクデバイスの列挙を行うポート。"""
+
+    def list_microphones(self) -> list[str]:
+        """List available microphone devices."""
+        ...

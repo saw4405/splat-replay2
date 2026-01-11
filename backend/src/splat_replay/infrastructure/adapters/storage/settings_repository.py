@@ -27,7 +27,10 @@ from splat_replay.infrastructure.config import (
 from splat_replay.infrastructure.filesystem import paths
 
 if TYPE_CHECKING:
-    from splat_replay.application.interfaces import CaptureDeviceEnumeratorPort
+    from splat_replay.application.interfaces import (
+        CaptureDeviceEnumeratorPort,
+        MicrophoneEnumeratorPort,
+    )
 
 
 class TomlSettingsRepository(SettingsRepositoryPort):
@@ -37,9 +40,11 @@ class TomlSettingsRepository(SettingsRepositoryPort):
         self,
         settings_path: Path | None = None,
         device_enumerator: CaptureDeviceEnumeratorPort | None = None,
+        microphone_enumerator: MicrophoneEnumeratorPort | None = None,
     ) -> None:
         self._settings_path = settings_path or paths.SETTINGS_FILE
         self._device_enumerator = device_enumerator
+        self._microphone_enumerator = microphone_enumerator
 
     def fetch_sections(self) -> List[SettingSectionData]:
         settings = load_settings_from_toml(self._settings_path)
@@ -181,6 +186,28 @@ class TomlSettingsRepository(SettingsRepositoryPort):
                             field_data["choices"].append(serialized_value)
                 except Exception:
                     # デバイス列挙に失敗した場合はテキスト入力にフォールバック
+                    pass
+
+            should_add_microphone_choices = (
+                section_id == "speech_transcriber"
+                and field_name == "mic_device_name"
+            )
+            if (
+                should_add_microphone_choices
+                and self._microphone_enumerator is not None
+            ):
+                try:
+                    devices = self._microphone_enumerator.list_microphones()
+                    if devices:
+                        field_data["type"] = "select"
+                        field_data["choices"] = devices
+                        if (
+                            isinstance(serialized_value, str)
+                            and serialized_value
+                            and serialized_value not in devices
+                        ):
+                            field_data["choices"].append(serialized_value)
+                except Exception:
                     pass
 
             if choices:

@@ -15,6 +15,7 @@ __all__ = [
     "SubtitleEditor",
     "ImageDrawer",
     "IntegratedSpeechRecognizer",
+    "MicrophoneEnumerator",
     "SpeechTranscriber",
     "GoogleTextToSpeech",
     "EventPublisherAdapter",
@@ -34,6 +35,7 @@ __all__ = [
 from .audio import (
     GoogleTextToSpeech,
     IntegratedSpeechRecognizer,
+    MicrophoneEnumerator,
     SpeechTranscriber,
 )
 from .capture.capture import Capture

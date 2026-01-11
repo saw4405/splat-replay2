@@ -32,6 +32,7 @@ export const STEP_SUBSTEP_COUNTS: Record<string, number> = {
   ffmpeg_setup: 1, // FFMPEG: 1つのサブステップ
   tesseract_setup: 2, // Tesseract: 2つのサブステップ
   font_installation: 2, // Font: 2つのサブステップ
+  transcription_setup: 4, // 文字起こし: 4つのサブステップ
   youtube_setup: 7, // YouTube: 7つのサブステップ
 };
 
@@ -45,6 +46,7 @@ export const progressInfo = derived(setupState, ($state): ProgressInfo | null =>
     'ffmpeg_setup',
     'tesseract_setup',
     'font_installation',
+    'transcription_setup',
     'youtube_setup',
   ];
 

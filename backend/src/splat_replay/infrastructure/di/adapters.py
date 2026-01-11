@@ -6,6 +6,8 @@ Phase 3 リファクタリング - インフラアダプタの登録を分離。
 from __future__ import annotations
 
 from typing import Optional, cast
+import hashlib
+import json
 
 import punq
 from splat_replay.application.interfaces import (
@@ -18,6 +20,7 @@ from splat_replay.application.interfaces import (
     EventPublisher,
     FramePublisher,
     ImageSelector,
+    MicrophoneEnumeratorPort,
     PowerPort,
     RecorderWithTranscriptionPort,
     SettingsRepositoryPort,
@@ -50,6 +53,7 @@ from splat_replay.infrastructure import (
     GuiRuntimePortAdapter,
     ImageDrawer,
     IntegratedSpeechRecognizer,
+    MicrophoneEnumerator,
     MatcherRegistry,
     NDICapture,
     OBSRecorderController,
@@ -63,6 +67,7 @@ from splat_replay.infrastructure import (
     TomlSettingsRepository,
     YouTubeClient,
 )
+from splat_replay.infrastructure.config import load_settings_from_toml
 from splat_replay.infrastructure.filesystem import paths
 from splat_replay.infrastructure.runtime import AppRuntime
 from structlog.stdlib import BoundLogger
@@ -72,6 +77,7 @@ def register_adapters(container: punq.Container) -> None:
     """アダプターを DI コンテナに登録する。"""
     container.register(CaptureDevicePort, CaptureDeviceChecker)
     container.register(CaptureDeviceEnumeratorPort, CaptureDeviceEnumerator)
+    container.register(MicrophoneEnumeratorPort, MicrophoneEnumerator)
     # ========== DEBUG/FIX START ==========
     # 修正: CapturePort をシングルトンとして登録
     # 理由: setup() で初期化された NDI 接続を、FrameCaptureProducer でも使用する必要がある
@@ -161,7 +167,11 @@ def register_adapters(container: punq.Container) -> None:
 
     def _settings_repository_factory() -> SettingsRepositoryPort:
         device_enumerator = container.resolve(CaptureDeviceEnumeratorPort)
-        return TomlSettingsRepository(device_enumerator=device_enumerator)
+        microphone_enumerator = container.resolve(MicrophoneEnumeratorPort)
+        return TomlSettingsRepository(
+            device_enumerator=device_enumerator,
+            microphone_enumerator=microphone_enumerator,
+        )
 
     container.register(
         SettingsRepositoryPort, factory=_settings_repository_factory
@@ -181,17 +191,56 @@ def register_adapters(container: punq.Container) -> None:
     container.register(
         VideoAssetRepositoryPort, factory=_video_asset_repo_factory
     )
+
+    def _build_speech_transcriber() -> tuple[
+        Optional[SpeechTranscriberPort], str
+    ]:
+        logger = cast(BoundLogger, container.resolve(BoundLogger))
+        settings = load_settings_from_toml()
+        speech_settings = settings.speech_transcriber
+        fingerprint_payload = json.dumps(
+            {
+                "enabled": speech_settings.enabled,
+                "mic_device_name": speech_settings.mic_device_name,
+                "groq_api_key": speech_settings.groq_api_key.get_secret_value(),
+                "language": speech_settings.language,
+                "custom_dictionary": speech_settings.custom_dictionary,
+                "vad_aggressiveness": speech_settings.vad_aggressiveness,
+                "groq_model": speech_settings.groq_model,
+                "integrator_model": speech_settings.integrator_model,
+                "phrase_time_limit": speech_settings.phrase_time_limit,
+            },
+            ensure_ascii=True,
+            sort_keys=True,
+        )
+        fingerprint = hashlib.sha256(
+            fingerprint_payload.encode("utf-8")
+        ).hexdigest()
+        if not speech_settings.enabled:
+            logger.info("文字起こしを無効化します", reason="無効設定")
+            return None, fingerprint
+        if not speech_settings.mic_device_name.strip():
+            logger.info("文字起こしを無効化します", reason="マイク名が未設定")
+            return None, fingerprint
+        try:
+            recognizer = IntegratedSpeechRecognizer(speech_settings, logger)
+            return (
+                SpeechTranscriber(speech_settings, recognizer, logger),
+                fingerprint,
+            )
+        except Exception as exc:
+            logger.warning("文字起こしの初期化に失敗しました", error=str(exc))
+            return None, fingerprint
+
     recorder_with_transcription_instance = RecorderWithTranscription(
         cast(VideoRecorderPort, container.resolve(VideoRecorderPort)),
-        cast(
-            Optional[SpeechTranscriberPort],
-            container.resolve(SpeechTranscriberPort),
-        ),
+        None,
         cast(
             VideoAssetRepositoryPort,
             container.resolve(VideoAssetRepositoryPort),
         ),
         cast(BoundLogger, container.resolve(BoundLogger)),
+        transcriber_factory=_build_speech_transcriber,
     )
     container.register(
         RecorderWithTranscriptionPort,

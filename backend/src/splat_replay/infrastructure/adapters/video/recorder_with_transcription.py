@@ -22,20 +22,43 @@ class RecorderWithTranscription(RecorderWithTranscriptionPort):
         transcriber: Optional[SpeechTranscriberPort],
         asset_repo: VideoAssetRepositoryPort,
         logger: BoundLogger,
+        transcriber_factory: Callable[
+            [], tuple[Optional[SpeechTranscriberPort], str]
+        ]
+        | None = None,
     ) -> None:
         self.recorder = recorder
         self.transcriber = transcriber
         self.asset_repo = asset_repo
         self.logger = logger
+        self._transcriber_factory = transcriber_factory
+        self._transcriber_fingerprint: str | None = None
         self._status_listeners: List[
             Callable[[RecorderStatus], Awaitable[None]]
         ] = []
+
+    def _refresh_transcriber(self) -> None:
+        if self._transcriber_factory is None:
+            return
+        try:
+            transcriber, fingerprint = self._transcriber_factory()
+            if fingerprint == self._transcriber_fingerprint:
+                return
+            self.transcriber = transcriber
+            self._transcriber_fingerprint = fingerprint
+        except Exception as exc:
+            self.logger.error(
+                "文字起こし設定の再読み込みに失敗しました",
+                error=str(exc),
+            )
+            self.transcriber = None
 
     async def setup(self) -> None:
         await self.recorder.setup()
         self.recorder.add_status_listener(self._notify_status_change)
 
     async def start(self) -> None:
+        self._refresh_transcriber()
         await self.recorder.start()
         if self.transcriber is not None:
             self.transcriber.start()

@@ -27,6 +27,8 @@ class SpeechTranscriber(SpeechTranscriberPort):
 
     @staticmethod
     def find_microphone(device_name: str) -> Optional[int]:
+        if not device_name.strip():
+            return None
         for index, name in enumerate(sr.Microphone.list_microphone_names()):
             if device_name.lower() in name.lower():
                 return index
@@ -38,6 +40,9 @@ class SpeechTranscriber(SpeechTranscriberPort):
         speech_recognizer: IntegratedSpeechRecognizer,
         logger: BoundLogger,
     ):
+        if not settings.mic_device_name.strip():
+            logger.info("文字起こしを無効化します", reason="マイク名が未設定")
+            raise ValueError("マイク名が未設定")
         microphone_index = self.find_microphone(settings.mic_device_name)
         if microphone_index is None:
             raise ValueError("マイクが見つかりません")
