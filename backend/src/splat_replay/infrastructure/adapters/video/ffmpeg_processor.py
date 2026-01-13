@@ -37,6 +37,15 @@ class FFmpegProcessor(VideoEditorPort):
         input_text: str | None = None,
         timeout: float | None = None,
     ) -> CompletedProcess[str]:
+        # Windows環境での asyncio.create_subprocess_exec の NotImplementedError 回避
+        # subprocess.run を asyncio.to_thread でラップして実行
+        import sys
+
+        if sys.platform == "win32":
+            return await self._run_text_windows(
+                command, cwd=cwd, input_text=input_text, timeout=timeout
+            )
+
         process = await asyncio.create_subprocess_exec(
             *command,
             cwd=str(cwd) if cwd else None,
@@ -77,6 +86,37 @@ class FFmpegProcessor(VideoEditorPort):
             stdout=stdout_bytes.decode("utf-8", errors="replace"),
             stderr=stderr_bytes.decode("utf-8", errors="replace"),
         )
+
+    async def _run_text_windows(
+        self,
+        command: Sequence[str],
+        *,
+        cwd: Path | None = None,
+        input_text: str | None = None,
+        timeout: float | None = None,
+    ) -> CompletedProcess[str]:
+        """Windows環境での subprocess 実行（asyncio.to_thread を使用）。"""
+
+        def run_subprocess() -> CompletedProcess[str]:
+            input_bytes = (
+                input_text.encode("utf-8") if input_text is not None else None
+            )
+            result = subprocess.run(
+                command,
+                cwd=str(cwd) if cwd else None,
+                input=input_bytes,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                timeout=timeout,
+            )
+            return CompletedProcess(
+                args=list(command),
+                returncode=result.returncode,
+                stdout=result.stdout.decode("utf-8", errors="replace"),
+                stderr=result.stderr.decode("utf-8", errors="replace"),
+            )
+
+        return await asyncio.to_thread(run_subprocess)
 
     async def _run_binary(
         self,
@@ -389,11 +429,11 @@ class FFmpegProcessor(VideoEditorPort):
         # キャッシュ利用
         cached = self._length_cache.get(abs_path)
         if cached is not None:
-            self.logger.info(
+            self.logger.debug(
                 "FFprobe: 長さ取得 (cache)", path=str(abs_path), seconds=cached
             )
             return cached
-        self.logger.info("FFprobe: 長さ取得", path=str(abs_path))
+        self.logger.debug("FFprobe: 長さ取得", path=str(abs_path))
 
         result = await self._run_text(
             [
@@ -414,6 +454,13 @@ class FFmpegProcessor(VideoEditorPort):
             return None
 
         raw = result.stdout.strip()
+        if not raw:
+            self.logger.error(
+                "FFprobe: 長さ取得失敗 (stdout が空)",
+                path=str(abs_path),
+            )
+            self._length_cache[abs_path] = None
+            return None
         try:
             length = float(raw)
         except ValueError:
