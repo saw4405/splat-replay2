@@ -14,6 +14,9 @@
   let subtitleData: SubtitleData | null = null;
   let blocks: SubtitleBlock[] = [];
   let videoDuration: number | null = null;
+  let videoElementDuration: number | null = null;
+  let blocksMaxDuration: number | null = null;
+  let timelineDuration: number | null = null;
   let loading = true;
   let saving = false;
   let error: string | null = null;
@@ -62,6 +65,7 @@
   async function loadSubtitle() {
     loading = true;
     error = null;
+    videoElementDuration = null;
     try {
       subtitleData = await getRecordedSubtitle(videoId);
       blocks = [...subtitleData.blocks];
@@ -112,6 +116,7 @@
     playing = false;
     selectedBlockIndex = null;
     draggingBlock = null;
+    videoElementDuration = null;
   }
 
   function handleVideoTimeUpdate() {
@@ -128,6 +133,14 @@
     playing = false;
   }
 
+  function handleVideoMetadataLoaded() {
+    if (!videoElement) return;
+    const duration = normalizeDuration(videoElement.duration);
+    if (duration !== null) {
+      videoElementDuration = duration;
+    }
+  }
+
   function _togglePlay() {
     if (!videoElement) return;
     if (playing) {
@@ -139,7 +152,10 @@
 
   function seekToTime(time: number) {
     if (!videoElement) return;
-    videoElement.currentTime = Math.max(0, Math.min(time, videoDuration || 0));
+    const duration = timelineDuration;
+    const clampedTime =
+      duration !== null ? Math.max(0, Math.min(time, duration)) : Math.max(0, time);
+    videoElement.currentTime = clampedTime;
   }
 
   // 現在時刻に表示されている字幕を取得
@@ -150,6 +166,20 @@
 
   // currentTimeまたはblocksが変更されたら再計算
   $: currentSubtitleText = blocks && currentTime >= 0 ? getCurrentSubtitle() : '';
+
+  function normalizeDuration(duration: number | null): number | null {
+    if (duration === null) return null;
+    if (!Number.isFinite(duration) || duration <= 0) return null;
+    return duration;
+  }
+
+  $: blocksMaxDuration =
+    blocks.length > 0 ? Math.max(...blocks.map((block) => block.end_time)) : null;
+
+  $: timelineDuration =
+    normalizeDuration(videoDuration) ??
+    normalizeDuration(videoElementDuration) ??
+    normalizeDuration(blocksMaxDuration);
 
   // 時間重複チェック関数
   function hasOverlap(startTime: number, endTime: number, excludeIndex: number = -1): boolean {
@@ -200,19 +230,20 @@
     return `${m}:${String(s).padStart(2, '0')}.${String(ms).padStart(3, '0')}`;
   }
 
-  function timeToPixel(time: number): number {
-    if (!videoDuration || videoDuration === 0) return 0;
-    return (time / videoDuration) * timelineWidth;
+  function timeToPixel(time: number, duration: number | null, width: number): number {
+    if (!duration || duration === 0 || width === 0) return 0;
+    return (time / duration) * width;
   }
 
-  function pixelToTime(pixel: number): number {
-    if (!videoDuration || videoDuration === 0) return 0;
-    return (pixel / timelineWidth) * videoDuration;
+  function pixelToTime(pixel: number, duration: number | null, width: number): number {
+    if (!duration || duration === 0 || width === 0) return 0;
+    return (pixel / width) * duration;
   }
 
   function _addBlock() {
     const newStartTime = currentTime;
-    const newEndTime = Math.min(currentTime + 2.5, videoDuration || currentTime + 2.5);
+    const maxDuration = timelineDuration ?? currentTime + 2.5;
+    const newEndTime = Math.min(currentTime + 2.5, maxDuration);
 
     const newBlock: SubtitleBlock = {
       index: blocks.length + 1,
@@ -257,8 +288,12 @@
     // ポップアップの位置を計算
     if (event && timelineContainer) {
       const _containerRect = timelineContainer.getBoundingClientRect();
-      const blockLeft = timeToPixel(blocks[index].start_time);
-      const blockWidth = timeToPixel(blocks[index].end_time - blocks[index].start_time);
+      const blockLeft = timeToPixel(blocks[index].start_time, timelineDuration, timelineWidth);
+      const blockWidth = timeToPixel(
+        blocks[index].end_time - blocks[index].start_time,
+        timelineDuration,
+        timelineWidth
+      );
 
       // ポップアップの幅を推定（実際の幅 = 300px + パディング）
       const popupWidth = 320;
@@ -323,7 +358,7 @@
     if (draggingBlock === null || draggingEdge === null) return;
 
     const deltaX = event.clientX - dragStartX;
-    const deltaTime = pixelToTime(deltaX);
+    const deltaTime = pixelToTime(deltaX, timelineDuration, timelineWidth);
 
     const block = blocks[draggingBlock];
     const duration = block.end_time - block.start_time;
@@ -341,7 +376,10 @@
         };
       }
     } else if (draggingEdge === 'end') {
-      let newEnd = Math.min(videoDuration || dragStartTime + deltaTime, dragStartTime + deltaTime);
+      let newEnd = dragStartTime + deltaTime;
+      if (timelineDuration !== null) {
+        newEnd = Math.min(timelineDuration, newEnd);
+      }
       const newStart = Math.min(block.start_time, newEnd - 0.5);
 
       // 他の字幕と重複しないかチェック
@@ -354,7 +392,11 @@
       }
     } else if (draggingEdge === 'move') {
       let newStart = dragStartTime + deltaTime;
-      newStart = Math.max(0, Math.min(newStart, (videoDuration || 0) - duration));
+      if (timelineDuration !== null) {
+        newStart = Math.max(0, Math.min(newStart, timelineDuration - duration));
+      } else {
+        newStart = Math.max(0, newStart);
+      }
       const newEnd = newStart + duration;
 
       // 他の字幕と重複しないかチェック
@@ -382,7 +424,7 @@
 
     const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
     const x = event.clientX - rect.left;
-    const time = pixelToTime(x);
+    const time = pixelToTime(x, timelineDuration, timelineWidth);
     seekToTime(time);
 
     // タイムライン背景をクリックしたら編集ポップアップを閉じる
@@ -408,10 +450,11 @@
     showAddPopup = false;
 
     // 新しい字幕ブロックを追加
+    const maxDuration = timelineDuration ?? time + 3;
     const newBlock: SubtitleBlock = {
       index: blocks.length + 1,
       start_time: time,
-      end_time: Math.min(time + 3, videoDuration || time + 3),
+      end_time: Math.min(time + 3, maxDuration),
       text: '',
     };
     blocks = [...blocks, newBlock].sort((a, b) => a.start_time - b.start_time);
@@ -425,8 +468,12 @@
       editedEndTime = blocks[addedIndex].end_time;
 
       // ポップアップの位置を計算
-      const blockLeft = timeToPixel(blocks[addedIndex].start_time);
-      const blockWidth = timeToPixel(blocks[addedIndex].end_time - blocks[addedIndex].start_time);
+      const blockLeft = timeToPixel(blocks[addedIndex].start_time, timelineDuration, timelineWidth);
+      const blockWidth = timeToPixel(
+        blocks[addedIndex].end_time - blocks[addedIndex].start_time,
+        timelineDuration,
+        timelineWidth
+      );
 
       const popupWidth = 320;
       const halfPopupWidth = popupWidth / 2;
@@ -492,6 +539,8 @@
               on:timeupdate={handleVideoTimeUpdate}
               on:play={handleVideoPlay}
               on:pause={handleVideoPause}
+              on:loadedmetadata={handleVideoMetadataLoaded}
+              on:durationchange={handleVideoMetadataLoaded}
               controls
             >
               <track kind="captions" />
@@ -529,12 +578,12 @@
           >
             <!-- 時間軸 -->
             <div class="timeline-axis">
-              {#if videoDuration}
+              {#if timelineDuration}
                 <!-- 30秒間隔でメモリを表示 -->
-                {#each Array(Math.floor(videoDuration / 30) + 1) as _, i}
+                {#each Array(Math.floor(timelineDuration / 30) + 1) as _, i}
                   {@const time = i * 30}
-                  {@const left = (time / videoDuration) * 100}
-                  {#if time <= videoDuration}
+                  {@const left = (time / timelineDuration) * 100}
+                  {#if time <= timelineDuration}
                     <div class="timeline-tick" style="left: {left}%">
                       <div class="tick-line"></div>
                       <div class="tick-label">{formatTime(time)}</div>
@@ -545,13 +594,20 @@
             </div>
 
             <!-- 現在位置インジケーター -->
-            <div class="playhead" style="left: {timeToPixel(currentTime)}px"></div>
+            <div
+              class="playhead"
+              style="left: {timeToPixel(currentTime, timelineDuration, timelineWidth)}px"
+            ></div>
 
             <!-- 字幕ブロック -->
             <div class="timeline-blocks">
               {#each blocks as block, i}
-                {@const left = timeToPixel(block.start_time)}
-                {@const width = timeToPixel(block.end_time - block.start_time)}
+                {@const left = timeToPixel(block.start_time, timelineDuration, timelineWidth)}
+                {@const width = timeToPixel(
+                  block.end_time - block.start_time,
+                  timelineDuration,
+                  timelineWidth
+                )}
                 <div
                   class="subtitle-block"
                   class:selected={selectedBlockIndex === i}
@@ -803,6 +859,8 @@
   /* タイムライン */
   .timeline-section {
     margin-bottom: 24px;
+    position: relative;
+    z-index: 20;
   }
 
   .timeline-container {
@@ -815,6 +873,7 @@
     border-radius: 8px;
     cursor: crosshair;
     overflow: visible;
+    margin: 0 1rem;
   }
 
   .timeline-axis {
