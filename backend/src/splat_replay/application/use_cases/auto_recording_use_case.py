@@ -88,6 +88,7 @@ class AutoRecordingUseCase:
         self._task: asyncio.Task[bool] | None = None
         self._context_lock = asyncio.Lock()
         self._context_revision = 0
+        self._last_record_state: RecordState | None = None
         self._merger = MetadataMerger()
 
     # ================================================================
@@ -135,6 +136,7 @@ class AutoRecordingUseCase:
             電源OFF検出フラグ（True: 電源OFFで終了、False: 通常終了）
         """
         self.last_phase = None
+        self._last_record_state = self._session.state
         self.logger.info("自動録画開始")
         detected_power_off = False
 
@@ -222,9 +224,12 @@ class AutoRecordingUseCase:
         while not self._stop_event.is_set():
             # フレーム取得
             frame = await self._frame_processor.acquire_frame()
+            synced = await self._sync_context_if_state_changed()
             if frame is None:
                 # フレーム未到来。CPU スピン緩和のため譲歩。
                 await asyncio.sleep(0.1)
+                continue
+            if synced:
                 continue
 
             # 電源OFF検出
@@ -402,6 +407,23 @@ class AutoRecordingUseCase:
                 pending_result_updates=pending_result_updates,
             )
             self._context_revision += 1
+
+    async def _sync_context_if_state_changed(self) -> bool:
+        """録画停止への遷移を検知してコンテキストを同期する。
+
+        Returns:
+            同期した場合 True
+        """
+        current_state = self._session.state
+        if self._last_record_state == current_state:
+            return False
+        synced = False
+        if current_state is RecordState.STOPPED:
+            base_context, _ = await self._snapshot_context()
+            await self._sync_context_from_service(base_context=base_context)
+            synced = True
+        self._last_record_state = current_state
+        return synced
 
     async def get_metadata(self) -> RecordingMetadata:
         """現在の録画メタデータを取得する。"""
