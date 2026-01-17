@@ -11,8 +11,15 @@ from typing import List, Optional, Tuple
 import speech_recognition as sr
 from structlog.stdlib import BoundLogger
 
-from splat_replay.application.interfaces import SpeechTranscriberPort
+from splat_replay.application.interfaces import (
+    DomainEventPublisher,
+    SpeechTranscriberPort,
+)
 from splat_replay.domain.config import SpeechTranscriberSettings
+from splat_replay.domain.events import (
+    SpeechRecognized,
+    SpeechRecognizerListening,
+)
 from splat_replay.infrastructure.adapters.audio.integrated_speech_recognition import (
     IntegratedSpeechRecognizer,
 )
@@ -39,6 +46,7 @@ class SpeechTranscriber(SpeechTranscriberPort):
         settings: SpeechTranscriberSettings,
         speech_recognizer: IntegratedSpeechRecognizer,
         logger: BoundLogger,
+        event_publisher: Optional[DomainEventPublisher] = None,
     ):
         if not settings.mic_device_name.strip():
             logger.info("文字起こしを無効化します", reason="マイク名が未設定")
@@ -50,6 +58,7 @@ class SpeechTranscriber(SpeechTranscriberPort):
         self.phrase_time_limit = settings.phrase_time_limit
         self._speech_recognizer = speech_recognizer
         self._logger = logger
+        self._event_publisher = event_publisher
         self._stopwatch = StopWatch()
         self._recognizer: sr.Recognizer = sr.Recognizer()
         self._is_paused: bool = False
@@ -104,11 +113,46 @@ class SpeechTranscriber(SpeechTranscriberPort):
                 continue
 
             audio, start, end = self._audio_queue.get(timeout=1)
-            result = asyncio.run(self._speech_recognizer.recognize(audio))
+            try:
+                has_voice_activity = (
+                    self._speech_recognizer.has_voice_activity(audio)
+                )
+                if has_voice_activity and self._event_publisher:
+                    self._event_publisher.publish_domain_event(
+                        SpeechRecognizerListening()
+                    )
+                result = asyncio.run(
+                    self._speech_recognizer.recognize(
+                        audio, has_voice_activity=has_voice_activity
+                    )
+                )
+            except Exception as e:
+                self._logger.error("音声認識処理に失敗しました", error=str(e))
+                result = None
+
             if result is None:
+                # Still emit event with empty text to reset "listening" state in frontend
+                if self._event_publisher:
+                    self._event_publisher.publish_domain_event(
+                        SpeechRecognized(
+                            text="",
+                            start_seconds=start,
+                            end_seconds=end,
+                        )
+                    )
                 continue
 
             self._segments.append(Segment(start, end, result))
+
+            # Emit recognized event with the transcribed text
+            if self._event_publisher:
+                self._event_publisher.publish_domain_event(
+                    SpeechRecognized(
+                        text=result,
+                        start_seconds=start,
+                        end_seconds=end,
+                    )
+                )
 
     def start(self) -> None:
         self._stopwatch.reset()

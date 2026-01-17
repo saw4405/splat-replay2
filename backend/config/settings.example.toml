@@ -21,11 +21,13 @@ enabled = true
 mic_device_name = "マイク (USB Audio Device)"
 groq_api_key = ""
 groq_model = "whisper-large-v3"
-integrator_model = "openai/gpt-oss-120b"
+integrator_model = "openai/gpt-oss-20b"
 language = "ja-JP"
 phrase_time_limit = 3.0
 custom_dictionary = ["ナイス", "キル", "デス"]
 vad_aggressiveness = 2
+vad_min_speech_frames = 3
+vad_min_speech_ratio = 0.1
 
 [video_storage]
 base_dir = "videos"

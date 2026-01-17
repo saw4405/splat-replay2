@@ -37,6 +37,7 @@ from .recording_events import (
     RecordingStarted,
     RecordingStopped,
 )
+from .speech_events import SpeechRecognized, SpeechRecognizerListening
 
 __all__ = [
     # Base
@@ -69,4 +70,7 @@ __all__ = [
     "AutoProcessStarted",
     "AutoSleepPending",
     "AutoSleepStarted",
+    # Speech events
+    "SpeechRecognizerListening",
+    "SpeechRecognized",
 ]

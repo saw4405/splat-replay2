@@ -28,7 +28,9 @@ export type DomainEventType =
   | 'domain.process.pending'
   | 'domain.process.started'
   | 'domain.process.sleep.pending'
-  | 'domain.process.sleep.started';
+  | 'domain.process.sleep.started'
+  | 'domain.speech.listening'
+  | 'domain.speech.recognized';
 
 export interface DomainEvent {
   type: DomainEventType;
@@ -75,6 +77,14 @@ export interface EditUploadCompletedPayload {
   success: boolean;
   message: string;
   trigger?: 'auto' | 'manual';
+}
+
+export interface SpeechRecognizedPayload {
+  text?: string;
+  start_seconds?: number;
+  end_seconds?: number;
+  event_id?: string;
+  timestamp?: string;
 }
 
 /**
