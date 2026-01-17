@@ -1,7 +1,11 @@
 ﻿<script lang="ts">
   import { onMount, onDestroy } from 'svelte';
-  import { Circle, Pause, Square, Play, Eye, EyeOff } from 'lucide-svelte';
-  import { subscribeDomainEvents, type DomainEvent } from '../../domainEvents';
+  import { Circle, Pause, Square, Play, Eye, EyeOff, Mic } from 'lucide-svelte';
+  import {
+    subscribeDomainEvents,
+    type DomainEvent,
+    type SpeechRecognizedPayload,
+  } from '../../domainEvents';
 
   let eventSource: EventSource | null = null;
   let videoEl: HTMLVideoElement | null = null;
@@ -15,6 +19,19 @@
   let cameraStartInFlight: boolean = false;
   let previewToggleFocused: boolean = false;
   let toggleVisible: boolean = true;
+
+  // Speech recognition preview state
+  type SpeechState = 'idle' | 'listening' | 'recognized';
+  let speechState: SpeechState = 'idle';
+  let speechText: string = '';
+  let speechFadeTimeout: ReturnType<typeof setTimeout> | null = null;
+  let speechListeningTimeout: ReturnType<typeof setTimeout> | null = null;
+  let speechRecognizedMinTimeout: ReturnType<typeof setTimeout> | null = null;
+  let speechRecognizedMinUntil: number | null = null;
+  let speechPendingListeningUntil: number | null = null;
+  const SPEECH_FADE_DELAY_MS = 5000;
+  const SPEECH_LISTENING_TIMEOUT_MS = 2000;
+  const SPEECH_RECOGNIZED_MIN_MS = 3000;
 
   const CAMERA_START_MAX_ATTEMPTS = 3;
   const CAMERA_START_RETRY_DELAY_MS = 500;
@@ -33,6 +50,38 @@
     previewVisible = !previewVisible;
   }
 
+  function isSpeechDisplayAvailable(): boolean {
+    return recorderState !== 'STOPPED';
+  }
+
+  function startListeningState(durationMs: number = SPEECH_LISTENING_TIMEOUT_MS): void {
+    speechState = 'listening';
+    if (speechFadeTimeout) {
+      clearTimeout(speechFadeTimeout);
+      speechFadeTimeout = null;
+    }
+    if (speechListeningTimeout) {
+      clearTimeout(speechListeningTimeout);
+    }
+    speechListeningTimeout = setTimeout(() => {
+      speechState = 'idle';
+      speechListeningTimeout = null;
+    }, durationMs);
+  }
+
+  function finishRecognizedDisplay(): void {
+    speechRecognizedMinUntil = null;
+    if (speechPendingListeningUntil !== null) {
+      const remaining = speechPendingListeningUntil - Date.now();
+      speechPendingListeningUntil = null;
+      if (remaining > 0 && isSpeechDisplayAvailable()) {
+        startListeningState(remaining);
+        return;
+      }
+    }
+    speechState = 'idle';
+  }
+
   function connectRecorderStateEvents(): void {
     eventSource?.close();
     eventSource = subscribeDomainEvents((event: DomainEvent) => {
@@ -47,7 +96,92 @@
         case 'domain.recording.stopped':
         case 'domain.recording.cancelled':
           recorderState = 'STOPPED';
+          // Reset speech preview when recording stops
+          speechState = 'idle';
+          speechText = '';
+          if (speechFadeTimeout) {
+            clearTimeout(speechFadeTimeout);
+            speechFadeTimeout = null;
+          }
+          if (speechListeningTimeout) {
+            clearTimeout(speechListeningTimeout);
+            speechListeningTimeout = null;
+          }
+          if (speechRecognizedMinTimeout) {
+            clearTimeout(speechRecognizedMinTimeout);
+            speechRecognizedMinTimeout = null;
+          }
+          speechRecognizedMinUntil = null;
+          speechPendingListeningUntil = null;
           break;
+        case 'domain.speech.listening':
+          // Only show listening state when recording
+          if (isSpeechDisplayAvailable()) {
+            if (speechState === 'recognized') {
+              speechPendingListeningUntil = Date.now() + SPEECH_LISTENING_TIMEOUT_MS;
+              break;
+            }
+            startListeningState();
+          }
+          break;
+        case 'domain.speech.recognized': {
+          const payload = event.payload as SpeechRecognizedPayload;
+          if (isSpeechDisplayAvailable()) {
+            speechPendingListeningUntil = null;
+            if (speechListeningTimeout) {
+              clearTimeout(speechListeningTimeout);
+              speechListeningTimeout = null;
+            }
+            if (payload.text) {
+              speechState = 'recognized';
+              speechText = payload.text;
+              speechRecognizedMinUntil = Date.now() + SPEECH_RECOGNIZED_MIN_MS;
+              if (speechRecognizedMinTimeout) {
+                clearTimeout(speechRecognizedMinTimeout);
+                speechRecognizedMinTimeout = null;
+              }
+              // Auto-fade after delay
+              if (speechFadeTimeout) {
+                clearTimeout(speechFadeTimeout);
+              }
+              speechFadeTimeout = setTimeout(() => {
+                speechFadeTimeout = null;
+                finishRecognizedDisplay();
+              }, SPEECH_FADE_DELAY_MS);
+            } else {
+              // No text recognized (e.g. skipped or empty), return to idle
+              if (
+                speechState === 'recognized' &&
+                speechRecognizedMinUntil !== null &&
+                Date.now() < speechRecognizedMinUntil
+              ) {
+                const remaining = speechRecognizedMinUntil - Date.now();
+                if (speechRecognizedMinTimeout) {
+                  clearTimeout(speechRecognizedMinTimeout);
+                }
+                if (speechFadeTimeout) {
+                  clearTimeout(speechFadeTimeout);
+                  speechFadeTimeout = null;
+                }
+                speechRecognizedMinTimeout = setTimeout(() => {
+                  speechRecognizedMinTimeout = null;
+                  finishRecognizedDisplay();
+                }, remaining);
+              } else {
+                if (speechFadeTimeout) {
+                  clearTimeout(speechFadeTimeout);
+                  speechFadeTimeout = null;
+                }
+                if (speechRecognizedMinTimeout) {
+                  clearTimeout(speechRecognizedMinTimeout);
+                  speechRecognizedMinTimeout = null;
+                }
+                finishRecognizedDisplay();
+              }
+            }
+          }
+          break;
+        }
         default:
           break;
       }
@@ -219,6 +353,15 @@
   onDestroy(() => {
     if (eventSource) {
       eventSource.close();
+    }
+    if (speechFadeTimeout) {
+      clearTimeout(speechFadeTimeout);
+    }
+    if (speechListeningTimeout) {
+      clearTimeout(speechListeningTimeout);
+    }
+    if (speechRecognizedMinTimeout) {
+      clearTimeout(speechRecognizedMinTimeout);
     }
     stopCamera();
   });
@@ -408,6 +551,29 @@
 
   {#if previewVisible}
     <video bind:this={videoEl} class="preview-canvas" playsinline muted></video>
+  {/if}
+
+  <!-- Speech recognition preview overlay -->
+  {#if previewVisible && speechState !== 'idle'}
+    <div
+      class="speech-preview"
+      class:speech-preview--listening={speechState === 'listening'}
+      class:speech-preview--recognized={speechState === 'recognized'}
+    >
+      {#if speechState === 'listening'}
+        <div class="speech-listening">
+          <Mic size={16} class="speech-mic-icon" />
+          <span class="speech-listening-text">音声認識中...</span>
+          <div class="speech-listening-dots">
+            <span class="dot"></span>
+            <span class="dot"></span>
+            <span class="dot"></span>
+          </div>
+        </div>
+      {:else if speechState === 'recognized'}
+        <div class="speech-text">{speechText}</div>
+      {/if}
+    </div>
   {/if}
 </div>
 
@@ -622,5 +788,119 @@
     outline: 3px solid rgba(255, 255, 255, 0.6);
     outline-offset: 4px;
     transform: translate(-50%, -50%) scale(1.02);
+  }
+
+  /* Speech recognition preview styles */
+  .speech-preview {
+    position: absolute;
+    bottom: 1.5rem;
+    left: 50%;
+    transform: translateX(-50%);
+    max-width: calc(100% - 2rem);
+    box-sizing: border-box;
+    padding: 0.75rem 1.25rem;
+    background: rgba(0, 0, 0, 0.75);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border-radius: 12px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    z-index: 15;
+    animation: speech-fade-in 0.3s ease-out;
+  }
+
+  @keyframes speech-fade-in {
+    from {
+      opacity: 0;
+      transform: translateX(-50%) translateY(10px);
+    }
+    to {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+    }
+  }
+
+  .speech-preview--listening {
+    border-color: rgba(59, 130, 246, 0.4);
+  }
+
+  .speech-preview--recognized {
+    border-color: rgba(34, 197, 94, 0.4);
+  }
+
+  .speech-listening {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    color: rgba(255, 255, 255, 0.9);
+  }
+
+  .speech-preview :global(.speech-mic-icon) {
+    color: #3b82f6;
+    animation: mic-pulse 1.5s ease-in-out infinite;
+  }
+
+  @keyframes mic-pulse {
+    0%,
+    100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0.5;
+    }
+  }
+
+  .speech-listening-text {
+    font-size: 0.875rem;
+    font-weight: 500;
+    white-space: nowrap;
+  }
+
+  .speech-listening-dots {
+    display: flex;
+    gap: 4px;
+    margin-left: 4px;
+  }
+
+  .speech-listening-dots .dot {
+    width: 4px;
+    height: 4px;
+    background: #3b82f6;
+    border-radius: 50%;
+    animation: dot-bounce 1.4s ease-in-out infinite both;
+  }
+
+  .speech-listening-dots .dot:nth-child(1) {
+    animation-delay: 0s;
+  }
+
+  .speech-listening-dots .dot:nth-child(2) {
+    animation-delay: 0.2s;
+  }
+
+  .speech-listening-dots .dot:nth-child(3) {
+    animation-delay: 0.4s;
+  }
+
+  @keyframes dot-bounce {
+    0%,
+    80%,
+    100% {
+      transform: scale(0.8);
+      opacity: 0.5;
+    }
+    40% {
+      transform: scale(1.2);
+      opacity: 1;
+    }
+  }
+
+  .speech-text {
+    color: white;
+    font-size: 1.5rem;
+    font-weight: 500;
+    text-align: center;
+    line-height: 1.4;
+    word-break: break-word;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
   }
 </style>

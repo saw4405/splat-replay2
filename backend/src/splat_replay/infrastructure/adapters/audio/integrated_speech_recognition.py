@@ -1,4 +1,5 @@
 import asyncio
+import math
 import os
 from typing import Optional
 
@@ -33,6 +34,8 @@ class IntegratedSpeechRecognizer:
         self._recognizer: sr.Recognizer = sr.Recognizer()
         self._groq = AsyncGroq()
         self._vad = webrtcvad.Vad(settings.vad_aggressiveness)
+        self._vad_min_speech_frames = settings.vad_min_speech_frames
+        self._vad_min_speech_ratio = settings.vad_min_speech_ratio
 
     def _has_voice_activity(self, audio: sr.AudioData) -> bool:
         """VAD を用いて音声活動を判定する。"""
@@ -48,25 +51,55 @@ class IntegratedSpeechRecognizer:
         frame_duration_ms = 30
         bytes_per_frame = int(16000 * 2 * frame_duration_ms / 1000)
         if len(pcm16) < bytes_per_frame:
-            self._logger.info(
+            self._logger.debug(
                 "VAD判定に必要なフレーム長を満たしていないため無音と判定しました"
             )
             return False
 
+        speech_frames = 0
+        total_frames = 0
         for start in range(
             0, len(pcm16) - bytes_per_frame + 1, bytes_per_frame
         ):
             frame = pcm16[start : start + bytes_per_frame]
+            total_frames += 1
             if self._vad.is_speech(frame, 16000):
-                return True
+                speech_frames += 1
 
-        self._logger.info(
+        if total_frames == 0:
+            self._logger.debug(
+                "VAD判定対象のフレームが存在しないため無音と判定しました"
+            )
+            return False
+
+        required_frames = max(
+            self._vad_min_speech_frames,
+            math.ceil(total_frames * self._vad_min_speech_ratio),
+        )
+        self._logger.debug(
+            "VAD判定結果",
+            total_frames=total_frames,
+            speech_frames=speech_frames,
+            required_frames=required_frames,
+        )
+        if speech_frames >= required_frames:
+            return True
+
+        self._logger.debug(
             "VADが音声活動を検出しなかったため無音と判定しました"
         )
         return False
 
-    async def recognize(self, audio: sr.AudioData) -> Optional[str]:
-        if not self._has_voice_activity(audio):
+    def has_voice_activity(self, audio: sr.AudioData) -> bool:
+        """VAD を用いた音声活動の判定結果を返す。"""
+        return self._has_voice_activity(audio)
+
+    async def recognize(
+        self, audio: sr.AudioData, has_voice_activity: Optional[bool] = None
+    ) -> Optional[str]:
+        if has_voice_activity is None:
+            has_voice_activity = self._has_voice_activity(audio)
+        if not has_voice_activity:
             return None
 
         google, groq = await asyncio.gather(
@@ -75,7 +108,8 @@ class IntegratedSpeechRecognizer:
         )
         if google is None:
             self._logger.info(
-                "Google音声認識が無効なためスキップします (whisperは無音判定しないため)"
+                "Google音声認識の結果が空のためスキップします (音声なしと判断)",
+                groq=groq,
             )
             return None
         result = await self._estimate_speech(f"google: {google}\ngroq: {groq}")
@@ -108,7 +142,9 @@ class IntegratedSpeechRecognizer:
         def _recognize_groq() -> Optional[str]:
             try:
                 result = self._recognizer.recognize_groq(
-                    audio, model=self.groq_model, language=language
+                    audio,
+                    model=self.groq_model,
+                    language=language,
                 )
                 self._logger.debug(f"groq: {result}")
                 return result

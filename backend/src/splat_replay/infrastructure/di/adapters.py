@@ -196,6 +196,9 @@ def register_adapters(container: punq.Container) -> None:
         Optional[SpeechTranscriberPort], str
     ]:
         logger = cast(BoundLogger, container.resolve(BoundLogger))
+        event_publisher = cast(
+            DomainEventPublisher, container.resolve(DomainEventPublisher)
+        )
         settings = load_settings_from_toml()
         speech_settings = settings.speech_transcriber
         fingerprint_payload = json.dumps(
@@ -225,7 +228,9 @@ def register_adapters(container: punq.Container) -> None:
         try:
             recognizer = IntegratedSpeechRecognizer(speech_settings, logger)
             return (
-                SpeechTranscriber(speech_settings, recognizer, logger),
+                SpeechTranscriber(
+                    speech_settings, recognizer, logger, event_publisher
+                ),
                 fingerprint,
             )
         except Exception as exc:

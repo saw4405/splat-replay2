@@ -30,6 +30,10 @@ from .recording_events import (
     RecordingStarted,
     RecordingStopped,
 )
+from .speech_events import (
+    SpeechRecognizerListening,
+    SpeechRecognized,
+)
 
 __all__ = [
     # Base
@@ -56,4 +60,7 @@ __all__ = [
     "BattleFinished",
     "BattleResultDetected",
     "ScheduleChanged",
+    # Speech events
+    "SpeechRecognizerListening",
+    "SpeechRecognized",
 ]

@@ -69,6 +69,21 @@ class SpeechTranscriberSettings(BaseModel):
         le=3,
         recommended=False,
     )
+    vad_min_speech_frames: int = Field(
+        default=3,
+        title="VAD最小検出フレーム数",
+        description="VADで音声ありと判定するために必要な最小フレーム数",
+        ge=1,
+        recommended=False,
+    )
+    vad_min_speech_ratio: float = Field(
+        default=0.1,
+        title="VAD最小検出比率",
+        description="VADで音声ありと判定するために必要なフレーム比率 (0.0〜1.0)",
+        ge=0.0,
+        le=1.0,
+        recommended=False,
+    )
 
     class Config:
         pass

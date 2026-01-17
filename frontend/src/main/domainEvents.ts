@@ -23,7 +23,9 @@ export type DomainEventType =
   | 'domain.asset.recorded.subtitle_updated'
   | 'domain.asset.recorded.deleted'
   | 'domain.asset.edited.saved'
-  | 'domain.asset.edited.deleted';
+  | 'domain.asset.edited.deleted'
+  | 'domain.speech.listening'
+  | 'domain.speech.recognized';
 
 export interface DomainEvent {
   type: DomainEventType;
@@ -52,6 +54,14 @@ export interface BattleStartedPayload {
 export interface RecordingPausedPayload {
   session_id?: string;
   reason?: string | null;
+  event_id?: string;
+  timestamp?: string;
+}
+
+export interface SpeechRecognizedPayload {
+  text?: string;
+  start_seconds?: number;
+  end_seconds?: number;
   event_id?: string;
   timestamp?: string;
 }
