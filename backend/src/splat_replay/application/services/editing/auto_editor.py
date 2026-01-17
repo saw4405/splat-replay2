@@ -185,6 +185,8 @@ class AutoEditor:
                     "Video edit failed",
                     group_label=label,
                     error=str(e),
+                    error_type=type(e).__name__,
+                    exc_info=True,
                 )
                 # 失敗したグループをスキップして次へ
                 self.progress.advance(task_id)

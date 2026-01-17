@@ -12,6 +12,7 @@ from splat_replay.application.services import (
     AutoRecorder,
     DeviceChecker,
     ErrorHandler,
+    ProgressEventStore,
     RecordingPreparationService,
     SetupService,
     SystemCheckService,
@@ -19,6 +20,9 @@ from splat_replay.application.services import (
 )
 from splat_replay.application.services.common.settings_service import (
     SettingsService,
+)
+from splat_replay.application.services.process.auto_process_service import (
+    AutoProcessService,
 )
 from splat_replay.application.use_cases import (
     AutoRecordingUseCase,
@@ -61,6 +65,8 @@ class WebAPIServer:
     upload_use_case: UploadUseCase
     auto_recording_use_case_factory: Callable[[], AutoRecordingUseCase]
     auto_recorder: AutoRecorder
+    auto_process_service: AutoProcessService
+    progress_store: ProgressEventStore
     event_bus: EventBusPort
     project_root: Path
     runtime_root: Path
@@ -94,6 +100,8 @@ class WebAPIServer:
         upload_use_case: UploadUseCase,
         auto_recording_use_case_factory: Callable[[], AutoRecordingUseCase],
         auto_recorder: AutoRecorder,
+        auto_process_service: AutoProcessService,
+        progress_store: ProgressEventStore,
         event_bus: EventBusPort,
         project_root: Path,
         runtime_root: Path,
@@ -124,6 +132,8 @@ class WebAPIServer:
             upload_use_case: アップロードユースケース
             auto_recording_use_case_factory: 自動録画ユースケースファクトリ
             auto_recorder: 自動録画サービス
+            auto_process_service: 自動処理サービス
+            progress_store: 進捗イベントストア
             event_bus: イベントバス
             project_root: プロジェクトルートディレクトリ
             runtime_root: ランタイムルートディレクトリ
@@ -150,6 +160,8 @@ class WebAPIServer:
         self.upload_use_case = upload_use_case
         self.auto_recording_use_case_factory = auto_recording_use_case_factory
         self.auto_recorder = auto_recorder
+        self.auto_process_service = auto_process_service
+        self.progress_store = progress_store
         self.event_bus = event_bus
         self.project_root = project_root
         self.runtime_root = runtime_root

@@ -11,9 +11,9 @@ import time
 import traceback
 from pathlib import Path
 
+import structlog
 import uvicorn
 import webview
-import structlog
 from structlog.stdlib import BoundLogger
 
 
@@ -64,7 +64,6 @@ def start_backend_server(
             app=app_import_path,
         )
 
-        # デバッグ用: ログをコンソールに出力
         uvicorn.run(
             app_import_path,
             host=host,

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import subprocess
 
 from structlog.stdlib import BoundLogger
 
@@ -18,7 +19,19 @@ class SystemPower(PowerPort):
     async def sleep(self) -> None:
         """PC をスリープさせる。"""
         self.logger.info("PC スリープ指示")
-        process = await asyncio.create_subprocess_exec(
-            "rundll32.exe", "powrprof.dll,SetSuspendState", "0,1,0"
+        try:
+            process = await asyncio.create_subprocess_exec(
+                "rundll32.exe", "powrprof.dll,SetSuspendState", "0,1,0"
+            )
+            await process.wait()
+        except NotImplementedError:
+            await asyncio.to_thread(self._sleep_via_subprocess)
+
+    @staticmethod
+    def _sleep_via_subprocess() -> None:
+        subprocess.run(
+            ["rundll32.exe", "powrprof.dll,SetSuspendState", "0,1,0"],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            check=False,
         )
-        await process.wait()

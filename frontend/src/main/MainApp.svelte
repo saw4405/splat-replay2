@@ -3,12 +3,49 @@
   import SettingsDialog from './components/settings/SettingsDialog.svelte';
   import VideoPreviewContainer from './components/recording/VideoPreviewContainer.svelte';
   import BottomDrawer from './components/recording/BottomDrawer.svelte';
+  import AutoProcessNotification from './components/AutoProcessNotification.svelte';
+  import { onMount } from 'svelte';
+  import { api } from './api';
+  import { subscribeDomainEvents } from './domainEvents';
+  import type {
+    DomainEvent,
+    AutoProcessPendingPayload,
+    AutoSleepPendingPayload,
+  } from './domainEvents';
 
   let isSettingsOpen = false;
+  let autoProcessPayload: AutoProcessPendingPayload | null = null;
+  let autoSleepPayload: AutoSleepPendingPayload | null = null;
+  let bottomDrawerRef: BottomDrawer | null = null;
 
   function openSettings(): void {
     isSettingsOpen = true;
   }
+
+  onMount(() => {
+    const eventSource = subscribeDomainEvents((event: DomainEvent) => {
+      if (event.type === 'domain.process.pending') {
+        autoProcessPayload = event.payload as unknown as AutoProcessPendingPayload;
+      } else if (event.type === 'domain.process.sleep.pending') {
+        autoSleepPayload = event.payload as unknown as AutoSleepPendingPayload;
+      } else if (event.type === 'domain.process.edit_upload_completed') {
+        autoProcessPayload = null;
+      } else if (event.type === 'domain.process.sleep.started') {
+        autoSleepPayload = null;
+      } else if (event.type === 'domain.process.started') {
+        // 自動処理が実際に開始された
+        autoProcessPayload = null;
+        // BottomDrawerに進捗表示を促す
+        if (bottomDrawerRef && typeof bottomDrawerRef.openProgress === 'function') {
+          bottomDrawerRef.openProgress();
+        }
+      }
+    });
+
+    return () => {
+      eventSource.close();
+    };
+  });
 </script>
 
 <main class="app-shell glass-surface">
@@ -30,9 +67,37 @@
     <VideoPreviewContainer />
   </div>
 
-  <BottomDrawer />
+  <BottomDrawer bind:this={bottomDrawerRef} />
 
   <SettingsDialog bind:open={isSettingsOpen} />
+
+  {#if autoProcessPayload}
+    <AutoProcessNotification
+      payload={autoProcessPayload}
+      title="自動処理の開始予告"
+      onStart={() => {
+        if (bottomDrawerRef && typeof bottomDrawerRef.startAutoProcessing === 'function') {
+          bottomDrawerRef.startAutoProcessing();
+        }
+      }}
+      onDismiss={() => {
+        autoProcessPayload = null;
+      }}
+    />
+  {/if}
+
+  {#if autoSleepPayload}
+    <AutoProcessNotification
+      payload={autoSleepPayload}
+      title="スリープの開始予告"
+      onStart={() => {
+        return api.process.startSleep();
+      }}
+      onDismiss={() => {
+        autoSleepPayload = null;
+      }}
+    />
+  {/if}
 </main>
 
 <style>

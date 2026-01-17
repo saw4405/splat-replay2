@@ -8,7 +8,11 @@
   import { fetchRecordedVideos, fetchEditedVideos } from '../../api/assets';
   import { startEditUploadProcess, fetchEditUploadStatus } from '../../api/assets';
   import type { RecordedVideo, EditedVideo, EditUploadStatus } from '../../api/types';
-  import { subscribeDomainEvents, type DomainEvent } from '../../domainEvents';
+  import {
+    subscribeDomainEvents,
+    type DomainEvent,
+    type EditUploadCompletedPayload,
+  } from '../../domainEvents';
 
   // 展開状態: "closed" | "half" | "full"
   type DrawerState = 'closed' | 'half' | 'full';
@@ -125,6 +129,12 @@
   }
 
   function handleAssetEvent(event: DomainEvent): void {
+    if (event.type === 'domain.process.edit_upload_completed') {
+      const payload = event.payload as unknown as EditUploadCompletedPayload;
+      handleEditUploadCompleted(payload);
+      return;
+    }
+
     const assetEventTypes = new Set([
       'domain.asset.recorded.saved',
       'domain.asset.recorded.metadata_updated',
@@ -137,6 +147,36 @@
       return;
     }
     console.log('[BottomDrawer] Asset event received:', event.type);
+    void loadData();
+  }
+
+  function handleEditUploadCompleted(payload: EditUploadCompletedPayload): void {
+    if (statusPollingInterval !== null) {
+      clearInterval(statusPollingInterval);
+      statusPollingInterval = null;
+    }
+
+    const finishedAt = new Date().toISOString();
+    const startedAt = processStatus?.startedAt ?? null;
+    processStatus = {
+      state: payload.success ? 'succeeded' : 'failed',
+      startedAt,
+      finishedAt,
+      error: payload.success ? null : payload.message,
+    };
+
+    showProgressDialog = false;
+
+    if (payload.success) {
+      alertMessage = payload.message || '編集・アップロード処理が完了しました!';
+      alertVariant = 'success';
+    } else {
+      const detail = payload.message || '不明なエラー';
+      alertMessage = `編集・アップロード処理が失敗しました: ${detail}`;
+      alertVariant = 'error';
+    }
+    showAlertDialog = true;
+
     void loadData();
   }
 
@@ -187,11 +227,11 @@
     }
   }
 
-  async function executeProcessing(): Promise<void> {
+  async function executeProcessing(auto: boolean = false): Promise<void> {
     try {
       // 進捗ダイアログを表示
       showProgressDialog = true;
-      const response = await startEditUploadProcess();
+      const response = await startEditUploadProcess({ auto });
       if (response.accepted) {
         processStatus = response.status;
         // 処理状態のポーリング開始
@@ -208,6 +248,18 @@
       alertVariant = 'error';
       showAlertDialog = true;
     }
+  }
+
+  /**
+   * 自動処理通知から実行を開始する。
+   */
+  export function startAutoProcessing(): void {
+    if (isProcessing) {
+      showProgressDialog = true;
+      startStatusPolling();
+      return;
+    }
+    void executeProcessing(true);
   }
 
   function handleYouTubePermissionDialogClose(): void {
@@ -251,6 +303,14 @@
         console.error('状態取得エラー:', error);
       }
     }, 2000);
+  }
+
+  /**
+   * 外部（MainAppなど）から進捗表示を開始するための関数
+   */
+  export function openProgress(): void {
+    showProgressDialog = true;
+    startStatusPolling();
   }
 </script>
 

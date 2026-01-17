@@ -70,8 +70,17 @@ export async function fetchEditedVideos(): Promise<EditedVideo[]> {
 /**
  * 編集・アップロードプロセスを開始
  */
-export async function startEditUploadProcess(): Promise<EditUploadTriggerResponse> {
-  const response = await fetch('/api/process/edit-upload', {
+export async function startEditUploadProcess(options?: {
+  auto?: boolean;
+}): Promise<EditUploadTriggerResponse> {
+  const params = new URLSearchParams();
+  if (options?.auto) {
+    params.set('auto', '1');
+  }
+  const url = params.toString()
+    ? `/api/process/edit-upload?${params.toString()}`
+    : '/api/process/edit-upload';
+  const response = await fetch(url, {
     method: 'POST',
     headers: JSON_HEADERS,
   });

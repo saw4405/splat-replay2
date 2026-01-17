@@ -109,5 +109,6 @@ class FrameProcessingService:
             event = PowerOffDetected(
                 consecutive_count=POWER_OFF_COUNT_THRESHOLD,
                 threshold=POWER_OFF_COUNT_THRESHOLD,
+                final=final,
             )
             self._domain_publisher.publish_domain_event(event)

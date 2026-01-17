@@ -11,6 +11,7 @@ from splat_replay.application.services import (
     AutoRecorder,
     DeviceChecker,
     ErrorHandler,
+    ProgressEventStore,
     RecordingPreparationService,
     SetupService,
     SystemCheckService,
@@ -18,6 +19,9 @@ from splat_replay.application.services import (
 )
 from splat_replay.application.services.common.settings_service import (
     SettingsService,
+)
+from splat_replay.application.services.process.auto_process_service import (
+    AutoProcessService,
 )
 from splat_replay.application.use_cases import (
     AutoRecordingUseCase,
@@ -46,6 +50,8 @@ from splat_replay.interface.web.server import WebAPIServer
 def build_web_api_server(container: punq.Container) -> WebAPIServer:
     """Resolve dependencies and assemble WebAPIServer."""
     auto_recorder = resolve(container, AutoRecorder)
+    auto_process_service = resolve(container, AutoProcessService)
+    progress_store = resolve(container, ProgressEventStore)
     device_checker = resolve(container, DeviceChecker)
     recording_preparation_service = resolve(
         container, RecordingPreparationService
@@ -95,6 +101,8 @@ def build_web_api_server(container: punq.Container) -> WebAPIServer:
         upload_use_case=upload_use_case,
         auto_recording_use_case_factory=auto_recording_use_case_factory,
         auto_recorder=auto_recorder,
+        auto_process_service=auto_process_service,
+        progress_store=progress_store,
         event_bus=event_bus_port,
         project_root=PROJECT_ROOT,
         runtime_root=RUNTIME_ROOT,
@@ -113,12 +121,22 @@ def build_web_api_server(container: punq.Container) -> WebAPIServer:
     )
 
 
-def create_app(container: punq.Container | None = None) -> FastAPI:
-    """Create the FastAPI app with resolved dependencies."""
+def create_app(
+    container: punq.Container | None = None, enable_lifespan: bool = True
+) -> FastAPI:
+    """Create the FastAPI app with resolved dependencies.
+
+    Args:
+        container: DIコンテナ（None の場合は新規作成）
+        enable_lifespan: lifespan イベントを有効化するか（テスト時は False）
+
+    Returns:
+        FastAPIアプリケーション
+    """
     if container is None:
         container = configure_container()
     server = build_web_api_server(container)
-    return create_web_app(server)
+    return create_web_app(server, enable_lifespan=enable_lifespan)
 
 
 # Expose a factory for uvicorn's --factory mode.

@@ -23,7 +23,12 @@ export type DomainEventType =
   | 'domain.asset.recorded.subtitle_updated'
   | 'domain.asset.recorded.deleted'
   | 'domain.asset.edited.saved'
-  | 'domain.asset.edited.deleted';
+  | 'domain.asset.edited.deleted'
+  | 'domain.process.edit_upload_completed'
+  | 'domain.process.pending'
+  | 'domain.process.started'
+  | 'domain.process.sleep.pending'
+  | 'domain.process.sleep.started';
 
 export interface DomainEvent {
   type: DomainEventType;
@@ -54,6 +59,22 @@ export interface RecordingPausedPayload {
   reason?: string | null;
   event_id?: string;
   timestamp?: string;
+}
+
+export interface AutoProcessPendingPayload {
+  timeout_seconds: number;
+  message: string;
+}
+
+export interface AutoSleepPendingPayload {
+  timeout_seconds: number;
+  message: string;
+}
+
+export interface EditUploadCompletedPayload {
+  success: boolean;
+  message: string;
+  trigger?: 'auto' | 'manual';
 }
 
 /**

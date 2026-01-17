@@ -12,8 +12,9 @@ from __future__ import annotations
 from pathlib import Path
 from typing import TYPE_CHECKING, List
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, Query, status
 from fastapi.responses import FileResponse, JSONResponse
+
 from splat_replay.interface.web.schemas import (
     EditedVideoItem,
     EditUploadStatus,
@@ -223,23 +224,45 @@ def create_assets_router(server: WebAPIServer) -> APIRouter:
         "/process/edit-upload",
         response_model=EditUploadTriggerResponse,
     )
-    async def trigger_edit_upload() -> JSONResponse:
+    async def trigger_edit_upload(
+        auto: bool = Query(False, description="自動処理トリガーかどうか"),
+    ) -> JSONResponse:
         """編集・アップロード処理を開始。"""
         try:
-            await server.start_edit_upload_uc.execute()
+            if auto:
+                await server.auto_process_service.start_auto_process()
+            else:
+                await server.start_edit_upload_uc.execute()
+            # バックグラウンドタスクを開始したため、状態は"running"として返す
+            # (実際のAutoEditorの状態更新は非同期タスク内で行われるため、
+            #  このタイミングでは"idle"の可能性があるが、論理的には"running"が正しい)
             return JSONResponse(
                 status_code=status.HTTP_202_ACCEPTED,
                 content={
                     "accepted": True,
                     "message": "編集・アップロード処理を開始しました",
+                    "status": {
+                        "state": "running",
+                        "started_at": None,
+                        "finished_at": None,
+                        "error": None,
+                    },
                 },
             )
         except RuntimeError as e:
+            # 既に実行中の場合は現在の状態を返す
+            status_dto = await server.get_edit_upload_status_uc.execute()
             return JSONResponse(
                 status_code=status.HTTP_409_CONFLICT,
                 content={
                     "accepted": False,
                     "message": str(e),
+                    "status": {
+                        "state": status_dto.state,
+                        "started_at": None,
+                        "finished_at": None,
+                        "error": None,
+                    },
                 },
             )
 
@@ -260,5 +283,6 @@ def create_assets_router(server: WebAPIServer) -> APIRouter:
     return router
 
 
+__all__ = ["create_assets_router"]
 __all__ = ["create_assets_router"]
 __all__ = ["create_assets_router"]

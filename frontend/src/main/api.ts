@@ -39,3 +39,9 @@ export {
   getRecordedSubtitle,
   updateRecordedSubtitle,
 } from './api/metadata';
+
+import { processApi } from './api/process';
+
+export const api = {
+  process: processApi,
+};

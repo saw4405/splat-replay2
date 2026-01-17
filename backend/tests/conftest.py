@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, Callable, Iterator
 
 import pytest
 from fastapi.testclient import TestClient
+
 from splat_replay.bootstrap.web_app import create_app
 from splat_replay.infrastructure.di import configure_container
 
@@ -84,6 +85,7 @@ def client(monkeypatch: pytest.MonkeyPatch) -> Iterator[TestClient]:
     monkeypatch.setattr(OBSRecorderController, "teardown", mock_teardown)
 
     container = configure_container()
-    app = create_app(container)
+    # 契約テストでは起動タスクを不要にするため lifespan を無効化
+    app = create_app(container, enable_lifespan=False)
     with TestClient(app) as test_client:
         yield test_client

@@ -79,6 +79,7 @@ class PowerOffDetected(DomainEvent):
 
     consecutive_count: int = 0
     threshold: int = 0
+    final: bool = False
 
 
 __all__ = [

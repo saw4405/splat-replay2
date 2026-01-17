@@ -4,7 +4,6 @@ Type-safe domain events for event-driven architecture.
 All domain events should inherit from DomainEvent base class.
 """
 
-from .base import DomainEvent
 from .asset_events import (
     AssetEditedDeleted,
     AssetEditedSaved,
@@ -13,6 +12,7 @@ from .asset_events import (
     AssetRecordedSaved,
     AssetRecordedSubtitleUpdated,
 )
+from .base import DomainEvent
 from .battle_events import (
     BattleFinished,
     BattleInterrupted,
@@ -20,6 +20,13 @@ from .battle_events import (
     BattleResultDetected,
     BattleStarted,
     ScheduleChanged,
+)
+from .process_events import (
+    AutoProcessPending,
+    AutoProcessStarted,
+    AutoSleepPending,
+    AutoSleepStarted,
+    EditUploadCompleted,
 )
 from .recording_events import (
     PowerOffDetected,
@@ -56,4 +63,10 @@ __all__ = [
     "BattleFinished",
     "BattleResultDetected",
     "ScheduleChanged",
+    # Process events
+    "EditUploadCompleted",
+    "AutoProcessPending",
+    "AutoProcessStarted",
+    "AutoSleepPending",
+    "AutoSleepStarted",
 ]

@@ -14,6 +14,7 @@ __all__ = [
     "AutoUploader",
     "PowerManager",
     "ProgressReporter",
+    "ProgressEventStore",
     "SettingsService",
     "ProgressEvent",
     "RecordingPreparationService",
@@ -61,4 +62,9 @@ from .setup.setup_errors import (
 )
 from .system import DeviceChecker, PowerManager
 from .upload import AutoUploader
-from .common import ProgressEvent, ProgressReporter, SettingsService
+from .common import (
+    ProgressEvent,
+    ProgressEventStore,
+    ProgressReporter,
+    SettingsService,
+)

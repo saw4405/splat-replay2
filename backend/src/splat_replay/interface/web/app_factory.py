@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import contextlib
+
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
@@ -11,6 +13,7 @@ from splat_replay.interface.web.routers import (
     create_assets_router,
     create_events_router,
     create_metadata_router,
+    create_process_router,
     create_recording_router,
     create_settings_router,
     create_setup_router,
@@ -18,7 +21,16 @@ from splat_replay.interface.web.routers import (
 from splat_replay.interface.web.server import WebAPIServer
 
 
-def create_app(server: WebAPIServer) -> FastAPI:
+def create_app(server: WebAPIServer, enable_lifespan: bool = True) -> FastAPI:
+    """FastAPIアプリケーションを作成する。
+
+    Args:
+        server: WebAPIServerインスタンス
+        enable_lifespan: lifespan イベントを有効化するか（テスト時は False）
+
+    Returns:
+        FastAPIアプリケーション
+    """
     setup_service = server.setup_service
     system_check_service = server.system_check_service
     system_setup_service = server.system_setup_service
@@ -28,7 +40,27 @@ def create_app(server: WebAPIServer) -> FastAPI:
     recording_preparation_service = server.recording_preparation_service
     upload_use_case = server.upload_use_case
 
-    app = FastAPI(title="Splat Replay Web API")
+    from contextlib import asynccontextmanager
+
+    @asynccontextmanager
+    async def lifespan(_app: FastAPI):
+        # Startup
+        import asyncio
+
+        auto_process_task = asyncio.create_task(
+            server.auto_process_service.start()
+        )
+        yield
+        # Shutdown
+        auto_process_task.cancel()
+        with contextlib.suppress(Exception):
+            await auto_process_task
+
+    # テスト時は lifespan を無効化
+    if enable_lifespan:
+        app = FastAPI(title="Splat Replay Web API", lifespan=lifespan)
+    else:
+        app = FastAPI(title="Splat Replay Web API")
 
     # CORS設定 (開発時 & pywebview)
     # pywebview からのアクセスも許可するため、127.0.0.1:8000 と localhost:8000 を追加
@@ -92,6 +124,9 @@ def create_app(server: WebAPIServer) -> FastAPI:
 
     settings_router = create_settings_router(server)
     app.include_router(settings_router)
+
+    process_router = create_process_router(server)
+    app.include_router(process_router)
 
     # === SPA用 Catch-all ルート (最後に定義してAPIルートより優先度を下げる) ===
     if frontend_exists:

@@ -8,11 +8,16 @@ from __future__ import annotations
 
 import asyncio
 import inspect
-from collections.abc import Awaitable
+import threading
+from collections.abc import Awaitable, Mapping
 from dataclasses import dataclass
 from typing import List, Optional, Protocol, Union
 
-from splat_replay.application.interfaces import EventPublisher, LoggerPort
+from splat_replay.application.interfaces import (
+    EventBusPort,
+    EventPublisher,
+    LoggerPort,
+)
 
 
 @dataclass(slots=True)
@@ -213,24 +218,7 @@ class ProgressReporter:
                 completed=event.completed,
                 total=event.total,
             )
-            payload = {
-                "kind": event.kind,
-                "task_id": event.task_id,
-                "task_name": event.task_name,
-                "total": event.total,
-                "completed": event.completed,
-                "stage_key": event.stage_key,
-                "stage_label": event.stage_label,
-                "stage_index": event.stage_index,
-                "stage_count": event.stage_count,
-                "success": event.success,
-                "message": event.message,
-                # structured
-                "items": event.items,
-                "item_index": event.item_index,
-                "item_key": event.item_key,
-                "item_label": event.item_label,
-            }
+            payload = build_progress_payload(event)
             self._publisher.publish(f"progress.{event.kind}", payload)
         except Exception:
             # エラーハンドリング内でloggerを使うと循環参照や無限ループの可能性があるため
@@ -249,8 +237,112 @@ class ProgressReporter:
                 pass
 
 
+def build_progress_payload(event: ProgressEvent) -> dict[str, object]:
+    """進捗イベントをシリアライズ可能なpayloadに変換する。"""
+    return {
+        "kind": event.kind,
+        "task_id": event.task_id,
+        "task_name": event.task_name,
+        "total": event.total,
+        "completed": event.completed,
+        "stage_key": event.stage_key,
+        "stage_label": event.stage_label,
+        "stage_index": event.stage_index,
+        "stage_count": event.stage_count,
+        "success": event.success,
+        "message": event.message,
+        # structured
+        "items": event.items,
+        "item_index": event.item_index,
+        "item_key": event.item_key,
+        "item_label": event.item_label,
+    }
+
+
+class ProgressEventStore:
+    """進捗イベントを保持して再送できるようにするインメモリストア。"""
+
+    def __init__(self, max_events: int = 500) -> None:
+        self._max_events = max_events
+        self._events: list[dict[str, object]] = []
+        self._active_tasks: set[str] = set()
+        self._lock = threading.Lock()
+
+    def record(self, event: ProgressEvent) -> None:
+        """進捗イベントを保存する。"""
+        payload = build_progress_payload(event)
+        self.record_payload(payload)
+
+    def record_payload(self, payload: Mapping[str, object]) -> None:
+        """payload形式の進捗イベントを保存する。"""
+        kind = str(payload.get("kind") or "")
+        task_id = str(payload.get("task_id") or "")
+        with self._lock:
+            if kind == "start":
+                if not self._active_tasks:
+                    self._events.clear()
+                if task_id:
+                    self._active_tasks.add(task_id)
+            elif kind == "finish":
+                if task_id:
+                    self._active_tasks.discard(task_id)
+            self._events.append(dict(payload))
+            if len(self._events) > self._max_events:
+                overflow = len(self._events) - self._max_events
+                if overflow > 0:
+                    del self._events[:overflow]
+
+    def snapshot(self) -> list[dict[str, object]]:
+        """現在の進捗イベント履歴を返す。"""
+        with self._lock:
+            return list(self._events)
+
+    def read_since(self, cursor: int) -> tuple[list[dict[str, object]], int]:
+        """指定位置からの進捗イベントを返す。
+
+        Args:
+            cursor: 前回取得した位置
+
+        Returns:
+            (新規イベント一覧, 次回のcursor)
+        """
+        with self._lock:
+            total = len(self._events)
+            if cursor < 0 or cursor > total:
+                cursor = 0
+            return list(self._events[cursor:]), total
+
+    async def start_listening(self, event_bus: EventBusPort) -> None:
+        """イベントバスから進捗イベントを購読して保存する。"""
+        sub = event_bus.subscribe(
+            event_types={
+                "progress.start",
+                "progress.total",
+                "progress.stage",
+                "progress.advance",
+                "progress.finish",
+                "progress.items",
+                "progress.item_stage",
+                "progress.item_finish",
+            }
+        )
+        try:
+            while True:
+                events = sub.poll(max_items=20)
+                for ev in events:
+                    payload = getattr(ev, "payload", None)
+                    if isinstance(payload, dict):
+                        self.record_payload(payload)
+                await asyncio.sleep(0.1)
+        except asyncio.CancelledError:
+            sub.close()
+            raise
+
+
 __all__ = [
     "ProgressReporter",
     "ProgressEvent",
     "ProgressListener",
+    "ProgressEventStore",
+    "build_progress_payload",
 ]

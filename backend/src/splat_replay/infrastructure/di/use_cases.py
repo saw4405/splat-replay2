@@ -87,7 +87,11 @@ def register_app_usecases(container: punq.Container) -> None:
         DeleteEditedVideoUseCase, factory=delete_edited_video_factory
     )
     container.register(GetEditUploadStatusUseCase, GetEditUploadStatusUseCase)
-    container.register(StartEditUploadUseCase, StartEditUploadUseCase)
+    container.register(
+        StartEditUploadUseCase,
+        StartEditUploadUseCase,
+        scope=punq.Scope.singleton,
+    )
 
     # Metadata Use Cases - base_dir を注入する必要があるため factory で登録
     def update_recorded_metadata_factory() -> UpdateRecordedMetadataUseCase:

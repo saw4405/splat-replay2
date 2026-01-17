@@ -25,6 +25,7 @@ class FFmpegProcessor(VideoEditorPort):
         self.logger = logger
         # 動画長のキャッシュ (GUI リスト表示時の ffprobe 過多を防止)
         self._length_cache: dict[Path, float | None] = {}
+        self._subprocess_fallback_logged = False
 
     # ------------------------------------------------------------------
     # Helpers
@@ -37,13 +38,28 @@ class FFmpegProcessor(VideoEditorPort):
         input_text: str | None = None,
         timeout: float | None = None,
     ) -> CompletedProcess[str]:
-        process = await asyncio.create_subprocess_exec(
-            *command,
-            cwd=str(cwd) if cwd else None,
-            stdin=asyncio_subprocess.PIPE if input_text is not None else None,
-            stdout=asyncio_subprocess.PIPE,
-            stderr=asyncio_subprocess.PIPE,
-        )
+        try:
+            process = await asyncio.create_subprocess_exec(
+                *command,
+                cwd=str(cwd) if cwd else None,
+                stdin=asyncio_subprocess.PIPE
+                if input_text is not None
+                else None,
+                stdout=asyncio_subprocess.PIPE,
+                stderr=asyncio_subprocess.PIPE,
+            )
+        except NotImplementedError:
+            if not self._subprocess_fallback_logged:
+                self.logger.warning(
+                    "asyncio subprocess が未対応のため同期実行へフォールバックします"
+                )
+                self._subprocess_fallback_logged = True
+            return await self._run_text_fallback(
+                command,
+                cwd=cwd,
+                input_text=input_text,
+                timeout=timeout,
+            )
         input_bytes = (
             input_text.encode("utf-8") if input_text is not None else None
         )
@@ -78,18 +94,53 @@ class FFmpegProcessor(VideoEditorPort):
             stderr=stderr_bytes.decode("utf-8", errors="replace"),
         )
 
+    async def _run_text_fallback(
+        self,
+        command: Sequence[str],
+        *,
+        cwd: Path | None = None,
+        input_text: str | None = None,
+        timeout: float | None = None,
+    ) -> CompletedProcess[str]:
+        def _run() -> CompletedProcess[str]:
+            return subprocess.run(
+                list(command),
+                input=input_text,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                cwd=str(cwd) if cwd else None,
+                timeout=timeout,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+            )
+
+        return await asyncio.to_thread(_run)
+
     async def _run_binary(
         self,
         command: Sequence[str],
         *,
         input_bytes: bytes | None = None,
     ) -> CompletedProcess[bytes]:
-        process = await asyncio.create_subprocess_exec(
-            *command,
-            stdin=asyncio_subprocess.PIPE if input_bytes is not None else None,
-            stdout=asyncio_subprocess.PIPE,
-            stderr=asyncio_subprocess.PIPE,
-        )
+        try:
+            process = await asyncio.create_subprocess_exec(
+                *command,
+                stdin=asyncio_subprocess.PIPE
+                if input_bytes is not None
+                else None,
+                stdout=asyncio_subprocess.PIPE,
+                stderr=asyncio_subprocess.PIPE,
+            )
+        except NotImplementedError:
+            if not self._subprocess_fallback_logged:
+                self.logger.warning(
+                    "asyncio subprocess が未対応のため同期実行へフォールバックします"
+                )
+                self._subprocess_fallback_logged = True
+            return await self._run_binary_fallback(
+                command, input_bytes=input_bytes
+            )
         try:
             stdout_bytes, stderr_bytes = await process.communicate(input_bytes)
         except asyncio.CancelledError:
@@ -105,6 +156,22 @@ class FFmpegProcessor(VideoEditorPort):
             stdout=stdout_bytes,
             stderr=stderr_bytes,
         )
+
+    async def _run_binary_fallback(
+        self,
+        command: Sequence[str],
+        *,
+        input_bytes: bytes | None = None,
+    ) -> CompletedProcess[bytes]:
+        def _run() -> CompletedProcess[bytes]:
+            return subprocess.run(
+                list(command),
+                input=input_bytes,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+            )
+
+        return await asyncio.to_thread(_run)
 
     def _log_failure(
         self,

@@ -25,6 +25,7 @@ from splat_replay.application.services import (
     ErrorHandler,
     PowerManager,
     ProgressReporter,
+    ProgressEventStore,
     RecordingPreparationService,
     SettingsService,
     SetupService,
@@ -36,8 +37,11 @@ from splat_replay.application.services.checkers import (
     OBSChecker,
     TesseractChecker,
 )
-from splat_replay.application.services.errors.error_logger import ErrorLogger
 from splat_replay.application.services.common.queries import AssetQueryService
+from splat_replay.application.services.errors.error_logger import ErrorLogger
+from splat_replay.application.services.process.auto_process_service import (
+    AutoProcessService,
+)
 from splat_replay.application.use_cases.auto_recording_use_case import (
     AutoRecordingUseCase,
 )
@@ -101,16 +105,27 @@ def register_app_services(container: Container) -> None:
         scope=punq.Scope.singleton,
     )
 
-    # ProgressReporter に LoggerPort を注入
+    container.register(
+        ProgressEventStore, ProgressEventStore, scope=punq.Scope.singleton
+    )
+
+    def progress_reporter_factory() -> ProgressReporter:
+        publisher = container.resolve(EventPublisher)
+        logger = container.resolve(LoggerPort)
+        progress_store = container.resolve(ProgressEventStore)
+        progress = ProgressReporter(publisher, logger)
+        progress.add_listener(progress_store.record)
+        return progress
+
+    # ProgressReporter を生成
     container.register(
         ProgressReporter,
-        factory=lambda publisher, logger: ProgressReporter(publisher, logger),
-        publisher=EventPublisher,
-        logger=LoggerPort,
+        factory=progress_reporter_factory,
     )
 
     container.register(AutoEditor, AutoEditor)
     container.register(AutoUploader, AutoUploader)
+    container.register(AutoProcessService, AutoProcessService)
     container.register(PowerManager, PowerManager)
     container.register(AssetQueryService, AssetQueryService)
     container.register(SettingsService, SettingsService)
