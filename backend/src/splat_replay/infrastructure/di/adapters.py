@@ -5,9 +5,9 @@ Phase 3 リファクタリング - インフラアダプタの登録を分離。
 
 from __future__ import annotations
 
-from typing import Optional, cast
 import hashlib
 import json
+from typing import Optional, cast
 
 import punq
 from splat_replay.application.interfaces import (
@@ -53,8 +53,8 @@ from splat_replay.infrastructure import (
     GuiRuntimePortAdapter,
     ImageDrawer,
     IntegratedSpeechRecognizer,
-    MicrophoneEnumerator,
     MatcherRegistry,
+    MicrophoneEnumerator,
     NDICapture,
     OBSRecorderController,
     RecorderWithTranscription,

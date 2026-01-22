@@ -5,8 +5,6 @@ from __future__ import annotations
 from collections.abc import Callable
 from pathlib import Path
 
-from structlog.stdlib import BoundLogger
-
 from splat_replay.application.interfaces import EventBusPort
 from splat_replay.application.services import (
     AutoRecorder,
@@ -42,6 +40,7 @@ from splat_replay.application.use_cases.metadata import (
     UpdateRecordedSubtitleStructuredUseCase,
 )
 from splat_replay.interface.web.error_handler import WebErrorHandler
+from structlog.stdlib import BoundLogger
 
 
 class WebAPIServer:
@@ -71,6 +70,7 @@ class WebAPIServer:
     project_root: Path
     runtime_root: Path
     base_dir: Path
+    assets_dir: Path
 
     # Assets Use Cases
     list_recorded_videos_uc: ListRecordedVideosUseCase
@@ -106,6 +106,7 @@ class WebAPIServer:
         project_root: Path,
         runtime_root: Path,
         base_dir: Path,
+        assets_dir: Path,
         # Assets Use Cases
         list_recorded_videos_uc: ListRecordedVideosUseCase,
         delete_recorded_video_uc: DeleteRecordedVideoUseCase,
@@ -138,6 +139,7 @@ class WebAPIServer:
             project_root: プロジェクトルートディレクトリ
             runtime_root: ランタイムルートディレクトリ
             base_dir: 録画ファイル保存先ディレクトリ
+            assets_dir: アセットディレクトリ
             list_recorded_videos_uc: 録画一覧取得ユースケース
             delete_recorded_video_uc: 録画削除ユースケース
             list_edited_videos_uc: 編集済み一覧取得ユースケース
@@ -166,6 +168,7 @@ class WebAPIServer:
         self.project_root = project_root
         self.runtime_root = runtime_root
         self.base_dir = base_dir
+        self.assets_dir = assets_dir
 
         # Assets Use Cases
         self.list_recorded_videos_uc = list_recorded_videos_uc

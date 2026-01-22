@@ -7,6 +7,7 @@
   import { onMount } from 'svelte';
   import { api } from './api';
   import { subscribeDomainEvents } from './domainEvents';
+  import { notifyRecordingStarted, notifyRecordingStopped } from './notification';
   import type {
     DomainEvent,
     AutoProcessPendingPayload,
@@ -39,6 +40,12 @@
         if (bottomDrawerRef && typeof bottomDrawerRef.openProgress === 'function') {
           bottomDrawerRef.openProgress();
         }
+      } else if (event.type === 'domain.recording.started') {
+        // 録画開始時の通知
+        notifyRecordingStarted();
+      } else if (event.type === 'domain.recording.stopped') {
+        // 録画終了時の通知
+        notifyRecordingStopped();
       }
     });
 

@@ -1337,6 +1337,7 @@ dependencies = [
     { name = "uvicorn", extra = ["standard"] },
     { name = "webrtcvad" },
     { name = "websockets" },
+    { name = "winotify", marker = "sys_platform == 'win32'" },
 ]
 
 [package.dev-dependencies]
@@ -1391,6 +1392,7 @@ requires-dist = [
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.32.0" },
     { name = "webrtcvad", specifier = ">=2.0.10" },
     { name = "websockets", specifier = ">=14.0" },
+    { name = "winotify", marker = "sys_platform == 'win32'", specifier = ">=1.1.0" },
 ]
 
 [package.metadata.requires-dev]
@@ -1727,4 +1729,13 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/17/b1/1ffdb2680c64e9c3921d99db460546194c40d4acbef999a18c37aa4d58a3/websockets-14.2-cp313-cp313-win32.whl", hash = "sha256:a9e72fb63e5f3feacdcf5b4ff53199ec8c18d66e325c34ee4c551ca748623bbc", size = 163974 },
     { url = "https://files.pythonhosted.org/packages/14/13/8b7fc4cb551b9cfd9890f0fd66e53c18a06240319915533b033a56a3d520/websockets-14.2-cp313-cp313-win_amd64.whl", hash = "sha256:b439ea828c4ba99bb3176dc8d9b933392a2413c0f6b149fdcba48393f573377f", size = 164420 },
     { url = "https://files.pythonhosted.org/packages/7b/c8/d529f8a32ce40d98309f4470780631e971a5a842b60aec864833b3615786/websockets-14.2-py3-none-any.whl", hash = "sha256:7a6ceec4ea84469f15cf15807a747e9efe57e369c384fa86e022b3bea679b79b", size = 157416 },
+]
+
+[[package]]
+name = "winotify"
+version = "1.1.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/a1/b0/1b304fdd8fd810f1f8e81a2708f8bf72e0987de1a763f0ee81f6d08bcae7/winotify-1.1.0.tar.gz", hash = "sha256:f8a0d6ff00cb2c1b3dcdfe825431f46f6aa5dc8ce84ffc59e8fda8c7e36687fe", size = 10101 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/72/85/6cc4c738080d60b62cad59d0f32386b8277d40e2bf8c06fd1e4101a17238/winotify-1.1.0-py3-none-any.whl", hash = "sha256:13aa9b1196b02ab3e699645b4407371ca73348421f8662565100d70c7cf552d9", size = 15034 },
 ]

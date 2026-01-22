@@ -8,11 +8,11 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
-
 from splat_replay.interface.web.routers import (
     create_assets_router,
     create_events_router,
     create_metadata_router,
+    create_notifications_router,
     create_process_router,
     create_recording_router,
     create_settings_router,
@@ -119,6 +119,10 @@ def create_app(server: WebAPIServer, enable_lifespan: bool = True) -> FastAPI:
     assets_router = create_assets_router(server)
     app.include_router(assets_router)
 
+    # 通知ルーターを登録
+    notifications_router = create_notifications_router(server.assets_dir)
+    app.include_router(notifications_router)
+
     metadata_router = create_metadata_router(server)
     app.include_router(metadata_router)
 
@@ -152,4 +156,5 @@ def create_app(server: WebAPIServer, enable_lifespan: bool = True) -> FastAPI:
     return app
 
 
+__all__ = ["create_app"]
 __all__ = ["create_app"]

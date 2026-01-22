@@ -11,14 +11,13 @@ from __future__ import annotations
 from dataclasses import replace
 from pathlib import Path
 
-from structlog.stdlib import BoundLogger
-
 from splat_replay.domain.models import SetupState, SetupStep
 from splat_replay.domain.repositories import (
     RepositoryError,
     SetupStateRepository,
 )
 from splat_replay.infrastructure.logging import get_logger
+from structlog.stdlib import BoundLogger
 
 from .setup_state_file_io import SetupStateFileIO
 from .setup_state_serializer import SetupStateSerializer

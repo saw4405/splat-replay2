@@ -4,8 +4,6 @@ from __future__ import annotations
 
 import punq
 from fastapi import FastAPI
-from structlog.stdlib import BoundLogger
-
 from splat_replay.application.interfaces import EventBusPort
 from splat_replay.application.services import (
     AutoRecorder,
@@ -42,9 +40,14 @@ from splat_replay.application.use_cases.metadata import (
 )
 from splat_replay.domain.config import AppSettings
 from splat_replay.infrastructure.di import configure_container, resolve
-from splat_replay.infrastructure.filesystem import PROJECT_ROOT, RUNTIME_ROOT
+from splat_replay.infrastructure.filesystem import (
+    ASSETS_DIR,
+    PROJECT_ROOT,
+    RUNTIME_ROOT,
+)
 from splat_replay.interface.web.app_factory import create_app as create_web_app
 from splat_replay.interface.web.server import WebAPIServer
+from structlog.stdlib import BoundLogger
 
 
 def build_web_api_server(container: punq.Container) -> WebAPIServer:
@@ -107,6 +110,7 @@ def build_web_api_server(container: punq.Container) -> WebAPIServer:
         project_root=PROJECT_ROOT,
         runtime_root=RUNTIME_ROOT,
         base_dir=base_dir,
+        assets_dir=ASSETS_DIR,
         # Assets Use Cases
         list_recorded_videos_uc=list_recorded_videos_uc,
         delete_recorded_video_uc=delete_recorded_video_uc,

@@ -7,6 +7,7 @@
   import CameraPermissionDialog from '../permission/CameraPermissionDialog.svelte';
   import { subscribeDomainEvents, type DomainEvent } from '../../domainEvents';
   import { buildMetadataOptionMap, getMetadataOptions } from '../../api/metadata';
+  import { notifyRecordingReady } from '../../notification';
 
   type PreviewState = 'checking' | 'connected' | 'disconnected' | 'error';
 
@@ -366,6 +367,8 @@
       if (result.success) {
         status = '自動録画機能 ON（バトル開始を検知中...）';
         console.log('自動録画機能 ON 成功');
+        // 録画準備完了の通知を表示
+        await notifyRecordingReady();
       } else {
         status = `エラー: ${result.error ?? '原因不明のエラー'}`;
         console.error('自動録画有効化失敗:', result.error);
