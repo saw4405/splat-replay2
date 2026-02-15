@@ -38,6 +38,10 @@ class RecordingContext:
     result_frame: Optional[Frame] = None
     resume_trigger: Optional[ResumeTrigger] = None
     completed: bool = False
+    weapon_detection_done: bool = False
+    weapon_detection_attempts: int = 0
+    weapon_best_scores: tuple[float, ...] | None = None
+    weapon_last_visible_frame: Optional[Frame] = None
 
     def phase(self, sm_state: RecordState) -> SessionPhase:
         """現在のフェーズを返す。

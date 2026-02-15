@@ -505,4 +505,8 @@ class AutoRecordingUseCase:
             and not context.completed
             and not context.manual_fields
             and not context.pending_result_updates
+            and not context.weapon_detection_done
+            and context.weapon_detection_attempts == 0
+            and context.weapon_best_scores is None
+            and context.weapon_last_visible_frame is None
         )

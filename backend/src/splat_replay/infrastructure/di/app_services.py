@@ -16,6 +16,7 @@ from splat_replay.application.interfaces import (
     LoggerPort,
     RecorderWithTranscriptionPort,
     VideoAssetRepositoryPort,
+    WeaponRecognitionPort,
 )
 from splat_replay.application.services import (
     AutoEditor,
@@ -64,6 +65,7 @@ def register_app_services(container: Container) -> None:
         recorder = container.resolve(RecorderWithTranscriptionPort)
         asset_repository = container.resolve(VideoAssetRepositoryPort)
         logger = container.resolve(LoggerPort)
+        weapon_recognizer = container.resolve(WeaponRecognitionPort)
         publisher = container.resolve(EventPublisher)
         frame_publisher = container.resolve(FramePublisher)
         domain_publisher = container.resolve(DomainEventPublisher)
@@ -75,6 +77,7 @@ def register_app_services(container: Container) -> None:
             recorder=recorder,
             asset_repository=asset_repository,
             logger=logger,
+            weapon_recognizer=weapon_recognizer,
             publisher=publisher,
             frame_publisher=frame_publisher,
             domain_publisher=domain_publisher,

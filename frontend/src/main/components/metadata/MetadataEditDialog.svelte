@@ -5,11 +5,9 @@
   import { getMetadataOptions } from '../../api/metadata';
   import type { MetadataOptionItem } from '../../api/types';
 
-  const dispatch = createEventDispatcher();
+  type WeaponSlots = [string, string, string, string];
 
-  export let visible: boolean = false;
-  export let videoId: string = '';
-  export let metadata: {
+  interface EditableMetadata {
     match: string;
     rule: string;
     stage: string;
@@ -18,9 +16,33 @@
     kill: number;
     death: number;
     special: number;
-  };
+    allies: WeaponSlots;
+    enemies: WeaponSlots;
+  }
 
-  let editedMetadata = {
+  const dispatch = createEventDispatcher();
+
+  export let visible: boolean = false;
+  export let videoId: string = '';
+  export let metadata: EditableMetadata;
+
+  function normaliseWeaponSlots(values: string[] | undefined): WeaponSlots {
+    const normalised = values?.slice(0, 4) ?? [];
+    while (normalised.length < 4) {
+      normalised.push('');
+    }
+    return [normalised[0] ?? '', normalised[1] ?? '', normalised[2] ?? '', normalised[3] ?? ''];
+  }
+
+  function createEditableMetadata(value: EditableMetadata): EditableMetadata {
+    return {
+      ...value,
+      allies: normaliseWeaponSlots(value.allies),
+      enemies: normaliseWeaponSlots(value.enemies),
+    };
+  }
+
+  let editedMetadata: EditableMetadata = {
     match: '',
     rule: '',
     stage: '',
@@ -29,6 +51,8 @@
     kill: 0,
     death: 0,
     special: 0,
+    allies: ['', '', '', ''],
+    enemies: ['', '', '', ''],
   };
   let matchOptions: MetadataOptionItem[] = [];
   let ruleOptions: MetadataOptionItem[] = [];
@@ -38,7 +62,7 @@
   let previousVisible = false;
 
   $: if (visible && !previousVisible && metadata) {
-    editedMetadata = { ...metadata };
+    editedMetadata = createEditableMetadata(metadata);
     previousVisible = true;
   } else if (!visible) {
     previousVisible = false;
@@ -81,11 +105,22 @@
   maxWidth="37.5rem"
   maxHeight="85vh"
 >
-  <MetadataForm
-    bind:metadata={editedMetadata}
-    {matchOptions}
-    {ruleOptions}
-    {stageOptions}
-    {judgementOptions}
-  />
+  <div class="metadata-form-scroll">
+    <MetadataForm
+      bind:metadata={editedMetadata}
+      {matchOptions}
+      {ruleOptions}
+      {stageOptions}
+      {judgementOptions}
+    />
+  </div>
 </BaseDialog>
+
+<style>
+  .metadata-form-scroll {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    padding-right: 0.25rem;
+  }
+</style>

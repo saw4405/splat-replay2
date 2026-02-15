@@ -22,6 +22,8 @@ class TemplateMatcher(BaseMatcher):
         name: str | None = None,
     ) -> None:
         super().__init__(mask_path, roi, name)
+        self.template_path = template_path
+        self.mask_path = mask_path
         template = imread_unicode(template_path)
         if template is None:
             raise FileNotFoundError(
@@ -34,6 +36,13 @@ class TemplateMatcher(BaseMatcher):
         return await asyncio.to_thread(self._match, image)
 
     def _match(self, image: np.ndarray) -> bool:
+        return self._score(image) >= self._threshold
+
+    async def score(self, image: np.ndarray) -> float:
+        """テンプレートとの最大一致スコアを返す。"""
+        return await asyncio.to_thread(self._score, image)
+
+    def _score(self, image: np.ndarray) -> float:
         img = self._apply_roi(image)
         gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
         if self._mask is not None:
@@ -46,4 +55,6 @@ class TemplateMatcher(BaseMatcher):
             )
 
         _, max_val, _, _ = cv2.minMaxLoc(result)
-        return max_val >= self._threshold
+        if np.isnan(max_val):
+            return -1.0
+        return float(max_val)

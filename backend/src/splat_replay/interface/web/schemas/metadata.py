@@ -46,6 +46,8 @@ class MetadataUpdateRequest(BaseModel):
     kill: Optional[int] = None
     death: Optional[int] = None
     special: Optional[int] = None
+    allies: Optional[List[str]] = None
+    enemies: Optional[List[str]] = None
 
 
 class SubtitleBlock(BaseModel):

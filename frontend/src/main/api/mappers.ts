@@ -28,6 +28,8 @@ export type RawRecordedVideo = {
   kill: number | null;
   death: number | null;
   special: number | null;
+  allies: string[] | null;
+  enemies: string[] | null;
   hazard: number | null;
   golden_egg: number | null;
   power_egg: number | null;
@@ -84,6 +86,8 @@ export function mapRecordedVideo(raw: RawRecordedVideo): RecordedVideo {
     kill: normaliseNumber(raw.kill),
     death: normaliseNumber(raw.death),
     special: normaliseNumber(raw.special),
+    allies: raw.allies ?? null,
+    enemies: raw.enemies ?? null,
     hazard: normaliseNumber(raw.hazard),
     goldenEgg: normaliseNumber(raw.golden_egg),
     powerEgg: normaliseNumber(raw.power_egg),

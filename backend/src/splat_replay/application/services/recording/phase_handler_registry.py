@@ -33,6 +33,9 @@ from splat_replay.application.services.recording.recording_context import (
     RecordingContext,
     SessionPhase,
 )
+from splat_replay.application.services.recording.weapon_detection_service import (
+    WeaponDetectionService,
+)
 from splat_replay.domain.models import Frame
 from splat_replay.domain.services import FrameAnalyzer, RecordState
 
@@ -52,11 +55,17 @@ class PhaseHandlerRegistry:
         analyzer: FrameAnalyzer,
         logger: LoggerPort,
         event_bus: EventBusPort,
+        weapon_detection_service: WeaponDetectionService,
     ):
         # フェーズハンドラの初期化
         self._standby = StandbyPhaseHandler(analyzer, logger, event_bus)
         self._matching = MatchingPhaseHandler(analyzer, logger, event_bus)
-        self._in_game = InGamePhaseHandler(analyzer, logger, event_bus)
+        self._in_game = InGamePhaseHandler(
+            analyzer,
+            logger,
+            event_bus,
+            weapon_detection_service,
+        )
         self._post_finish = PostFinishPhaseHandler(analyzer, logger, event_bus)
         self._result = ResultPhaseHandler(analyzer, logger, event_bus)
         self._paused = PausedStateHandler(logger, event_bus)

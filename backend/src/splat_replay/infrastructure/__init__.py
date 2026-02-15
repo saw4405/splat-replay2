@@ -35,6 +35,7 @@ __all__ = [
     "FileSystemPathsAdapter",
     "LocalFileSystemAdapter",
     "ProcessEnvironmentAdapter",
+    "WeaponRecognitionAdapter",
 ]
 
 from .adapters import (
@@ -65,6 +66,7 @@ from .adapters import (
     TesseractOCR,
     TomlConfigAdapter,
     TomlSettingsRepository,
+    WeaponRecognitionAdapter,
     YouTubeClient,
 )
 from .matchers import MatcherRegistry

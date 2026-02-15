@@ -80,6 +80,8 @@ class RecordingMetadata:
             "started_at",
             "rate",
             "judgement",
+            "allies",
+            "enemies",
         }
     )
 
@@ -120,17 +122,21 @@ class RecordingMetadata:
     started_at: datetime | None = None
     rate: RateBase | None = None
     judgement: Judgement | None = None
+    allies: tuple[str, str, str, str] | None = None
+    enemies: tuple[str, str, str, str] | None = None
     result: Result | None = None
 
-    def to_dict(self) -> dict[str, str | int | None]:
+    def to_dict(self) -> dict[str, str | int | list[str] | None]:
         """Serialize into a JSON-friendly dictionary."""
-        payload: dict[str, str | int | None] = {
+        payload: dict[str, str | int | list[str] | None] = {
             "game_mode": self.game_mode.name,
             "started_at": self.started_at.isoformat()
             if self.started_at
             else None,
             "rate": str(self.rate) if self.rate else None,
             "judgement": self.judgement.name if self.judgement else None,
+            "allies": list(self.allies) if self.allies else None,
+            "enemies": list(self.enemies) if self.enemies else None,
         }
         if self.result:
             payload.update(self.result.to_dict())

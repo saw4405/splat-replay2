@@ -27,6 +27,8 @@ class RecordedVideoDTO:
         kill: キル数
         death: デス数
         special: スペシャル数
+        allies: 味方4人のブキ
+        enemies: 敵4人のブキ
         hazard: 危険度（サーモンラン）
         golden_egg: 金イクラ数
         power_egg: イクラ数
@@ -51,6 +53,8 @@ class RecordedVideoDTO:
     kill: int | None
     death: int | None
     special: int | None
+    allies: tuple[str, str, str, str] | None
+    enemies: tuple[str, str, str, str] | None
     hazard: int | None
     golden_egg: int | None
     power_egg: int | None

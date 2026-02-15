@@ -221,6 +221,7 @@ client_secrets.json
 token.pickle
 logs/
 videos/
+backend/outputs/
 ikamodoki1.ttf
 .specify/
 .serena/

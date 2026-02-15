@@ -12,6 +12,7 @@ from splat_replay.application.interfaces import (
     RecorderStatus,
     RecorderWithTranscriptionPort,
     VideoAssetRepositoryPort,
+    WeaponRecognitionPort,
 )
 from splat_replay.application.services.recording.frame_capture_producer import (
     FrameCaptureProducer,
@@ -27,6 +28,9 @@ from splat_replay.application.services.recording.publisher_worker import (
 )
 from splat_replay.application.services.recording.recording_context import (
     RecordingContext,
+)
+from splat_replay.application.services.recording.weapon_detection_service import (
+    WeaponDetectionService,
 )
 from splat_replay.application.services.recording.recording_session_service import (
     RecordingSessionService,
@@ -67,6 +71,7 @@ class AutoRecorder:
         recorder: RecorderWithTranscriptionPort,
         asset_repository: VideoAssetRepositoryPort,
         logger: LoggerPort,
+        weapon_recognizer: WeaponRecognitionPort,
         publisher: EventPublisher,
         frame_publisher: FramePublisher,
         domain_publisher: DomainEventPublisher,
@@ -147,11 +152,17 @@ class AutoRecorder:
         event_bus_adapter: EventBusPort = EventBusAdapter(  # type: ignore[assignment]
             self._publisher_worker, domain_publisher
         )
+        weapon_detection_service = WeaponDetectionService(
+            recognizer=weapon_recognizer,
+            logger=logger,
+            event_bus=event_bus_adapter,
+        )
 
         self._phase_handlers = PhaseHandlerRegistry(
             analyzer=analyzer,
             logger=logger,
             event_bus=event_bus_adapter,
+            weapon_detection_service=weapon_detection_service,
         )
 
     # ================================================================

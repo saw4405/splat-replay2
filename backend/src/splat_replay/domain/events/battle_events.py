@@ -5,7 +5,7 @@ Events related to battle lifecycle and state transitions.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import ClassVar
 
 from splat_replay.domain.events.base import DomainEvent
@@ -60,6 +60,20 @@ class BattleResultDetected(DomainEvent):
 
 
 @dataclass(frozen=True)
+class BattleWeaponsDetected(DomainEvent):
+    """Battle HUD のブキ判別結果が更新された。"""
+
+    EVENT_TYPE: ClassVar[str] = "domain.battle.weapons_detected"
+
+    allies: list[str] = field(default_factory=list)
+    enemies: list[str] = field(default_factory=list)
+    elapsed_seconds: float = 0.0
+    attempt: int = 0
+    is_final: bool = False
+    unmatched_output_dir: str | None = None
+
+
+@dataclass(frozen=True)
 class ScheduleChanged(DomainEvent):
     """Game schedule (stage rotation) has changed during matching."""
 
@@ -72,5 +86,6 @@ __all__ = [
     "BattleInterrupted",
     "BattleFinished",
     "BattleResultDetected",
+    "BattleWeaponsDetected",
     "ScheduleChanged",
 ]

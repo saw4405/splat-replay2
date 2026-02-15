@@ -168,6 +168,10 @@ class MetadataMerger:
             merged = replace(merged, rate=current.rate)
         if "judgement" in manual_fields:
             merged = replace(merged, judgement=current.judgement)
+        if "allies" in manual_fields:
+            merged = replace(merged, allies=current.allies)
+        if "enemies" in manual_fields:
+            merged = replace(merged, enemies=current.enemies)
 
         # Result フィールドの上書き
         result_fields = manual_fields.intersection(
@@ -254,6 +258,20 @@ class MetadataMerger:
                 and current.judgement == base.judgement
             ):
                 merged = replace(merged, judgement=auto_update.judgement)
+
+        if "allies" not in manual_fields:
+            if (
+                auto_update.allies != base.allies
+                and current.allies == base.allies
+            ):
+                merged = replace(merged, allies=auto_update.allies)
+
+        if "enemies" not in manual_fields:
+            if (
+                auto_update.enemies != base.enemies
+                and current.enemies == base.enemies
+            ):
+                merged = replace(merged, enemies=auto_update.enemies)
 
         return merged
 

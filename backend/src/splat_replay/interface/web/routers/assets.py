@@ -63,6 +63,8 @@ def create_assets_router(server: WebAPIServer) -> APIRouter:
                     kill=dto.kill,
                     death=dto.death,
                     special=dto.special,
+                    allies=list(dto.allies) if dto.allies else None,
+                    enemies=list(dto.enemies) if dto.enemies else None,
                     hazard=dto.hazard,
                     golden_egg=dto.golden_egg,
                     power_egg=dto.power_egg,
@@ -283,6 +285,4 @@ def create_assets_router(server: WebAPIServer) -> APIRouter:
     return router
 
 
-__all__ = ["create_assets_router"]
-__all__ = ["create_assets_router"]
 __all__ = ["create_assets_router"]

@@ -19,6 +19,7 @@ from .battle_events import (
     BattleMatchingStarted,
     BattleResultDetected,
     BattleStarted,
+    BattleWeaponsDetected,
     ScheduleChanged,
 )
 from .process_events import (
@@ -63,6 +64,7 @@ __all__ = [
     "BattleInterrupted",
     "BattleFinished",
     "BattleResultDetected",
+    "BattleWeaponsDetected",
     "ScheduleChanged",
     # Process events
     "EditUploadCompleted",

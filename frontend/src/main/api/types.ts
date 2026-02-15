@@ -43,6 +43,8 @@ export interface RecordedVideo {
   kill: number | null;
   death: number | null;
   special: number | null;
+  allies: string[] | null;
+  enemies: string[] | null;
   hazard: number | null;
   goldenEgg: number | null;
   powerEgg: number | null;
@@ -78,6 +80,8 @@ export interface MetadataUpdate {
   kill?: number;
   death?: number;
   special?: number;
+  allies?: string[];
+  enemies?: string[];
 }
 
 export interface MetadataOptionItem {

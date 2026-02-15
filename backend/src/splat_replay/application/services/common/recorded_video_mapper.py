@@ -65,6 +65,8 @@ async def build_recorded_video_dto(
     kill_value: int | None = None
     death_value: int | None = None
     special_value: int | None = None
+    allies: tuple[str, str, str, str] | None = metadata.allies
+    enemies: tuple[str, str, str, str] | None = metadata.enemies
     hazard: int | None = None
     golden_egg: int | None = None
     power_egg: int | None = None
@@ -100,6 +102,8 @@ async def build_recorded_video_dto(
         kill=kill_value,
         death=death_value,
         special=special_value,
+        allies=allies,
+        enemies=enemies,
         hazard=hazard,
         golden_egg=golden_egg,
         power_egg=power_egg,

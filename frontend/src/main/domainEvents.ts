@@ -11,6 +11,7 @@ export type DomainEventType =
   | 'domain.battle.started'
   | 'domain.battle.matching_started'
   | 'domain.battle.result_detected'
+  | 'domain.battle.weapons_detected'
   | 'domain.battle.schedule_changed'
   | 'domain.recording.paused'
   | 'domain.recording.started'
@@ -54,6 +55,15 @@ export interface BattleStartedPayload {
   rate?: string | null;
   event_id?: string;
   timestamp?: string;
+}
+
+export interface BattleWeaponsDetectedPayload {
+  allies?: string[];
+  enemies?: string[];
+  elapsed_seconds?: number;
+  attempt?: number;
+  is_final?: boolean;
+  unmatched_output_dir?: string | null;
 }
 
 export interface RecordingPausedPayload {
@@ -127,6 +137,14 @@ export function getDomainEventNotification(event: DomainEvent): string | null {
 
     case 'domain.battle.result_detected':
       return 'バトル判定を検出しました。';
+
+    case 'domain.battle.weapons_detected': {
+      const payload = event.payload as BattleWeaponsDetectedPayload;
+      if (payload.is_final) {
+        return 'ブキ判別が確定しました。';
+      }
+      return 'ブキ判別結果を更新しました。';
+    }
 
     // その他のイベントは通知不要
     case 'domain.recording.started':

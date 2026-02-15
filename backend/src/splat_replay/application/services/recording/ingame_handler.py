@@ -15,6 +15,9 @@ from splat_replay.application.services.recording.commands import (
 from splat_replay.application.services.recording.recording_context import (
     RecordingContext,
 )
+from splat_replay.application.services.recording.weapon_detection_service import (
+    WeaponDetectionService,
+)
 from splat_replay.domain.events import BattleFinished, BattleInterrupted
 from splat_replay.domain.models import Frame
 from splat_replay.domain.services import FrameAnalyzer, RecordState
@@ -44,10 +47,12 @@ class InGamePhaseHandler:
         analyzer: FrameAnalyzer,
         logger: LoggerPort,
         event_bus: EventBusPort,
+        weapon_detection_service: WeaponDetectionService | None = None,
     ):
         self.analyzer = analyzer
         self.logger = logger
         self.event_bus = event_bus
+        self.weapon_detection_service = weapon_detection_service
 
     async def handle(
         self, frame: Frame, ctx: RecordingContext, state: RecordState
@@ -80,6 +85,13 @@ class InGamePhaseHandler:
             # UI通知が必要な場合は RecordingTimeLimitExceeded イベントを追加すべき
             return RecordingCommand.stop_recording(
                 ctx, reason="録画時間制限（10分）"
+            )
+
+        # ブキ判別（20秒以内・表示画面時のみ）
+        if self.weapon_detection_service is not None:
+            ctx = await self.weapon_detection_service.process(
+                frame=frame,
+                context=ctx,
             )
 
         # バトル終了検出

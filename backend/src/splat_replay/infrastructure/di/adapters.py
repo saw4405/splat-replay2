@@ -27,6 +27,7 @@ from splat_replay.application.interfaces import (
     SpeechTranscriberPort,
     SubtitleEditorPort,
     SystemCommandPort,
+    WeaponRecognitionPort,
     TextToSpeechPort,
     UploadPort,
     VideoAssetRepositoryPort,
@@ -65,6 +66,7 @@ from splat_replay.infrastructure import (
     SystemPower,
     TesseractOCR,
     TomlSettingsRepository,
+    WeaponRecognitionAdapter,
     YouTubeClient,
 )
 from splat_replay.infrastructure.config import load_settings_from_toml
@@ -158,6 +160,11 @@ def register_adapters(container: punq.Container) -> None:
     container.register(SubtitleEditorPort, SubtitleEditor)
     container.register(
         ImageSelector, instance=ImageDrawer.select_brightest_image
+    )
+    container.register(
+        WeaponRecognitionPort,
+        WeaponRecognitionAdapter,
+        scope=punq.Scope.singleton,
     )
     try:
         container.register(TextToSpeechPort, GoogleTextToSpeech)
