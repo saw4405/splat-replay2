@@ -198,16 +198,20 @@
     align-items: center;
     justify-content: space-between;
     gap: 0.75rem;
-    background: linear-gradient(135deg, rgba(8, 11, 22, 0.65) 0%, rgba(12, 22, 32, 0.45) 100%);
-    border: 1px solid rgba(255, 255, 255, 0.14);
+    background: linear-gradient(
+      135deg,
+      rgba(var(--theme-rgb-surface-muted), 0.65) 0%,
+      rgba(var(--theme-rgb-surface-chip), 0.45) 100%
+    );
+    border: 1px solid rgba(var(--theme-rgb-white), 0.14);
     border-radius: 0.625rem;
     padding: 0.75rem 1rem;
-    color: rgba(226, 232, 240, 0.95);
+    color: rgba(var(--theme-rgb-light-slate), 0.95);
     font-size: 0.95rem;
     font-weight: 500;
     box-shadow:
-      inset 0 1px 2px rgba(0, 0, 0, 0.4),
-      0 1px 2px rgba(0, 0, 0, 0.2);
+      inset 0 1px 2px rgba(var(--theme-rgb-black), 0.4),
+      0 1px 2px rgba(var(--theme-rgb-black), 0.2);
     cursor: pointer;
     transition:
       border-color 0.25s ease,
@@ -223,11 +227,15 @@
 
   .select-trigger:not(:disabled):hover,
   .select-trigger:not(:disabled):focus-visible {
-    border-color: rgba(25, 211, 199, 0.55);
-    background: linear-gradient(135deg, rgba(25, 211, 199, 0.14) 0%, rgba(25, 211, 199, 0.06) 100%);
+    border-color: rgba(var(--theme-rgb-accent), 0.55);
+    background: linear-gradient(
+      135deg,
+      rgba(var(--theme-rgb-accent), 0.14) 0%,
+      rgba(var(--theme-rgb-accent), 0.06) 100%
+    );
     box-shadow:
-      0 0 0 0.1875rem rgba(25, 211, 199, 0.18),
-      0 0.35rem 0.9rem rgba(25, 211, 199, 0.22);
+      0 0 0 0.1875rem rgba(var(--theme-rgb-accent), 0.18),
+      0 0.35rem 0.9rem rgba(var(--theme-rgb-accent), 0.22);
     transform: translateY(-0.125rem);
     outline: none;
   }
@@ -240,7 +248,7 @@
   .chevron {
     flex: 0 0 auto;
     font-size: 0.9rem;
-    color: rgba(226, 232, 240, 0.7);
+    color: rgba(var(--theme-rgb-light-slate), 0.7);
     transition:
       transform 0.2s ease,
       color 0.2s ease;
@@ -248,7 +256,7 @@
 
   .select-trigger[aria-expanded='true'] .chevron {
     transform: rotate(180deg);
-    color: #19d3c7;
+    color: var(--accent-color);
   }
 
   .select-dropdown {
@@ -260,12 +268,16 @@
     margin: 0;
     padding: 0.35rem;
     list-style: none;
-    background: linear-gradient(135deg, rgba(12, 20, 32, 0.95) 0%, rgba(6, 12, 22, 0.92) 100%);
-    border: 1px solid rgba(255, 255, 255, 0.12);
+    background: linear-gradient(
+      135deg,
+      rgba(var(--theme-rgb-surface-dropdown), 0.95) 0%,
+      rgba(var(--theme-rgb-surface-card-dark), 0.92) 100%
+    );
+    border: 1px solid rgba(var(--theme-rgb-white), 0.12);
     border-radius: 0.75rem;
     box-shadow:
-      0 1.25rem 3rem rgba(0, 0, 0, 0.45),
-      0 0 0 1px rgba(255, 255, 255, 0.08);
+      0 1.25rem 3rem rgba(var(--theme-rgb-black), 0.45),
+      0 0 0 1px rgba(var(--theme-rgb-white), 0.08);
     backdrop-filter: blur(18px) saturate(180%);
     -webkit-backdrop-filter: blur(18px) saturate(180%);
     max-height: 14rem;
@@ -280,7 +292,7 @@
     gap: 0.75rem;
     padding: 0.65rem 0.85rem;
     border-radius: 0.6rem;
-    color: rgba(226, 232, 240, 0.9);
+    color: rgba(var(--theme-rgb-light-slate), 0.9);
     cursor: pointer;
     transition:
       background 0.2s ease,
@@ -290,16 +302,20 @@
   }
 
   .select-dropdown li.highlighted {
-    background: linear-gradient(135deg, rgba(25, 211, 199, 0.24) 0%, rgba(25, 211, 199, 0.12) 100%);
-    color: #041b1a;
+    background: linear-gradient(
+      135deg,
+      rgba(var(--theme-rgb-accent), 0.24) 0%,
+      rgba(var(--theme-rgb-accent), 0.12) 100%
+    );
+    color: var(--theme-accent-ink-strong);
     box-shadow:
-      inset 0 1px 0 rgba(255, 255, 255, 0.2),
-      0 6px 16px rgba(25, 211, 199, 0.18);
+      inset 0 1px 0 rgba(var(--theme-rgb-white), 0.2),
+      0 6px 16px rgba(var(--theme-rgb-accent), 0.18);
     transform: translateX(0.1rem);
   }
 
   .select-dropdown li.selected {
-    color: #19d3c7;
+    color: var(--accent-color);
   }
 
   .checkmark {
@@ -311,12 +327,16 @@
   }
 
   .select-dropdown::-webkit-scrollbar-track {
-    background: rgba(255, 255, 255, 0.06);
+    background: rgba(var(--theme-rgb-white), 0.06);
     border-radius: 999px;
   }
 
   .select-dropdown::-webkit-scrollbar-thumb {
-    background: linear-gradient(180deg, rgba(25, 211, 199, 0.6) 0%, rgba(25, 211, 199, 0.4) 100%);
+    background: linear-gradient(
+      180deg,
+      rgba(var(--theme-rgb-accent), 0.6) 0%,
+      rgba(var(--theme-rgb-accent), 0.4) 100%
+    );
     border-radius: 999px;
   }
 </style>

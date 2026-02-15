@@ -41,7 +41,7 @@
   .loading-spinner {
     width: 64px;
     height: 64px;
-    border: 4px solid rgba(255, 255, 255, 0.1);
+    border: 4px solid rgba(var(--theme-rgb-white), 0.1);
     border-top-color: var(--accent-color);
     border-radius: 50%;
     animation: spin 1s linear infinite;

@@ -1,0 +1,131 @@
+:root {
+  --theme-name: 'Neon Abyss B';
+  --theme-font-body:
+    -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Fira Sans',
+    'Droid Sans', 'Helvetica Neue', sans-serif;
+  --theme-font-heading: 'Segoe UI', 'Helvetica Neue', sans-serif;
+
+  --theme-rgb-white: 245, 245, 255;
+  --theme-rgb-black: 6, 8, 15;
+  --theme-rgb-accent: 47, 246, 227;
+  --theme-rgb-accent-strong: 20, 201, 184;
+  --theme-rgb-accent-bright: 99, 255, 239;
+  --theme-rgb-info: 110, 181, 255;
+  --theme-rgb-info-strong: 74, 159, 255;
+  --theme-rgb-success: 93, 225, 164;
+  --theme-rgb-success-strong: 70, 199, 146;
+  --theme-rgb-success-soft-alt: 138, 239, 194;
+  --theme-rgb-warning: 255, 200, 106;
+  --theme-rgb-warning-strong: 255, 176, 96;
+  --theme-rgb-danger: 255, 95, 136;
+  --theme-rgb-danger-strong: 255, 63, 113;
+  --theme-rgb-danger-bright: 255, 82, 126;
+  --theme-rgb-danger-soft: 255, 146, 175;
+  --theme-rgb-danger-soft-alt: 255, 174, 194;
+  --theme-rgb-danger-pale: 255, 191, 210;
+  --theme-rgb-danger-apple: 255, 95, 136;
+
+  --theme-rgb-surface-deep: 9, 9, 22;
+  --theme-rgb-surface-overlay: 16, 16, 38;
+  --theme-rgb-surface-card: 16, 23, 48;
+  --theme-rgb-surface-card-strong: 26, 28, 58;
+  --theme-rgb-surface-card-deep: 12, 18, 36;
+  --theme-rgb-surface-card-dark: 10, 15, 30;
+  --theme-rgb-surface-card-dark-2: 8, 12, 24;
+  --theme-rgb-surface-muted: 17, 23, 46;
+  --theme-rgb-surface-muted-2: 12, 24, 44;
+  --theme-rgb-surface-chip: 26, 30, 60;
+  --theme-rgb-surface-dropdown: 18, 24, 49;
+  --theme-rgb-surface-progress: 23, 28, 55;
+  --theme-rgb-surface-progress-deep: 14, 18, 36;
+  --theme-rgb-surface-preview: 24, 30, 58;
+  --theme-rgb-shadow-deep: 4, 7, 20;
+  --theme-rgb-ring: 6, 10, 30;
+  --theme-rgb-ring-strong: 8, 14, 38;
+
+  --theme-rgb-slate: 168, 174, 208;
+  --theme-rgb-slate-500: 133, 141, 183;
+  --theme-rgb-gray: 138, 145, 179;
+  --theme-rgb-gray-strong: 55, 60, 92;
+  --theme-rgb-gray-surface: 40, 46, 78;
+  --theme-rgb-light-slate: 220, 224, 247;
+  --theme-rgb-light-bg: 240, 244, 248;
+  --theme-rgb-light-bg-alt: 248, 250, 252;
+  --theme-rgb-light-green-bg: 240, 253, 250;
+  --theme-rgb-light-mode-text: 33, 53, 71;
+
+  --theme-rgb-blue-preview: 74, 159, 255;
+  --theme-rgb-blue-alt: 110, 181, 255;
+  --theme-rgb-green-preview: 93, 225, 164;
+  --theme-rgb-green-soft: 138, 239, 194;
+  --theme-rgb-green-alt: 70, 199, 146;
+  --theme-rgb-amber-preview: 255, 200, 106;
+  --theme-rgb-red-preview: 255, 95, 136;
+  --theme-rgb-purple-preview: 122, 111, 232;
+  --theme-rgb-red-dark: 197, 46, 92;
+  --theme-rgb-gold: 255, 208, 122;
+  --theme-rgb-orange: 255, 176, 96;
+  --theme-rgb-orange-soft: 255, 193, 117;
+  --theme-rgb-orange-alt: 255, 200, 106;
+  --theme-rgb-dark-alt: 8, 12, 28;
+  --theme-rgb-dark-alt-2: 22, 24, 44;
+  --theme-rgb-space: 18, 18, 42;
+  --theme-rgb-space-2: 20, 22, 48;
+  --theme-rgb-space-3: 16, 16, 36;
+
+  --theme-color-white: #f5f5ff;
+  --theme-color-black: #06080f;
+  --theme-color-charcoal: #101225;
+  --theme-color-light-text: #d9def4;
+  --theme-color-light-mode-text: #213547;
+
+  --theme-accent-color: #2ff6e3;
+  --theme-accent-color-strong: #14c9b8;
+  --theme-accent-color-alt: #63ffef;
+  --theme-accent-ink: #052523;
+  --theme-accent-ink-strong: #031917;
+  --theme-accent-ink-surface: #041312;
+  --theme-panel-navy: #17173b;
+  --theme-panel-lavender: #b8b8de;
+
+  --theme-status-info: #6eb5ff;
+  --theme-status-info-strong: #4a9fff;
+  --theme-status-info-soft: #9ad0ff;
+  --theme-status-success: #5de1a4;
+  --theme-status-success-soft: #8aefc2;
+  --theme-status-warning: #ffc86a;
+  --theme-status-warning-soft: #ffe0a3;
+  --theme-status-danger: #ff5f88;
+  --theme-status-danger-soft: #ff92af;
+  --theme-status-danger-strong: #ff3f71;
+
+  --theme-preview-neutral: #8a91b3;
+  --theme-preview-neutral-soft: #a8aed0;
+  --theme-preview-danger: #ff5f88;
+  --theme-preview-warning: #ffc86a;
+  --theme-preview-accent: #2ff6e3;
+
+  --theme-base-text-color: rgba(var(--theme-rgb-white), 0.9);
+  --theme-background-gradient: linear-gradient(140deg, #090916 0%, #161633 44%, #10263b 100%);
+
+  --theme-glass-bg: linear-gradient(
+    135deg,
+    rgba(var(--theme-rgb-white), 0.1) 0%,
+    rgba(var(--theme-rgb-white), 0.04) 100%
+  );
+  --theme-glass-bg-strong: linear-gradient(
+    145deg,
+    rgba(var(--theme-rgb-surface-card), 0.78) 0%,
+    rgba(var(--theme-rgb-surface-card-strong), 0.72) 45%,
+    rgba(var(--theme-rgb-surface-card-deep), 0.82) 100%
+  );
+  --theme-glass-border: rgba(var(--theme-rgb-slate), 0.28);
+  --theme-glass-border-strong: rgba(var(--theme-rgb-accent), 0.36);
+  --theme-glass-shadow: 0 20px 60px rgba(var(--theme-rgb-shadow-deep), 0.5);
+  --theme-glass-shadow-soft: 0 12px 32px rgba(var(--theme-rgb-black), 0.35);
+
+  --theme-accent-glow: rgba(var(--theme-rgb-accent), 0.38);
+  --theme-text-primary: rgba(var(--theme-rgb-white), 0.95);
+  --theme-text-secondary: rgba(var(--theme-rgb-light-slate), 0.72);
+  --theme-divider-color: rgba(var(--theme-rgb-slate), 0.16);
+}

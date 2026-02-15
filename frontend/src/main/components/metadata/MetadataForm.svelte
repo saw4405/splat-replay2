@@ -152,7 +152,7 @@
   }
 
   label {
-    color: #19d3c7;
+    color: var(--accent-color);
     font-size: 0.85rem;
     font-weight: 500;
     text-align: left;
@@ -160,33 +160,33 @@
 
   input,
   select {
-    background: rgba(255, 255, 255, 0.05);
-    border: 1px solid rgba(255, 255, 255, 0.15);
+    background: rgba(var(--theme-rgb-white), 0.05);
+    border: 1px solid rgba(var(--theme-rgb-white), 0.15);
     border-radius: 6px;
     padding: 0.6rem 0.8rem;
-    color: #fff;
+    color: var(--theme-color-white);
     font-size: 0.9rem;
     transition: all 0.2s ease;
   }
 
   /* selectのドロップダウンリスト */
   select option {
-    background: #1a1a2e;
-    color: #fff;
+    background: var(--theme-panel-navy);
+    color: var(--theme-color-white);
     padding: 0.5rem;
   }
 
   input:focus,
   select:focus {
     outline: none;
-    border-color: #19d3c7;
-    background: rgba(255, 255, 255, 0.08);
-    box-shadow: 0 0 0 3px rgba(25, 211, 199, 0.1);
+    border-color: var(--accent-color);
+    background: rgba(var(--theme-rgb-white), 0.08);
+    box-shadow: 0 0 0 3px rgba(var(--theme-rgb-accent), 0.1);
   }
 
   input:hover,
   select:hover {
-    border-color: rgba(255, 255, 255, 0.25);
+    border-color: rgba(var(--theme-rgb-white), 0.25);
   }
 
   select {
@@ -194,10 +194,16 @@
     -webkit-appearance: none;
     -moz-appearance: none;
     appearance: none;
-    background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
+    background-image:
+      linear-gradient(45deg, transparent 50%, var(--theme-color-white) 50%),
+      linear-gradient(135deg, var(--theme-color-white) 50%, transparent 50%);
     background-repeat: no-repeat;
-    background-position: right 0.7rem center;
-    background-size: 1rem;
+    background-position:
+      calc(100% - 1rem) calc(50% - 0.1rem),
+      calc(100% - 0.7rem) calc(50% - 0.1rem);
+    background-size:
+      0.35rem 0.35rem,
+      0.35rem 0.35rem;
     padding-right: 2.5rem;
   }
 
@@ -230,7 +236,7 @@
 
   .weapon-team h3 {
     margin: 0;
-    color: #19d3c7;
+    color: var(--theme-accent-color);
     font-size: 0.9rem;
     font-weight: 600;
     text-align: left;

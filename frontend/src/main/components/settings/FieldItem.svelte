@@ -219,13 +219,13 @@
     border-radius: 0.875rem;
     background: linear-gradient(
       135deg,
-      rgba(255, 255, 255, 0.05) 0%,
-      rgba(255, 255, 255, 0.02) 100%
+      rgba(var(--theme-rgb-white), 0.05) 0%,
+      rgba(var(--theme-rgb-white), 0.02) 100%
     );
-    border: 1px solid rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(var(--theme-rgb-white), 0.08);
     box-shadow:
-      0 0.5rem 1.5rem rgba(0, 0, 0, 0.18),
-      inset 0 1px 0 rgba(255, 255, 255, 0.08);
+      0 0.5rem 1.5rem rgba(var(--theme-rgb-black), 0.18),
+      inset 0 1px 0 rgba(var(--theme-rgb-white), 0.08);
     transition:
       transform 0.25s ease,
       border-color 0.25s ease,
@@ -236,10 +236,10 @@
 
   .field-item:hover {
     transform: translateY(-0.125rem);
-    border-color: rgba(25, 211, 199, 0.25);
+    border-color: rgba(var(--theme-rgb-accent), 0.25);
     box-shadow:
-      0 0.75rem 2rem rgba(25, 211, 199, 0.16),
-      inset 0 1px 0 rgba(255, 255, 255, 0.12);
+      0 0.75rem 2rem rgba(var(--theme-rgb-accent), 0.16),
+      inset 0 1px 0 rgba(var(--theme-rgb-white), 0.12);
   }
 
   .field-header {
@@ -251,11 +251,11 @@
 
   label {
     font-weight: 600;
-    color: rgba(248, 250, 252, 0.92);
+    color: rgba(var(--theme-rgb-light-bg-alt), 0.92);
   }
 
   label.recommended {
-    color: #38bdf8;
+    color: var(--theme-status-info-soft);
   }
 
   input[type='text'],
@@ -263,15 +263,19 @@
   input[type='number'],
   textarea {
     width: 100%;
-    background: linear-gradient(135deg, rgba(8, 11, 22, 0.65) 0%, rgba(12, 22, 32, 0.45) 100%);
-    border: 1px solid rgba(255, 255, 255, 0.14);
+    background: linear-gradient(
+      135deg,
+      rgba(var(--theme-rgb-surface-muted), 0.65) 0%,
+      rgba(var(--theme-rgb-surface-chip), 0.45) 100%
+    );
+    border: 1px solid rgba(var(--theme-rgb-white), 0.14);
     border-radius: 0.625rem;
     padding: 0.75rem 1rem;
-    color: rgba(226, 232, 240, 0.95);
+    color: rgba(var(--theme-rgb-light-slate), 0.95);
     font-size: 0.95rem;
     box-shadow:
-      inset 0 1px 2px rgba(0, 0, 0, 0.4),
-      0 1px 2px rgba(0, 0, 0, 0.2);
+      inset 0 1px 2px rgba(var(--theme-rgb-black), 0.4),
+      0 1px 2px rgba(var(--theme-rgb-black), 0.2);
     transition:
       border-color 0.2s ease,
       box-shadow 0.2s ease,
@@ -283,16 +287,20 @@
   input[type='number']:focus,
   textarea:focus {
     outline: none;
-    border-color: rgba(25, 211, 199, 0.55);
-    background: linear-gradient(135deg, rgba(25, 211, 199, 0.14) 0%, rgba(25, 211, 199, 0.06) 100%);
+    border-color: rgba(var(--theme-rgb-accent), 0.55);
+    background: linear-gradient(
+      135deg,
+      rgba(var(--theme-rgb-accent), 0.14) 0%,
+      rgba(var(--theme-rgb-accent), 0.06) 100%
+    );
     box-shadow:
-      0 0 0 0.1875rem rgba(25, 211, 199, 0.18),
-      0 0.35rem 0.9rem rgba(25, 211, 199, 0.22);
+      0 0 0 0.1875rem rgba(var(--theme-rgb-accent), 0.18),
+      0 0.35rem 0.9rem rgba(var(--theme-rgb-accent), 0.22);
   }
 
   input::placeholder,
   textarea::placeholder {
-    color: rgba(148, 163, 184, 0.6);
+    color: rgba(var(--theme-rgb-slate), 0.6);
   }
 
   input[type='checkbox'] {
@@ -315,15 +323,15 @@
     inset: 0;
     background: linear-gradient(
       135deg,
-      rgba(148, 163, 184, 0.28) 0%,
-      rgba(100, 116, 139, 0.28) 100%
+      rgba(var(--theme-rgb-slate), 0.28) 0%,
+      rgba(var(--theme-rgb-slate-500), 0.28) 100%
     );
-    border: 1px solid rgba(148, 163, 184, 0.45);
+    border: 1px solid rgba(var(--theme-rgb-slate), 0.45);
     border-radius: 2rem;
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     box-shadow:
-      inset 0 0.125rem 0.25rem rgba(0, 0, 0, 0.25),
-      0 0.125rem 0.25rem rgba(0, 0, 0, 0.15);
+      inset 0 0.125rem 0.25rem rgba(var(--theme-rgb-black), 0.25),
+      0 0.125rem 0.25rem rgba(var(--theme-rgb-black), 0.15);
   }
 
   .toggle-slider::before {
@@ -335,49 +343,61 @@
     bottom: 0.25rem;
     background: linear-gradient(
       135deg,
-      rgba(255, 255, 255, 0.95) 0%,
-      rgba(226, 232, 240, 0.9) 100%
+      rgba(var(--theme-rgb-white), 0.95) 0%,
+      rgba(var(--theme-rgb-light-slate), 0.9) 100%
     );
     border-radius: 50%;
     transition: inherit;
     box-shadow:
-      0 0.25rem 0.5rem rgba(0, 0, 0, 0.35),
-      0 0.125rem 0.25rem rgba(0, 0, 0, 0.25);
+      0 0.25rem 0.5rem rgba(var(--theme-rgb-black), 0.35),
+      0 0.125rem 0.25rem rgba(var(--theme-rgb-black), 0.25);
   }
 
   input[type='checkbox']:checked + .toggle-slider {
-    background: linear-gradient(135deg, rgba(25, 211, 199, 0.92) 0%, rgba(25, 211, 199, 0.78) 100%);
-    border-color: rgba(25, 211, 199, 0.65);
+    background: linear-gradient(
+      135deg,
+      rgba(var(--theme-rgb-accent), 0.92) 0%,
+      rgba(var(--theme-rgb-accent), 0.78) 100%
+    );
+    border-color: rgba(var(--theme-rgb-accent), 0.65);
     box-shadow:
-      inset 0 0.125rem 0.35rem rgba(0, 0, 0, 0.15),
-      0 0.5rem 1rem rgba(25, 211, 199, 0.28);
+      inset 0 0.125rem 0.35rem rgba(var(--theme-rgb-black), 0.15),
+      0 0.5rem 1rem rgba(var(--theme-rgb-accent), 0.28);
   }
 
   input[type='checkbox']:checked + .toggle-slider::before {
     transform: translateX(1.5rem);
-    background: linear-gradient(135deg, rgba(255, 255, 255, 1) 0%, rgba(240, 253, 250, 0.96) 100%);
+    background: linear-gradient(
+      135deg,
+      rgba(var(--theme-rgb-white), 1) 0%,
+      rgba(var(--theme-rgb-light-green-bg), 0.96) 100%
+    );
     box-shadow:
-      0 0.3rem 0.6rem rgba(0, 0, 0, 0.28),
-      0 0.125rem 0.5rem rgba(25, 211, 199, 0.4);
+      0 0.3rem 0.6rem rgba(var(--theme-rgb-black), 0.28),
+      0 0.125rem 0.5rem rgba(var(--theme-rgb-accent), 0.4);
   }
 
   input[type='checkbox']:focus + .toggle-slider {
-    outline: 0.125rem solid rgba(25, 211, 199, 0.55);
+    outline: 0.125rem solid rgba(var(--theme-rgb-accent), 0.55);
     outline-offset: 0.125rem;
   }
 
   .toggle-switch:hover .toggle-slider {
-    border-color: rgba(25, 211, 199, 0.5);
+    border-color: rgba(var(--theme-rgb-accent), 0.5);
     box-shadow:
-      inset 0 0.125rem 0.35rem rgba(0, 0, 0, 0.22),
-      0 0.25rem 0.75rem rgba(25, 211, 199, 0.24);
+      inset 0 0.125rem 0.35rem rgba(var(--theme-rgb-black), 0.22),
+      0 0.25rem 0.75rem rgba(var(--theme-rgb-accent), 0.24);
   }
 
   input[type='checkbox']:checked + .toggle-slider:hover {
-    background: linear-gradient(135deg, rgba(25, 211, 199, 1) 0%, rgba(25, 211, 199, 0.86) 100%);
+    background: linear-gradient(
+      135deg,
+      rgba(var(--theme-rgb-accent), 1) 0%,
+      rgba(var(--theme-rgb-accent), 0.86) 100%
+    );
     box-shadow:
-      inset 0 0.125rem 0.35rem rgba(0, 0, 0, 0.18),
-      0 0.4rem 1.1rem rgba(25, 211, 199, 0.4);
+      inset 0 0.125rem 0.35rem rgba(var(--theme-rgb-black), 0.18),
+      0 0.4rem 1.1rem rgba(var(--theme-rgb-accent), 0.4);
   }
 
   textarea {
@@ -391,23 +411,23 @@
 
   .field-description {
     font-size: 0.85rem;
-    color: rgba(226, 232, 240, 0.68);
+    color: rgba(var(--theme-rgb-light-slate), 0.68);
     margin: 0;
   }
 
   .field-group {
-    border: 1px solid rgba(255, 255, 255, 0.12);
+    border: 1px solid rgba(var(--theme-rgb-white), 0.12);
     border-radius: 1rem;
     padding: 1.25rem;
     margin: 0;
     background: linear-gradient(
       135deg,
-      rgba(255, 255, 255, 0.05) 0%,
-      rgba(255, 255, 255, 0.015) 100%
+      rgba(var(--theme-rgb-white), 0.05) 0%,
+      rgba(var(--theme-rgb-white), 0.015) 100%
     );
     box-shadow:
-      0 0.5rem 1.5rem rgba(0, 0, 0, 0.18),
-      inset 0 1px 0 rgba(255, 255, 255, 0.08);
+      0 0.5rem 1.5rem rgba(var(--theme-rgb-black), 0.18),
+      inset 0 1px 0 rgba(var(--theme-rgb-white), 0.08);
     display: flex;
     flex-direction: column;
     gap: 0.75rem;
@@ -416,11 +436,11 @@
   .field-group legend {
     padding: 0 0.75rem;
     font-weight: 600;
-    color: rgba(248, 250, 252, 0.94);
+    color: rgba(var(--theme-rgb-light-bg-alt), 0.94);
   }
 
   .field-group legend.recommended {
-    color: #38bdf8;
+    color: var(--theme-status-info-soft);
   }
 
   .field-group-children {
@@ -453,18 +473,18 @@
     padding: 0.25rem;
     border: none;
     background: transparent;
-    color: rgba(148, 163, 184, 0.7);
+    color: rgba(var(--theme-rgb-slate), 0.7);
     cursor: pointer;
     transition: color 0.2s ease;
     border-radius: 0.375rem;
   }
 
   .password-toggle:hover {
-    color: rgba(226, 232, 240, 0.95);
+    color: rgba(var(--theme-rgb-light-slate), 0.95);
   }
 
   .password-toggle:focus {
     outline: none;
-    color: rgba(25, 211, 199, 0.9);
+    color: rgba(var(--theme-rgb-accent), 0.9);
   }
 </style>

@@ -36,7 +36,7 @@
     margin: 0;
     font-size: 1rem;
     line-height: 1.6;
-    color: rgba(255, 255, 255, 0.9);
+    color: rgba(var(--theme-rgb-white), 0.9);
     word-break: break-word;
     white-space: pre-line;
     text-align: left;

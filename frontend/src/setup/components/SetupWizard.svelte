@@ -400,7 +400,7 @@
   .progress-bar-wrapper {
     width: 100%;
     height: 8px;
-    background: rgba(255, 255, 255, 0.1);
+    background: rgba(var(--theme-rgb-white), 0.1);
     border-radius: 4px;
     overflow: hidden;
     position: relative;
@@ -424,7 +424,7 @@
     background: linear-gradient(
       90deg,
       transparent 0%,
-      rgba(255, 255, 255, 0.3) 50%,
+      rgba(var(--theme-rgb-white), 0.3) 50%,
       transparent 100%
     );
     animation: shimmer 2s infinite;
@@ -482,7 +482,7 @@
   .loading-spinner {
     width: 48px;
     height: 48px;
-    border: 4px solid rgba(255, 255, 255, 0.1);
+    border: 4px solid rgba(var(--theme-rgb-white), 0.1);
     border-top-color: var(--accent-color);
     border-radius: 50%;
     animation: spin 1s linear infinite;
@@ -507,8 +507,8 @@
     align-items: center;
     justify-content: center;
     padding: 3rem;
-    background: rgba(0, 0, 0, 0.2);
-    border: 2px dashed rgba(255, 255, 255, 0.1);
+    background: rgba(var(--theme-rgb-black), 0.2);
+    border: 2px dashed rgba(var(--theme-rgb-white), 0.1);
     border-radius: 12px;
   }
 
@@ -555,7 +555,7 @@
 
   .button-primary {
     background: linear-gradient(135deg, var(--accent-color) 0%, var(--accent-color-strong) 100%);
-    color: white;
+    color: var(--theme-color-white);
     border-color: var(--accent-color);
   }
 
@@ -567,32 +567,32 @@
   .button-skip {
     background: linear-gradient(
       135deg,
-      rgba(255, 159, 10, 0.9) 0%,
-      rgba(255, 149, 0, 0.9) 100%
+      rgba(var(--theme-rgb-orange-soft), 0.9) 0%,
+      rgba(var(--theme-rgb-orange), 0.9) 100%
     ) !important;
-    color: white !important;
-    border-color: rgba(255, 159, 10, 0.8) !important;
+    color: var(--theme-color-white) !important;
+    border-color: rgba(var(--theme-rgb-orange-soft), 0.8) !important;
   }
 
   .button-skip:hover:not(:disabled) {
     background: linear-gradient(
       135deg,
-      rgba(255, 159, 10, 1) 0%,
-      rgba(255, 149, 0, 1) 100%
+      rgba(var(--theme-rgb-orange-soft), 1) 0%,
+      rgba(var(--theme-rgb-orange), 1) 100%
     ) !important;
-    border-color: rgba(255, 159, 10, 1) !important;
-    box-shadow: 0 6px 16px rgba(255, 159, 10, 0.4) !important;
+    border-color: rgba(var(--theme-rgb-orange-soft), 1) !important;
+    box-shadow: 0 6px 16px rgba(var(--theme-rgb-orange-soft), 0.4) !important;
   }
 
   .button-secondary {
-    background: rgba(255, 255, 255, 0.05);
+    background: rgba(var(--theme-rgb-white), 0.05);
     color: var(--text-primary);
-    border-color: rgba(255, 255, 255, 0.1);
+    border-color: rgba(var(--theme-rgb-white), 0.1);
   }
 
   .button-secondary:hover:not(:disabled) {
-    background: rgba(255, 255, 255, 0.1);
-    border-color: rgba(255, 255, 255, 0.2);
+    background: rgba(var(--theme-rgb-white), 0.1);
+    border-color: rgba(var(--theme-rgb-white), 0.2);
     transform: translateY(-2px);
   }
 

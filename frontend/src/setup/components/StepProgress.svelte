@@ -33,8 +33,8 @@
   .progress-container {
     width: 100%;
     padding: 1.5rem;
-    background: rgba(0, 0, 0, 0.2);
-    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: rgba(var(--theme-rgb-black), 0.2);
+    border: 1px solid rgba(var(--theme-rgb-white), 0.08);
     border-radius: 12px;
     backdrop-filter: blur(10px);
     -webkit-backdrop-filter: blur(10px);
@@ -55,7 +55,7 @@
   .step-dot {
     flex: 1;
     height: 4px;
-    background: rgba(255, 255, 255, 0.1);
+    background: rgba(var(--theme-rgb-white), 0.1);
     border-radius: 999px;
     position: relative;
     display: flex;

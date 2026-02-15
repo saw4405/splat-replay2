@@ -804,11 +804,11 @@
   .error {
     padding: 40px;
     text-align: center;
-    color: rgba(255, 255, 255, 0.7);
+    color: rgba(var(--theme-rgb-white), 0.7);
   }
 
   .error {
-    color: #ff6b6b;
+    color: var(--theme-status-danger-soft);
   }
 
   /* 動画プレビュー */
@@ -824,7 +824,7 @@
   .video-preview video {
     width: 100%;
     max-height: 400px;
-    background: #000;
+    background: var(--theme-color-black);
     border-radius: 4px;
     display: block;
   }
@@ -834,8 +834,8 @@
     bottom: 40px; /* 下部に近い位置に表示 */
     left: 50%;
     transform: translateX(-50%);
-    background: rgba(0, 0, 0, 0.8);
-    color: #ffffff;
+    background: rgba(var(--theme-rgb-black), 0.8);
+    color: var(--theme-color-white);
     padding: 8px 16px;
     border-radius: 4px;
     font-size: 16px;
@@ -844,14 +844,14 @@
     max-width: 80%;
     word-wrap: break-word;
     text-shadow:
-      -2px -2px 0 #000,
-      2px -2px 0 #000,
-      -2px 2px 0 #000,
-      2px 2px 0 #000,
-      -2px 0 0 #000,
-      2px 0 0 #000,
-      0 -2px 0 #000,
-      0 2px 0 #000;
+      -2px -2px 0 var(--theme-color-black),
+      2px -2px 0 var(--theme-color-black),
+      -2px 2px 0 var(--theme-color-black),
+      2px 2px 0 var(--theme-color-black),
+      -2px 0 0 var(--theme-color-black),
+      2px 0 0 var(--theme-color-black),
+      0 -2px 0 var(--theme-color-black),
+      0 2px 0 var(--theme-color-black);
     pointer-events: none;
     z-index: 10;
   }
@@ -866,10 +866,10 @@
   .timeline-container {
     position: relative;
     height: 120px;
-    background: rgba(42, 42, 42, 0.6);
+    background: rgba(var(--theme-rgb-gray-strong), 0.6);
     backdrop-filter: blur(8px);
     -webkit-backdrop-filter: blur(8px);
-    border: 1px solid rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(var(--theme-rgb-white), 0.08);
     border-radius: 8px;
     cursor: crosshair;
     overflow: visible;
@@ -882,7 +882,7 @@
     left: 0;
     right: 0;
     height: 30px;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    border-bottom: 1px solid rgba(var(--theme-rgb-white), 0.1);
   }
 
   .timeline-tick {
@@ -894,13 +894,13 @@
   .tick-line {
     width: 1px;
     height: 8px;
-    background: rgba(255, 255, 255, 0.3);
+    background: rgba(var(--theme-rgb-white), 0.3);
     margin: 0 auto;
   }
 
   .tick-label {
     font-size: 10px;
-    color: rgba(255, 255, 255, 0.5);
+    color: rgba(var(--theme-rgb-white), 0.5);
     margin-top: 2px;
     white-space: nowrap;
   }
@@ -910,7 +910,7 @@
     top: 30px;
     bottom: 0;
     width: 2px;
-    background: #ff4444;
+    background: var(--theme-status-danger-strong);
     pointer-events: none;
     z-index: 10;
   }
@@ -924,7 +924,7 @@
     height: 0;
     border-left: 5px solid transparent;
     border-right: 5px solid transparent;
-    border-top: 6px solid #ff4444;
+    border-top: 6px solid var(--theme-status-danger-strong);
   }
 
   .timeline-blocks {
@@ -938,32 +938,32 @@
   .subtitle-block {
     position: absolute;
     height: 60px;
-    background: rgba(76, 175, 255, 0.5);
+    background: rgba(var(--theme-rgb-blue-alt), 0.5);
     backdrop-filter: blur(8px);
     -webkit-backdrop-filter: blur(8px);
-    border: 2px solid rgba(76, 175, 255, 0.8);
+    border: 2px solid rgba(var(--theme-rgb-blue-alt), 0.8);
     border-radius: 8px;
     cursor: move;
     display: flex;
     align-items: center;
     transition: all 0.2s;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+    box-shadow: 0 2px 8px rgba(var(--theme-rgb-black), 0.2);
   }
 
   .subtitle-block:hover {
-    background: rgba(76, 175, 255, 0.7);
-    border-color: rgba(76, 175, 255, 1);
-    box-shadow: 0 4px 12px rgba(76, 175, 255, 0.3);
+    background: rgba(var(--theme-rgb-blue-alt), 0.7);
+    border-color: rgba(var(--theme-rgb-blue-alt), 1);
+    box-shadow: 0 4px 12px rgba(var(--theme-rgb-blue-alt), 0.3);
   }
 
   .subtitle-block.selected {
-    background: rgba(255, 193, 7, 0.5);
+    background: rgba(var(--theme-rgb-gold), 0.5);
     backdrop-filter: blur(10px);
     -webkit-backdrop-filter: blur(10px);
-    border-color: rgba(255, 193, 7, 1);
+    border-color: rgba(var(--theme-rgb-gold), 1);
     box-shadow:
-      0 4px 16px rgba(255, 193, 7, 0.4),
-      0 0 0 1px rgba(255, 193, 7, 0.3);
+      0 4px 16px rgba(var(--theme-rgb-gold), 0.4),
+      0 0 0 1px rgba(var(--theme-rgb-gold), 0.3);
   }
 
   .resize-handle {
@@ -972,14 +972,14 @@
     bottom: 0;
     width: 8px;
     cursor: ew-resize;
-    background: rgba(255, 255, 255, 0.25);
+    background: rgba(var(--theme-rgb-white), 0.25);
     backdrop-filter: blur(4px);
     -webkit-backdrop-filter: blur(4px);
     transition: all 0.2s;
   }
 
   .resize-handle:hover {
-    background: rgba(255, 255, 255, 0.5);
+    background: rgba(var(--theme-rgb-white), 0.5);
   }
 
   .resize-handle.left {
@@ -1004,13 +1004,13 @@
   .block-label {
     font-size: 10px;
     font-weight: bold;
-    color: rgba(255, 255, 255, 0.9);
+    color: rgba(var(--theme-rgb-white), 0.9);
     margin-bottom: 2px;
   }
 
   .block-text {
     font-size: 12px;
-    color: rgba(255, 255, 255, 0.95);
+    color: rgba(var(--theme-rgb-white), 0.95);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -1019,14 +1019,14 @@
   /* ポップアップ編集フォーム */
   .popup-editor {
     position: absolute;
-    background: rgba(30, 30, 30, 0.95);
+    background: rgba(var(--theme-rgb-dark-alt-2), 0.95);
     backdrop-filter: blur(16px);
     -webkit-backdrop-filter: blur(16px);
-    border: 2px solid rgba(255, 193, 7, 0.8);
+    border: 2px solid rgba(var(--theme-rgb-gold), 0.8);
     border-radius: 12px;
     box-shadow:
-      0 12px 32px rgba(0, 0, 0, 0.7),
-      0 0 0 1px rgba(255, 193, 7, 0.2);
+      0 12px 32px rgba(var(--theme-rgb-black), 0.7),
+      0 0 0 1px rgba(var(--theme-rgb-gold), 0.2);
     z-index: 100;
     min-width: 300px;
     transform: translate(-50%, -100%);
@@ -1043,7 +1043,7 @@
     height: 0;
     border-left: 10px solid transparent;
     border-right: 10px solid transparent;
-    border-top: 10px solid rgba(255, 193, 7, 1);
+    border-top: 10px solid rgba(var(--theme-rgb-gold), 1);
   }
 
   .popup-header {
@@ -1051,8 +1051,8 @@
     justify-content: space-between;
     align-items: center;
     padding: 10px 12px;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-    background: rgba(255, 193, 7, 0.15);
+    border-bottom: 1px solid rgba(var(--theme-rgb-white), 0.1);
+    background: rgba(var(--theme-rgb-gold), 0.15);
     backdrop-filter: blur(8px);
     -webkit-backdrop-filter: blur(8px);
   }
@@ -1060,13 +1060,13 @@
   .popup-title {
     font-size: 13px;
     font-weight: bold;
-    color: rgba(255, 193, 7, 1);
+    color: rgba(var(--theme-rgb-gold), 1);
   }
 
   .popup-close {
     background: none;
     border: none;
-    color: rgba(255, 255, 255, 0.7);
+    color: rgba(var(--theme-rgb-white), 0.7);
     font-size: 18px;
     cursor: pointer;
     padding: 0;
@@ -1080,8 +1080,8 @@
   }
 
   .popup-close:hover {
-    background: rgba(255, 255, 255, 0.15);
-    color: rgba(255, 255, 255, 1);
+    background: rgba(var(--theme-rgb-white), 0.15);
+    color: rgba(var(--theme-rgb-white), 1);
     backdrop-filter: blur(8px);
     -webkit-backdrop-filter: blur(8px);
   }
@@ -1105,7 +1105,7 @@
     display: flex;
     flex-direction: column;
     gap: 4px;
-    color: rgba(255, 255, 255, 0.7);
+    color: rgba(var(--theme-rgb-white), 0.7);
     font-size: 11px;
   }
 
@@ -1115,11 +1115,11 @@
 
   .popup-row input,
   .popup-row textarea {
-    background: rgba(42, 42, 42, 0.8);
+    background: rgba(var(--theme-rgb-gray-strong), 0.8);
     backdrop-filter: blur(8px);
     -webkit-backdrop-filter: blur(8px);
-    border: 1px solid rgba(255, 255, 255, 0.2);
-    color: rgba(255, 255, 255, 0.9);
+    border: 1px solid rgba(var(--theme-rgb-white), 0.2);
+    color: rgba(var(--theme-rgb-white), 0.9);
     padding: 6px 8px;
     border-radius: 6px;
     font-size: 12px;
@@ -1129,22 +1129,22 @@
   .popup-row input:focus,
   .popup-row textarea:focus {
     outline: none;
-    border-color: rgba(255, 193, 7, 0.8);
+    border-color: rgba(var(--theme-rgb-gold), 0.8);
   }
 
   .popup-row input.error {
-    border-color: #f44336;
-    background: rgba(244, 67, 54, 0.1);
+    border-color: var(--theme-status-danger);
+    background: rgba(var(--theme-rgb-danger), 0.1);
   }
 
   .overlap-warning {
-    color: #f44336;
+    color: var(--theme-status-danger);
     font-size: 11px;
     margin-top: 4px;
     padding: 4px 8px;
-    background: rgba(244, 67, 54, 0.1);
+    background: rgba(var(--theme-rgb-danger), 0.1);
     border-radius: 4px;
-    border-left: 3px solid #f44336;
+    border-left: 3px solid var(--theme-status-danger);
   }
 
   .popup-row textarea {
@@ -1156,15 +1156,15 @@
     display: flex;
     justify-content: flex-end;
     padding-top: 8px;
-    border-top: 1px solid rgba(255, 255, 255, 0.1);
+    border-top: 1px solid rgba(var(--theme-rgb-white), 0.1);
   }
 
   .delete-button {
-    background: rgba(244, 67, 54, 0.9);
+    background: rgba(var(--theme-rgb-danger), 0.9);
     backdrop-filter: blur(10px);
     -webkit-backdrop-filter: blur(10px);
-    border: 1px solid rgba(255, 255, 255, 0.2);
-    color: white;
+    border: 1px solid rgba(var(--theme-rgb-white), 0.2);
+    color: var(--theme-color-white);
     padding: 6px 12px;
     border-radius: 6px;
     cursor: pointer;
@@ -1173,9 +1173,9 @@
   }
 
   .delete-button:hover {
-    background: rgba(211, 47, 47, 0.95);
-    border-color: rgba(255, 255, 255, 0.3);
-    box-shadow: 0 4px 12px rgba(244, 67, 54, 0.3);
+    background: rgba(var(--theme-rgb-danger-strong), 0.95);
+    border-color: rgba(var(--theme-rgb-white), 0.3);
+    box-shadow: 0 4px 12px rgba(var(--theme-rgb-danger), 0.3);
   }
 
   /* 追加用の丸いポップアップ */
@@ -1185,32 +1185,32 @@
     transform: translate(-50%, -50%);
     width: 48px;
     height: 48px;
-    background: rgba(76, 175, 80, 0.9);
+    background: rgba(var(--theme-rgb-success), 0.9);
     backdrop-filter: blur(10px);
     -webkit-backdrop-filter: blur(10px);
-    border: 2px solid rgba(255, 255, 255, 0.2);
+    border: 2px solid rgba(var(--theme-rgb-white), 0.2);
     border-radius: 50%;
     display: flex;
     align-items: center;
     justify-content: center;
     cursor: pointer;
     box-shadow:
-      0 4px 16px rgba(76, 175, 80, 0.4),
-      0 0 0 1px rgba(255, 255, 255, 0.1);
+      0 4px 16px rgba(var(--theme-rgb-success), 0.4),
+      0 0 0 1px rgba(var(--theme-rgb-white), 0.1);
     transition: all 0.2s;
     z-index: 1000;
   }
 
   .add-popup:hover {
-    background: rgba(69, 160, 73, 0.95);
+    background: rgba(var(--theme-rgb-green-alt), 0.95);
     transform: translate(-50%, -50%) scale(1.1);
     box-shadow:
-      0 6px 20px rgba(76, 175, 80, 0.5),
-      0 0 0 2px rgba(255, 255, 255, 0.15);
+      0 6px 20px rgba(var(--theme-rgb-success), 0.5),
+      0 0 0 2px rgba(var(--theme-rgb-white), 0.15);
   }
 
   .add-icon {
-    color: white;
+    color: var(--theme-color-white);
     font-size: 28px;
     font-weight: bold;
     line-height: 1;

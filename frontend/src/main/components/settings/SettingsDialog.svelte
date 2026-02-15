@@ -280,13 +280,13 @@
     border: none;
     background: linear-gradient(
       135deg,
-      rgba(255, 255, 255, 0.06) 0%,
-      rgba(255, 255, 255, 0.03) 100%
+      rgba(var(--theme-rgb-white), 0.06) 0%,
+      rgba(var(--theme-rgb-white), 0.03) 100%
     );
     backdrop-filter: blur(8px);
     -webkit-backdrop-filter: blur(8px);
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    color: rgba(255, 255, 255, 0.8);
+    border: 1px solid rgba(var(--theme-rgb-white), 0.08);
+    color: rgba(var(--theme-rgb-white), 0.8);
     border-radius: 0.625rem;
     padding: 0.85rem 1.2rem;
     text-align: left;
@@ -310,7 +310,7 @@
     background: linear-gradient(
       90deg,
       transparent 0%,
-      rgba(255, 255, 255, 0.1) 50%,
+      rgba(var(--theme-rgb-white), 0.1) 50%,
       transparent 100%
     );
     transition: left 0.6s ease;
@@ -321,37 +321,45 @@
   }
 
   .tabs button:hover {
-    background: linear-gradient(135deg, rgba(25, 211, 199, 0.15) 0%, rgba(25, 211, 199, 0.08) 100%);
-    border-color: rgba(25, 211, 199, 0.3);
-    color: #19d3c7;
+    background: linear-gradient(
+      135deg,
+      rgba(var(--theme-rgb-accent), 0.15) 0%,
+      rgba(var(--theme-rgb-accent), 0.08) 100%
+    );
+    border-color: rgba(var(--theme-rgb-accent), 0.3);
+    color: var(--accent-color);
     transform: translateX(0.25rem);
   }
 
   .tabs button.selected {
-    background: linear-gradient(135deg, rgba(25, 211, 199, 0.25) 0%, rgba(25, 211, 199, 0.15) 100%);
-    border-color: rgba(25, 211, 199, 0.4);
-    color: #19d3c7;
+    background: linear-gradient(
+      135deg,
+      rgba(var(--theme-rgb-accent), 0.25) 0%,
+      rgba(var(--theme-rgb-accent), 0.15) 100%
+    );
+    border-color: rgba(var(--theme-rgb-accent), 0.4);
+    color: var(--accent-color);
     box-shadow:
-      0 0.25rem 0.75rem rgba(25, 211, 199, 0.2),
-      inset 0 1px 0 rgba(255, 255, 255, 0.1);
+      0 0.25rem 0.75rem rgba(var(--theme-rgb-accent), 0.2),
+      inset 0 1px 0 rgba(var(--theme-rgb-white), 0.1);
     font-weight: 600;
   }
 
   .fields {
     background: linear-gradient(
       135deg,
-      rgba(255, 255, 255, 0.06) 0%,
-      rgba(255, 255, 255, 0.03) 100%
+      rgba(var(--theme-rgb-white), 0.06) 0%,
+      rgba(var(--theme-rgb-white), 0.03) 100%
     );
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(var(--theme-rgb-white), 0.1);
     border-radius: 1rem;
     padding: 2rem;
     box-shadow:
-      0 0.5rem 1.5rem rgba(0, 0, 0, 0.2),
-      0 0.125rem 0.5rem rgba(0, 0, 0, 0.1),
-      inset 0 1px 0 rgba(255, 255, 255, 0.1);
+      0 0.5rem 1.5rem rgba(var(--theme-rgb-black), 0.2),
+      0 0.125rem 0.5rem rgba(var(--theme-rgb-black), 0.1),
+      inset 0 1px 0 rgba(var(--theme-rgb-white), 0.1);
     display: flex;
     flex-direction: column;
     min-height: 0;
@@ -377,35 +385,43 @@
   }
 
   .fields-scroll::-webkit-scrollbar-track {
-    background: rgba(255, 255, 255, 0.05);
+    background: rgba(var(--theme-rgb-white), 0.05);
     border-radius: 0.1875rem;
   }
 
   .fields-scroll::-webkit-scrollbar-thumb {
-    background: linear-gradient(180deg, rgba(25, 211, 199, 0.5) 0%, rgba(25, 211, 199, 0.3) 100%);
+    background: linear-gradient(
+      180deg,
+      rgba(var(--theme-rgb-accent), 0.5) 0%,
+      rgba(var(--theme-rgb-accent), 0.3) 100%
+    );
     border-radius: 0.1875rem;
     transition: background 0.2s ease;
   }
 
   .fields-scroll::-webkit-scrollbar-thumb:hover {
-    background: linear-gradient(180deg, rgba(25, 211, 199, 0.7) 0%, rgba(25, 211, 199, 0.5) 100%);
+    background: linear-gradient(
+      180deg,
+      rgba(var(--theme-rgb-accent), 0.7) 0%,
+      rgba(var(--theme-rgb-accent), 0.5) 100%
+    );
   }
 
   .status {
     margin: 0;
     font-size: 0.9rem;
-    color: rgba(255, 255, 255, 0.8);
+    color: rgba(var(--theme-rgb-white), 0.8);
     padding: 0.5rem 0;
   }
 
   .status.error {
-    color: #ff6b6b;
-    text-shadow: 0 0 0.5rem rgba(255, 107, 107, 0.3);
+    color: var(--theme-status-danger-soft);
+    text-shadow: 0 0 0.5rem rgba(var(--theme-rgb-danger-soft-alt), 0.3);
   }
 
   .status.success {
-    color: #34d399;
-    text-shadow: 0 0 0.5rem rgba(52, 211, 153, 0.3);
+    color: var(--theme-status-success-soft);
+    text-shadow: 0 0 0.5rem rgba(var(--theme-rgb-success-soft-alt), 0.3);
   }
 
   @media (max-width: 56.25rem) {

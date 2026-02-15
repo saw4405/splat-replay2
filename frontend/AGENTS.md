@@ -96,19 +96,66 @@ npm run check       # svelte-check 実行
 
 ---
 
-## 5. 禁止事項（明確に NG）
+## 5. テーマ化とスタイリング
+
+### 5.1 テーマ変数の使用
+
+**必須**: すべての色・スタイル定義はテーマ変数を使用すること。
+
+#### テーマファイル
+
+- **テーマ定義**: `frontend/src/themes/neon-abyss.css`
+  - すべてのカラーパレット、フォント、グラデーション、影の定義
+  - RGB値（`--theme-rgb-*`）とHEX値（`--theme-color-*`, `--theme-accent-color`等）の両方を提供
+- **グラスモーフィズム変数**: `frontend/src/app.css`
+  - `--glass-bg`, `--glass-bg-strong`, `--glass-border` 等の中間変数
+  - テーマ変数から値を取得し、コンポーネントで再利用可能な形式に整形
+
+#### 使用例
+
+```css
+/* ✅ 良い例: テーマ変数を使用 */
+.my-element {
+  color: var(--theme-accent-color);
+  background: rgba(var(--theme-rgb-surface-card), 0.8);
+  border: 1px solid rgba(var(--theme-rgb-accent), 0.2);
+}
+
+/* ❌ 悪い例: ハードコードされた色 */
+.my-element {
+  color: #2ff6e3;
+  background: rgba(16, 23, 48, 0.8);
+  border: 1px solid rgba(47, 246, 227, 0.2);
+}
+```
+
+### 5.2 グラスモーフィズムユーティリティ
+
+`app.css` で定義されたグラスモーフィズムユーティリティクラスを活用：
+
+- `.glass-surface`: メインのグラスサーフェス
+- `.glass-panel`: パネルスタイル
+- `.glass-card`: カードスタイル
+- `.glass-icon-button`: アイコンボタン
+- `.glass-divider`: 区切り線
+- `.glass-pill`: ピルバッジ
+
+---
+
+## 6. 禁止事項（明確に NG）
 
 - ブラウザ標準ダイアログ（`alert()`, `confirm()`, `prompt()`）の使用
 - Svelte コンポーネントの型に `unknown` や `any` を使用
 - 共通型を複数箇所で重複定義する
+- **色の直接指定（HEXコード、RGB値のハードコード）**: 必ずテーマ変数を使用すること
 
 ---
 
-## 6. ディレクトリ構成
+## 7. ディレクトリ構成
 
-### 6.1 現在の構成（2025-12-31時点）
+### 7.1 現在の構成（2025-12-31時点）
 
-```
+```text
 frontend/src/
 ├── common/              # 共通コンポーネント・型
 │   ├── components/      # 共通ダイアログ（BaseDialog, NotificationDialog等）
@@ -138,13 +185,13 @@ frontend/src/
     └── SetupApp.svelte  # セットアップアプリ
 ```
 
-### 6.2 ファイル分割の原則
+### 7.2 ファイル分割の原則
 
 - **1ファイルは100〜300行を目安**（絶対ではない）
 - **責務の単一性**: 1ファイルは1つの責務のみ
 - **Re-export維持**: 既存のimport文を変更しないよう、分割前のファイルをre-export用に残す
 
-### 6.3 API層（main/api/）の責務
+### 7.3 API層（main/api/）の責務
 
 - `types.ts`: 全API共通の型定義
 - `recording.ts`: 録画制御（start/state）
@@ -153,7 +200,7 @@ frontend/src/
 - `mappers.ts`: バックエンドのsnake_caseをfrontendのcamelCaseに変換
 - `utils.ts`: HTTPヘッダー、エラーハンドリング
 
-### 6.4 セットアップ状態管理（setup/stores/）の責務
+### 7.4 セットアップ状態管理（setup/stores/）の責務
 
 - `state.ts`: セットアップ状態の保持、ローディング・エラー管理、進行状況計算
 - `navigation.ts`: ステップ間の移動、サブステップ管理、ステップのスキップ・完了
@@ -162,7 +209,7 @@ frontend/src/
 
 ---
 
-## 7. ルートのAGENTS.mdとの関係
+## 8. ルートのAGENTS.mdとの関係
 
 このドキュメントは、ルートの `AGENTS.md` を補完するものであり：
 

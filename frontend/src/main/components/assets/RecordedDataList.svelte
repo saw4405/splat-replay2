@@ -566,8 +566,8 @@
   .video-item:hover {
     transform: translateY(-2px);
     box-shadow:
-      0 18px 40px rgba(0, 0, 0, 0.35),
-      0 0 24px rgba(25, 211, 199, 0.18);
+      0 18px 40px rgba(var(--theme-rgb-black), 0.35),
+      0 0 24px rgba(var(--theme-rgb-accent), 0.18);
   }
 
   .delete-button {
@@ -580,7 +580,7 @@
     align-items: center;
     justify-content: center;
     cursor: pointer;
-    color: rgba(255, 255, 255, 0.72);
+    color: rgba(var(--theme-rgb-white), 0.72);
     padding: 0;
     transition: all 0.2s ease;
     opacity: 0;
@@ -592,10 +592,14 @@
   }
 
   .delete-button:hover {
-    color: #fff;
+    color: var(--theme-color-white);
     transform: scale(1.08);
-    box-shadow: 0 10px 18px rgba(244, 67, 54, 0.35);
-    background: linear-gradient(145deg, rgba(244, 67, 54, 0.92) 0%, rgba(190, 40, 28, 0.85) 100%);
+    box-shadow: 0 10px 18px rgba(var(--theme-rgb-danger), 0.35);
+    background: linear-gradient(
+      145deg,
+      rgba(var(--theme-rgb-danger), 0.92) 0%,
+      rgba(var(--theme-rgb-red-dark), 0.85) 100%
+    );
   }
 
   .delete-button:active {
@@ -616,8 +620,8 @@
     display: inline-block;
     width: 16px;
     height: 16px;
-    border: 2px solid rgba(255, 255, 255, 0.3);
-    border-top-color: #fff;
+    border: 2px solid rgba(var(--theme-rgb-white), 0.3);
+    border-top-color: var(--theme-color-white);
     border-radius: 50%;
     animation: spin 0.6s linear infinite;
   }
@@ -649,7 +653,7 @@
   .video-timestamp {
     font-size: 0.85rem;
     font-weight: 600;
-    color: #19d3c7;
+    color: var(--accent-color);
     word-break: break-all;
     overflow-wrap: break-word;
   }
@@ -660,7 +664,7 @@
     height: 90px;
     border-radius: 6px;
     overflow: hidden;
-    background: rgba(0, 0, 0, 0.4);
+    background: rgba(var(--theme-rgb-black), 0.4);
   }
 
   .video-thumbnail img {
@@ -676,7 +680,7 @@
     left: 0;
     width: 100%;
     height: 100%;
-    background: rgba(0, 0, 0, 0.5);
+    background: rgba(var(--theme-rgb-black), 0.5);
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -690,8 +694,8 @@
   }
 
   .overlay-button {
-    background: rgba(0, 0, 0, 0.6);
-    border: 2px solid rgba(255, 255, 255, 0.8);
+    background: rgba(var(--theme-rgb-black), 0.6);
+    border: 2px solid rgba(var(--theme-rgb-white), 0.8);
     border-radius: 50%;
     width: 44px;
     height: 44px;
@@ -700,7 +704,7 @@
     justify-content: center;
     cursor: pointer;
     transition: all 0.2s ease;
-    color: #fff;
+    color: var(--theme-color-white);
     padding: 0;
   }
 
@@ -710,10 +714,10 @@
   }
 
   .overlay-button:hover {
-    background: rgba(25, 211, 199, 0.9);
-    border-color: #19d3c7;
+    background: rgba(var(--theme-rgb-accent), 0.9);
+    border-color: var(--accent-color);
     transform: scale(1.15);
-    box-shadow: 0 4px 16px rgba(25, 211, 199, 0.4);
+    box-shadow: 0 4px 16px rgba(var(--theme-rgb-accent), 0.4);
   }
 
   .overlay-button:active {
@@ -736,7 +740,7 @@
   }
 
   .video-metadata:hover {
-    background: rgba(25, 211, 199, 0.08);
+    background: rgba(var(--theme-rgb-accent), 0.08);
   }
 
   /* 字幕メタデータ */
@@ -756,7 +760,7 @@
   }
 
   .subtitle-metadata:hover {
-    background: rgba(25, 211, 199, 0.08);
+    background: rgba(var(--theme-rgb-accent), 0.08);
   }
 
   .metadata-row {
@@ -772,35 +776,35 @@
   }
 
   .metadata-label {
-    color: rgba(255, 255, 255, 0.6);
+    color: rgba(var(--theme-rgb-white), 0.6);
     font-size: 0.8rem;
   }
 
   .metadata-value {
-    color: #19d3c7;
+    color: var(--accent-color);
     font-weight: 500;
     word-break: break-all;
     overflow-wrap: break-word;
   }
 
   .metadata-item.incomplete .metadata-value {
-    color: rgba(255, 165, 0, 0.8);
+    color: rgba(var(--theme-rgb-orange-alt), 0.8);
     font-style: italic;
   }
 
   .judgement-win {
-    color: #4caf50 !important;
+    color: var(--theme-status-success) !important;
     font-weight: 600;
   }
 
   .judgement-lose {
-    color: #f44336 !important;
+    color: var(--theme-status-danger) !important;
     font-weight: 600;
   }
 
   .stats-row {
     padding-top: 0.25rem;
-    border-top: 1px solid rgba(255, 255, 255, 0.1);
+    border-top: 1px solid rgba(var(--theme-rgb-white), 0.1);
   }
 
   .stat-item {
@@ -812,18 +816,18 @@
   }
 
   .stat-value {
-    color: rgba(255, 255, 255, 0.9);
+    color: rgba(var(--theme-rgb-white), 0.9);
     font-weight: 500;
     font-size: 0.85rem;
   }
 
   /* 字幕情報アイテム */
   .subtitle-item .metadata-value.has-subtitles {
-    color: #4caf50;
+    color: var(--theme-status-success);
   }
 
   .subtitle-item .metadata-value:not(.has-subtitles) {
-    color: rgba(255, 165, 0, 0.8);
+    color: rgba(var(--theme-rgb-orange-alt), 0.8);
   }
 
   /* スクロールバースタイル */
@@ -832,17 +836,17 @@
   }
 
   .video-list::-webkit-scrollbar-track {
-    background: rgba(0, 0, 0, 0.2);
+    background: rgba(var(--theme-rgb-black), 0.2);
     border-radius: 3px;
   }
 
   .video-list::-webkit-scrollbar-thumb {
-    background: rgba(25, 211, 199, 0.3);
+    background: rgba(var(--theme-rgb-accent), 0.3);
     border-radius: 3px;
   }
 
   .video-list::-webkit-scrollbar-thumb:hover {
-    background: rgba(25, 211, 199, 0.5);
+    background: rgba(var(--theme-rgb-accent), 0.5);
   }
 
   @media (max-width: 1024px) {

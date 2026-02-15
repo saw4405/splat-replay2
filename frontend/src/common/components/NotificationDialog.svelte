@@ -18,26 +18,30 @@
     info: {
       title: 'メッセージ',
       icon: Info,
-      color: '#2196f3',
-      gradient: 'linear-gradient(135deg, rgba(33, 150, 243, 0.2), rgba(25, 118, 210, 0.3))',
+      color: 'var(--theme-status-info)',
+      gradient:
+        'linear-gradient(135deg, rgba(var(--theme-rgb-info), 0.2), rgba(var(--theme-rgb-info-strong), 0.3))',
     },
     success: {
       title: '完了',
       icon: CircleCheck,
-      color: '#4caf50',
-      gradient: 'linear-gradient(135deg, rgba(76, 175, 80, 0.2), rgba(56, 142, 60, 0.3))',
+      color: 'var(--theme-status-success)',
+      gradient:
+        'linear-gradient(135deg, rgba(var(--theme-rgb-success), 0.2), rgba(var(--theme-rgb-success-strong), 0.3))',
     },
     warning: {
       title: '警告',
       icon: TriangleAlert,
-      color: '#ff9800',
-      gradient: 'linear-gradient(135deg, rgba(255, 152, 0, 0.2), rgba(245, 124, 0, 0.3))',
+      color: 'var(--theme-status-warning)',
+      gradient:
+        'linear-gradient(135deg, rgba(var(--theme-rgb-warning), 0.2), rgba(var(--theme-rgb-warning-strong), 0.3))',
     },
     error: {
       title: 'エラー',
       icon: CircleAlert,
-      color: '#f44336',
-      gradient: 'linear-gradient(135deg, rgba(244, 67, 54, 0.2), rgba(211, 47, 47, 0.3))',
+      color: 'var(--theme-status-danger)',
+      gradient:
+        'linear-gradient(135deg, rgba(var(--theme-rgb-danger), 0.2), rgba(var(--theme-rgb-danger-strong), 0.3))',
     },
   };
 
@@ -85,14 +89,14 @@
     margin: 0;
     font-size: 1.5rem;
     font-weight: 600;
-    color: rgba(255, 255, 255, 0.95);
+    color: rgba(var(--theme-rgb-white), 0.95);
   }
 
   .message {
     margin: 0;
     font-size: 1rem;
     line-height: 1.6;
-    color: rgba(255, 255, 255, 0.9);
+    color: rgba(var(--theme-rgb-white), 0.9);
     word-break: break-word;
     white-space: pre-line;
     text-align: center;

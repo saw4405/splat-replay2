@@ -21,7 +21,7 @@
     box-sizing: border-box;
     box-shadow:
       var(--glass-shadow),
-      inset 0 0 60px rgba(25, 211, 199, 0.06);
+      inset 0 0 60px rgba(var(--theme-rgb-accent), 0.06);
   }
 
   .message-panel {
@@ -46,6 +46,6 @@
     line-height: 1.6;
     word-break: break-word;
     white-space: pre-wrap;
-    text-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
+    text-shadow: 0 2px 8px rgba(var(--theme-rgb-black), 0.5);
   }
 </style>

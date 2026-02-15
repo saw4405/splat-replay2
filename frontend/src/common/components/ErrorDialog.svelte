@@ -81,7 +81,7 @@
     align-items: center;
     gap: 1rem;
     padding-bottom: 1rem;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    border-bottom: 1px solid rgba(var(--theme-rgb-white), 0.1);
   }
 
   .error-icon {
@@ -91,15 +91,19 @@
     width: 80px;
     height: 80px;
     border-radius: 50%;
-    background: linear-gradient(135deg, rgba(244, 67, 54, 0.2), rgba(211, 47, 47, 0.3));
-    color: #f44336;
+    background: linear-gradient(
+      135deg,
+      rgba(var(--theme-rgb-danger), 0.2),
+      rgba(var(--theme-rgb-danger-strong), 0.3)
+    );
+    color: var(--theme-status-danger);
   }
 
   .error-title {
     margin: 0;
     font-size: 1.5rem;
     font-weight: 600;
-    color: rgba(255, 255, 255, 0.95);
+    color: rgba(var(--theme-rgb-white), 0.95);
     text-align: center;
   }
 
@@ -113,25 +117,25 @@
     margin: 0;
     font-size: 1rem;
     line-height: 1.6;
-    color: rgba(255, 255, 255, 0.9);
+    color: rgba(var(--theme-rgb-white), 0.9);
     text-align: left;
   }
 
   .error-code {
     margin: 0;
     padding: 0.5rem 0.75rem;
-    background: rgba(244, 67, 54, 0.1);
-    border-left: 3px solid #f44336;
+    background: rgba(var(--theme-rgb-danger), 0.1);
+    border-left: 3px solid var(--theme-status-danger);
     border-radius: 4px;
     font-size: 0.875rem;
     font-family: 'Courier New', monospace;
-    color: rgba(255, 255, 255, 0.8);
+    color: rgba(var(--theme-rgb-white), 0.8);
   }
 
   .recovery-section {
     padding: 1rem;
-    background: rgba(33, 150, 243, 0.1);
-    border-left: 3px solid #2196f3;
+    background: rgba(var(--theme-rgb-info), 0.1);
+    border-left: 3px solid var(--theme-status-info);
     border-radius: 4px;
   }
 
@@ -139,13 +143,13 @@
     margin: 0 0 0.5rem 0;
     font-size: 0.875rem;
     font-weight: 600;
-    color: #2196f3;
+    color: var(--theme-status-info);
   }
 
   .recovery-action {
     margin: 0;
     font-size: 0.875rem;
     line-height: 1.5;
-    color: rgba(255, 255, 255, 0.85);
+    color: rgba(var(--theme-rgb-white), 0.85);
   }
 </style>

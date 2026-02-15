@@ -303,8 +303,8 @@
     padding: 2rem;
     display: flex;
     flex-direction: column;
-    background: rgba(255, 255, 255, 0.03);
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    background: rgba(var(--theme-rgb-white), 0.03);
+    border: 1px solid rgba(var(--theme-rgb-white), 0.1);
     border-radius: 16px;
     max-height: 100%;
     box-sizing: border-box;
@@ -318,14 +318,14 @@
   }
 
   .requirement-card:hover {
-    border-color: rgba(255, 255, 255, 0.3);
-    background: rgba(255, 255, 255, 0.05);
+    border-color: rgba(var(--theme-rgb-white), 0.3);
+    background: rgba(var(--theme-rgb-white), 0.05);
   }
 
   .requirement-card.completed {
     border-color: var(--accent-color);
-    box-shadow: 0 0 15px rgba(25, 211, 199, 0.1);
-    background: rgba(25, 211, 199, 0.05);
+    box-shadow: 0 0 15px rgba(var(--theme-rgb-accent), 0.1);
+    background: rgba(var(--theme-rgb-accent), 0.05);
   }
 
   .requirement-content-wrapper {
@@ -356,7 +356,7 @@
     justify-content: space-between;
     gap: 1rem;
     padding-bottom: 1rem;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    border-bottom: 1px solid rgba(var(--theme-rgb-white), 0.1);
   }
 
   .header-left {
@@ -372,8 +372,12 @@
     align-items: center;
     justify-content: center;
     border-radius: 12px;
-    background: linear-gradient(135deg, rgba(25, 211, 199, 0.2) 0%, rgba(25, 211, 199, 0.05) 100%);
-    border: 1px solid rgba(25, 211, 199, 0.3);
+    background: linear-gradient(
+      135deg,
+      rgba(var(--theme-rgb-accent), 0.2) 0%,
+      rgba(var(--theme-rgb-accent), 0.05) 100%
+    );
+    border: 1px solid rgba(var(--theme-rgb-accent), 0.3);
     color: var(--accent-color);
   }
 
@@ -402,17 +406,17 @@
   }
 
   .card-body::-webkit-scrollbar-track {
-    background: rgba(255, 255, 255, 0.05);
+    background: rgba(var(--theme-rgb-white), 0.05);
     border-radius: 4px;
   }
 
   .card-body::-webkit-scrollbar-thumb {
-    background: rgba(255, 255, 255, 0.2);
+    background: rgba(var(--theme-rgb-white), 0.2);
     border-radius: 4px;
   }
 
   .card-body::-webkit-scrollbar-thumb:hover {
-    background: rgba(255, 255, 255, 0.3);
+    background: rgba(var(--theme-rgb-white), 0.3);
   }
 
   .requirement-spec-large {
@@ -430,9 +434,9 @@
     margin: 0;
     width: 100%;
     padding: 1.5rem;
-    background: rgba(0, 0, 0, 0.3);
+    background: rgba(var(--theme-rgb-black), 0.3);
     border-radius: 16px;
-    border: 1px solid rgba(255, 255, 255, 0.15);
+    border: 1px solid rgba(var(--theme-rgb-white), 0.15);
   }
 
   .diagram-layout {
@@ -454,19 +458,19 @@
   .vertical-line {
     width: 2px;
     height: 10px;
-    background: rgba(255, 255, 255, 0.4);
+    background: rgba(var(--theme-rgb-white), 0.4);
   }
 
   .connection-label-vertical {
     font-size: 0.7rem;
-    color: rgba(255, 255, 255, 0.9);
+    color: rgba(var(--theme-rgb-white), 0.9);
     font-weight: 700;
     padding: 0.3rem 0.6rem;
-    background: rgba(50, 50, 60, 0.95);
+    background: rgba(var(--theme-rgb-gray-surface), 0.95);
     border-radius: 4px;
-    border: 1px solid rgba(255, 255, 255, 0.3);
+    border: 1px solid rgba(var(--theme-rgb-white), 0.3);
     white-space: nowrap;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+    box-shadow: 0 2px 4px rgba(var(--theme-rgb-black), 0.3);
   }
 
   .split-connections {
@@ -492,7 +496,7 @@
     text-align: center;
     min-width: 90px;
     border: 2px solid;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+    box-shadow: 0 2px 8px rgba(var(--theme-rgb-black), 0.2);
     transition: transform 0.2s ease;
   }
 
@@ -501,52 +505,68 @@
   }
 
   .diagram-box.switch {
-    background: linear-gradient(135deg, rgba(255, 69, 58, 0.15) 0%, rgba(255, 69, 58, 0.05) 100%);
-    border-color: rgba(255, 69, 58, 0.6);
-    color: #ff6b6b;
+    background: linear-gradient(
+      135deg,
+      rgba(var(--theme-rgb-danger-apple), 0.15) 0%,
+      rgba(var(--theme-rgb-danger-apple), 0.05) 100%
+    );
+    border-color: rgba(var(--theme-rgb-danger-apple), 0.6);
+    color: var(--theme-status-danger-soft);
   }
 
   .diagram-box.capture {
-    background: linear-gradient(135deg, rgba(255, 159, 10, 0.15) 0%, rgba(255, 159, 10, 0.05) 100%);
-    border-color: rgba(255, 159, 10, 0.6);
-    color: #ffb347;
+    background: linear-gradient(
+      135deg,
+      rgba(var(--theme-rgb-orange-soft), 0.15) 0%,
+      rgba(var(--theme-rgb-orange-soft), 0.05) 100%
+    );
+    border-color: rgba(var(--theme-rgb-orange-soft), 0.6);
+    color: var(--theme-status-warning-soft);
   }
 
   .diagram-box.pc {
-    background: linear-gradient(135deg, rgba(25, 211, 199, 0.15) 0%, rgba(25, 211, 199, 0.05) 100%);
-    border-color: rgba(25, 211, 199, 0.6);
-    color: #19d3c7;
+    background: linear-gradient(
+      135deg,
+      rgba(var(--theme-rgb-accent), 0.15) 0%,
+      rgba(var(--theme-rgb-accent), 0.05) 100%
+    );
+    border-color: rgba(var(--theme-rgb-accent), 0.6);
+    color: var(--accent-color);
   }
 
   .diagram-box.monitor {
-    background: linear-gradient(135deg, rgba(94, 92, 230, 0.15) 0%, rgba(94, 92, 230, 0.05) 100%);
-    border-color: rgba(94, 92, 230, 0.6);
-    color: #7b79e8;
+    background: linear-gradient(
+      135deg,
+      rgba(var(--theme-rgb-purple-preview), 0.15) 0%,
+      rgba(var(--theme-rgb-purple-preview), 0.05) 100%
+    );
+    border-color: rgba(var(--theme-rgb-purple-preview), 0.6);
+    color: var(--theme-preview-accent);
   }
 
   .checkbox-indicator {
     width: 32px;
     height: 32px;
     border-radius: 6px;
-    border: 2px solid rgba(255, 255, 255, 0.2);
+    border: 2px solid rgba(var(--theme-rgb-white), 0.2);
     display: flex;
     align-items: center;
     justify-content: center;
     color: transparent;
     transition: all 0.2s ease;
-    background: rgba(255, 255, 255, 0.05);
+    background: rgba(var(--theme-rgb-white), 0.05);
   }
 
   .checkbox-indicator.checked {
     background: var(--accent-color);
     border-color: var(--accent-color);
-    color: #1a1a1a;
+    color: var(--theme-color-charcoal);
     box-shadow: 0 0 10px var(--accent-glow);
   }
 
   .requirement-card:hover .checkbox-indicator:not(.checked) {
-    border-color: rgba(255, 255, 255, 0.4);
-    background: rgba(255, 255, 255, 0.1);
+    border-color: rgba(var(--theme-rgb-white), 0.4);
+    background: rgba(var(--theme-rgb-white), 0.1);
   }
 
   @media (max-width: 768px) {

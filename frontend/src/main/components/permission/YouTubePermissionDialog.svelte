@@ -92,6 +92,6 @@
     width: 1.1rem;
     height: 1.1rem;
     cursor: pointer;
-    accent-color: #19d3c7;
+    accent-color: var(--accent-color);
   }
 </style>

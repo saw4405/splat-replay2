@@ -505,7 +505,7 @@
               </ol>
               <div
                 class="info-note"
-                style="margin-top: 1rem; padding: 0.75rem; background: rgba(25, 211, 199, 0.1); border: 1px solid rgba(25, 211, 199, 0.3); border-radius: 8px;"
+                style="margin-top: 1rem; padding: 0.75rem; background: rgba(var(--theme-rgb-accent), 0.1); border: 1px solid rgba(var(--theme-rgb-accent), 0.3); border-radius: 8px;"
               >
                 <p style="margin: 0; font-size: 0.875rem; color: var(--text-secondary);">
                   <strong style="color: var(--accent-color);">注意:</strong> この認証は、Google Cloud
@@ -624,14 +624,14 @@
     transform: translateX(-50%) translateY(-10px);
     width: 320px;
     padding: 1rem;
-    background: rgba(20, 20, 20, 0.95);
-    border: 1px solid rgba(255, 165, 0, 0.3);
+    background: rgba(var(--theme-rgb-space-3), 0.95);
+    border: 1px solid rgba(var(--theme-rgb-orange-alt), 0.3);
     border-radius: 8px;
     z-index: 100;
     opacity: 0;
     transition: all 0.2s ease;
     pointer-events: none;
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+    box-shadow: 0 4px 20px rgba(var(--theme-rgb-black), 0.5);
     backdrop-filter: blur(10px);
   }
 
@@ -645,7 +645,7 @@
     margin: 0;
     font-size: 0.85rem;
     line-height: 1.6;
-    color: #e0e0e0;
+    color: var(--theme-color-light-text);
     text-align: left;
   }
 
@@ -658,7 +658,7 @@
     margin-left: -6px;
     border-width: 6px;
     border-style: solid;
-    border-color: rgba(255, 165, 0, 0.3) transparent transparent transparent;
+    border-color: rgba(var(--theme-rgb-orange-alt), 0.3) transparent transparent transparent;
   }
 
   .setup-steps-section {
@@ -679,8 +679,8 @@
     padding: 2rem;
     display: flex;
     flex-direction: column;
-    background: rgba(255, 255, 255, 0.03);
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    background: rgba(var(--theme-rgb-white), 0.03);
+    border: 1px solid rgba(var(--theme-rgb-white), 0.1);
     border-radius: 16px;
     max-height: 100%;
     box-sizing: border-box;
@@ -694,14 +694,14 @@
   }
 
   .step-card:hover {
-    border-color: rgba(255, 255, 255, 0.3);
-    background: rgba(255, 255, 255, 0.05);
+    border-color: rgba(var(--theme-rgb-white), 0.3);
+    background: rgba(var(--theme-rgb-white), 0.05);
   }
 
   .step-card.completed {
     border-color: var(--accent-color);
-    box-shadow: 0 0 15px rgba(25, 211, 199, 0.1);
-    background: rgba(25, 211, 199, 0.05);
+    box-shadow: 0 0 15px rgba(var(--theme-rgb-accent), 0.1);
+    background: rgba(var(--theme-rgb-accent), 0.05);
   }
 
   .step-card.disabled {
@@ -710,8 +710,8 @@
   }
 
   .step-card.disabled:hover {
-    border-color: rgba(255, 255, 255, 0.1);
-    background: rgba(255, 255, 255, 0.03);
+    border-color: rgba(var(--theme-rgb-white), 0.1);
+    background: rgba(var(--theme-rgb-white), 0.03);
   }
 
   .step-content-wrapper {
@@ -742,7 +742,7 @@
     justify-content: space-between;
     gap: 1rem;
     padding-bottom: 1rem;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    border-bottom: 1px solid rgba(var(--theme-rgb-white), 0.1);
   }
 
   .header-left {
@@ -755,25 +755,25 @@
     width: 32px;
     height: 32px;
     border-radius: 6px;
-    border: 2px solid rgba(255, 255, 255, 0.2);
+    border: 2px solid rgba(var(--theme-rgb-white), 0.2);
     display: flex;
     align-items: center;
     justify-content: center;
     color: transparent;
     transition: all 0.2s ease;
-    background: rgba(255, 255, 255, 0.05);
+    background: rgba(var(--theme-rgb-white), 0.05);
   }
 
   .checkbox-indicator.checked {
     background: var(--accent-color);
     border-color: var(--accent-color);
-    color: #1a1a1a;
+    color: var(--theme-color-charcoal);
     box-shadow: 0 0 10px var(--accent-glow);
   }
 
   .step-card:hover .checkbox-indicator:not(.checked) {
-    border-color: rgba(255, 255, 255, 0.4);
-    background: rgba(255, 255, 255, 0.1);
+    border-color: rgba(var(--theme-rgb-white), 0.4);
+    background: rgba(var(--theme-rgb-white), 0.1);
   }
 
   .step-number-large {
@@ -783,8 +783,12 @@
     align-items: center;
     justify-content: center;
     border-radius: 50%;
-    background: linear-gradient(135deg, rgba(25, 211, 199, 0.2) 0%, rgba(25, 211, 199, 0.05) 100%);
-    border: 2px solid rgba(25, 211, 199, 0.3);
+    background: linear-gradient(
+      135deg,
+      rgba(var(--theme-rgb-accent), 0.2) 0%,
+      rgba(var(--theme-rgb-accent), 0.05) 100%
+    );
+    border: 2px solid rgba(var(--theme-rgb-accent), 0.3);
     font-size: 1.25rem;
     font-weight: 700;
     color: var(--accent-color);
@@ -823,17 +827,17 @@
   }
 
   .card-body::-webkit-scrollbar-track {
-    background: rgba(255, 255, 255, 0.05);
+    background: rgba(var(--theme-rgb-white), 0.05);
     border-radius: 4px;
   }
 
   .card-body::-webkit-scrollbar-thumb {
-    background: rgba(255, 255, 255, 0.2);
+    background: rgba(var(--theme-rgb-white), 0.2);
     border-radius: 4px;
   }
 
   .card-body::-webkit-scrollbar-thumb:hover {
-    background: rgba(255, 255, 255, 0.3);
+    background: rgba(var(--theme-rgb-white), 0.3);
   }
 
   .installed-badge {
@@ -844,7 +848,7 @@
     font-weight: 600;
     border-radius: 999px;
     background: linear-gradient(135deg, var(--accent-color) 0%, var(--accent-color-strong) 100%);
-    color: white;
+    color: var(--theme-color-white);
     box-shadow: 0 0 8px var(--accent-glow);
   }
 
@@ -856,16 +860,16 @@
     font-size: 1rem;
     font-weight: 500;
     border-radius: 6px;
-    border: 1px solid rgba(255, 255, 255, 0.2);
-    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(var(--theme-rgb-white), 0.2);
+    background: rgba(var(--theme-rgb-white), 0.05);
     color: var(--text-secondary);
     cursor: pointer;
     transition: all 0.2s ease;
   }
 
   .link-button:hover {
-    background: rgba(255, 255, 255, 0.1);
-    border-color: rgba(255, 255, 255, 0.3);
+    background: rgba(var(--theme-rgb-white), 0.1);
+    border-color: rgba(var(--theme-rgb-white), 0.3);
     transform: translateY(-1px);
   }
 
@@ -886,8 +890,8 @@
 
   .path-value {
     padding: 0.125rem 0.375rem;
-    background: rgba(25, 211, 199, 0.1);
-    border: 1px solid rgba(25, 211, 199, 0.3);
+    background: rgba(var(--theme-rgb-accent), 0.1);
+    border: 1px solid rgba(var(--theme-rgb-accent), 0.3);
     border-radius: 4px;
     font-family: monospace;
     color: var(--accent-color);
@@ -909,8 +913,8 @@
 
   .instruction-list code {
     padding: 0.125rem 0.375rem;
-    background: rgba(25, 211, 199, 0.1);
-    border: 1px solid rgba(25, 211, 199, 0.3);
+    background: rgba(var(--theme-rgb-accent), 0.1);
+    border: 1px solid rgba(var(--theme-rgb-accent), 0.3);
     border-radius: 4px;
     font-family: monospace;
     color: var(--accent-color);
@@ -928,16 +932,16 @@
     align-items: flex-start;
     gap: 0.75rem;
     padding: 1rem;
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(var(--theme-rgb-white), 0.1);
     border-radius: 8px;
-    background: rgba(255, 255, 255, 0.03);
+    background: rgba(var(--theme-rgb-white), 0.03);
     cursor: pointer;
     transition: all 0.2s ease;
   }
 
   .privacy-option:hover {
-    border-color: rgba(255, 255, 255, 0.3);
-    background: rgba(255, 255, 255, 0.05);
+    border-color: rgba(var(--theme-rgb-white), 0.3);
+    background: rgba(var(--theme-rgb-white), 0.05);
   }
 
   .privacy-option input[type='radio'] {

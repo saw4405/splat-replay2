@@ -68,7 +68,7 @@
 <div class="notification-card" role="alert">
   <div class="content">
     <div class="header">
-      <Clock size={16} class="icon-pulse" color="#19d3c7" />
+      <Clock size={16} class="icon-pulse" color="var(--accent-color)" />
       <h3 class="title">{title}</h3>
     </div>
 
@@ -93,12 +93,12 @@
     top: 24px;
     left: 24px;
     width: 380px;
-    background: rgba(20, 20, 25, 0.95);
+    background: rgba(var(--theme-rgb-space), 0.95);
     backdrop-filter: blur(16px);
     -webkit-backdrop-filter: blur(16px);
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(var(--theme-rgb-white), 0.1);
     border-radius: 12px;
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+    box-shadow: 0 8px 32px rgba(var(--theme-rgb-black), 0.5);
     z-index: 9999;
     overflow: hidden;
     animation: slide-in 0.4s cubic-bezier(0.16, 1, 0.3, 1);
@@ -119,13 +119,13 @@
   .title {
     font-size: 0.95rem;
     font-weight: 600;
-    color: #fff;
+    color: var(--theme-color-white);
     margin: 0;
   }
 
   .message {
     font-size: 0.85rem;
-    color: rgba(255, 255, 255, 0.8);
+    color: rgba(var(--theme-rgb-white), 0.8);
     margin: 0 0 16px 0;
     line-height: 1.5;
   }
@@ -138,15 +138,15 @@
 
   .timer {
     font-size: 0.85rem;
-    color: #19d3c7;
+    color: var(--accent-color);
     font-feature-settings: 'tnum';
     font-variant-numeric: tabular-nums;
   }
 
   .cancel-button {
-    background: rgba(255, 255, 255, 0.1);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    color: #fff;
+    background: rgba(var(--theme-rgb-white), 0.1);
+    border: 1px solid rgba(var(--theme-rgb-white), 0.1);
+    color: var(--theme-color-white);
     font-size: 0.85rem;
     padding: 6px 12px;
     border-radius: 6px;
@@ -155,21 +155,21 @@
   }
 
   .cancel-button:hover {
-    background: rgba(255, 255, 255, 0.15);
-    border-color: rgba(255, 255, 255, 0.2);
+    background: rgba(var(--theme-rgb-white), 0.15);
+    border-color: rgba(var(--theme-rgb-white), 0.2);
   }
 
   .progress-container {
     height: 3px;
-    background: rgba(255, 255, 255, 0.1);
+    background: rgba(var(--theme-rgb-white), 0.1);
     width: 100%;
   }
 
   .progress-bar {
     height: 100%;
-    background: #19d3c7;
+    background: var(--accent-color);
     transition: width 0.1s linear;
-    box-shadow: 0 0 8px rgba(25, 211, 199, 0.5);
+    box-shadow: 0 0 8px rgba(var(--theme-rgb-accent), 0.5);
   }
 
   :global(.icon-pulse) {
