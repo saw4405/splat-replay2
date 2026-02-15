@@ -1,0 +1,4 @@
+interface:
+  display_name: "Worktree Setup"
+  short_description: "対応内容からブランチを決めて worktree を作成・初期化する"
+  default_prompt: "対応内容を伝えるので、ブランチ名を提案して worktree を作成し、設定コピーと依存インストールまで実行してください。"

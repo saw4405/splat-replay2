@@ -1,0 +1,11 @@
+# ワークツリー作成時に「元リポジトリからコピーしたいローカル設定」を列挙する。
+# ルール:
+# - リポジトリルート基準のパスを 1 行ずつ記載する。
+# - 空行と `#` コメントは無視される。
+# - 追跡済みファイルは自動で除外される（未追跡ファイルのみコピーされる）。
+
+backend/config/client_secret.json
+backend/config/installation_state.toml
+backend/config/settings.toml
+backend/config/token.pickle
+backend/assets/thumbnail/ikamodoki1.ttf
