@@ -87,6 +87,12 @@ from splat_replay.application.interfaces.video import (
     VideoAssetRepositoryPort,
     VideoEditorPort,
 )
+from splat_replay.application.interfaces.weapon_detection import (
+    WeaponCandidateScore,
+    WeaponRecognitionPort,
+    WeaponRecognitionResult,
+    WeaponSlotResult,
+)
 
 # Domain Service用ポートはDomain層からインポート（ポート配置ルールに準拠）
 from splat_replay.domain.ports import ImageMatcherPort, OCRPort
@@ -129,6 +135,10 @@ __all__ = [
     # Video
     "VideoAssetRepositoryPort",
     "VideoEditorPort",
+    "WeaponCandidateScore",
+    "WeaponRecognitionPort",
+    "WeaponRecognitionResult",
+    "WeaponSlotResult",
     # Image
     "Color",
     "ImageDrawerPort",

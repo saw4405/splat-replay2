@@ -28,6 +28,26 @@ class MetadataParser:
     """Service for parsing and updating metadata from external sources."""
 
     @staticmethod
+    def _parse_weapon_slots(
+        value: object,
+    ) -> tuple[str, str, str, str] | None:
+        """ブキ4枠配列をパースする。"""
+        if not isinstance(value, (list, tuple)):
+            return None
+        if len(value) != 4:
+            return None
+        # 型ナローイング: 全要素がstrであることを検証し、型システムに伝える
+        if not all(isinstance(item, str) for item in value):
+            return None
+        # この時点でvalueは長さ4のlist[str] | tuple[str, ...]と推論される
+        # assertで型チェッカーに各要素がstrであることを明示的に保証
+        assert isinstance(value[0], str)
+        assert isinstance(value[1], str)
+        assert isinstance(value[2], str)
+        assert isinstance(value[3], str)
+        return (value[0], value[1], value[2], value[3])
+
+    @staticmethod
     def _parse_battle_result_updates_with_applied_fields(
         current: BattleResult, data: Mapping[str, object]
     ) -> tuple[BattleResult, set[str]]:
@@ -181,6 +201,16 @@ class MetadataParser:
             except Exception:
                 pass
 
+        # allies / enemies
+        for field_name in ("allies", "enemies"):
+            if field_name not in data:
+                continue
+            parsed_slots = MetadataParser._parse_weapon_slots(data[field_name])
+            if parsed_slots is None:
+                continue
+            updates[field_name] = parsed_slots
+            applied_fields.add(field_name)
+
         # result (delegate to specialized parsers)
         if current.result is not None:
             if isinstance(current.result, BattleResult):
@@ -300,10 +330,15 @@ class MetadataParser:
                     # オプションフィールド: パース失敗は None として扱う
                     result = None
 
+        allies = MetadataParser._parse_weapon_slots(data.get("allies"))
+        enemies = MetadataParser._parse_weapon_slots(data.get("enemies"))
+
         return RecordingMetadata(
             game_mode=game_mode,
             started_at=started_at,
             rate=rate,
             judgement=judgement,
+            allies=allies,
+            enemies=enemies,
             result=result,
         )

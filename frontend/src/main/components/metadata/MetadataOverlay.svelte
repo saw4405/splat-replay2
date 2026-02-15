@@ -11,6 +11,22 @@
   let alertMessage = ''; // アラートメッセージ
   let alertVariant: 'info' | 'success' | 'warning' | 'error' = 'info';
 
+  type WeaponSlots = [string, string, string, string];
+  type MetadataState = {
+    game_mode: string;
+    stage: string;
+    started_at: string;
+    match: string;
+    rule: string;
+    rate: string;
+    judgement: string;
+    kill: number;
+    death: number;
+    special: number;
+    allies: WeaponSlots;
+    enemies: WeaponSlots;
+  };
+
   type MetadataPayload = {
     game_mode?: string;
     stage?: string;
@@ -27,13 +43,15 @@
     power_egg?: number;
     rescue?: number;
     rescued?: number;
+    allies?: string[];
+    enemies?: string[];
   };
 
   // SSE接続
   let domainEventSource: EventSource | null = null;
 
   // メタデータ (SSE経由で更新)
-  let metadata = {
+  let metadata: MetadataState = {
     game_mode: '',
     started_at: '',
     match: '',
@@ -44,6 +62,8 @@
     kill: 0,
     death: 0,
     special: 0,
+    allies: ['', '', '', ''],
+    enemies: ['', '', '', ''],
   };
 
   // 手動編集フラグ (各フィールドごと)
@@ -58,6 +78,8 @@
     kill: false,
     death: false,
     special: false,
+    allies: false,
+    enemies: false,
   };
 
   const placeholderLabel = {
@@ -75,7 +97,6 @@
   let stageOptions: MetadataOptionItem[] = [];
   let judgementOptions: MetadataOptionItem[] = [];
 
-  let _eventSource: EventSource | null = null;
   let hasLoadedInitial = false;
 
   async function loadMetadataOptions(): Promise<void> {
@@ -102,6 +123,28 @@
     manuallyEdited[field] = true;
     console.log(`フィールド "${field}" が手動編集されました`);
     console.log('手動編集フラグの状態:', manuallyEdited);
+  }
+
+  function normaliseWeaponSlots(values: string[] | undefined): WeaponSlots {
+    if (!values || values.length !== 4) {
+      return ['', '', '', ''];
+    }
+    return [values[0] ?? '', values[1] ?? '', values[2] ?? '', values[3] ?? ''];
+  }
+
+  function updateWeaponSlot(team: 'allies' | 'enemies', index: number, value: string): void {
+    const updated = [...metadata[team]] as WeaponSlots;
+    updated[index] = value;
+    metadata = {
+      ...metadata,
+      [team]: updated,
+    };
+    markEdited(team);
+  }
+
+  function handleWeaponInput(team: 'allies' | 'enemies', index: number, event: Event): void {
+    const input = event.currentTarget as HTMLInputElement;
+    updateWeaponSlot(team, index, input.value);
   }
 
   async function fetchCurrentMetadata(): Promise<void> {
@@ -186,6 +229,18 @@
     } else {
       skippedFields.push('special (手動編集済み)');
     }
+    if (!manuallyEdited.allies) {
+      metadata.allies = normaliseWeaponSlots(data.allies);
+      updatedFields.push('allies');
+    } else {
+      skippedFields.push('allies (手動編集済み)');
+    }
+    if (!manuallyEdited.enemies) {
+      metadata.enemies = normaliseWeaponSlots(data.enemies);
+      updatedFields.push('enemies');
+    } else {
+      skippedFields.push('enemies (手動編集済み)');
+    }
 
     if (updatedFields.length > 0) {
       console.log('✓ 自動更新されたフィールド:', updatedFields);
@@ -209,6 +264,8 @@
       kill: false,
       death: false,
       special: false,
+      allies: false,
+      enemies: false,
     };
   }
 
@@ -226,12 +283,20 @@
       kill: 0,
       death: 0,
       special: 0,
+      allies: ['', '', '', ''],
+      enemies: ['', '', '', ''],
     };
+  }
+
+  function handleReset(): void {
+    resetManualEdits();
+    hasLoadedInitial = false;
+    void fetchCurrentMetadata();
   }
 
   async function saveMetadata(): Promise<void> {
     try {
-      const payload: Record<string, string | number> = {};
+      const payload: Record<string, string | number | string[]> = {};
       if (manuallyEdited.game_mode && metadata.game_mode) {
         payload.game_mode = metadata.game_mode;
       }
@@ -261,6 +326,12 @@
       }
       if (manuallyEdited.special && metadata.special !== null && metadata.special !== undefined) {
         payload.special = metadata.special;
+      }
+      if (manuallyEdited.allies) {
+        payload.allies = [...metadata.allies];
+      }
+      if (manuallyEdited.enemies) {
+        payload.enemies = [...metadata.enemies];
       }
       if (Object.keys(payload).length === 0) {
         alertMessage = '更新対象がありません';
@@ -314,6 +385,7 @@
         console.log('Recording stopped - resetting manual edits and metadata');
         resetManualEdits();
         resetMetadata();
+        hasLoadedInitial = false;
       }
     });
 
@@ -472,10 +544,44 @@
             />
           </div>
         </div>
+
+        <div class="weapon-grid">
+          <div class="weapon-team">
+            <h3>味方ブキ</h3>
+            {#each metadata.allies as weapon, index}
+              <div class="field-group">
+                <label for={`ally_weapon_${index + 1}`}>味方{index + 1}</label>
+                <input
+                  id={`ally_weapon_${index + 1}`}
+                  type="text"
+                  value={weapon}
+                  placeholder="不明"
+                  on:input={(event) => handleWeaponInput('allies', index, event)}
+                />
+              </div>
+            {/each}
+          </div>
+
+          <div class="weapon-team">
+            <h3>敵ブキ</h3>
+            {#each metadata.enemies as weapon, index}
+              <div class="field-group">
+                <label for={`enemy_weapon_${index + 1}`}>敵{index + 1}</label>
+                <input
+                  id={`enemy_weapon_${index + 1}`}
+                  type="text"
+                  value={weapon}
+                  placeholder="不明"
+                  on:input={(event) => handleWeaponInput('enemies', index, event)}
+                />
+              </div>
+            {/each}
+          </div>
+        </div>
       </div>
 
       <div class="panel-footer">
-        <button type="button" class="reset-btn">リセット</button>
+        <button type="button" class="reset-btn" on:click={handleReset}>リセット</button>
         <button type="button" class="save-btn" on:click={saveMetadata}>保存</button>
       </div>
     </div>
@@ -664,6 +770,29 @@
   .stats-row input {
     text-align: center;
     width: 100%;
+  }
+
+  .weapon-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.75rem;
+  }
+
+  .weapon-team {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    padding: 0.65rem;
+    border: 1px solid rgba(25, 211, 199, 0.2);
+    border-radius: calc(var(--glass-radius) - 8px);
+    background: rgba(6, 16, 26, 0.4);
+  }
+
+  .weapon-team h3 {
+    margin: 0;
+    font-size: 0.78rem;
+    letter-spacing: 0.04em;
+    color: var(--accent-color);
   }
 
   .panel-footer {

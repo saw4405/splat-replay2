@@ -6,7 +6,7 @@ composite_detection:
     or:
       - matcher: black_screen
       - matcher: poswer_off_template
-        
+
   match_select:
     or:
       - matcher: match_select_normal
@@ -28,12 +28,12 @@ composite_detection:
       #   - matcher: battle_start_bright
       #   - matcher: battle_start_fes_bright
       - matcher: battle_start_template
-        
+
   battle_abort:
     and:
       - matcher: battle_abort_hsv
       - matcher: battle_abort_template
-        
+
   battle_communication_error:
     and:
       - matcher: battle_communication_error_hsv
@@ -46,7 +46,7 @@ composite_detection:
           matcher: battle_finish_bright
       - matcher: battle_finish_text_hsv
       - matcher: battle_finish_band_hsv
-        
+
   battle_judgement_latter_half:
     and:
       - not:
@@ -54,15 +54,15 @@ composite_detection:
       - matcher: battle_judgement_bright
       - matcher: battle_judgement_latter_half_bright
       - or:
-        - matcher: battle_judgement_win
-        - matcher: battle_judgement_lose
-        
+          - matcher: battle_judgement_win
+          - matcher: battle_judgement_lose
+
   loading:
     and:
       - matcher: loading_top_bright
       - not:
           matcher: loading_bottom_bright
-          
+
   battle_result:
     and:
       - matcher: battle_result_message_hsv
@@ -72,7 +72,7 @@ composite_detection:
           matcher: battle_result_gear_hsv
       - matcher: battle_result_background_hsv
 
-# マッチャーグループ定義      
+# マッチャーグループ定義
 matcher_groups:
   battle_select:
     - match_select_regular
@@ -86,59 +86,128 @@ matcher_groups:
     - battle_judgement_win
 
   battle_matches:
-    - battle_match_regular                # レギュラーマッチ
-    - battle_match_anarchy_battle_series  # バンカラマッチ(チャレンジ)
-    - battle_match_anarchy_battle_open    # バンカラマッチ(オープン)
-    - battle_match_x_battle               # Xマッチ
-    - battle_match_event                  # イベントマッチ
-    - battle_match_splatfest_battle_pro   # フェスマッチ(チャレンジ)
-    - battle_match_splatfest_battle_open  # フェスマッチ(オープン)
-    - battle_match_tricolor_battle        # トリカラマッチ
+    - battle_match_regular # レギュラーマッチ
+    - battle_match_anarchy_battle_series # バンカラマッチ(チャレンジ)
+    - battle_match_anarchy_battle_open # バンカラマッチ(オープン)
+    - battle_match_x_battle # Xマッチ
+    - battle_match_event # イベントマッチ
+    - battle_match_splatfest_battle_pro # フェスマッチ(チャレンジ)
+    - battle_match_splatfest_battle_open # フェスマッチ(オープン)
+    - battle_match_tricolor_battle # トリカラマッチ
 
   battle_rules:
-    - battle_rule_turf_war            # ナワバリバトル
-    - battle_rule_rainmaker           # ガチホコ
-    - battle_rule_splat_zones         # ガチエリア
-    - battle_rule_tower_control       # ガチヤグラ
-    - battle_rule_clam_blitz          # ガチアサリ
-    - battle_rule_tricolor_turf_war   # トリカラバトル
-  
+    - battle_rule_turf_war # ナワバリバトル
+    - battle_rule_rainmaker # ガチホコ
+    - battle_rule_splat_zones # ガチエリア
+    - battle_rule_tower_control # ガチヤグラ
+    - battle_rule_clam_blitz # ガチアサリ
+    - battle_rule_tricolor_turf_war # トリカラバトル
+
   battle_rate_udemae:
     - battle_rate_udemae_s_plus
     - battle_rate_udemae_s
 
   battle_rate_xp_rules:
-    - battle_rate_xp_rainmaker        # ガチホコ
-    - battle_rate_xp_splat_zones      # ガチエリア
-    - battle_rate_xp_tower_control    # ガチヤグラ
-    - battle_rate_xp_clam_blitz       # ガチアサリ
-  
+    - battle_rate_xp_rainmaker # ガチホコ
+    - battle_rate_xp_splat_zones # ガチエリア
+    - battle_rate_xp_tower_control # ガチヤグラ
+    - battle_rate_xp_clam_blitz # ガチアサリ
+
   battle_stages:
-    - battle_stage_scorch_gorge        # ユノハナ大渓谷
-    - battle_stage_eeltail_alley       # ゴンズイ地区
-    - battle_stage_hagglefish_market   # ヤガラ市場
-    - battle_stage_undertow_spillway   # マテガイ放水路
+    - battle_stage_scorch_gorge # ユノハナ大渓谷
+    - battle_stage_eeltail_alley # ゴンズイ地区
+    - battle_stage_hagglefish_market # ヤガラ市場
+    - battle_stage_undertow_spillway # マテガイ放水路
     - battle_stage_mincemeat_metalworks # ナメロウ金属
-    - battle_stage_mahi_mahi_resort    # マヒマヒリゾート＆スパ
-    - battle_stage_museum_d_alfonsino  # キンメダイ美術館
-    - battle_stage_hammerhead_bridge   # マサバ海峡大橋
+    - battle_stage_mahi_mahi_resort # マヒマヒリゾート＆スパ
+    - battle_stage_museum_d_alfonsino # キンメダイ美術館
+    - battle_stage_hammerhead_bridge # マサバ海峡大橋
     - battle_stage_inkblot_art_academy # 海女美術大学
-    - battle_stage_sturgeon_shipyard   # チョウザメ造船
-    - battle_stage_mako_mart           # ザトウマーケット
-    - battle_stage_wahoo_world         # スメーシーワールド
-    - battle_stage_flounder_heights    # ヒラメが丘団地
-    - battle_stage_brinewater_springs  # クサヤ温泉
-    - battle_stage_umami_ruins         # ナンプラー遺跡
-    - battle_stage_manta_maria         # マンタマリア号
-    - battle_stage_barnacle_and_dime   # タラポートショッピングパーク
+    - battle_stage_sturgeon_shipyard # チョウザメ造船
+    - battle_stage_mako_mart # ザトウマーケット
+    - battle_stage_wahoo_world # スメーシーワールド
+    - battle_stage_flounder_heights # ヒラメが丘団地
+    - battle_stage_brinewater_springs # クサヤ温泉
+    - battle_stage_umami_ruins # ナンプラー遺跡
+    - battle_stage_manta_maria # マンタマリア号
+    - battle_stage_barnacle_and_dime # タラポートショッピングパーク
     - battle_stage_humpback_pump_track # コンブトラック
-    - battle_stage_crableg_capital     # タカアシ経済特区
-    - battle_stage_shipshape_cargo_co  # オヒョウ海運
-    - battle_stage_robo_rom_en         # バイガイ亭
-    - battle_stage_bluefin_depot       # ネギトロ炭鉱
-    - battle_stage_marlin_airport      # カジキ空港
-    - battle_stage_lemuria_hub         # リュウグウターミナル
-    - battle_stage_urchin_underpass    # デカライン高架下
+    - battle_stage_crableg_capital # タカアシ経済特区
+    - battle_stage_shipshape_cargo_co # オヒョウ海運
+    - battle_stage_robo_rom_en # バイガイ亭
+    - battle_stage_bluefin_depot # ネギトロ炭鉱
+    - battle_stage_marlin_airport # カジキ空港
+    - battle_stage_lemuria_hub # リュウグウターミナル
+    - battle_stage_urchin_underpass # デカライン高架下
+
+  weapon_templates:
+    - weapon_template_001
+    - weapon_template_002
+    - weapon_template_003
+    - weapon_template_004
+    - weapon_template_005
+    - weapon_template_006
+    - weapon_template_007
+    - weapon_template_008
+    - weapon_template_009
+    - weapon_template_010
+    - weapon_template_011
+    - weapon_template_012
+    - weapon_template_013
+    - weapon_template_014
+    - weapon_template_015
+    - weapon_template_016
+    - weapon_template_017
+    - weapon_template_018
+    - weapon_template_019
+    - weapon_template_020
+    - weapon_template_021
+    - weapon_template_022
+    - weapon_template_023
+    - weapon_template_024
+    - weapon_template_025
+    - weapon_template_026
+    - weapon_template_027
+    - weapon_template_028
+    - weapon_template_029
+    - weapon_template_030
+    - weapon_template_031
+    - weapon_template_032
+    - weapon_template_033
+    - weapon_template_034
+    - weapon_template_035
+    - weapon_template_036
+    - weapon_template_037
+    - weapon_template_038
+    - weapon_template_039
+    - weapon_template_040
+    - weapon_template_041
+    - weapon_template_042
+    - weapon_template_043
+    - weapon_template_044
+    - weapon_template_045
+    - weapon_template_046
+    - weapon_template_047
+    - weapon_template_048
+    - weapon_template_049
+    - weapon_template_050
+    - weapon_template_051
+    - weapon_template_052
+    - weapon_template_053
+    - weapon_template_054
+    - weapon_template_055
+    - weapon_template_056
+    - weapon_template_057
+    - weapon_template_058
+    - weapon_template_059
+    - weapon_template_060
+    - weapon_template_061
+    - weapon_template_062
+    - weapon_template_063
+    - weapon_template_064
+    - weapon_template_065
+    - weapon_template_066
+    - weapon_template_067
 
 # 単一手法検出器（シンプルな検出用）
 simple_matchers:
@@ -807,3 +876,539 @@ simple_matchers:
     template_path: "assets/matching/battle_stage_urchin_underpass.png"
     threshold: 0.9
     description: "デカライン高架下を検出する"
+
+  weapon_template_001:
+    name: "14式竹筒銃・甲"
+    type: "template"
+    template_path: "assets/matching/weapon/14式竹筒銃・甲.png"
+    mask_path: "assets/matching/weapon/14式竹筒銃・甲_mask.png"
+    threshold: 0.85
+    description: "ブキ照合テンプレート"
+
+  weapon_template_002:
+    name: "4Kスコープ"
+    type: "template"
+    template_path: "assets/matching/weapon/4Kスコープ.png"
+    mask_path: "assets/matching/weapon/4Kスコープ_mask.png"
+    threshold: 0.85
+    description: "ブキ照合テンプレート"
+
+  weapon_template_003:
+    name: "52ガロン"
+    type: "template"
+    template_path: "assets/matching/weapon/52ガロン.png"
+    mask_path: "assets/matching/weapon/52ガロン_mask.png"
+    threshold: 0.85
+    description: "ブキ照合テンプレート"
+
+  weapon_template_004:
+    name: "LACT-450MILK"
+    type: "template"
+    template_path: "assets/matching/weapon/LACT-450MILK.png"
+    mask_path: "assets/matching/weapon/LACT-450MILK_mask.png"
+    threshold: 0.85
+    description: "ブキ照合テンプレート"
+
+  weapon_template_005:
+    name: "N-ZAP89"
+    type: "template"
+    template_path: "assets/matching/weapon/N-ZAP89.png"
+    mask_path: "assets/matching/weapon/N-ZAP89_mask.png"
+    threshold: 0.85
+    description: "ブキ照合テンプレート"
+
+  weapon_template_006:
+    name: "R-PEN5H"
+    type: "template"
+    template_path: "assets/matching/weapon/R-PEN5H.png"
+    mask_path: "assets/matching/weapon/R-PEN5H_mask.png"
+    threshold: 0.85
+    description: "ブキ照合テンプレート"
+
+  weapon_template_007:
+    name: "Rブラスターエリートデコ"
+    type: "template"
+    template_path: "assets/matching/weapon/Rブラスターエリートデコ.png"
+    mask_path: "assets/matching/weapon/Rブラスターエリートデコ_mask.png"
+    threshold: 0.85
+    description: "ブキ照合テンプレート"
+
+  weapon_template_008:
+    name: "S-BLAST91"
+    type: "template"
+    template_path: "assets/matching/weapon/S-BLAST91.png"
+    mask_path: "assets/matching/weapon/S-BLAST91_mask.png"
+    threshold: 0.85
+    description: "ブキ照合テンプレート"
+
+  weapon_template_009:
+    name: "もみじシューター"
+    type: "template"
+    template_path: "assets/matching/weapon/もみじシューター.png"
+    mask_path: "assets/matching/weapon/もみじシューター_mask.png"
+    threshold: 0.85
+    description: "ブキ照合テンプレート"
+
+  weapon_template_010:
+    name: "わかばシューター"
+    type: "template"
+    template_path: "assets/matching/weapon/わかばシューター.png"
+    mask_path: "assets/matching/weapon/わかばシューター_mask.png"
+    threshold: 0.85
+    description: "ブキ照合テンプレート"
+
+  weapon_template_011:
+    name: "イグザミナー"
+    type: "template"
+    template_path: "assets/matching/weapon/イグザミナー.png"
+    mask_path: "assets/matching/weapon/イグザミナー_mask.png"
+    threshold: 0.85
+    description: "ブキ照合テンプレート"
+
+  weapon_template_012:
+    name: "エクスプロッシャーカスタム"
+    type: "template"
+    template_path: "assets/matching/weapon/エクスプロッシャーカスタム.png"
+    mask_path: "assets/matching/weapon/エクスプロッシャーカスタム_mask.png"
+    threshold: 0.85
+    description: "ブキ照合テンプレート"
+
+  weapon_template_013:
+    name: "オーダースピナーレプリカ"
+    type: "template"
+    template_path: "assets/matching/weapon/オーダースピナーレプリカ.png"
+    mask_path: "assets/matching/weapon/オーダースピナーレプリカ_mask.png"
+    threshold: 0.85
+    description: "ブキ照合テンプレート"
+
+  weapon_template_014:
+    name: "オーダーブラシレプリカ"
+    type: "template"
+    template_path: "assets/matching/weapon/オーダーブラシレプリカ.png"
+    mask_path: "assets/matching/weapon/オーダーブラシレプリカ_mask.png"
+    threshold: 0.85
+    description: "ブキ照合テンプレート"
+
+  weapon_template_015:
+    name: "オーダーローラーレプリカ"
+    type: "template"
+    template_path: "assets/matching/weapon/オーダーローラーレプリカ.png"
+    mask_path: "assets/matching/weapon/オーダーローラーレプリカ_mask.png"
+    threshold: 0.85
+    description: "ブキ照合テンプレート"
+
+  weapon_template_016:
+    name: "オーダーワイパーレプリカ"
+    type: "template"
+    template_path: "assets/matching/weapon/オーダーワイパーレプリカ.png"
+    mask_path: "assets/matching/weapon/オーダーワイパーレプリカ_mask.png"
+    threshold: 0.85
+    description: "ブキ照合テンプレート"
+
+  weapon_template_017:
+    name: "オーバーフロッシャー"
+    type: "template"
+    template_path: "assets/matching/weapon/オーバーフロッシャー.png"
+    mask_path: "assets/matching/weapon/オーバーフロッシャー_mask.png"
+    threshold: 0.85
+    description: "ブキ照合テンプレート"
+
+  weapon_template_018:
+    name: "カーボンローラーデコ"
+    type: "template"
+    template_path: "assets/matching/weapon/カーボンローラーデコ.png"
+    mask_path: "assets/matching/weapon/カーボンローラーデコ_mask.png"
+    threshold: 0.85
+    description: "ブキ照合テンプレート"
+
+  weapon_template_019:
+    name: "キャンピングシェルターCREM"
+    type: "template"
+    template_path: "assets/matching/weapon/キャンピングシェルターCREM.png"
+    mask_path: "assets/matching/weapon/キャンピングシェルターCREM_mask.png"
+    threshold: 0.85
+    description: "ブキ照合テンプレート"
+
+  weapon_template_020:
+    name: "クアッドホッパーブラック"
+    type: "template"
+    template_path: "assets/matching/weapon/クアッドホッパーブラック.png"
+    mask_path: "assets/matching/weapon/クアッドホッパーブラック_mask.png"
+    threshold: 0.85
+    description: "ブキ照合テンプレート"
+
+  weapon_template_021:
+    name: "クラッシュブラスター"
+    type: "template"
+    template_path: "assets/matching/weapon/クラッシュブラスター.png"
+    mask_path: "assets/matching/weapon/クラッシュブラスター_mask.png"
+    threshold: 0.85
+    description: "ブキ照合テンプレート"
+
+  weapon_template_022:
+    name: "クーゲルシュライバー"
+    type: "template"
+    template_path: "assets/matching/weapon/クーゲルシュライバー.png"
+    mask_path: "assets/matching/weapon/クーゲルシュライバー_mask.png"
+    threshold: 0.85
+    description: "ブキ照合テンプレート"
+
+  weapon_template_023:
+    name: "ケルビン525"
+    type: "template"
+    template_path: "assets/matching/weapon/ケルビン525.png"
+    mask_path: "assets/matching/weapon/ケルビン525_mask.png"
+    threshold: 0.85
+    description: "ブキ照合テンプレート"
+
+  weapon_template_024:
+    name: "シャープマーカー"
+    type: "template"
+    template_path: "assets/matching/weapon/シャープマーカー.png"
+    mask_path: "assets/matching/weapon/シャープマーカー_mask.png"
+    threshold: 0.85
+    description: "ブキ照合テンプレート"
+
+  weapon_template_025:
+    name: "シャープマーカーネオ"
+    type: "template"
+    template_path: "assets/matching/weapon/シャープマーカーネオ.png"
+    mask_path: "assets/matching/weapon/シャープマーカーネオ_mask.png"
+    threshold: 0.85
+    description: "ブキ照合テンプレート"
+
+  weapon_template_026:
+    name: "ジムワイパー"
+    type: "template"
+    template_path: "assets/matching/weapon/ジムワイパー.png"
+    mask_path: "assets/matching/weapon/ジムワイパー_mask.png"
+    threshold: 0.85
+    description: "ブキ照合テンプレート"
+
+  weapon_template_027:
+    name: "ジムワイパー・ヒュー"
+    type: "template"
+    template_path: "assets/matching/weapon/ジムワイパー・ヒュー.png"
+    mask_path: "assets/matching/weapon/ジムワイパー・ヒュー_mask.png"
+    threshold: 0.85
+    description: "ブキ照合テンプレート"
+
+  weapon_template_028:
+    name: "スクリュースロッシャー"
+    type: "template"
+    template_path: "assets/matching/weapon/スクリュースロッシャー.png"
+    mask_path: "assets/matching/weapon/スクリュースロッシャー_mask.png"
+    threshold: 0.85
+    description: "ブキ照合テンプレート"
+
+  weapon_template_029:
+    name: "スパッタリーOWL"
+    type: "template"
+    template_path: "assets/matching/weapon/スパッタリーOWL.png"
+    mask_path: "assets/matching/weapon/スパッタリーOWL_mask.png"
+    threshold: 0.85
+    description: "ブキ照合テンプレート"
+
+  weapon_template_030:
+    name: "スパッタリー・ヒュー"
+    type: "template"
+    template_path: "assets/matching/weapon/スパッタリー・ヒュー.png"
+    mask_path: "assets/matching/weapon/スパッタリー・ヒュー_mask.png"
+    threshold: 0.85
+    description: "ブキ照合テンプレート"
+
+  weapon_template_031:
+    name: "スプラシューター"
+    type: "template"
+    template_path: "assets/matching/weapon/スプラシューター.png"
+    mask_path: "assets/matching/weapon/スプラシューター_mask.png"
+    threshold: 0.85
+    description: "ブキ照合テンプレート"
+
+  weapon_template_032:
+    name: "スプラシューターコラボ"
+    type: "template"
+    template_path: "assets/matching/weapon/スプラシューターコラボ.png"
+    mask_path: "assets/matching/weapon/スプラシューターコラボ_mask.png"
+    threshold: 0.85
+    description: "ブキ照合テンプレート"
+
+  weapon_template_033:
+    name: "スプラシューター煌"
+    type: "template"
+    template_path: "assets/matching/weapon/スプラシューター煌.png"
+    mask_path: "assets/matching/weapon/スプラシューター煌_mask.png"
+    threshold: 0.85
+    description: "ブキ照合テンプレート"
+
+  weapon_template_034:
+    name: "スプラスピナーPYTN"
+    type: "template"
+    template_path: "assets/matching/weapon/スプラスピナーPYTN.png"
+    mask_path: "assets/matching/weapon/スプラスピナーPYTN_mask.png"
+    threshold: 0.85
+    description: "ブキ照合テンプレート"
+
+  weapon_template_035:
+    name: "スプラマニューバーコラボ"
+    type: "template"
+    template_path: "assets/matching/weapon/スプラマニューバーコラボ.png"
+    mask_path: "assets/matching/weapon/スプラマニューバーコラボ_mask.png"
+    threshold: 0.85
+    description: "ブキ照合テンプレート"
+
+  weapon_template_036:
+    name: "スプラローラー"
+    type: "template"
+    template_path: "assets/matching/weapon/スプラローラー.png"
+    mask_path: "assets/matching/weapon/スプラローラー_mask.png"
+    threshold: 0.85
+    description: "ブキ照合テンプレート"
+
+  weapon_template_037:
+    name: "スペースシューター"
+    type: "template"
+    template_path: "assets/matching/weapon/スペースシューター.png"
+    mask_path: "assets/matching/weapon/スペースシューター_mask.png"
+    threshold: 0.85
+    description: "ブキ照合テンプレート"
+
+  weapon_template_038:
+    name: "デュアルスイーパー"
+    type: "template"
+    template_path: "assets/matching/weapon/デュアルスイーパー.png"
+    mask_path: "assets/matching/weapon/デュアルスイーパー_mask.png"
+    threshold: 0.85
+    description: "ブキ照合テンプレート"
+
+  weapon_template_039:
+    name: "トライストリンガー"
+    type: "template"
+    template_path: "assets/matching/weapon/トライストリンガー.png"
+    mask_path: "assets/matching/weapon/トライストリンガー_mask.png"
+    threshold: 0.85
+    description: "ブキ照合テンプレート"
+
+  weapon_template_040:
+    name: "トライストリンガーコラボ"
+    type: "template"
+    template_path: "assets/matching/weapon/トライストリンガーコラボ.png"
+    mask_path: "assets/matching/weapon/トライストリンガーコラボ_mask.png"
+    threshold: 0.85
+    description: "ブキ照合テンプレート"
+
+  weapon_template_041:
+    name: "ノヴァブラスターネオ"
+    type: "template"
+    template_path: "assets/matching/weapon/ノヴァブラスターネオ.png"
+    mask_path: "assets/matching/weapon/ノヴァブラスターネオ_mask.png"
+    threshold: 0.85
+    description: "ブキ照合テンプレート"
+
+  weapon_template_042:
+    name: "ノーチラス47"
+    type: "template"
+    template_path: "assets/matching/weapon/ノーチラス47.png"
+    mask_path: "assets/matching/weapon/ノーチラス47_mask.png"
+    threshold: 0.85
+    description: "ブキ照合テンプレート"
+
+  weapon_template_043:
+    name: "ノーチラス79"
+    type: "template"
+    template_path: "assets/matching/weapon/ノーチラス79.png"
+    mask_path: "assets/matching/weapon/ノーチラス79_mask.png"
+    threshold: 0.85
+    description: "ブキ照合テンプレート"
+
+  weapon_template_044:
+    name: "ハイドラント"
+    type: "template"
+    template_path: "assets/matching/weapon/ハイドラント.png"
+    mask_path: "assets/matching/weapon/ハイドラント_mask.png"
+    threshold: 0.85
+    description: "ブキ照合テンプレート"
+
+  weapon_template_045:
+    name: "バケットスロッシャー"
+    type: "template"
+    template_path: "assets/matching/weapon/バケットスロッシャー.png"
+    mask_path: "assets/matching/weapon/バケットスロッシャー_mask.png"
+    threshold: 0.85
+    description: "ブキ照合テンプレート"
+
+  weapon_template_046:
+    name: "バレルスピナー"
+    type: "template"
+    template_path: "assets/matching/weapon/バレルスピナー.png"
+    mask_path: "assets/matching/weapon/バレルスピナー_mask.png"
+    threshold: 0.85
+    description: "ブキ照合テンプレート"
+
+  weapon_template_047:
+    name: "パブロ"
+    type: "template"
+    template_path: "assets/matching/weapon/パブロ.png"
+    mask_path: "assets/matching/weapon/パブロ_mask.png"
+    threshold: 0.85
+    description: "ブキ照合テンプレート"
+
+  weapon_template_048:
+    name: "パブロ・ヒュー"
+    type: "template"
+    template_path: "assets/matching/weapon/パブロ・ヒュー.png"
+    mask_path: "assets/matching/weapon/パブロ・ヒュー_mask.png"
+    threshold: 0.85
+    description: "ブキ照合テンプレート"
+
+  weapon_template_049:
+    name: "ヒッセン・ヒュー"
+    type: "template"
+    template_path: "assets/matching/weapon/ヒッセン・ヒュー.png"
+    mask_path: "assets/matching/weapon/ヒッセン・ヒュー_mask.png"
+    threshold: 0.85
+    description: "ブキ照合テンプレート"
+
+  weapon_template_050:
+    name: "ヒーローシューターレプリカ"
+    type: "template"
+    template_path: "assets/matching/weapon/ヒーローシューターレプリカ.png"
+    mask_path: "assets/matching/weapon/ヒーローシューターレプリカ_mask.png"
+    threshold: 0.85
+    description: "ブキ照合テンプレート"
+
+  weapon_template_051:
+    name: "フィンセント・ヒュー"
+    type: "template"
+    template_path: "assets/matching/weapon/フィンセント・ヒュー.png"
+    mask_path: "assets/matching/weapon/フィンセント・ヒュー_mask.png"
+    threshold: 0.85
+    description: "ブキ照合テンプレート"
+
+  weapon_template_052:
+    name: "フルイドV"
+    type: "template"
+    template_path: "assets/matching/weapon/フルイドV.png"
+    mask_path: "assets/matching/weapon/フルイドV_mask.png"
+    threshold: 0.85
+    description: "ブキ照合テンプレート"
+
+  weapon_template_053:
+    name: "プライムシューター"
+    type: "template"
+    template_path: "assets/matching/weapon/プライムシューター.png"
+    mask_path: "assets/matching/weapon/プライムシューター_mask.png"
+    threshold: 0.85
+    description: "ブキ照合テンプレート"
+
+  weapon_template_054:
+    name: "プライムシューターFRZN"
+    type: "template"
+    template_path: "assets/matching/weapon/プライムシューターFRZN.png"
+    mask_path: "assets/matching/weapon/プライムシューターFRZN_mask.png"
+    threshold: 0.85
+    description: "ブキ照合テンプレート"
+
+  weapon_template_055:
+    name: "プロモデラーMG"
+    type: "template"
+    template_path: "assets/matching/weapon/プロモデラーMG.png"
+    mask_path: "assets/matching/weapon/プロモデラーMG_mask.png"
+    threshold: 0.85
+    description: "ブキ照合テンプレート"
+
+  weapon_template_056:
+    name: "プロモデラーRG"
+    type: "template"
+    template_path: "assets/matching/weapon/プロモデラーRG.png"
+    mask_path: "assets/matching/weapon/プロモデラーRG_mask.png"
+    threshold: 0.85
+    description: "ブキ照合テンプレート"
+
+  weapon_template_057:
+    name: "ホクサイ・ヒュー"
+    type: "template"
+    template_path: "assets/matching/weapon/ホクサイ・ヒュー.png"
+    mask_path: "assets/matching/weapon/ホクサイ・ヒュー_mask.png"
+    threshold: 0.85
+    description: "ブキ照合テンプレート"
+
+  weapon_template_058:
+    name: "ボトルガイザーフォイル"
+    type: "template"
+    template_path: "assets/matching/weapon/ボトルガイザーフォイル.png"
+    mask_path: "assets/matching/weapon/ボトルガイザーフォイル_mask.png"
+    threshold: 0.85
+    description: "ブキ照合テンプレート"
+
+  weapon_template_059:
+    name: "ボールドマーカー"
+    type: "template"
+    template_path: "assets/matching/weapon/ボールドマーカー.png"
+    mask_path: "assets/matching/weapon/ボールドマーカー_mask.png"
+    threshold: 0.85
+    description: "ブキ照合テンプレート"
+
+  weapon_template_060:
+    name: "ボールドマーカーネオ"
+    type: "template"
+    template_path: "assets/matching/weapon/ボールドマーカーネオ.png"
+    mask_path: "assets/matching/weapon/ボールドマーカーネオ_mask.png"
+    threshold: 0.85
+    description: "ブキ照合テンプレート"
+
+  weapon_template_061:
+    name: "モップリンD"
+    type: "template"
+    template_path: "assets/matching/weapon/モップリンD.png"
+    mask_path: "assets/matching/weapon/モップリンD_mask.png"
+    threshold: 0.85
+    description: "ブキ照合テンプレート"
+
+  weapon_template_062:
+    name: "リッター4K"
+    type: "template"
+    template_path: "assets/matching/weapon/リッター4K.png"
+    mask_path: "assets/matching/weapon/リッター4K_mask.png"
+    threshold: 0.85
+    description: "ブキ照合テンプレート"
+
+  weapon_template_063:
+    name: "リッター4Kカスタム"
+    type: "template"
+    template_path: "assets/matching/weapon/リッター4Kカスタム.png"
+    mask_path: "assets/matching/weapon/リッター4Kカスタム_mask.png"
+    threshold: 0.85
+    description: "ブキ照合テンプレート"
+
+  weapon_template_064:
+    name: "ヴァリアブルローラー"
+    type: "template"
+    template_path: "assets/matching/weapon/ヴァリアブルローラー.png"
+    mask_path: "assets/matching/weapon/ヴァリアブルローラー_mask.png"
+    threshold: 0.85
+    description: "ブキ照合テンプレート"
+
+  weapon_template_065:
+    name: "ガエンFFカスタム"
+    type: "template"
+    template_path: "assets/matching/weapon/ガエンFFカスタム.png"
+    mask_path: "assets/matching/weapon/ガエンFFカスタム_mask.png"
+    threshold: 0.85
+    description: "ブキ照合テンプレート"
+
+  weapon_template_066:
+    name: "デュアルスイーパー蹄"
+    type: "template"
+    template_path: "assets/matching/weapon/デュアルスイーパー蹄.png"
+    mask_path: "assets/matching/weapon/デュアルスイーパー蹄_mask.png"
+    threshold: 0.85
+    description: "ブキ照合テンプレート"
+
+  weapon_template_067:
+    name: "スクイックリンα"
+    type: "template"
+    template_path: "assets/matching/weapon/スクイックリンα.png"
+    mask_path: "assets/matching/weapon/スクイックリンα_mask.png"
+    threshold: 0.85
+    description: "ブキ照合テンプレート"

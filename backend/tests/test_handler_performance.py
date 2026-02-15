@@ -20,6 +20,7 @@ import pytest
 from splat_replay.application.interfaces import (
     EventBusPort,  # noqa: E402
     LoggerPort,
+    WeaponRecognitionPort,
 )
 from splat_replay.application.interfaces.messaging import EventSubscription  # noqa: E402
 from splat_replay.application.services.recording.ingame_handler import (
@@ -28,6 +29,10 @@ from splat_replay.application.services.recording.ingame_handler import (
 from splat_replay.application.services.recording.recording_context import (
     RecordingContext,
 )  # noqa: E402
+from splat_replay.application.services.recording.weapon_detection_service import (
+    WeaponDetectionService,
+)  # noqa: E402
+from splat_replay.application.interfaces import WeaponRecognitionResult  # noqa: E402
 from splat_replay.domain.events import DomainEvent  # noqa: E402
 from splat_replay.domain.services import RecordState  # noqa: E402
 
@@ -79,13 +84,33 @@ class _DummyBus:
         return _DummySubscription()
 
 
+class _DummyWeaponRecognizer:
+    async def detect_weapon_display(self, frame: np.ndarray) -> bool:
+        return False
+
+    async def recognize_weapons(
+        self,
+        frame: np.ndarray,
+        save_unmatched_report: bool = True,
+    ) -> WeaponRecognitionResult:
+        raise RuntimeError("not used")
+
+
 @pytest.fixture()
 def handler() -> InGamePhaseHandler:
     analyzer = create_analyzer()
     logger = _DummyLogger()
     bus = _DummyBus()
+    weapon_detection_service = WeaponDetectionService(
+        cast(WeaponRecognitionPort, _DummyWeaponRecognizer()),
+        cast(LoggerPort, logger),
+        cast(EventBusPort, bus),
+    )
     return InGamePhaseHandler(
-        analyzer, cast(LoggerPort, logger), cast(EventBusPort, bus)
+        analyzer,
+        cast(LoggerPort, logger),
+        cast(EventBusPort, bus),
+        weapon_detection_service,
     )
 
 
@@ -156,9 +181,6 @@ async def test_ingame_handler_handle_performance(
 
     avg = sum(times) / len(times)
     # アサートせず、測定結果のみ出力
-    print(
-        f"\n{name}: avg={avg * 1000:.3f}ms (threshold={THRESHOLD_SEC * 1000:.3f}ms)"
-    )
     print(
         f"\n{name}: avg={avg * 1000:.3f}ms (threshold={THRESHOLD_SEC * 1000:.3f}ms)"
     )

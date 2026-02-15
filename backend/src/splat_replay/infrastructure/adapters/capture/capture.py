@@ -1,7 +1,6 @@
 from typing import List, Optional
 
 import cv2
-from pygrabber.dshow_graph import FilterGraph
 from structlog.stdlib import BoundLogger
 
 from splat_replay.application.interfaces import CapturePort
@@ -9,12 +8,22 @@ from splat_replay.domain.config import RecordSettings
 from splat_replay.domain.models import Frame, as_frame
 
 
+def _list_capture_devices_via_dshow() -> List[str]:
+    """DirectShow からキャプチャデバイスを取得する。"""
+    try:
+        from pygrabber.dshow_graph import FilterGraph
+    except Exception:
+        return []
+
+    graph = FilterGraph()
+    return graph.get_input_devices()
+
+
 class Capture(CapturePort):
     @staticmethod
     def list_capture_devices() -> List[str]:
         """DirectShowのビデオ入力デバイス名一覧を取得"""
-        graph = FilterGraph()
-        return graph.get_input_devices()
+        return _list_capture_devices_via_dshow()
 
     @staticmethod
     def get_camera_index_by_name(target_name: str) -> Optional[int]:

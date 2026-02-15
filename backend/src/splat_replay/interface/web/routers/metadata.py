@@ -49,6 +49,15 @@ def create_metadata_router(server: WebAPIServer) -> APIRouter:
 
     # === 録画済みビデオのメタデータ ===
 
+    def _to_weapon_slots(
+        value: list[str] | None,
+    ) -> tuple[str, str, str, str] | None:
+        if value is None:
+            return None
+        if len(value) != 4:
+            return None
+        return (value[0], value[1], value[2], value[3])
+
     @router.get(
         "/metadata/options",
         response_model=MetadataOptionsResponse,
@@ -95,6 +104,8 @@ def create_metadata_router(server: WebAPIServer) -> APIRouter:
             kill=metadata.kill,
             death=metadata.death,
             special=metadata.special,
+            allies=_to_weapon_slots(metadata.allies),
+            enemies=_to_weapon_slots(metadata.enemies),
         )
         try:
             dto = await server.update_recorded_metadata_uc.execute(
@@ -131,6 +142,8 @@ def create_metadata_router(server: WebAPIServer) -> APIRouter:
             kill=dto.kill,
             death=dto.death,
             special=dto.special,
+            allies=list(dto.allies) if dto.allies else None,
+            enemies=list(dto.enemies) if dto.enemies else None,
             hazard=dto.hazard,
             golden_egg=dto.golden_egg,
             power_egg=dto.power_egg,

@@ -117,6 +117,26 @@
     return map[value] ?? value;
   }
 
+  function normaliseWeaponSlots(
+    value: string[] | null | undefined
+  ): [string, string, string, string] {
+    const slots = value?.slice(0, 4) ?? [];
+    while (slots.length < 4) {
+      slots.push('不明');
+    }
+    return [slots[0] ?? '不明', slots[1] ?? '不明', slots[2] ?? '不明', slots[3] ?? '不明'];
+  }
+
+  function hasDetectedWeapon(value: string[] | null | undefined): boolean {
+    return normaliseWeaponSlots(value).some((weapon) => weapon.trim() !== '' && weapon !== '不明');
+  }
+
+  function formatWeaponSlots(value: string[] | null | undefined): string {
+    return normaliseWeaponSlots(value)
+      .map((weapon) => weapon.trim() || '不明')
+      .join(' / ');
+  }
+
   onMount(() => {
     void loadMetadataOptions();
   });
@@ -394,6 +414,18 @@
                   <span class="stat-value">SP×{video.special ?? 0}</span>
                 </div>
               </div>
+              <div class="metadata-row">
+                <div class="metadata-item" class:incomplete={!hasDetectedWeapon(video.allies)}>
+                  <span class="metadata-label">味方ブキ:</span>
+                  <span class="metadata-value">{formatWeaponSlots(video.allies)}</span>
+                </div>
+              </div>
+              <div class="metadata-row">
+                <div class="metadata-item" class:incomplete={!hasDetectedWeapon(video.enemies)}>
+                  <span class="metadata-label">敵ブキ:</span>
+                  <span class="metadata-value">{formatWeaponSlots(video.enemies)}</span>
+                </div>
+              </div>
             </button>
 
             <div class="metadata-row stats-row"></div>
@@ -436,6 +468,8 @@
       kill: editingVideo.kill ?? 0,
       death: editingVideo.death ?? 0,
       special: editingVideo.special ?? 0,
+      allies: normaliseWeaponSlots(editingVideo.allies),
+      enemies: normaliseWeaponSlots(editingVideo.enemies),
     }}
     on:save={handleSaveMetadata}
   />

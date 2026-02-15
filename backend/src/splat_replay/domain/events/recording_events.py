@@ -68,7 +68,9 @@ class RecordingMetadataUpdated(DomainEvent):
 
     EVENT_TYPE: ClassVar[str] = "domain.recording.metadata_updated"
 
-    metadata: dict[str, str | int | None] = field(default_factory=dict)
+    metadata: dict[str, str | int | list[str] | None] = field(
+        default_factory=dict
+    )
 
 
 @dataclass(frozen=True)

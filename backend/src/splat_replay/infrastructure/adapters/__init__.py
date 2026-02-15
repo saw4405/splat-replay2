@@ -30,6 +30,7 @@ __all__ = [
     "LocalFileSystemAdapter",
     "ProcessEnvironmentAdapter",
     "TomlSettingsRepository",
+    "WeaponRecognitionAdapter",
 ]
 
 from .audio import (
@@ -67,3 +68,4 @@ from .text.tesseract_ocr import TesseractOCR
 from .upload.youtube_client import YouTubeClient
 from .video.ffmpeg_processor import FFmpegProcessor
 from .video.recorder_with_transcription import RecorderWithTranscription
+from .weapon_detection import WeaponRecognitionAdapter

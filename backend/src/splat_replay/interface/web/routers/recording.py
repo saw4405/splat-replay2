@@ -55,6 +55,8 @@ class RecordingMetadataResponse(BaseModel):
     kill: int | None = Field(None, description="キル数")
     death: int | None = Field(None, description="デス数")
     special: int | None = Field(None, description="スペシャル数")
+    allies: list[str] | None = Field(None, description="味方4人のブキ")
+    enemies: list[str] | None = Field(None, description="敵4人のブキ")
     hazard: int | None = Field(None, description="危険度")
     golden_egg: int | None = Field(None, description="金イクラ数")
     power_egg: int | None = Field(None, description="イクラ数")
@@ -75,6 +77,8 @@ class RecordingMetadataUpdateRequest(BaseModel):
     kill: int | None = None
     death: int | None = None
     special: int | None = None
+    allies: list[str] | None = None
+    enemies: list[str] | None = None
     hazard: int | None = None
     golden_egg: int | None = None
     power_egg: int | None = None
@@ -126,6 +130,8 @@ def _build_recording_metadata_response(
         kill=kill,
         death=death,
         special=special,
+        allies=list(metadata.allies) if metadata.allies else None,
+        enemies=list(metadata.enemies) if metadata.enemies else None,
         hazard=hazard,
         golden_egg=golden_egg,
         power_egg=power_egg,

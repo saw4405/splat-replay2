@@ -35,7 +35,7 @@
   let isMetadataOpen = false;
   let isRefreshingDeviceStatus = false; // 多重実行防止フラグ
   let isCameraPermissionDialogOpen = false;
-  type MetadataValue = string | number | null | undefined;
+  type MetadataValue = string | number | string[] | null | undefined;
   type MetadataFieldKey =
     | 'game_mode'
     | 'rule'
@@ -46,7 +46,9 @@
     | 'judgement'
     | 'kill'
     | 'death'
-    | 'special';
+    | 'special'
+    | 'allies'
+    | 'enemies';
   type MetadataEventPayload = Partial<Record<MetadataFieldKey, MetadataValue>>;
   type MetadataNotification = {
     id: number;
@@ -194,6 +196,13 @@
     if (value === null || value === undefined) {
       return null;
     }
+    if (Array.isArray(value)) {
+      const normalized = value.map((item) => item.trim()).filter((item) => item !== '');
+      if (normalized.length === 0) {
+        return null;
+      }
+      return normalized.join(' / ');
+    }
     if (typeof value === 'number') {
       return value.toString();
     }
@@ -228,6 +237,56 @@
 
   function formatNumericValue(value: MetadataValue): string | null {
     return normalizeRawValue(value);
+  }
+
+  function normalizeWeaponSlots(value: MetadataValue): string[] | null {
+    if (!Array.isArray(value)) {
+      return null;
+    }
+    if (value.length === 0) {
+      return null;
+    }
+    return value.map((item) => item.trim() || '不明');
+  }
+
+  function handleWeaponTeamMetadataUpdate(
+    key: 'allies' | 'enemies',
+    rawValue: MetadataValue,
+    nextMetadata: Partial<Record<MetadataFieldKey, string>>,
+    updates: string[]
+  ): void {
+    const normalizedSlots = normalizeWeaponSlots(rawValue);
+    const previousValue = lastMetadata[key];
+
+    console.log(`[handleMetadataUpdate] ${key}:`, {
+      rawValue,
+      normalizedSlots,
+      previousValue,
+    });
+
+    if (normalizedSlots === null) {
+      delete nextMetadata[key];
+      return;
+    }
+
+    const normalizedTeam = normalizedSlots.join('|');
+    nextMetadata[key] = normalizedTeam;
+    if (previousValue === normalizedTeam) {
+      console.log(`[handleMetadataUpdate] ${key}: 値が変わっていないためスキップ`);
+      return;
+    }
+
+    const previousSlots = previousValue ? previousValue.split('|') : [];
+    const teamLabel = key === 'allies' ? '味方' : '敵';
+    const slotCount = Math.max(normalizedSlots.length, previousSlots.length);
+    for (let index = 0; index < slotCount; index += 1) {
+      const nextSlot = normalizedSlots[index] ?? '不明';
+      const previousSlot = previousSlots[index];
+      if (previousSlot === nextSlot) {
+        continue;
+      }
+      updates.push(`${teamLabel}${index + 1}: ${nextSlot}`);
+    }
   }
 
   function formatStartedAtValue(value: MetadataValue): string | null {
@@ -291,7 +350,6 @@
         console.log(`[handleMetadataUpdate] ${key}: 値が変わっていないためスキップ`);
         return;
       }
-
       const formatted = format(rawValue);
       if (formatted === null) {
         console.log(`[handleMetadataUpdate] ${key}: フォーマット結果がnullのためスキップ`);
@@ -301,6 +359,13 @@
       console.log(`[handleMetadataUpdate] ${key}: 通知追加 - ${label}: ${formatted}`);
       updates.push(`${label}: ${formatted}`);
     });
+
+    if ('allies' in payload) {
+      handleWeaponTeamMetadataUpdate('allies', payload.allies, nextMetadata, updates);
+    }
+    if ('enemies' in payload) {
+      handleWeaponTeamMetadataUpdate('enemies', payload.enemies, nextMetadata, updates);
+    }
 
     lastMetadata = nextMetadata;
 
@@ -521,6 +586,13 @@
         if (payload?.metadata) {
           handleMetadataUpdate(payload.metadata);
         }
+        return;
+      }
+      if (
+        event.type === 'domain.recording.stopped' ||
+        event.type === 'domain.recording.cancelled'
+      ) {
+        lastMetadata = {};
         return;
       }
       console.log('[DomainEvent]', event);
