@@ -12,6 +12,7 @@ vars:
   BACKEND_SPEC: packaging/splat-replay-webview.spec
   VENV_PYTHON: .venv/Scripts/python.exe
   VENV_PYINSTALLER: .venv/Scripts/pyinstaller.exe
+  WEAPON_TEMPLATE_SYNC_SCRIPT: backend/scripts/sync_weapon_templates.py
 
 tasks:
   # ========================================
@@ -363,6 +364,19 @@ tasks:
         ignore_error: true
       - cmd: powershell -NoProfile -Command "if (Test-Path 'node_modules') { Remove-Item -Recurse -Force 'node_modules' }"
         ignore_error: true
+
+  # ========================================
+  # ツール
+  # ========================================
+  weapon-sync:dry-run:
+    desc: Check missing weapon template definitions without updating YAML
+    cmds:
+      - "{{.VENV_PYTHON}} {{.WEAPON_TEMPLATE_SYNC_SCRIPT}} --dry-run"
+
+  weapon-sync:
+    desc: Sync weapon template definitions from assets to YAML
+    cmds:
+      - "{{.VENV_PYTHON}} {{.WEAPON_TEMPLATE_SYNC_SCRIPT}}"
 
   # ========================================
   # ユーティリティ
