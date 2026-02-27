@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import csv
 import re
 import sys
 from dataclasses import dataclass
@@ -17,6 +18,7 @@ TEMPLATE_PATH_PATTERN = re.compile(
     r'^\s{4}template_path:\s*"assets/matching/weapon/(.+)\.png"\s*$'
 )
 TOP_LEVEL_KEY_PATTERN = re.compile(r"^[^\s#][^:]*:\s*(?:#.*)?$")
+WEAPON_CSV_NAME_FIELD = "武器名"
 
 
 class SyncError(RuntimeError):
@@ -38,6 +40,11 @@ class ExistingDefinition:
 @dataclass(frozen=True)
 class PlannedAddition:
     key: str
+    weapon_name: str
+
+
+@dataclass(frozen=True)
+class CsvWeaponRow:
     weapon_name: str
 
 
@@ -207,6 +214,73 @@ def _collect_assets(assets_dir: Path) -> list[str]:
     return weapon_names
 
 
+def _load_csv_weapons(csv_path: Path) -> list[CsvWeaponRow]:
+    if not csv_path.is_file():
+        raise SyncError(f"CSV ファイルが見つかりません: {csv_path}")
+
+    with csv_path.open(encoding="utf-8-sig", newline="") as csv_file:
+        reader = csv.DictReader(csv_file)
+        if reader.fieldnames is None:
+            raise SyncError(f"CSV ヘッダーが見つかりません: {csv_path}")
+        if WEAPON_CSV_NAME_FIELD not in reader.fieldnames:
+            raise SyncError(
+                f"CSV に必須列がありません: {WEAPON_CSV_NAME_FIELD}"
+            )
+
+        rows: list[CsvWeaponRow] = []
+        seen_weapon_names: set[str] = set()
+        for row in reader:
+            raw_weapon_name = row.get(WEAPON_CSV_NAME_FIELD, "")
+            weapon_name = raw_weapon_name.strip()
+            if not weapon_name or weapon_name in seen_weapon_names:
+                continue
+            seen_weapon_names.add(weapon_name)
+            rows.append(CsvWeaponRow(weapon_name=weapon_name))
+
+    if not rows:
+        raise SyncError(
+            "CSV からブキ名を抽出できませんでした。"
+            f" file={csv_path}, column={WEAPON_CSV_NAME_FIELD}"
+        )
+    return rows
+
+
+def _normalize_weapon_name_for_compare(weapon_name: str) -> str:
+    return weapon_name.replace("/", "")
+
+
+def _find_uncovered_csv_weapons(
+    csv_rows: list[CsvWeaponRow],
+    reflected_weapon_names: list[str],
+) -> list[str]:
+    reflected_normalized = {
+        _normalize_weapon_name_for_compare(name)
+        for name in reflected_weapon_names
+    }
+    uncovered_weapon_names: list[str] = []
+    for row in csv_rows:
+        normalized_name = _normalize_weapon_name_for_compare(row.weapon_name)
+        if normalized_name not in reflected_normalized:
+            uncovered_weapon_names.append(row.weapon_name)
+    return uncovered_weapon_names
+
+
+def _print_uncovered_csv_weapons(
+    csv_path: Path, uncovered_weapon_names: list[str]
+) -> None:
+    print(
+        "未反映ブキ件数: "
+        f"{len(uncovered_weapon_names)} (source={csv_path.name})"
+    )
+    if not uncovered_weapon_names:
+        print("未反映ブキ一覧: なし")
+        return
+
+    print("未反映ブキ一覧:")
+    for weapon_name in uncovered_weapon_names:
+        print(f"- {weapon_name}")
+
+
 def _validate_key_sets(
     group_keys: list[str], definitions: list[ExistingDefinition]
 ) -> None:
@@ -372,7 +446,11 @@ def _validate_yaml_load(config_path: Path, repo_root: Path) -> None:
 
 
 def run_sync(
-    config_path: Path, assets_dir: Path, threshold: float, dry_run: bool
+    config_path: Path,
+    assets_dir: Path,
+    csv_path: Path,
+    threshold: float,
+    dry_run: bool,
 ) -> int:
     if threshold <= 0:
         raise SyncError(f"threshold は正の値を指定してください: {threshold}")
@@ -391,13 +469,28 @@ def run_sync(
     additions = _build_plan(
         weapon_assets=asset_weapons, definitions=definitions
     )
+    csv_rows = _load_csv_weapons(csv_path)
+    reflected_weapon_names = [
+        definition.weapon_name for definition in definitions
+    ] + [addition.weapon_name for addition in additions]
+    uncovered_csv_weapons = _find_uncovered_csv_weapons(
+        csv_rows=csv_rows,
+        reflected_weapon_names=reflected_weapon_names,
+    )
     config_count = len(definitions)
     asset_count = len(asset_weapons)
-    print(f"件数: assets={asset_count}, config={config_count}")
+    print(
+        "件数: "
+        f"csv={len(csv_rows)}, assets={asset_count}, config={config_count}"
+    )
 
     if not additions:
         print("件数一致: assets と config のブキ数は一致しています。")
         print("変更なし: 追加すべきブキ定義はありません。")
+        _print_uncovered_csv_weapons(
+            csv_path=csv_path,
+            uncovered_weapon_names=uncovered_csv_weapons,
+        )
         return 0
 
     print("追加予定ブキ:")
@@ -409,6 +502,10 @@ def run_sync(
 
     if dry_run:
         print("dry-run: image_matching.yaml は更新しません。")
+        _print_uncovered_csv_weapons(
+            csv_path=csv_path,
+            uncovered_weapon_names=uncovered_csv_weapons,
+        )
         return 0
 
     updated_text = _apply_additions(
@@ -438,6 +535,10 @@ def run_sync(
 
     print("件数一致: assets と config のブキ数は一致しています。")
     print(f"更新完了: {config_path}")
+    _print_uncovered_csv_weapons(
+        csv_path=csv_path,
+        uncovered_weapon_names=uncovered_csv_weapons,
+    )
     return 0
 
 
@@ -469,6 +570,11 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="差分のみ表示してファイル更新しない",
     )
+    parser.add_argument(
+        "--weapon-csv",
+        default="splatoon3_weapons_gamewith.csv",
+        help="未反映ブキ確認に利用する CSV のパス",
+    )
     return parser.parse_args()
 
 
@@ -476,6 +582,7 @@ def main() -> int:
     args = parse_args()
     config_path = Path(args.config)
     assets_dir = Path(args.assets_dir)
+    csv_path = Path(args.weapon_csv)
 
     if not config_path.is_file():
         raise SyncError(f"config ファイルが見つかりません: {config_path}")
@@ -483,6 +590,7 @@ def main() -> int:
     return run_sync(
         config_path=config_path,
         assets_dir=assets_dir,
+        csv_path=csv_path,
         threshold=args.threshold,
         dry_run=args.dry_run,
     )
