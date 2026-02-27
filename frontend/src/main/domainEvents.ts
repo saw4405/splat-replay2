@@ -63,7 +63,6 @@ export interface BattleWeaponsDetectedPayload {
   elapsed_seconds?: number;
   attempt?: number;
   is_final?: boolean;
-  unmatched_output_dir?: string | null;
 }
 
 export interface RecordingPausedPayload {

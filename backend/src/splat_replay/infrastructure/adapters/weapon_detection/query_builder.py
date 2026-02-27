@@ -30,6 +30,25 @@ def crop_slot_images(frame: np.ndarray) -> dict[str, np.ndarray]:
     return slots
 
 
+def build_padded_gray_by_slot(
+    *,
+    slot_images: dict[str, np.ndarray],
+) -> dict[str, np.ndarray]:
+    """スロット画像群から照合用のグレースケール画像を生成する。"""
+    result: dict[str, np.ndarray] = {}
+    for slot in constants.SLOT_ORDER:
+        gray = cv2.cvtColor(slot_images[slot], cv2.COLOR_BGR2GRAY)
+        result[slot] = cv2.copyMakeBorder(
+            gray,
+            constants.QUERY_MATCH_MAX_SHIFT_PX,
+            constants.QUERY_MATCH_MAX_SHIFT_PX,
+            constants.QUERY_MATCH_MAX_SHIFT_PX,
+            constants.QUERY_MATCH_MAX_SHIFT_PX,
+            borderType=cv2.BORDER_REPLICATE,
+        )
+    return result
+
+
 def build_query_slot_data(
     *,
     slot_images: dict[str, np.ndarray],

@@ -35,14 +35,16 @@ def infer_species_and_mask(
     *,
     detected_mask: np.ndarray,
     model_masks: dict[str, np.ndarray],
+    max_shift: int | None = None,
 ) -> tuple[str, np.ndarray]:
     """検出マスクに最も近い種別モデルを返す。"""
+    align_max_shift = max_shift or constants.OUTLINE_ALIGN_MAX_SHIFT
     species_iter = iter(model_masks.items())
     first_species, first_model = next(species_iter)
     best_aligned, best_score = _align_model_mask_to_detected_mask(
         detected_mask=detected_mask,
         model_mask=first_model,
-        max_shift=constants.OUTLINE_ALIGN_MAX_SHIFT,
+        max_shift=align_max_shift,
     )
     best_species = first_species
 
@@ -50,7 +52,7 @@ def infer_species_and_mask(
         aligned, score = _align_model_mask_to_detected_mask(
             detected_mask=detected_mask,
             model_mask=model_mask,
-            max_shift=constants.OUTLINE_ALIGN_MAX_SHIFT,
+            max_shift=align_max_shift,
         )
         if score > best_score:
             best_species = species

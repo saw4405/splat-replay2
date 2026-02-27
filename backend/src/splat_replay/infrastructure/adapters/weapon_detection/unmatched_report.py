@@ -1,22 +1,28 @@
-"""未一致スロットの検証出力。"""
+"""ブキ判別結果の検証出力。"""
 
 from __future__ import annotations
 
 import json
+from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 
 import cv2
 import numpy as np
 from PIL import Image
-
-from splat_replay.application.interfaces import (
-    WeaponCandidateScore,
-    WeaponSlotResult,
-)
+from splat_replay.application.interfaces import WeaponSlotResult
 
 from . import constants
 from .query_builder import QuerySlotData
+
+
+@dataclass(frozen=True)
+class SlotDebugCandidate:
+    """レポート出力用の候補情報。"""
+
+    weapon: str
+    score: float
+    threshold: float
 
 
 def save_unmatched_slots(
@@ -24,62 +30,69 @@ def save_unmatched_slots(
     frame: np.ndarray,
     query_data_by_slot: dict[str, QuerySlotData],
     slot_results: dict[str, WeaponSlotResult],
-    candidate_thresholds_by_slot: dict[str, dict[str, float]],
+    slot_debug_candidates_by_slot: dict[str, tuple[SlotDebugCandidate, ...]],
     trace_id: str | None = None,
+    target_slots: set[str] | None = None,
 ) -> str:
-    """未一致時の追跡情報を保存し、出力ディレクトリを返す。"""
+    """追跡情報を保存し、出力ディレクトリを返す。"""
     output_dir = _prepare_unmatched_output_dir(trace_id=trace_id)
 
     input_frame_path = output_dir / "input_frame.png"
     cv2.imwrite(str(input_frame_path), frame)
 
+    # レポート出力時は常に全8スロット分を出力
+    report_slots = constants.SLOT_ORDER
     rows: list[dict[str, object]] = []
     unmatched_count = 0
-    for slot in constants.SLOT_ORDER:
+    for slot in report_slots:
         slot_result = slot_results[slot]
         query_data = query_data_by_slot[slot]
-        threshold_by_weapon = candidate_thresholds_by_slot.get(slot, {})
-        top_candidates = slot_result.top_candidates
-        top1 = top_candidates[0] if len(top_candidates) >= 1 else None
-        top2 = top_candidates[1] if len(top_candidates) >= 2 else None
-        top3 = top_candidates[2] if len(top_candidates) >= 3 else None
+        candidates = slot_debug_candidates_by_slot.get(slot, ())
+        top1 = candidates[0] if len(candidates) >= 1 else None
 
-        weapon_only_path: Path | None = None
-        mask_path: Path | None = None
+        top1_weapon_for_file = _resolve_top1_weapon_for_file_name(
+            slot_result=slot_result,
+            top1=top1,
+        )
+        top1_score_for_file = _resolve_top1_score_for_file_name(top1=top1)
+        predicted_score = _resolve_predicted_score(
+            slot_result=slot_result,
+            candidates=candidates,
+        )
+        file_tag = _build_slot_file_tag(
+            slot=slot,
+            top1_weapon=top1_weapon_for_file,
+            top1_score=top1_score_for_file,
+        )
+
+        slot_image_path = output_dir / f"{file_tag}_slot.png"
+        weapon_only_path = output_dir / f"{file_tag}_weapon_only.png"
+        mask_path = output_dir / f"{file_tag}_mask.png"
+        Image.fromarray(query_data.rgba, mode="RGBA").save(slot_image_path)
+        Image.fromarray(query_data.weapon_only_rgba, mode="RGBA").save(
+            weapon_only_path
+        )
+        Image.fromarray(query_data.weapon_only_mask, mode="L").save(mask_path)
+
         if slot_result.is_unmatched:
             unmatched_count += 1
-            weapon_only_path = output_dir / f"{slot}_weapon_only.png"
-            mask_path = output_dir / f"{slot}_mask.png"
-            Image.fromarray(query_data.weapon_only_rgba, mode="RGBA").save(
-                weapon_only_path
-            )
-            Image.fromarray(query_data.weapon_only_mask, mode="L").save(
-                mask_path
-            )
 
         rows.append(
             {
                 "slot": slot,
                 "predicted_weapon": slot_result.predicted_weapon,
+                "predicted_score": predicted_score,
                 "is_unmatched": slot_result.is_unmatched,
                 "threshold": _resolve_threshold(
                     slot_result=slot_result,
-                    top1=top1,
-                    threshold_by_weapon=threshold_by_weapon,
+                    candidates=candidates,
                 ),
-                "top1": _to_candidate_row(top1, threshold_by_weapon),
-                "top2": _to_candidate_row(top2, threshold_by_weapon),
-                "top3": _to_candidate_row(top3, threshold_by_weapon),
-                "saved_weapon_only": (
-                    _as_path_string(weapon_only_path)
-                    if weapon_only_path is not None
-                    else None
-                ),
-                "saved_mask": (
-                    _as_path_string(mask_path)
-                    if mask_path is not None
-                    else None
-                ),
+                "top_candidates": [
+                    _to_candidate_row(item) for item in candidates
+                ],
+                "saved_slot": _as_path_string(slot_image_path),
+                "saved_weapon_only": _as_path_string(weapon_only_path),
+                "saved_mask": _as_path_string(mask_path),
             }
         )
 
@@ -116,29 +129,91 @@ def _sanitize_trace_id(trace_id: str | None) -> str:
 
 
 def _to_candidate_row(
-    candidate: WeaponCandidateScore | None,
-    threshold_by_weapon: dict[str, float],
+    candidate: SlotDebugCandidate | None,
 ) -> dict[str, object] | None:
     if candidate is None:
         return None
     return {
         "weapon": candidate.weapon,
         "score": candidate.score,
-        "threshold": threshold_by_weapon.get(candidate.weapon),
+        "threshold": candidate.threshold,
     }
 
 
 def _resolve_threshold(
     *,
     slot_result: WeaponSlotResult,
-    top1: WeaponCandidateScore | None,
-    threshold_by_weapon: dict[str, float],
+    candidates: tuple[SlotDebugCandidate, ...],
 ) -> float | None:
-    if not slot_result.is_unmatched:
-        return threshold_by_weapon.get(slot_result.predicted_weapon)
+    predicted = _find_candidate_by_weapon(
+        candidates=candidates,
+        weapon=slot_result.predicted_weapon,
+    )
+    if predicted is not None:
+        return predicted.threshold
+    if not candidates:
+        return None
+    return candidates[0].threshold
+
+
+def _resolve_predicted_score(
+    *,
+    slot_result: WeaponSlotResult,
+    candidates: tuple[SlotDebugCandidate, ...],
+) -> float | None:
+    predicted = _find_candidate_by_weapon(
+        candidates=candidates,
+        weapon=slot_result.predicted_weapon,
+    )
+    if predicted is not None:
+        return predicted.score
+    if not candidates:
+        return None
+    return candidates[0].score
+
+
+def _resolve_top1_weapon_for_file_name(
+    *,
+    slot_result: WeaponSlotResult,
+    top1: SlotDebugCandidate | None,
+) -> str:
+    if top1 is not None:
+        return top1.weapon
+    return slot_result.predicted_weapon
+
+
+def _resolve_top1_score_for_file_name(
+    *,
+    top1: SlotDebugCandidate | None,
+) -> float | None:
     if top1 is None:
         return None
-    return threshold_by_weapon.get(top1.weapon)
+    return top1.score
+
+
+def _find_candidate_by_weapon(
+    *,
+    candidates: tuple[SlotDebugCandidate, ...],
+    weapon: str,
+) -> SlotDebugCandidate | None:
+    for candidate in candidates:
+        if candidate.weapon == weapon:
+            return candidate
+    return None
+
+
+def _build_slot_file_tag(
+    *,
+    slot: str,
+    top1_weapon: str,
+    top1_score: float | None,
+) -> str:
+    weapon = _sanitize_trace_id(top1_weapon)
+    if top1_score is None:
+        score = "na"
+    else:
+        score = f"{top1_score:.4f}"
+    return f"{slot}_pred_{weapon}_score_{score}"
 
 
 def _as_path_string(path: Path) -> str:

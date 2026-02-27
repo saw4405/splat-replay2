@@ -54,6 +54,12 @@ class InGamePhaseHandler:
         self.event_bus = event_bus
         self.weapon_detection_service = weapon_detection_service
 
+    def cancel_background_tasks(self) -> None:
+        """バックグラウンドのブキ判別タスクを中断する。"""
+        if self.weapon_detection_service is None:
+            return
+        self.weapon_detection_service.request_cancel()
+
     async def handle(
         self, frame: Frame, ctx: RecordingContext, state: RecordState
     ) -> RecordingCommand:
@@ -70,6 +76,7 @@ class InGamePhaseHandler:
             now - ctx.battle_started_at <= EARLY_ABORT_WINDOW_SECONDS
             and await self.analyzer.detect_session_abort(frame, gm)
         ):
+            self.cancel_background_tasks()
             self.logger.info("バトル中断を検出したため録画を中止")
             self.event_bus.publish_domain_event(
                 BattleInterrupted(reason="early_abort")
@@ -80,6 +87,7 @@ class InGamePhaseHandler:
 
         # 録画時間制限（10分）
         if now - ctx.battle_started_at >= MAX_RECORDING_SECONDS:
+            self.cancel_background_tasks()
             self.logger.info("録画が10分以上続いたため停止")
             # Note: 時間制限超過は異常系ではないため、専用のドメインイベントは不要
             # UI通知が必要な場合は RecordingTimeLimitExceeded イベントを追加すべき
@@ -87,7 +95,7 @@ class InGamePhaseHandler:
                 ctx, reason="録画時間制限（10分）"
             )
 
-        # ブキ判別（20秒以内・表示画面時のみ）
+        # ブキ判別（バックグラウンド）
         if self.weapon_detection_service is not None:
             ctx = await self.weapon_detection_service.process(
                 frame=frame,
@@ -96,6 +104,7 @@ class InGamePhaseHandler:
 
         # バトル終了検出
         if await self.analyzer.detect_session_finish(frame, gm):
+            self.cancel_background_tasks()
             duration = now - ctx.battle_started_at
             self.logger.info("バトル終了を検出、一時停止")
             self.event_bus.publish_domain_event(
@@ -115,6 +124,7 @@ class InGamePhaseHandler:
 
         # 通信エラー検出
         if await self.analyzer.detect_communication_error(frame, gm):
+            self.cancel_background_tasks()
             self.logger.info("通信エラーを検出")
             self.event_bus.publish_domain_event(
                 BattleInterrupted(reason="communication_error")

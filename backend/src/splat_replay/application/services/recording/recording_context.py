@@ -2,10 +2,13 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import Enum, auto
-from typing import Awaitable, Callable, Optional
+from typing import TYPE_CHECKING, Awaitable, Callable, Optional
 
 from splat_replay.domain.models import Frame, RecordingMetadata
 from splat_replay.domain.services import RecordState
+
+if TYPE_CHECKING:
+    from splat_replay.application.interfaces import WeaponSlotResult
 
 
 class SessionPhase(Enum):
@@ -41,6 +44,7 @@ class RecordingContext:
     weapon_detection_done: bool = False
     weapon_detection_attempts: int = 0
     weapon_best_scores: tuple[float, ...] | None = None
+    weapon_slot_results: tuple[WeaponSlotResult, ...] | None = None
     weapon_last_visible_frame: Optional[Frame] = None
 
     def phase(self, sm_state: RecordState) -> SessionPhase:

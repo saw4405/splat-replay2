@@ -70,7 +70,6 @@ class BattleWeaponsDetected(DomainEvent):
     elapsed_seconds: float = 0.0
     attempt: int = 0
     is_final: bool = False
-    unmatched_output_dir: str | None = None
 
 
 @dataclass(frozen=True)

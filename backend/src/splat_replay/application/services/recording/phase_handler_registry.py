@@ -105,3 +105,7 @@ class PhaseHandlerRegistry:
             return RecordingCommand.none(ctx)
 
         return await handler.handle(frame, ctx, state)
+
+    def cancel_background_tasks(self) -> None:
+        """バックグラウンドタスクを中断する。"""
+        self._in_game.cancel_background_tasks()

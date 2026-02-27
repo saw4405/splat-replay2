@@ -17,10 +17,12 @@ from typing import Callable, Mapping, Optional, Set, cast
 import cv2
 import numpy as np
 import pytest
+from splat_replay.application.interfaces import EventBusPort  # noqa: E402
+from splat_replay.application.interfaces import WeaponRecognitionResult  # noqa: E402
 from splat_replay.application.interfaces import (
-    EventBusPort,  # noqa: E402
     LoggerPort,
     WeaponRecognitionPort,
+    WeaponSlotResult,
 )
 from splat_replay.application.interfaces.messaging import EventSubscription  # noqa: E402
 from splat_replay.application.services.recording.ingame_handler import (
@@ -32,7 +34,6 @@ from splat_replay.application.services.recording.recording_context import (
 from splat_replay.application.services.recording.weapon_detection_service import (
     WeaponDetectionService,
 )  # noqa: E402
-from splat_replay.application.interfaces import WeaponRecognitionResult  # noqa: E402
 from splat_replay.domain.events import DomainEvent  # noqa: E402
 from splat_replay.domain.services import RecordState  # noqa: E402
 
@@ -92,7 +93,11 @@ class _DummyWeaponRecognizer:
         self,
         frame: np.ndarray,
         save_unmatched_report: bool = True,
+        target_slots: set[str] | None = None,
+        previous_results: dict[str, WeaponSlotResult] | None = None,
     ) -> WeaponRecognitionResult:
+        _ = target_slots
+        _ = previous_results
         raise RuntimeError("not used")
 
 
@@ -181,6 +186,9 @@ async def test_ingame_handler_handle_performance(
 
     avg = sum(times) / len(times)
     # アサートせず、測定結果のみ出力
+    print(
+        f"\n{name}: avg={avg * 1000:.3f}ms (threshold={THRESHOLD_SEC * 1000:.3f}ms)"
+    )
     print(
         f"\n{name}: avg={avg * 1000:.3f}ms (threshold={THRESHOLD_SEC * 1000:.3f}ms)"
     )

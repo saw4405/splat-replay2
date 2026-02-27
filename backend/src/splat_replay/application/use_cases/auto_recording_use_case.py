@@ -192,6 +192,8 @@ class AutoRecordingUseCase:
         Args:
             detected_power_off: 電源OFF検出フラグ
         """
+        self._phase_handlers.cancel_background_tasks()
+
         # 録画中なら停止
         if self._session.state in (RecordState.RECORDING, RecordState.PAUSED):
             await self._session.cancel()
@@ -419,6 +421,7 @@ class AutoRecordingUseCase:
             return False
         synced = False
         if current_state is RecordState.STOPPED:
+            self._phase_handlers.cancel_background_tasks()
             base_context, _ = await self._snapshot_context()
             await self._sync_context_from_service(base_context=base_context)
             synced = True
