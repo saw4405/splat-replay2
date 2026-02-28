@@ -18,10 +18,13 @@ class TemplateMatcher(BaseMatcher):
         mask_path: Optional[Path] = None,
         threshold: float = 0.9,
         roi: Optional[Tuple[int, int, int, int]] = None,
+        response_top_k: int = 1,
         *,
         name: str | None = None,
     ) -> None:
         super().__init__(mask_path, roi, name)
+        if response_top_k < 1:
+            raise ValueError("response_top_k は 1 以上である必要があります")
         self.template_path = template_path
         self.mask_path = mask_path
         template = imread_unicode(template_path)
@@ -31,6 +34,7 @@ class TemplateMatcher(BaseMatcher):
             )
         self._template = cv2.cvtColor(template, cv2.COLOR_BGR2GRAY)
         self._threshold = threshold
+        self._response_top_k = response_top_k
 
     async def match(self, image: np.ndarray) -> bool:
         return await asyncio.to_thread(self._match, image)
@@ -44,7 +48,7 @@ class TemplateMatcher(BaseMatcher):
         *,
         cancel_check: Callable[[], bool] | None = None,
     ) -> float:
-        """テンプレートとの最大一致スコアを返す。"""
+        """テンプレート一致スコアを返す。"""
         return await asyncio.to_thread(self._score, image, cancel_check)
 
     def _score(
@@ -69,7 +73,19 @@ class TemplateMatcher(BaseMatcher):
         if cancel_check is not None and cancel_check():
             raise asyncio.CancelledError("template scoring cancelled")
 
-        _, max_val, _, _ = cv2.minMaxLoc(result)
-        if np.isnan(max_val) or np.isinf(max_val):
+        return self._aggregate_match_response(result)
+
+    def _aggregate_match_response(self, result: np.ndarray) -> float:
+        finite_mask = np.isfinite(result)
+        if not np.any(finite_mask):
             return -1.0
-        return float(max_val)
+        values = result[finite_mask].astype(np.float32, copy=False).ravel()
+        if values.size == 0:
+            return -1.0
+        if self._response_top_k == 1 or values.size == 1:
+            return float(np.max(values))
+
+        top_k = min(self._response_top_k, int(values.size))
+        top_indices = np.argpartition(values, -top_k)[-top_k:]
+        top_values = values[top_indices]
+        return float(np.mean(top_values))

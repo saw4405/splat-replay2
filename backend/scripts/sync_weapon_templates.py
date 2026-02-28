@@ -562,7 +562,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--threshold",
         type=float,
-        default=0.85,
+        default=0.82,
         help="追加する weapon_template_xxx の threshold",
     )
     parser.add_argument(

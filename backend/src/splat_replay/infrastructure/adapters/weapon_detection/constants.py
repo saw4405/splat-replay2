@@ -38,6 +38,22 @@ WEAPON_DISPLAY_OUTLINE_MIN_IOU: Final[float] = 0.40
 WEAPON_DISPLAY_OUTLINE_MIN_MATCHED_SLOTS: Final[int] = 4
 SCORE_TIE_EPSILON: Final[float] = 1e-12
 
+# 候補の最終選択は score と template_threshold の単一スコアで一貫して行う。
+# confidence = score - (weight * threshold)
+# confidence が accept_threshold 未満なら UNKNOWN とする。
+CANDIDATE_CONFIDENCE_THRESHOLD_WEIGHT: Final[float] = 1.31
+CANDIDATE_CONFIDENCE_ACCEPT_THRESHOLD: Final[float] = -0.29
+# UNKNOWN 判定のうち、証拠量が十分なケースのみを追加受理する救済パラメータ。
+# rescue_threshold = accept_threshold - rescue_margin
+CANDIDATE_CONFIDENCE_RESCUE_MARGIN: Final[float] = 0.24
+CANDIDATE_CONFIDENCE_RESCUE_MIN_GAP: Final[float] = 0.0085
+CANDIDATE_CONFIDENCE_RESCUE_MIN_EDGE_RATIO: Final[float] = 0.09
+CANDIDATE_CONFIDENCE_RESCUE_MIN_TEAM_EDGE_RATIO: Final[float] = 0.07
+CANDIDATE_CONFIDENCE_RESCUE_MAX_THRESHOLD: Final[float] = 0.95
+
+# テンプレートマッチ応答の集約点数。1 は従来どおり最大値のみを使う。
+TEMPLATE_RESPONSE_TOP_K: Final[int] = 1
+
 OUTLINE_MODEL_VOTE_RATIO: Final[float] = 0.35
 OUTLINE_MODEL_MAX_SHIFT: Final[int] = 20
 OUTLINE_ALIGN_FAST_MAX_SHIFT: Final[int] = 8

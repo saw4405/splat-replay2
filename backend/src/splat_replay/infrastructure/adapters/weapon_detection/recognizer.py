@@ -55,6 +55,12 @@ class _RankedCandidate:
     template_threshold: float
 
 
+@dataclass(frozen=True)
+class _SlotSignalMetrics:
+    edge_ratio: float
+    team_edge_ratio: float
+
+
 class WeaponRecognitionAdapter(WeaponRecognitionPort):
     """TemplateMatcher を用いたブキ判別アダプタ。"""
 
@@ -212,6 +218,25 @@ class WeaponRecognitionAdapter(WeaponRecognitionPort):
             return 0.0
         return intersection / float(union)
 
+    def _compute_slot_signal_metrics(
+        self, *, slot_image: np.ndarray
+    ) -> _SlotSignalMetrics:
+        gray = cv2.cvtColor(slot_image, cv2.COLOR_BGR2GRAY)
+        team_mask = detect_slot_team_region(slot_image) > 0
+        edges = cv2.Canny(gray, 80, 160) > 0
+        edge_ratio = float(int(edges.sum())) / float(edges.size)
+        team_pixel_count = int(team_mask.sum())
+        if team_pixel_count <= 0:
+            return _SlotSignalMetrics(
+                edge_ratio=edge_ratio,
+                team_edge_ratio=0.0,
+            )
+        team_edges = int(np.logical_and(edges, team_mask).sum())
+        return _SlotSignalMetrics(
+            edge_ratio=edge_ratio,
+            team_edge_ratio=team_edges / float(team_pixel_count),
+        )
+
     async def recognize_weapons(
         self,
         frame: Frame,
@@ -277,10 +302,14 @@ class WeaponRecognitionAdapter(WeaponRecognitionPort):
                         slot_debug_candidates_by_slot[slot] = ()
                 continue
             # target_slotsに含まれるスロットのみ再判別
+            slot_signal_metrics = self._compute_slot_signal_metrics(
+                slot_image=slot_images[slot]
+            )
             slot_result, slot_debug_candidates = await self._predict_slot(
                 slot=slot,
                 query_padded_gray=query_padded_gray_by_slot[slot],
                 cancel_generation=cancel_generation,
+                slot_signal_metrics=slot_signal_metrics,
             )
             slot_results[slot] = slot_result
             if save_unmatched_report:
@@ -329,6 +358,7 @@ class WeaponRecognitionAdapter(WeaponRecognitionPort):
         slot: str,
         query_padded_gray: np.ndarray,
         cancel_generation: int,
+        slot_signal_metrics: _SlotSignalMetrics | None = None,
     ) -> tuple[
         WeaponSlotResult,
         tuple[unmatched_report.SlotDebugCandidate, ...],
@@ -338,10 +368,31 @@ class WeaponRecognitionAdapter(WeaponRecognitionPort):
             cancel_generation=cancel_generation,
         )
         self._ensure_not_cancelled(cancel_generation)
-        accepted_candidate = next(
-            (item for item in ranked if item.score >= item.template_threshold),
-            None,
+        best_candidate, selected_confidence, second_confidence = (
+            self._select_best_candidates_by_confidence(ranked)
         )
+        accepted_candidate: _RankedCandidate | None = None
+        rescue_applied = False
+        if (
+            best_candidate is not None
+            and selected_confidence is not None
+            and selected_confidence
+            >= constants.CANDIDATE_CONFIDENCE_ACCEPT_THRESHOLD
+        ):
+            accepted_candidate = best_candidate
+        elif (
+            best_candidate is not None
+            and selected_confidence is not None
+            and self._should_apply_confidence_rescue(
+                best_candidate=best_candidate,
+                best_confidence=selected_confidence,
+                second_confidence=second_confidence,
+                slot_signal_metrics=slot_signal_metrics,
+            )
+        ):
+            accepted_candidate = best_candidate
+            rescue_applied = True
+
         top_candidates = tuple(
             WeaponCandidateScore(
                 weapon=item.weapon,
@@ -376,7 +427,44 @@ class WeaponRecognitionAdapter(WeaponRecognitionPort):
             predicted_weapon=predicted_weapon,
             is_unmatched=is_unmatched,
             threshold=threshold,
+            selected_confidence=(
+                round(selected_confidence, 6)
+                if selected_confidence is not None
+                else None
+            ),
+            selected_confidence_gap=(
+                round(selected_confidence - second_confidence, 6)
+                if selected_confidence is not None
+                and second_confidence is not None
+                else None
+            ),
+            confidence_accept_threshold=round(
+                constants.CANDIDATE_CONFIDENCE_ACCEPT_THRESHOLD, 6
+            ),
+            confidence_rescue_threshold=round(
+                constants.CANDIDATE_CONFIDENCE_ACCEPT_THRESHOLD
+                - constants.CANDIDATE_CONFIDENCE_RESCUE_MARGIN,
+                6,
+            ),
+            rescue_applied=rescue_applied,
+            slot_edge_ratio=(
+                round(slot_signal_metrics.edge_ratio, 6)
+                if slot_signal_metrics is not None
+                else None
+            ),
+            slot_team_edge_ratio=(
+                round(slot_signal_metrics.team_edge_ratio, 6)
+                if slot_signal_metrics is not None
+                else None
+            ),
             candidates=self._serialize_candidates_for_log(ranked[:3]),
+            confidence_candidates=[
+                {
+                    "weapon": item.weapon,
+                    "confidence": round(self._candidate_confidence(item), 6),
+                }
+                for item in ranked[:3]
+            ],
             threshold_matched_candidates=self._serialize_candidates_for_log(
                 threshold_matched[:3]
             ),
@@ -390,6 +478,101 @@ class WeaponRecognitionAdapter(WeaponRecognitionPort):
                 top_candidates=top_candidates,
             ),
             debug_candidates,
+        )
+
+    def _should_apply_confidence_rescue(
+        self,
+        *,
+        best_candidate: _RankedCandidate,
+        best_confidence: float,
+        second_confidence: float | None,
+        slot_signal_metrics: _SlotSignalMetrics | None,
+    ) -> bool:
+        if slot_signal_metrics is None:
+            return False
+        if (
+            best_candidate.template_threshold
+            > constants.CANDIDATE_CONFIDENCE_RESCUE_MAX_THRESHOLD
+        ):
+            return False
+        rescue_threshold = (
+            constants.CANDIDATE_CONFIDENCE_ACCEPT_THRESHOLD
+            - constants.CANDIDATE_CONFIDENCE_RESCUE_MARGIN
+        )
+        if best_confidence < rescue_threshold:
+            return False
+        if (
+            second_confidence is not None
+            and (best_confidence - second_confidence)
+            < constants.CANDIDATE_CONFIDENCE_RESCUE_MIN_GAP
+        ):
+            return False
+        if (
+            slot_signal_metrics.edge_ratio
+            < constants.CANDIDATE_CONFIDENCE_RESCUE_MIN_EDGE_RATIO
+        ):
+            return False
+        if (
+            slot_signal_metrics.team_edge_ratio
+            < constants.CANDIDATE_CONFIDENCE_RESCUE_MIN_TEAM_EDGE_RATIO
+        ):
+            return False
+        return True
+
+    def _select_best_candidates_by_confidence(
+        self, ranked: list[_RankedCandidate]
+    ) -> tuple[_RankedCandidate | None, float | None, float | None]:
+        if not ranked:
+            return None, None, None
+        sorted_by_confidence = sorted(
+            ranked, key=cmp_to_key(self._compare_candidates_by_confidence)
+        )
+        best = sorted_by_confidence[0]
+        best_confidence = self._candidate_confidence(best)
+        second_confidence = None
+        if len(sorted_by_confidence) >= 2:
+            second_confidence = self._candidate_confidence(
+                sorted_by_confidence[1]
+            )
+        return best, best_confidence, second_confidence
+
+    def _compare_candidates_by_confidence(
+        self, left: _RankedCandidate, right: _RankedCandidate
+    ) -> int:
+        left_confidence = self._candidate_confidence(left)
+        right_confidence = self._candidate_confidence(right)
+        diff = left_confidence - right_confidence
+        if diff > constants.SCORE_TIE_EPSILON:
+            return -1
+        if diff < -constants.SCORE_TIE_EPSILON:
+            return 1
+        score_diff = left.score - right.score
+        if score_diff > constants.SCORE_TIE_EPSILON:
+            return -1
+        if score_diff < -constants.SCORE_TIE_EPSILON:
+            return 1
+        if left.weapon < right.weapon:
+            return -1
+        if left.weapon > right.weapon:
+            return 1
+        return 0
+
+    def _select_candidate_by_confidence(
+        self, ranked: list[_RankedCandidate]
+    ) -> tuple[_RankedCandidate | None, float | None]:
+        best, best_confidence, _ = self._select_best_candidates_by_confidence(
+            ranked
+        )
+        if best is None or best_confidence is None:
+            return None, None
+        if best_confidence < constants.CANDIDATE_CONFIDENCE_ACCEPT_THRESHOLD:
+            return None, best_confidence
+        return best, best_confidence
+
+    def _candidate_confidence(self, candidate: _RankedCandidate) -> float:
+        return candidate.score - (
+            constants.CANDIDATE_CONFIDENCE_THRESHOLD_WEIGHT
+            * candidate.template_threshold
         )
 
     async def _rank_weapon_candidates(
@@ -521,6 +704,7 @@ class WeaponRecognitionAdapter(WeaponRecognitionPort):
             template_path=template_path,
             mask_path=mask_path,
             threshold=cfg.threshold,
+            response_top_k=constants.TEMPLATE_RESPONSE_TOP_K,
         )
         return _TemplateSource(
             matcher=matcher,

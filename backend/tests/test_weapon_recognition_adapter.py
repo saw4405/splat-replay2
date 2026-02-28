@@ -13,6 +13,8 @@ from splat_replay.infrastructure.adapters.weapon_detection.constants import (
     UNKNOWN_WEAPON_LABEL,
 )
 from splat_replay.infrastructure.adapters.weapon_detection.recognizer import (
+    _RankedCandidate,
+    _SlotSignalMetrics,
     WeaponRecognitionAdapter,
 )
 from splat_replay.infrastructure.adapters.weapon_detection.team_color import (
@@ -230,6 +232,201 @@ def _to_expected_order(slots: dict[str, str]) -> tuple[list[str], list[str]]:
     allies = [slots[f"ally_{idx}"] for idx in range(1, 5)]
     enemies = [slots[f"enemy_{idx}"] for idx in range(1, 5)]
     return allies, enemies
+
+
+def _ranked_candidate(
+    *, weapon: str, score: float, threshold: float
+) -> _RankedCandidate:
+    return _RankedCandidate(
+        weapon=weapon,
+        score=score,
+        template_source=None,
+        template_threshold=threshold,
+    )
+
+
+def _slot_signal_metrics(
+    *, edge_ratio: float, team_edge_ratio: float
+) -> _SlotSignalMetrics:
+    return _SlotSignalMetrics(
+        edge_ratio=edge_ratio,
+        team_edge_ratio=team_edge_ratio,
+    )
+
+
+def test_candidate_confidence_prefers_threshold_weighted_high_score(
+    recognizer: WeaponRecognitionAdapter,
+) -> None:
+    top1 = _ranked_candidate(weapon="候補1", score=0.920, threshold=0.880)
+    top2 = _ranked_candidate(weapon="候補2", score=0.894, threshold=0.780)
+
+    confidence_1 = recognizer._candidate_confidence(top1)
+    confidence_2 = recognizer._candidate_confidence(top2)
+
+    assert confidence_2 > confidence_1
+
+
+def test_select_candidate_by_confidence_returns_unknown_when_low_confidence(
+    recognizer: WeaponRecognitionAdapter,
+) -> None:
+    ranked = [
+        _ranked_candidate(weapon="候補1", score=0.100, threshold=0.900),
+        _ranked_candidate(weapon="候補2", score=0.090, threshold=0.850),
+    ]
+
+    selected, confidence = recognizer._select_candidate_by_confidence(ranked)
+
+    assert selected is None
+    assert confidence is not None
+    assert confidence < constants.CANDIDATE_CONFIDENCE_ACCEPT_THRESHOLD
+
+
+@pytest.mark.asyncio
+async def test_predict_slot_uses_confidence_based_selection(
+    recognizer: WeaponRecognitionAdapter,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    ranked = [
+        _ranked_candidate(weapon="候補1", score=0.920, threshold=0.880),
+        _ranked_candidate(weapon="候補2", score=0.894, threshold=0.780),
+    ]
+
+    async def _stub_rank_weapon_candidates(
+        query_padded_gray: np.ndarray,
+        *,
+        cancel_generation: int,
+    ) -> list[_RankedCandidate]:
+        _ = query_padded_gray
+        _ = cancel_generation
+        return ranked
+
+    monkeypatch.setattr(
+        recognizer,
+        "_rank_weapon_candidates",
+        _stub_rank_weapon_candidates,
+    )
+
+    slot_result, _debug_candidates = await recognizer._predict_slot(
+        slot=constants.ALLY_SLOTS[0],
+        query_padded_gray=np.zeros((16, 16), dtype=np.uint8),
+        cancel_generation=recognizer._capture_cancel_generation(),
+    )
+
+    assert slot_result.predicted_weapon == "候補2"
+    assert slot_result.is_unmatched is False
+
+
+@pytest.mark.asyncio
+async def test_predict_slot_returns_unknown_when_best_confidence_is_low(
+    recognizer: WeaponRecognitionAdapter,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    ranked = [
+        _ranked_candidate(weapon="候補1", score=0.100, threshold=0.900),
+        _ranked_candidate(weapon="候補2", score=0.090, threshold=0.850),
+    ]
+
+    async def _stub_rank_weapon_candidates(
+        query_padded_gray: np.ndarray,
+        *,
+        cancel_generation: int,
+    ) -> list[_RankedCandidate]:
+        _ = query_padded_gray
+        _ = cancel_generation
+        return ranked
+
+    monkeypatch.setattr(
+        recognizer,
+        "_rank_weapon_candidates",
+        _stub_rank_weapon_candidates,
+    )
+
+    slot_result, _debug_candidates = await recognizer._predict_slot(
+        slot=constants.ALLY_SLOTS[0],
+        query_padded_gray=np.zeros((16, 16), dtype=np.uint8),
+        cancel_generation=recognizer._capture_cancel_generation(),
+    )
+
+    assert slot_result.predicted_weapon == UNKNOWN_WEAPON_LABEL
+    assert slot_result.is_unmatched is True
+
+
+@pytest.mark.asyncio
+async def test_predict_slot_applies_confidence_rescue_when_signal_is_strong(
+    recognizer: WeaponRecognitionAdapter,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    ranked = [
+        _ranked_candidate(weapon="候補1", score=0.780, threshold=0.820),
+        _ranked_candidate(weapon="候補2", score=0.700, threshold=0.820),
+    ]
+
+    async def _stub_rank_weapon_candidates(
+        query_padded_gray: np.ndarray,
+        *,
+        cancel_generation: int,
+    ) -> list[_RankedCandidate]:
+        _ = query_padded_gray
+        _ = cancel_generation
+        return ranked
+
+    monkeypatch.setattr(
+        recognizer,
+        "_rank_weapon_candidates",
+        _stub_rank_weapon_candidates,
+    )
+
+    slot_result, _debug_candidates = await recognizer._predict_slot(
+        slot=constants.ALLY_SLOTS[0],
+        query_padded_gray=np.zeros((16, 16), dtype=np.uint8),
+        cancel_generation=recognizer._capture_cancel_generation(),
+        slot_signal_metrics=_slot_signal_metrics(
+            edge_ratio=0.120,
+            team_edge_ratio=0.100,
+        ),
+    )
+
+    assert slot_result.predicted_weapon == "候補1"
+    assert slot_result.is_unmatched is False
+
+
+@pytest.mark.asyncio
+async def test_predict_slot_does_not_apply_confidence_rescue_when_signal_is_weak(
+    recognizer: WeaponRecognitionAdapter,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    ranked = [
+        _ranked_candidate(weapon="候補1", score=0.780, threshold=0.820),
+        _ranked_candidate(weapon="候補2", score=0.700, threshold=0.820),
+    ]
+
+    async def _stub_rank_weapon_candidates(
+        query_padded_gray: np.ndarray,
+        *,
+        cancel_generation: int,
+    ) -> list[_RankedCandidate]:
+        _ = query_padded_gray
+        _ = cancel_generation
+        return ranked
+
+    monkeypatch.setattr(
+        recognizer,
+        "_rank_weapon_candidates",
+        _stub_rank_weapon_candidates,
+    )
+
+    slot_result, _debug_candidates = await recognizer._predict_slot(
+        slot=constants.ALLY_SLOTS[0],
+        query_padded_gray=np.zeros((16, 16), dtype=np.uint8),
+        cancel_generation=recognizer._capture_cancel_generation(),
+        slot_signal_metrics=_slot_signal_metrics(
+            edge_ratio=0.120,
+            team_edge_ratio=0.020,
+        ),
+    )
+
+    assert slot_result.predicted_weapon == UNKNOWN_WEAPON_LABEL
+    assert slot_result.is_unmatched is True
 
 
 @pytest.mark.asyncio
