@@ -7,6 +7,7 @@ import threading
 from dataclasses import dataclass
 from functools import cmp_to_key
 from pathlib import Path
+from typing import cast
 
 import cv2
 import numpy as np
@@ -73,7 +74,16 @@ class WeaponRecognitionAdapter(WeaponRecognitionPort):
         self._settings = settings
         self._logger = logger
         self._assets_dir = assets_dir
-        self._template_sources_by_weapon = self._load_template_sources()
+        (
+            self._template_sources_by_weapon,
+            self._variant_template_sources_by_weapon,
+        ) = self._load_template_sources()
+        self._template_sources_with_variant_by_weapon = (
+            self._merge_template_sources(
+                base=self._template_sources_by_weapon,
+                addition=self._variant_template_sources_by_weapon,
+            )
+        )
         self._matching_assets_dir = self._resolve_matching_assets_dir()
         self._outline_model_masks: dict[str, np.ndarray] | None = None
         self._cancel_lock = threading.Lock()
@@ -104,19 +114,22 @@ class WeaponRecognitionAdapter(WeaponRecognitionPort):
         outline_matched_slots = 0
         processed_slots = 0
         fallback_used = False
+        display_weapon_region_ratio: float | None = None
         outline_iou_by_slot = {slot: 0.0 for slot in constants.SLOT_ORDER}
         if color_visible:
             model_masks = self._get_outline_model_masks()
-            (
-                fast_matched_slots,
-                fast_iou_by_slot,
-                fast_processed_slots,
-            ) = self._count_outline_matched_slots(
+            fast_result = self._count_outline_matched_slots(
                 slot_images=slot_images,
                 model_masks=model_masks,
                 cancel_generation=cancel_generation,
                 max_shift=constants.OUTLINE_ALIGN_FAST_MAX_SHIFT,
             )
+            (
+                fast_matched_slots,
+                fast_iou_by_slot,
+                fast_processed_slots,
+                fast_weapon_region_ratio,
+            ) = self._unpack_outline_count_result(fast_result)
             if (
                 fast_matched_slots
                 >= constants.WEAPON_DISPLAY_OUTLINE_MIN_MATCHED_SLOTS
@@ -124,23 +137,36 @@ class WeaponRecognitionAdapter(WeaponRecognitionPort):
                 outline_matched_slots = fast_matched_slots
                 outline_iou_by_slot = fast_iou_by_slot
                 processed_slots = fast_processed_slots
+                display_weapon_region_ratio = fast_weapon_region_ratio
             else:
                 fallback_used = True
-                (
-                    outline_matched_slots,
-                    outline_iou_by_slot,
-                    processed_slots,
-                ) = self._count_outline_matched_slots(
+                precise_result = self._count_outline_matched_slots(
                     slot_images=slot_images,
                     model_masks=model_masks,
                     cancel_generation=cancel_generation,
                     max_shift=constants.OUTLINE_ALIGN_MAX_SHIFT,
                 )
+                (
+                    outline_matched_slots,
+                    outline_iou_by_slot,
+                    processed_slots,
+                    display_weapon_region_ratio,
+                ) = self._unpack_outline_count_result(precise_result)
         self._ensure_not_cancelled(cancel_generation)
 
-        is_visible = color_visible and (
-            outline_matched_slots
-            >= constants.WEAPON_DISPLAY_OUTLINE_MIN_MATCHED_SLOTS
+        weapon_region_ratio_passed = True
+        if display_weapon_region_ratio is not None:
+            weapon_region_ratio_passed = (
+                display_weapon_region_ratio
+                >= constants.WEAPON_DISPLAY_MIN_WEAPON_REGION_RATIO
+            )
+        is_visible = (
+            color_visible
+            and (
+                outline_matched_slots
+                >= constants.WEAPON_DISPLAY_OUTLINE_MIN_MATCHED_SLOTS
+            )
+            and weapon_region_ratio_passed
         )
         self._logger.debug(
             "ブキ表示判定",
@@ -152,6 +178,20 @@ class WeaponRecognitionAdapter(WeaponRecognitionPort):
             processed_slots=processed_slots,
             outline_required_slots=constants.WEAPON_DISPLAY_OUTLINE_MIN_MATCHED_SLOTS,
             outline_iou_threshold=constants.WEAPON_DISPLAY_OUTLINE_MIN_IOU,
+            display_weapon_region_ratio=(
+                round(display_weapon_region_ratio, 6)
+                if display_weapon_region_ratio is not None
+                else None
+            ),
+            display_weapon_region_ratio_threshold=round(
+                constants.WEAPON_DISPLAY_MIN_WEAPON_REGION_RATIO,
+                6,
+            ),
+            display_weapon_region_ratio_passed=(
+                weapon_region_ratio_passed
+                if display_weapon_region_ratio is not None
+                else None
+            ),
             fast_shift=constants.OUTLINE_ALIGN_FAST_MAX_SHIFT,
             fallback_used=fallback_used,
             outline_iou_by_slot={
@@ -169,6 +209,29 @@ class WeaponRecognitionAdapter(WeaponRecognitionPort):
             )
         return self._outline_model_masks
 
+    @staticmethod
+    def _unpack_outline_count_result(
+        result: tuple[int, dict[str, float], int]
+        | tuple[int, dict[str, float], int, float | None],
+    ) -> tuple[int, dict[str, float], int, float | None]:
+        if len(result) == 3:
+            result3 = cast(tuple[int, dict[str, float], int], result)
+            matched_slots, iou_by_slot, processed_slots = result3
+            return matched_slots, iou_by_slot, processed_slots, None
+        result4 = cast(tuple[int, dict[str, float], int, float | None], result)
+        (
+            matched_slots,
+            iou_by_slot,
+            processed_slots,
+            display_weapon_region_ratio,
+        ) = result4
+        return (
+            matched_slots,
+            iou_by_slot,
+            processed_slots,
+            display_weapon_region_ratio,
+        )
+
     def _count_outline_matched_slots(
         self,
         *,
@@ -176,13 +239,14 @@ class WeaponRecognitionAdapter(WeaponRecognitionPort):
         model_masks: dict[str, np.ndarray],
         cancel_generation: int | None = None,
         max_shift: int | None = None,
-    ) -> tuple[int, dict[str, float], int]:
+    ) -> tuple[int, dict[str, float], int, float | None]:
         if cancel_generation is None:
             cancel_generation = self._capture_cancel_generation()
         if max_shift is None:
             max_shift = constants.OUTLINE_ALIGN_MAX_SHIFT
         matched_slots = 0
         processed_slots = 0
+        matched_slot_weapon_region_ratios: list[float] = []
         iou_by_slot: dict[str, float] = {
             slot: 0.0 for slot in constants.SLOT_ORDER
         }
@@ -191,6 +255,7 @@ class WeaponRecognitionAdapter(WeaponRecognitionPort):
             processed_slots += 1
             detected_mask = detect_slot_team_region(slot_images[slot])
             iou = 0.0
+            aligned_model_mask: np.ndarray | None = None
             if int(detected_mask.sum()) > 0:
                 _, aligned_model_mask = outline_models.infer_species_and_mask(
                     detected_mask=detected_mask,
@@ -202,13 +267,34 @@ class WeaponRecognitionAdapter(WeaponRecognitionPort):
             iou_by_slot[slot] = iou
             if iou >= constants.WEAPON_DISPLAY_OUTLINE_MIN_IOU:
                 matched_slots += 1
+                if aligned_model_mask is not None:
+                    weapon_region_mask = np.logical_and(
+                        aligned_model_mask > 0,
+                        detected_mask == 0,
+                    )
+                    weapon_region_ratio = float(
+                        int(weapon_region_mask.sum())
+                    ) / float(weapon_region_mask.size)
+                    matched_slot_weapon_region_ratios.append(
+                        weapon_region_ratio
+                    )
                 if (
                     matched_slots
                     >= constants.WEAPON_DISPLAY_OUTLINE_MIN_MATCHED_SLOTS
                 ):
                     break
 
-        return matched_slots, iou_by_slot, processed_slots
+        display_weapon_region_ratio: float | None = None
+        if matched_slot_weapon_region_ratios:
+            display_weapon_region_ratio = float(
+                np.mean(matched_slot_weapon_region_ratios)
+            )
+        return (
+            matched_slots,
+            iou_by_slot,
+            processed_slots,
+            display_weapon_region_ratio,
+        )
 
     @staticmethod
     def _calc_iou(mask_a: np.ndarray, mask_b: np.ndarray) -> float:
@@ -368,30 +454,51 @@ class WeaponRecognitionAdapter(WeaponRecognitionPort):
             cancel_generation=cancel_generation,
         )
         self._ensure_not_cancelled(cancel_generation)
-        best_candidate, selected_confidence, second_confidence = (
-            self._select_best_candidates_by_confidence(ranked)
+        (
+            accepted_candidate,
+            selected_confidence,
+            second_confidence,
+            rescue_applied,
+        ) = self._select_accepted_candidate(
+            ranked=ranked,
+            slot_signal_metrics=slot_signal_metrics,
         )
-        accepted_candidate: _RankedCandidate | None = None
-        rescue_applied = False
-        if (
-            best_candidate is not None
-            and selected_confidence is not None
-            and selected_confidence
-            >= constants.CANDIDATE_CONFIDENCE_ACCEPT_THRESHOLD
+        variant_fallback_attempted = False
+        variant_applied = False
+        if self._should_try_variant_fallback(
+            accepted_candidate=accepted_candidate,
+            selected_confidence=selected_confidence,
+            second_confidence=second_confidence,
         ):
-            accepted_candidate = best_candidate
-        elif (
-            best_candidate is not None
-            and selected_confidence is not None
-            and self._should_apply_confidence_rescue(
-                best_candidate=best_candidate,
-                best_confidence=selected_confidence,
-                second_confidence=second_confidence,
+            variant_fallback_attempted = True
+            ranked_with_variant = (
+                await self._rank_weapon_candidates_with_variant(
+                    query_padded_gray,
+                    cancel_generation=cancel_generation,
+                )
+            )
+            self._ensure_not_cancelled(cancel_generation)
+            (
+                variant_accepted_candidate,
+                variant_selected_confidence,
+                variant_second_confidence,
+                variant_rescue_applied,
+            ) = self._select_accepted_candidate(
+                ranked=ranked_with_variant,
                 slot_signal_metrics=slot_signal_metrics,
             )
-        ):
-            accepted_candidate = best_candidate
-            rescue_applied = True
+            if self._should_replace_with_variant_result(
+                accepted_candidate=accepted_candidate,
+                selected_confidence=selected_confidence,
+                variant_accepted_candidate=variant_accepted_candidate,
+                variant_selected_confidence=variant_selected_confidence,
+            ):
+                ranked = ranked_with_variant
+                accepted_candidate = variant_accepted_candidate
+                selected_confidence = variant_selected_confidence
+                second_confidence = variant_second_confidence
+                rescue_applied = variant_rescue_applied
+                variant_applied = True
 
         top_candidates = tuple(
             WeaponCandidateScore(
@@ -445,6 +552,11 @@ class WeaponRecognitionAdapter(WeaponRecognitionPort):
                 constants.CANDIDATE_CONFIDENCE_ACCEPT_THRESHOLD
                 - constants.CANDIDATE_CONFIDENCE_RESCUE_MARGIN,
                 6,
+            ),
+            variant_fallback_attempted=variant_fallback_attempted,
+            variant_applied=variant_applied,
+            variant_fallback_max_confidence_gap=round(
+                constants.VARIANT_FALLBACK_MAX_CONFIDENCE_GAP, 6
             ),
             rescue_applied=rescue_applied,
             slot_edge_ratio=(
@@ -519,6 +631,77 @@ class WeaponRecognitionAdapter(WeaponRecognitionPort):
             return False
         return True
 
+    def _select_accepted_candidate(
+        self,
+        *,
+        ranked: list[_RankedCandidate],
+        slot_signal_metrics: _SlotSignalMetrics | None,
+    ) -> tuple[
+        _RankedCandidate | None,
+        float | None,
+        float | None,
+        bool,
+    ]:
+        best_candidate, selected_confidence, second_confidence = (
+            self._select_best_candidates_by_confidence(ranked)
+        )
+        if best_candidate is None or selected_confidence is None:
+            return None, None, None, False
+        if (
+            selected_confidence
+            >= constants.CANDIDATE_CONFIDENCE_ACCEPT_THRESHOLD
+        ):
+            return (
+                best_candidate,
+                selected_confidence,
+                second_confidence,
+                False,
+            )
+        if self._should_apply_confidence_rescue(
+            best_candidate=best_candidate,
+            best_confidence=selected_confidence,
+            second_confidence=second_confidence,
+            slot_signal_metrics=slot_signal_metrics,
+        ):
+            return best_candidate, selected_confidence, second_confidence, True
+        return None, selected_confidence, second_confidence, False
+
+    def _should_try_variant_fallback(
+        self,
+        *,
+        accepted_candidate: _RankedCandidate | None,
+        selected_confidence: float | None,
+        second_confidence: float | None,
+    ) -> bool:
+        if not self._variant_template_sources_by_weapon:
+            return False
+        if accepted_candidate is None:
+            return True
+        if selected_confidence is None or second_confidence is None:
+            return False
+        confidence_gap = selected_confidence - second_confidence
+        return confidence_gap <= constants.VARIANT_FALLBACK_MAX_CONFIDENCE_GAP
+
+    def _should_replace_with_variant_result(
+        self,
+        *,
+        accepted_candidate: _RankedCandidate | None,
+        selected_confidence: float | None,
+        variant_accepted_candidate: _RankedCandidate | None,
+        variant_selected_confidence: float | None,
+    ) -> bool:
+        if (
+            variant_accepted_candidate is None
+            or variant_selected_confidence is None
+        ):
+            return False
+        if accepted_candidate is None or selected_confidence is None:
+            return True
+        return (
+            variant_selected_confidence
+            > selected_confidence + constants.SCORE_TIE_EPSILON
+        )
+
     def _select_best_candidates_by_confidence(
         self, ranked: list[_RankedCandidate]
     ) -> tuple[_RankedCandidate | None, float | None, float | None]:
@@ -581,6 +764,31 @@ class WeaponRecognitionAdapter(WeaponRecognitionPort):
         *,
         cancel_generation: int,
     ) -> list[_RankedCandidate]:
+        return await self._rank_weapon_candidates_from_sources(
+            query_padded_gray=query_padded_gray,
+            cancel_generation=cancel_generation,
+            template_sources_by_weapon=self._template_sources_by_weapon,
+        )
+
+    async def _rank_weapon_candidates_with_variant(
+        self,
+        query_padded_gray: np.ndarray,
+        *,
+        cancel_generation: int,
+    ) -> list[_RankedCandidate]:
+        return await self._rank_weapon_candidates_from_sources(
+            query_padded_gray=query_padded_gray,
+            cancel_generation=cancel_generation,
+            template_sources_by_weapon=self._template_sources_with_variant_by_weapon,
+        )
+
+    async def _rank_weapon_candidates_from_sources(
+        self,
+        *,
+        query_padded_gray: np.ndarray,
+        cancel_generation: int,
+        template_sources_by_weapon: dict[str, tuple[_TemplateSource, ...]],
+    ) -> list[_RankedCandidate]:
         query_padded_bgr = cv2.cvtColor(query_padded_gray, cv2.COLOR_GRAY2BGR)
         candidates: list[_RankedCandidate] = []
 
@@ -590,7 +798,7 @@ class WeaponRecognitionAdapter(WeaponRecognitionPort):
         for (
             weapon,
             template_sources,
-        ) in self._template_sources_by_weapon.items():
+        ) in template_sources_by_weapon.items():
             self._ensure_not_cancelled(cancel_generation)
             score_tasks = [
                 asyncio.create_task(
@@ -657,7 +865,12 @@ class WeaponRecognitionAdapter(WeaponRecognitionPort):
             for candidate in candidates
         ]
 
-    def _load_template_sources(self) -> dict[str, tuple[_TemplateSource, ...]]:
+    def _load_template_sources(
+        self,
+    ) -> tuple[
+        dict[str, tuple[_TemplateSource, ...]],
+        dict[str, tuple[_TemplateSource, ...]],
+    ]:
         keys = self._settings.matcher_groups.get(
             constants.WEAPON_TEMPLATE_MATCHER_GROUP
         )
@@ -666,9 +879,10 @@ class WeaponRecognitionAdapter(WeaponRecognitionPort):
                 "ブキテンプレートグループが未定義",
                 group=constants.WEAPON_TEMPLATE_MATCHER_GROUP,
             )
-            return {}
+            return {}, {}
 
         grouped: dict[str, list[_TemplateSource]] = {}
+        variant_grouped: dict[str, list[_TemplateSource]] = {}
         for key in keys:
             cfg = self._settings.matchers.get(key)
             if cfg is None:
@@ -678,11 +892,49 @@ class WeaponRecognitionAdapter(WeaponRecognitionPort):
             if source is None:
                 continue
             weapon_name = cfg.name or key
+            if self._is_variant_template_source(cfg):
+                variant_grouped.setdefault(weapon_name, []).append(source)
+                continue
             grouped.setdefault(weapon_name, []).append(source)
 
+        # variantしか存在しないブキは通常候補として扱う。
+        for weapon, sources in variant_grouped.items():
+            if weapon not in grouped:
+                grouped[weapon] = list(sources)
+
+        return (
+            {
+                weapon: tuple(sources)
+                for weapon, sources in grouped.items()
+                if sources
+            },
+            {
+                weapon: tuple(sources)
+                for weapon, sources in variant_grouped.items()
+                if sources
+            },
+        )
+
+    def _is_variant_template_source(self, cfg: MatcherConfig) -> bool:
+        if not cfg.template_path:
+            return False
+        normalized_template_path = cfg.template_path.replace("\\", "/")
+        return "_variant" in Path(normalized_template_path).stem.casefold()
+
+    def _merge_template_sources(
+        self,
+        *,
+        base: dict[str, tuple[_TemplateSource, ...]],
+        addition: dict[str, tuple[_TemplateSource, ...]],
+    ) -> dict[str, tuple[_TemplateSource, ...]]:
+        merged: dict[str, list[_TemplateSource]] = {}
+        for weapon, sources in base.items():
+            merged[weapon] = list(sources)
+        for weapon, sources in addition.items():
+            merged.setdefault(weapon, []).extend(sources)
         return {
             weapon: tuple(sources)
-            for weapon, sources in grouped.items()
+            for weapon, sources in merged.items()
             if sources
         }
 
@@ -714,7 +966,10 @@ class WeaponRecognitionAdapter(WeaponRecognitionPort):
         )
 
     def _resolve_matching_assets_dir(self) -> Path:
-        for template_sources in self._template_sources_by_weapon.values():
+        all_template_sources = list(
+            self._template_sources_by_weapon.values()
+        ) + list(self._variant_template_sources_by_weapon.values())
+        for template_sources in all_template_sources:
             if template_sources:
                 template_parent = template_sources[0].template_path.parent
                 if template_parent.name == "matching":

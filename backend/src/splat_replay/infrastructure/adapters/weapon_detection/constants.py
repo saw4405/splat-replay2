@@ -36,6 +36,9 @@ TEAM_COLOR_WITHIN_MAX_DISTANCE: Final[float] = 90.0
 TEAM_COLOR_BETWEEN_MIN_DISTANCE: Final[float] = 110.0
 WEAPON_DISPLAY_OUTLINE_MIN_IOU: Final[float] = 0.40
 WEAPON_DISPLAY_OUTLINE_MIN_MATCHED_SLOTS: Final[int] = 4
+# 輪郭一致スロットで推定した「ブキ本体領域」の平均比率が低すぎる場合は
+# ブキ表示が薄い/欠落しているとみなし、表示あり判定を抑制する。
+WEAPON_DISPLAY_MIN_WEAPON_REGION_RATIO: Final[float] = 0.08
 SCORE_TIE_EPSILON: Final[float] = 1e-12
 
 # 候補の最終選択は score と template_threshold の単一スコアで一貫して行う。
@@ -50,6 +53,8 @@ CANDIDATE_CONFIDENCE_RESCUE_MIN_GAP: Final[float] = 0.0085
 CANDIDATE_CONFIDENCE_RESCUE_MIN_EDGE_RATIO: Final[float] = 0.09
 CANDIDATE_CONFIDENCE_RESCUE_MIN_TEAM_EDGE_RATIO: Final[float] = 0.07
 CANDIDATE_CONFIDENCE_RESCUE_MAX_THRESHOLD: Final[float] = 0.95
+# variant テンプレートは、通常判定が拮抗した場合のみ再判定に使用する。
+VARIANT_FALLBACK_MAX_CONFIDENCE_GAP: Final[float] = 0.02
 
 # テンプレートマッチ応答の集約点数。1 は従来どおり最大値のみを使う。
 TEMPLATE_RESPONSE_TOP_K: Final[int] = 1

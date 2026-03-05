@@ -305,6 +305,11 @@ async def test_predict_slot_uses_confidence_based_selection(
         "_rank_weapon_candidates",
         _stub_rank_weapon_candidates,
     )
+    monkeypatch.setattr(
+        recognizer,
+        "_variant_template_sources_by_weapon",
+        {},
+    )
 
     slot_result, _debug_candidates = await recognizer._predict_slot(
         slot=constants.ALLY_SLOTS[0],
@@ -340,6 +345,11 @@ async def test_predict_slot_returns_unknown_when_best_confidence_is_low(
         "_rank_weapon_candidates",
         _stub_rank_weapon_candidates,
     )
+    monkeypatch.setattr(
+        recognizer,
+        "_variant_template_sources_by_weapon",
+        {},
+    )
 
     slot_result, _debug_candidates = await recognizer._predict_slot(
         slot=constants.ALLY_SLOTS[0],
@@ -349,6 +359,121 @@ async def test_predict_slot_returns_unknown_when_best_confidence_is_low(
 
     assert slot_result.predicted_weapon == UNKNOWN_WEAPON_LABEL
     assert slot_result.is_unmatched is True
+
+
+@pytest.mark.asyncio
+async def test_predict_slot_uses_variant_fallback_when_confidence_gap_is_small(
+    recognizer: WeaponRecognitionAdapter,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    ranked_base = [
+        _ranked_candidate(weapon="候補1", score=0.840, threshold=0.820),
+        _ranked_candidate(weapon="候補2", score=0.826, threshold=0.820),
+    ]
+    ranked_with_variant = [
+        _ranked_candidate(weapon="候補2", score=0.910, threshold=0.820),
+        _ranked_candidate(weapon="候補1", score=0.840, threshold=0.820),
+    ]
+
+    async def _stub_rank_weapon_candidates(
+        query_padded_gray: np.ndarray,
+        *,
+        cancel_generation: int,
+    ) -> list[_RankedCandidate]:
+        _ = query_padded_gray
+        _ = cancel_generation
+        return ranked_base
+
+    async def _stub_rank_weapon_candidates_with_variant(
+        query_padded_gray: np.ndarray,
+        *,
+        cancel_generation: int,
+    ) -> list[_RankedCandidate]:
+        _ = query_padded_gray
+        _ = cancel_generation
+        return ranked_with_variant
+
+    monkeypatch.setattr(
+        recognizer,
+        "_rank_weapon_candidates",
+        _stub_rank_weapon_candidates,
+    )
+    monkeypatch.setattr(
+        recognizer,
+        "_rank_weapon_candidates_with_variant",
+        _stub_rank_weapon_candidates_with_variant,
+    )
+    monkeypatch.setattr(
+        recognizer,
+        "_variant_template_sources_by_weapon",
+        {"候補2": ()},
+    )
+
+    slot_result, _debug_candidates = await recognizer._predict_slot(
+        slot=constants.ALLY_SLOTS[0],
+        query_padded_gray=np.zeros((16, 16), dtype=np.uint8),
+        cancel_generation=recognizer._capture_cancel_generation(),
+    )
+
+    assert slot_result.predicted_weapon == "候補2"
+    assert slot_result.top_candidates[0].weapon == "候補2"
+
+
+@pytest.mark.asyncio
+async def test_predict_slot_skips_variant_fallback_when_confidence_gap_is_large(
+    recognizer: WeaponRecognitionAdapter,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    ranked_base = [
+        _ranked_candidate(weapon="候補1", score=0.950, threshold=0.820),
+        _ranked_candidate(weapon="候補2", score=0.826, threshold=0.820),
+    ]
+    variant_called = False
+
+    async def _stub_rank_weapon_candidates(
+        query_padded_gray: np.ndarray,
+        *,
+        cancel_generation: int,
+    ) -> list[_RankedCandidate]:
+        _ = query_padded_gray
+        _ = cancel_generation
+        return ranked_base
+
+    async def _stub_rank_weapon_candidates_with_variant(
+        query_padded_gray: np.ndarray,
+        *,
+        cancel_generation: int,
+    ) -> list[_RankedCandidate]:
+        nonlocal variant_called
+        _ = query_padded_gray
+        _ = cancel_generation
+        variant_called = True
+        return ranked_base
+
+    monkeypatch.setattr(
+        recognizer,
+        "_rank_weapon_candidates",
+        _stub_rank_weapon_candidates,
+    )
+    monkeypatch.setattr(
+        recognizer,
+        "_rank_weapon_candidates_with_variant",
+        _stub_rank_weapon_candidates_with_variant,
+    )
+    monkeypatch.setattr(
+        recognizer,
+        "_variant_template_sources_by_weapon",
+        {"候補2": ()},
+    )
+
+    slot_result, _debug_candidates = await recognizer._predict_slot(
+        slot=constants.ALLY_SLOTS[0],
+        query_padded_gray=np.zeros((16, 16), dtype=np.uint8),
+        cancel_generation=recognizer._capture_cancel_generation(),
+    )
+
+    assert slot_result.predicted_weapon == "候補1"
+    assert variant_called is False
 
 
 @pytest.mark.asyncio
@@ -374,6 +499,11 @@ async def test_predict_slot_applies_confidence_rescue_when_signal_is_strong(
         recognizer,
         "_rank_weapon_candidates",
         _stub_rank_weapon_candidates,
+    )
+    monkeypatch.setattr(
+        recognizer,
+        "_variant_template_sources_by_weapon",
+        {},
     )
 
     slot_result, _debug_candidates = await recognizer._predict_slot(
@@ -414,6 +544,11 @@ async def test_predict_slot_does_not_apply_confidence_rescue_when_signal_is_weak
         "_rank_weapon_candidates",
         _stub_rank_weapon_candidates,
     )
+    monkeypatch.setattr(
+        recognizer,
+        "_variant_template_sources_by_weapon",
+        {},
+    )
 
     slot_result, _debug_candidates = await recognizer._predict_slot(
         slot=constants.ALLY_SLOTS[0],
@@ -449,6 +584,7 @@ async def test_detect_weapon_display_true(
         "no_weapon_icons_screen_2.png",
         "no_weapon_icons_screen_3.png",
         "no_weapon_icons_screen_4.png",
+        "no_weapon_icons_screen_5.png",
     ],
 )
 async def test_detect_weapon_display_false(
@@ -678,12 +814,15 @@ async def test_count_outline_matched_slots_early_returns_at_threshold(
         _infer_species_and_mask,
     )
 
-    matched_slots, iou_by_slot, processed_slots = (
-        recognizer._count_outline_matched_slots(
-            slot_images=slot_images,
-            model_masks={},
-            max_shift=constants.OUTLINE_ALIGN_FAST_MAX_SHIFT,
-        )
+    (
+        matched_slots,
+        iou_by_slot,
+        processed_slots,
+        display_weapon_region_ratio,
+    ) = recognizer._count_outline_matched_slots(
+        slot_images=slot_images,
+        model_masks={},
+        max_shift=constants.OUTLINE_ALIGN_FAST_MAX_SHIFT,
     )
 
     assert matched_slots == constants.WEAPON_DISPLAY_OUTLINE_MIN_MATCHED_SLOTS
@@ -691,6 +830,7 @@ async def test_count_outline_matched_slots_early_returns_at_threshold(
         processed_slots == constants.WEAPON_DISPLAY_OUTLINE_MIN_MATCHED_SLOTS
     )
     assert calls == constants.WEAPON_DISPLAY_OUTLINE_MIN_MATCHED_SLOTS
+    assert display_weapon_region_ratio == 0.0
     for slot in constants.SLOT_ORDER[:4]:
         assert iou_by_slot[slot] >= constants.WEAPON_DISPLAY_OUTLINE_MIN_IOU
     for slot in constants.SLOT_ORDER[4:]:

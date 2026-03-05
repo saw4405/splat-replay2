@@ -24,6 +24,7 @@ NON_VISIBLE_FILENAMES = (
     "no_weapon_icons_screen_2.png",
     "no_weapon_icons_screen_3.png",
     "no_weapon_icons_screen_4.png",
+    "no_weapon_icons_screen_5.png",
 )
 
 
