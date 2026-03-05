@@ -280,6 +280,16 @@ matcher_groups:
     - weapon_template_137
     - weapon_template_138
     - weapon_template_139
+    - weapon_template_140
+    - weapon_template_141
+    - weapon_template_142
+    - weapon_template_143
+    - weapon_template_144
+    - weapon_template_145
+    - weapon_template_146
+    - weapon_template_147
+    - weapon_template_148
+    - weapon_template_149
 
 # 単一手法検出器（シンプルな検出用）
 simple_matchers:
@@ -1322,7 +1332,7 @@ simple_matchers:
     type: "template"
     template_path: "assets/matching/weapon/パブロ.png"
     mask_path: "assets/matching/weapon/パブロ_mask.png"
-    threshold: 0.84
+    threshold: 0.86
     description: "ブキ照合テンプレート"
 
   weapon_template_048:
@@ -1330,7 +1340,7 @@ simple_matchers:
     type: "template"
     template_path: "assets/matching/weapon/パブロ・ヒュー.png"
     mask_path: "assets/matching/weapon/パブロ・ヒュー_mask.png"
-    threshold: 0.78
+    threshold: 0.79
     description: "ブキ照合テンプレート"
 
   weapon_template_049:
@@ -1834,7 +1844,7 @@ simple_matchers:
     type: "template"
     template_path: "assets/matching/weapon/スプラスコープFRST.png"
     mask_path: "assets/matching/weapon/スプラスコープFRST_mask.png"
-    threshold: 0.82
+    threshold: 0.92
     description: "ブキ照合テンプレート"
 
   weapon_template_112:
@@ -2060,3 +2070,84 @@ simple_matchers:
     mask_path: "assets/matching/weapon/ワイドローラー惑_mask.png"
     threshold: 0.82
     description: "ブキ照合テンプレート"
+
+  weapon_template_140:
+    name: "H3リールガンSNAK"
+    type: "template"
+    template_path: "assets/matching/weapon/H3リールガンSNAK.png"
+    mask_path: "assets/matching/weapon/H3リールガンSNAK_mask.png"
+    threshold: 0.82
+    description: "ブキ照合テンプレート"
+
+  weapon_template_141:
+    name: "スプラチャージャーFRST"
+    type: "template"
+    template_path: "assets/matching/weapon/スプラチャージャーFRST.png"
+    mask_path: "assets/matching/weapon/スプラチャージャーFRST_mask.png"
+    threshold: 0.82
+    description: "ブキ照合テンプレート"
+
+  weapon_template_142:
+    name: "4Kスコープ"
+    type: "template"
+    template_path: "assets/matching/weapon/4Kスコープ_variant_002.png"
+    mask_path: "assets/matching/weapon/4Kスコープ_variant_002_mask.png"
+    threshold: 0.82
+    description: "ブキ照合テンプレート（variant）"
+
+  weapon_template_143:
+    name: "H3リールガン"
+    type: "template"
+    template_path: "assets/matching/weapon/H3リールガン.png"
+    mask_path: "assets/matching/weapon/H3リールガン_mask.png"
+    threshold: 0.82
+    description: "ブキ照合テンプレート"
+
+  weapon_template_144:
+    name: "クーゲルシュライバー・ヒュー"
+    type: "template"
+    template_path: "assets/matching/weapon/クーゲルシュライバー・ヒュー.png"
+    mask_path: "assets/matching/weapon/クーゲルシュライバー・ヒュー_mask.png"
+    threshold: 0.82
+    description: "ブキ照合テンプレート"
+
+  weapon_template_145:
+    name: "ワイドローラー"
+    type: "template"
+    template_path: "assets/matching/weapon/ワイドローラー.png"
+    mask_path: "assets/matching/weapon/ワイドローラー_mask.png"
+    threshold: 0.82
+    description: "ブキ照合テンプレート"
+
+  weapon_template_146:
+    name: "24式張替傘・乙"
+    type: "template"
+    template_path: "assets/matching/weapon/24式張替傘・乙.png"
+    mask_path: "assets/matching/weapon/24式張替傘・乙_mask.png"
+    threshold: 0.82
+    description: "ブキ照合テンプレート"
+
+  weapon_template_147:
+    name: "96ガロンデコ"
+    type: "template"
+    template_path: "assets/matching/weapon/96ガロンデコ.png"
+    mask_path: "assets/matching/weapon/96ガロンデコ_mask.png"
+    threshold: 0.82
+    description: "ブキ照合テンプレート"
+
+  weapon_template_148:
+    name: "クアッドホッパーホワイト"
+    type: "template"
+    template_path: "assets/matching/weapon/クアッドホッパーホワイト.png"
+    mask_path: "assets/matching/weapon/クアッドホッパーホワイト_mask.png"
+    threshold: 0.82
+    description: "ブキ照合テンプレート"
+
+  weapon_template_149:
+    name: "シャープマーカーGECK"
+    type: "template"
+    template_path: "assets/matching/weapon/シャープマーカーGECK.png"
+    mask_path: "assets/matching/weapon/シャープマーカーGECK_mask.png"
+    threshold: 0.82
+    description: "ブキ照合テンプレート"
+
