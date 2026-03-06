@@ -290,6 +290,7 @@ matcher_groups:
     - weapon_template_147
     - weapon_template_148
     - weapon_template_149
+    - weapon_template_150
 
 # 単一手法検出器（シンプルな検出用）
 simple_matchers:
@@ -2148,6 +2149,14 @@ simple_matchers:
     type: "template"
     template_path: "assets/matching/weapon/シャープマーカーGECK.png"
     mask_path: "assets/matching/weapon/シャープマーカーGECK_mask.png"
+    threshold: 0.82
+    description: "ブキ照合テンプレート"
+
+  weapon_template_150:
+    name: "ボトルガイザー"
+    type: "template"
+    template_path: "assets/matching/weapon/ボトルガイザー.png"
+    mask_path: "assets/matching/weapon/ボトルガイザー_mask.png"
     threshold: 0.82
     description: "ブキ照合テンプレート"
 
