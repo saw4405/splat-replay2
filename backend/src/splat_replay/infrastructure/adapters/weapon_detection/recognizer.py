@@ -449,6 +449,9 @@ class WeaponRecognitionAdapter(WeaponRecognitionPort):
         WeaponSlotResult,
         tuple[unmatched_report.SlotDebugCandidate, ...],
     ]:
+        low_signal_forced_unknown = self._is_low_signal_slot(
+            slot_signal_metrics=slot_signal_metrics
+        )
         ranked = await self._rank_weapon_candidates(
             query_padded_gray,
             cancel_generation=cancel_generation,
@@ -463,9 +466,12 @@ class WeaponRecognitionAdapter(WeaponRecognitionPort):
             ranked=ranked,
             slot_signal_metrics=slot_signal_metrics,
         )
+        if low_signal_forced_unknown:
+            accepted_candidate = None
+            rescue_applied = False
         variant_fallback_attempted = False
         variant_applied = False
-        if self._should_try_variant_fallback(
+        if not low_signal_forced_unknown and self._should_try_variant_fallback(
             accepted_candidate=accepted_candidate,
             selected_confidence=selected_confidence,
             second_confidence=second_confidence,
@@ -558,6 +564,13 @@ class WeaponRecognitionAdapter(WeaponRecognitionPort):
             variant_fallback_max_confidence_gap=round(
                 constants.VARIANT_FALLBACK_MAX_CONFIDENCE_GAP, 6
             ),
+            low_signal_forced_unknown=low_signal_forced_unknown,
+            low_signal_edge_ratio_max=round(
+                constants.LOW_SIGNAL_EDGE_RATIO_MAX, 6
+            ),
+            low_signal_team_edge_ratio_max=round(
+                constants.LOW_SIGNAL_TEAM_EDGE_RATIO_MAX, 6
+            ),
             rescue_applied=rescue_applied,
             slot_edge_ratio=(
                 round(slot_signal_metrics.edge_ratio, 6)
@@ -630,6 +643,20 @@ class WeaponRecognitionAdapter(WeaponRecognitionPort):
         ):
             return False
         return True
+
+    def _is_low_signal_slot(
+        self,
+        *,
+        slot_signal_metrics: _SlotSignalMetrics | None,
+    ) -> bool:
+        if slot_signal_metrics is None:
+            return False
+        return (
+            slot_signal_metrics.edge_ratio
+            <= constants.LOW_SIGNAL_EDGE_RATIO_MAX
+            and slot_signal_metrics.team_edge_ratio
+            <= constants.LOW_SIGNAL_TEAM_EDGE_RATIO_MAX
+        )
 
     def _select_accepted_candidate(
         self,

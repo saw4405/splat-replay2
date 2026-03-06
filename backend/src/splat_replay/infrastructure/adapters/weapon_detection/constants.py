@@ -55,6 +55,9 @@ CANDIDATE_CONFIDENCE_RESCUE_MIN_TEAM_EDGE_RATIO: Final[float] = 0.07
 CANDIDATE_CONFIDENCE_RESCUE_MAX_THRESHOLD: Final[float] = 0.95
 # variant テンプレートは、通常判定が拮抗した場合のみ再判定に使用する。
 VARIANT_FALLBACK_MAX_CONFIDENCE_GAP: Final[float] = 0.02
+# ブキ表示が実質見えていない低信号スロットは強制的に UNKNOWN とする。
+LOW_SIGNAL_EDGE_RATIO_MAX: Final[float] = 0.001
+LOW_SIGNAL_TEAM_EDGE_RATIO_MAX: Final[float] = 0.001
 
 # テンプレートマッチ応答の集約点数。1 は従来どおり最大値のみを使う。
 TEMPLATE_RESPONSE_TOP_K: Final[int] = 1

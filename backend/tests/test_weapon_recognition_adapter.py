@@ -420,6 +420,50 @@ async def test_predict_slot_uses_variant_fallback_when_confidence_gap_is_small(
 
 
 @pytest.mark.asyncio
+async def test_predict_slot_forces_unknown_when_low_signal(
+    recognizer: WeaponRecognitionAdapter,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    ranked = [
+        _ranked_candidate(weapon="候補1", score=0.950, threshold=0.820),
+        _ranked_candidate(weapon="候補2", score=0.900, threshold=0.820),
+    ]
+
+    async def _stub_rank_weapon_candidates(
+        query_padded_gray: np.ndarray,
+        *,
+        cancel_generation: int,
+    ) -> list[_RankedCandidate]:
+        _ = query_padded_gray
+        _ = cancel_generation
+        return ranked
+
+    monkeypatch.setattr(
+        recognizer,
+        "_rank_weapon_candidates",
+        _stub_rank_weapon_candidates,
+    )
+    monkeypatch.setattr(
+        recognizer,
+        "_variant_template_sources_by_weapon",
+        {},
+    )
+
+    slot_result, _debug_candidates = await recognizer._predict_slot(
+        slot=constants.ALLY_SLOTS[0],
+        query_padded_gray=np.zeros((16, 16), dtype=np.uint8),
+        cancel_generation=recognizer._capture_cancel_generation(),
+        slot_signal_metrics=_slot_signal_metrics(
+            edge_ratio=0.0,
+            team_edge_ratio=0.0,
+        ),
+    )
+
+    assert slot_result.predicted_weapon == UNKNOWN_WEAPON_LABEL
+    assert slot_result.is_unmatched is True
+
+
+@pytest.mark.asyncio
 async def test_predict_slot_skips_variant_fallback_when_confidence_gap_is_large(
     recognizer: WeaponRecognitionAdapter,
     monkeypatch: pytest.MonkeyPatch,

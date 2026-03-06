@@ -1261,7 +1261,7 @@ simple_matchers:
     type: "template"
     template_path: "assets/matching/weapon/デュアルスイーパー.png"
     mask_path: "assets/matching/weapon/デュアルスイーパー_mask.png"
-    threshold: 0.74
+    threshold: 0.65
     description: "ブキ照合テンプレート"
 
   weapon_template_039:
@@ -1381,7 +1381,7 @@ simple_matchers:
     type: "template"
     template_path: "assets/matching/weapon/プライムシューター.png"
     mask_path: "assets/matching/weapon/プライムシューター_mask.png"
-    threshold: 0.82
+    threshold: 0.85
     description: "ブキ照合テンプレート"
 
   weapon_template_054:
@@ -1397,7 +1397,7 @@ simple_matchers:
     type: "template"
     template_path: "assets/matching/weapon/プロモデラーMG.png"
     mask_path: "assets/matching/weapon/プロモデラーMG_mask.png"
-    threshold: 0.79
+    threshold: 0.8
     description: "ブキ照合テンプレート"
 
   weapon_template_056:
@@ -1557,7 +1557,7 @@ simple_matchers:
     type: "template"
     template_path: "assets/matching/weapon/ダイナモローラー.png"
     mask_path: "assets/matching/weapon/ダイナモローラー_mask.png"
-    threshold: 0.79
+    threshold: 0.83
     description: "ブキ照合テンプレート"
 
   weapon_template_076:
