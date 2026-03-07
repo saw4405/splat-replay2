@@ -292,6 +292,12 @@ matcher_groups:
     - weapon_template_148
     - weapon_template_149
     - weapon_template_150
+    - weapon_template_151
+    - weapon_template_152
+    - weapon_template_153
+    - weapon_template_154
+    - weapon_template_155
+    - weapon_template_156
 
 # 単一手法検出器（シンプルな検出用）
 simple_matchers:
@@ -2157,3 +2163,52 @@ simple_matchers:
     mask_path: "assets/matching/weapon/ボトルガイザー_mask.png"
     threshold: 0.82
     description: "ブキ照合テンプレート"
+
+  weapon_template_151:
+    name: "4Kスコープカスタム"
+    type: "template"
+    template_path: "assets/matching/weapon/4Kスコープカスタム.png"
+    mask_path: "assets/matching/weapon/4Kスコープカスタム_mask.png"
+    threshold: 0.82
+    description: "ブキ照合テンプレート"
+
+  weapon_template_152:
+    name: "オーダーブラスターレプリカ"
+    type: "template"
+    template_path: "assets/matching/weapon/オーダーブラスターレプリカ.png"
+    mask_path: "assets/matching/weapon/オーダーブラスターレプリカ_mask.png"
+    threshold: 0.82
+    description: "ブキ照合テンプレート"
+
+  weapon_template_153:
+    name: "ジェットスイーパー"
+    type: "template"
+    template_path: "assets/matching/weapon/ジェットスイーパー.png"
+    mask_path: "assets/matching/weapon/ジェットスイーパー_mask.png"
+    threshold: 0.82
+    description: "ブキ照合テンプレート"
+
+  weapon_template_154:
+    name: "ジェットスイーパーカスタム"
+    type: "template"
+    template_path: "assets/matching/weapon/ジェットスイーパーカスタム.png"
+    mask_path: "assets/matching/weapon/ジェットスイーパーカスタム_mask.png"
+    threshold: 0.82
+    description: "ブキ照合テンプレート"
+
+  weapon_template_155:
+    name: "スクリュースロッシャーネオ"
+    type: "template"
+    template_path: "assets/matching/weapon/スクリュースロッシャーネオ.png"
+    mask_path: "assets/matching/weapon/スクリュースロッシャーネオ_mask.png"
+    threshold: 0.82
+    description: "ブキ照合テンプレート"
+
+  weapon_template_156:
+    name: "フルイドVカスタム"
+    type: "template"
+    template_path: "assets/matching/weapon/フルイドVカスタム.png"
+    mask_path: "assets/matching/weapon/フルイドVカスタム_mask.png"
+    threshold: 0.82
+    description: "ブキ照合テンプレート"
+
