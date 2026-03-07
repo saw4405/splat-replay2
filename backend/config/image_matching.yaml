@@ -298,6 +298,8 @@ matcher_groups:
     - weapon_template_154
     - weapon_template_155
     - weapon_template_156
+    - weapon_template_157
+    - weapon_template_158
 
 # 単一手法検出器（シンプルな検出用）
 simple_matchers:
@@ -1057,7 +1059,7 @@ simple_matchers:
     type: "template"
     template_path: "assets/matching/weapon/エクスプロッシャーカスタム.png"
     mask_path: "assets/matching/weapon/エクスプロッシャーカスタム_mask.png"
-    threshold: 0.82
+    threshold: 0.75
     description: "ブキ照合テンプレート"
 
   weapon_template_013:
@@ -1201,7 +1203,7 @@ simple_matchers:
     type: "template"
     template_path: "assets/matching/weapon/スパッタリー・ヒュー.png"
     mask_path: "assets/matching/weapon/スパッタリー・ヒュー_mask.png"
-    threshold: 0.68
+    threshold: 0.70
     description: "ブキ照合テンプレート"
 
   weapon_template_031:
@@ -1465,7 +1467,7 @@ simple_matchers:
     type: "template"
     template_path: "assets/matching/weapon/リッター4Kカスタム.png"
     mask_path: "assets/matching/weapon/リッター4Kカスタム_mask.png"
-    threshold: 0.76
+    threshold: 0.75
     description: "ブキ照合テンプレート"
 
   weapon_template_064:
@@ -1561,7 +1563,7 @@ simple_matchers:
     type: "template"
     template_path: "assets/matching/weapon/ダイナモローラー.png"
     mask_path: "assets/matching/weapon/ダイナモローラー_mask.png"
-    threshold: 0.83
+    threshold: 0.87
     description: "ブキ照合テンプレート"
 
   weapon_template_076:
@@ -2209,6 +2211,22 @@ simple_matchers:
     type: "template"
     template_path: "assets/matching/weapon/フルイドVカスタム.png"
     mask_path: "assets/matching/weapon/フルイドVカスタム_mask.png"
+    threshold: 0.82
+    description: "ブキ照合テンプレート"
+
+  weapon_template_157:
+    name: "H3リールガンD"
+    type: "template"
+    template_path: "assets/matching/weapon/H3リールガンD.png"
+    mask_path: "assets/matching/weapon/H3リールガンD_mask.png"
+    threshold: 0.82
+    description: "ブキ照合テンプレート"
+
+  weapon_template_158:
+    name: "ラピッドブラスター"
+    type: "template"
+    template_path: "assets/matching/weapon/ラピッドブラスター.png"
+    mask_path: "assets/matching/weapon/ラピッドブラスター_mask.png"
     threshold: 0.82
     description: "ブキ照合テンプレート"
 
