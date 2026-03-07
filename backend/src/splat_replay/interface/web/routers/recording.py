@@ -12,7 +12,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from fastapi import APIRouter
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, root_validator
 from splat_replay.domain.models import (
     BattleResult,
     RecordingMetadata,
@@ -55,6 +55,8 @@ class RecordingMetadataResponse(BaseModel):
     kill: int | None = Field(None, description="キル数")
     death: int | None = Field(None, description="デス数")
     special: int | None = Field(None, description="スペシャル数")
+    gold_medals: int | None = Field(None, description="金表彰数")
+    silver_medals: int | None = Field(None, description="銀表彰数")
     allies: list[str] | None = Field(None, description="味方4人のブキ")
     enemies: list[str] | None = Field(None, description="敵4人のブキ")
     hazard: int | None = Field(None, description="危険度")
@@ -77,6 +79,8 @@ class RecordingMetadataUpdateRequest(BaseModel):
     kill: int | None = None
     death: int | None = None
     special: int | None = None
+    gold_medals: int | None = Field(None, ge=0, le=3)
+    silver_medals: int | None = Field(None, ge=0, le=3)
     allies: list[str] | None = None
     enemies: list[str] | None = None
     hazard: int | None = None
@@ -84,6 +88,22 @@ class RecordingMetadataUpdateRequest(BaseModel):
     power_egg: int | None = None
     rescue: int | None = None
     rescued: int | None = None
+
+    @root_validator
+    def validate_medal_total(
+        cls, values: dict[str, object]
+    ) -> dict[str, object]:
+        gold_medals = values.get("gold_medals")
+        silver_medals = values.get("silver_medals")
+        if (
+            isinstance(gold_medals, int)
+            and isinstance(silver_medals, int)
+            and gold_medals + silver_medals > 3
+        ):
+            raise ValueError(
+                "gold_medals と silver_medals の合計は 3 以下で指定してください"
+            )
+        return values
 
 
 def _build_recording_metadata_response(
@@ -95,6 +115,8 @@ def _build_recording_metadata_response(
     kill: int | None = None
     death: int | None = None
     special: int | None = None
+    gold_medals: int | None = None
+    silver_medals: int | None = None
     hazard: int | None = None
     golden_egg: int | None = None
     power_egg: int | None = None
@@ -109,6 +131,8 @@ def _build_recording_metadata_response(
         kill = result.kill
         death = result.death
         special = result.special
+        gold_medals = result.gold_medals
+        silver_medals = result.silver_medals
     elif isinstance(result, SalmonResult):
         stage = result.stage.name
         hazard = result.hazard
@@ -130,6 +154,8 @@ def _build_recording_metadata_response(
         kill=kill,
         death=death,
         special=special,
+        gold_medals=gold_medals,
+        silver_medals=silver_medals,
         allies=list(metadata.allies) if metadata.allies else None,
         enemies=list(metadata.enemies) if metadata.enemies else None,
         hazard=hazard,

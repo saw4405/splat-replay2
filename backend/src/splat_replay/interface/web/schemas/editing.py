@@ -31,6 +31,8 @@ class RecordedVideoItem(BaseModel):
     kill: Optional[int] = None
     death: Optional[int] = None
     special: Optional[int] = None
+    gold_medals: Optional[int] = None
+    silver_medals: Optional[int] = None
     allies: Optional[list[str]] = None
     enemies: Optional[list[str]] = None
     hazard: Optional[int] = None

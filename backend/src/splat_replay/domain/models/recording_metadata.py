@@ -94,6 +94,8 @@ class RecordingMetadata:
             "kill",
             "death",
             "special",
+            "gold_medals",
+            "silver_medals",
         }
     )
 

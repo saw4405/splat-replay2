@@ -100,7 +100,7 @@ class VideoEditSettings(BaseModel):
         user_editable=True,
     )
     chapter_template: str = Field(
-        default="{RESULT:<5} {KILL:>3}k {DEATH:>3}d {SPECIAL:>3}s  {STAGE}",
+        default="{RESULT:<5} {KILL:>3}k {DEATH:>3}d {SPECIAL:>3}s {MEDALS} {STAGE}",
         title="チャプターテンプレート",
         description="動画の説明欄に入るチャプターに使用するテンプレート",
         recommended=False,

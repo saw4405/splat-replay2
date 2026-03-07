@@ -3,6 +3,7 @@
 
   type WeaponTeam = 'allies' | 'enemies';
   type WeaponSlots = [string, string, string, string];
+  type MedalField = 'goldMedals' | 'silverMedals';
 
   export let metadata: {
     match: string;
@@ -13,6 +14,8 @@
     kill: number;
     death: number;
     special: number;
+    goldMedals: number;
+    silverMedals: number;
     allies: WeaponSlots;
     enemies: WeaponSlots;
   };
@@ -36,6 +39,25 @@
     metadata = {
       ...metadata,
       [team]: nextSlots,
+    };
+  }
+
+  function normaliseMedalCount(value: number): number {
+    if (!Number.isFinite(value)) {
+      return 0;
+    }
+    return Math.min(3, Math.max(0, Math.trunc(value)));
+  }
+
+  function normaliseMedalInput(field: MedalField): void {
+    const otherField: MedalField = field === 'goldMedals' ? 'silverMedals' : 'goldMedals';
+    const otherValue = normaliseMedalCount(metadata[otherField]);
+    const maxCurrent = 3 - otherValue;
+    const nextValue = Math.min(normaliseMedalCount(metadata[field]), maxCurrent);
+    metadata = {
+      ...metadata,
+      [field]: nextValue,
+      [otherField]: otherValue,
     };
   }
 </script>
@@ -100,6 +122,32 @@
     <div class="form-group">
       <label for="special">スペシャル</label>
       <input id="special" type="number" min="0" bind:value={metadata.special} />
+    </div>
+  </div>
+
+  <div class="medals-grid">
+    <div class="form-group">
+      <label for="gold_medals">金表彰</label>
+      <input
+        id="gold_medals"
+        type="number"
+        min="0"
+        max="3"
+        bind:value={metadata.goldMedals}
+        on:input={() => normaliseMedalInput('goldMedals')}
+      />
+    </div>
+
+    <div class="form-group">
+      <label for="silver_medals">銀表彰</label>
+      <input
+        id="silver_medals"
+        type="number"
+        min="0"
+        max="3"
+        bind:value={metadata.silverMedals}
+        on:input={() => normaliseMedalInput('silverMedals')}
+      />
     </div>
   </div>
 
@@ -213,11 +261,18 @@
     gap: 0.75rem;
   }
 
+  .medals-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.75rem;
+  }
+
   .stats-grid .form-group {
     min-width: 0;
   }
 
-  .stats-grid input {
+  .stats-grid input,
+  .medals-grid input {
     width: 100%;
     box-sizing: border-box;
   }
@@ -244,6 +299,13 @@
 
   @media (max-width: 900px) {
     .weapon-grid {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  @media (max-width: 640px) {
+    .stats-grid,
+    .medals-grid {
       grid-template-columns: 1fr;
     }
   }

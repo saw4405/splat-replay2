@@ -39,10 +39,16 @@ export async function updateRecordedVideoMetadata(
   videoId: string,
   metadata: MetadataUpdate
 ): Promise<RecordedVideo> {
+  const { goldMedals, silverMedals, ...rest } = metadata;
+  const payload = {
+    ...rest,
+    gold_medals: goldMedals,
+    silver_medals: silverMedals,
+  };
   const response = await fetch(`/api/assets/recorded/${encodeURIComponent(videoId)}/metadata`, {
     method: 'PATCH',
     headers: JSON_HEADERS,
-    body: JSON.stringify(metadata),
+    body: JSON.stringify(payload),
   });
   if (!response.ok) {
     const detail = await safeReadText(response);

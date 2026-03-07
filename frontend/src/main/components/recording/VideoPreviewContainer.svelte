@@ -47,6 +47,8 @@
     | 'kill'
     | 'death'
     | 'special'
+    | 'gold_medals'
+    | 'silver_medals'
     | 'allies'
     | 'enemies';
   type MetadataEventPayload = Partial<Record<MetadataFieldKey, MetadataValue>>;
@@ -139,6 +141,7 @@
   let metadataNotifications: MetadataNotification[] = [];
   let notificationIdCounter = 0;
   let lastMetadata: Partial<Record<MetadataFieldKey, string>> = {};
+  let pendingMetadataSessionReset = false;
 
   async function loadMetadataOptions(): Promise<void> {
     try {
@@ -239,6 +242,36 @@
     return normalizeRawValue(value);
   }
 
+  function normalizeStoredMedalCount(value: string | undefined): number {
+    if (!value) {
+      return 0;
+    }
+    const parsed = Number.parseInt(value, 10);
+    return Number.isNaN(parsed) ? 0 : parsed;
+  }
+
+  function normalizeIncomingMedalCount(value: MetadataValue): number | null {
+    if (value === null || value === undefined) {
+      return null;
+    }
+    if (typeof value === 'number') {
+      return Number.isNaN(value) ? null : value;
+    }
+    if (typeof value === 'string') {
+      const trimmed = value.trim();
+      if (!trimmed) {
+        return null;
+      }
+      const parsed = Number.parseInt(trimmed, 10);
+      return Number.isNaN(parsed) ? null : parsed;
+    }
+    return null;
+  }
+
+  function formatMedalSummary(gold: number, silver: number): string {
+    return `🥇x${gold} 🥈x${silver}`;
+  }
+
   function normalizeWeaponSlots(value: MetadataValue): string[] | null {
     if (!Array.isArray(value)) {
       return null;
@@ -316,7 +349,30 @@
     return trimmed;
   }
 
+  function resetMetadataTracking(): void {
+    lastMetadata = {};
+    pendingMetadataSessionReset = false;
+  }
+
+  function prepareMetadataTrackingForNextSession(payload: MetadataEventPayload): void {
+    if (!pendingMetadataSessionReset) {
+      return;
+    }
+
+    const incomingStartedAt = normalizeStartedAtValue(payload.started_at);
+    const previousStartedAt = lastMetadata.started_at;
+
+    // 停止直後に同一セッションの最終メタデータが再送されるため、
+    // started_at が同じ間は比較基準を維持する。
+    if (incomingStartedAt !== null && incomingStartedAt === previousStartedAt) {
+      return;
+    }
+
+    resetMetadataTracking();
+  }
+
   function handleMetadataUpdate(payload: MetadataEventPayload): void {
+    prepareMetadataTrackingForNextSession(payload);
     console.log('[handleMetadataUpdate] payload:', payload);
     const updates: string[] = [];
     const nextMetadata: Partial<Record<MetadataFieldKey, string>> = {
@@ -365,6 +421,25 @@
     }
     if ('enemies' in payload) {
       handleWeaponTeamMetadataUpdate('enemies', payload.enemies, nextMetadata, updates);
+    }
+    if ('gold_medals' in payload || 'silver_medals' in payload) {
+      const previousGold = normalizeStoredMedalCount(lastMetadata.gold_medals);
+      const previousSilver = normalizeStoredMedalCount(lastMetadata.silver_medals);
+      const nextGold =
+        'gold_medals' in payload
+          ? (normalizeIncomingMedalCount(payload.gold_medals) ?? 0)
+          : previousGold;
+      const nextSilver =
+        'silver_medals' in payload
+          ? (normalizeIncomingMedalCount(payload.silver_medals) ?? 0)
+          : previousSilver;
+
+      nextMetadata.gold_medals = nextGold.toString();
+      nextMetadata.silver_medals = nextSilver.toString();
+
+      if (previousGold !== nextGold || previousSilver !== nextSilver) {
+        updates.push(`表彰: ${formatMedalSummary(nextGold, nextSilver)}`);
+      }
     }
 
     lastMetadata = nextMetadata;
@@ -592,7 +667,7 @@
         event.type === 'domain.recording.stopped' ||
         event.type === 'domain.recording.cancelled'
       ) {
-        lastMetadata = {};
+        pendingMetadataSessionReset = true;
         return;
       }
       console.log('[DomainEvent]', event);

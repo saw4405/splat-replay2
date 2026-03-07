@@ -11,6 +11,10 @@ from .match import Match
 from .rule import Rule
 from .stage import Stage
 
+MEDAL_COUNT_MIN = 0
+MEDAL_COUNT_MAX = 3
+MEDAL_COUNT_TOTAL_MAX = 3
+
 
 def _as_str(value: object, field: str) -> str:
     if isinstance(value, str):
@@ -33,6 +37,24 @@ def _as_int(value: object, field: str) -> int:
     raise TypeError(f"{field} must be int or str, got {type(value)!r}")
 
 
+def validate_medal_counts(gold_medals: int, silver_medals: int) -> None:
+    if not (MEDAL_COUNT_MIN <= gold_medals <= MEDAL_COUNT_MAX):
+        raise ValidationError(
+            f"gold_medals は {MEDAL_COUNT_MIN} 以上 {MEDAL_COUNT_MAX} 以下で指定してください",
+            error_code="GOLD_MEDALS_OUT_OF_RANGE",
+        )
+    if not (MEDAL_COUNT_MIN <= silver_medals <= MEDAL_COUNT_MAX):
+        raise ValidationError(
+            f"silver_medals は {MEDAL_COUNT_MIN} 以上 {MEDAL_COUNT_MAX} 以下で指定してください",
+            error_code="SILVER_MEDALS_OUT_OF_RANGE",
+        )
+    if gold_medals + silver_medals > MEDAL_COUNT_TOTAL_MAX:
+        raise ValidationError(
+            f"gold_medals と silver_medals の合計は {MEDAL_COUNT_TOTAL_MAX} 以下で指定してください",
+            error_code="MEDAL_COUNT_TOTAL_OUT_OF_RANGE",
+        )
+
+
 @dataclass(frozen=True)
 class BattleResult:
     """Result information for a battle.
@@ -47,6 +69,11 @@ class BattleResult:
     kill: int
     death: int
     special: int
+    gold_medals: int = 0
+    silver_medals: int = 0
+
+    def __post_init__(self) -> None:
+        validate_medal_counts(self.gold_medals, self.silver_medals)
 
     def to_dict(self) -> dict[str, str | int]:
         return {
@@ -56,6 +83,8 @@ class BattleResult:
             "kill": self.kill,
             "death": self.death,
             "special": self.special,
+            "gold_medals": self.gold_medals,
+            "silver_medals": self.silver_medals,
         }
 
     @classmethod
@@ -66,6 +95,8 @@ class BattleResult:
         kill = _as_int(data["kill"], "kill")
         death = _as_int(data["death"], "death")
         special = _as_int(data["special"], "special")
+        gold_medals = _as_int(data.get("gold_medals", 0), "gold_medals")
+        silver_medals = _as_int(data.get("silver_medals", 0), "silver_medals")
         return cls(
             match=Match[match_str],
             rule=Rule[rule_str],
@@ -73,6 +104,8 @@ class BattleResult:
             kill=kill,
             death=death,
             special=special,
+            gold_medals=gold_medals,
+            silver_medals=silver_medals,
         )
 
 

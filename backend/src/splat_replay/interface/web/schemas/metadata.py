@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from typing import List, Optional
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, root_validator
 
 __all__ = [
     "MetadataOptionItem",
@@ -46,8 +46,26 @@ class MetadataUpdateRequest(BaseModel):
     kill: Optional[int] = None
     death: Optional[int] = None
     special: Optional[int] = None
+    gold_medals: Optional[int] = Field(None, ge=0, le=3)
+    silver_medals: Optional[int] = Field(None, ge=0, le=3)
     allies: Optional[List[str]] = None
     enemies: Optional[List[str]] = None
+
+    @root_validator
+    def validate_medal_total(
+        cls, values: dict[str, object]
+    ) -> dict[str, object]:
+        gold_medals = values.get("gold_medals")
+        silver_medals = values.get("silver_medals")
+        if (
+            isinstance(gold_medals, int)
+            and isinstance(silver_medals, int)
+            and gold_medals + silver_medals > 3
+        ):
+            raise ValueError(
+                "gold_medals と silver_medals の合計は 3 以下で指定してください"
+            )
+        return values
 
 
 class SubtitleBlock(BaseModel):

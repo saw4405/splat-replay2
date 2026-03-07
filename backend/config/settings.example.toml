@@ -36,7 +36,7 @@ base_dir = "videos"
 volume_multiplier = 1.0
 title_template = "{BATTLE}({RATE}) {RULE} {WIN}勝{LOSE}敗 {DAY:'%y.%m.%d} {SCHEDULE:%H}時～"
 description_template = "{CHAPTERS}"
-chapter_template = "{RESULT:<5} {KILL:>3}k {DEATH:>3}d {SPECIAL:>3}s  {STAGE}"
+chapter_template = "{RESULT:<5} {KILL:>3}k {DEATH:>3}d {SPECIAL:>3}s {MEDALS} {STAGE}"
 
 [video_edit.speech]
 enabled = false

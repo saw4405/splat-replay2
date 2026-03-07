@@ -26,6 +26,7 @@ __all__ = [
     "MicrophoneEnumerator",
     "SpeechTranscriber",
     "GoogleTextToSpeech",
+    "BattleMedalRecognizerAdapter",
     "FileVideoAssetRepository",
     "SetupStateFileAdapter",
     "SystemCommandAdapter",
@@ -40,6 +41,7 @@ __all__ = [
 
 from .adapters import (
     Capture,
+    BattleMedalRecognizerAdapter,
     CaptureDeviceChecker,
     CaptureDeviceEnumerator,
     EventBusPortAdapter,

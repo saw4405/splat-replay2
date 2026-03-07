@@ -63,6 +63,8 @@ def create_assets_router(server: WebAPIServer) -> APIRouter:
                     kill=dto.kill,
                     death=dto.death,
                     special=dto.special,
+                    gold_medals=dto.gold_medals,
+                    silver_medals=dto.silver_medals,
                     allies=list(dto.allies) if dto.allies else None,
                     enemies=list(dto.enemies) if dto.enemies else None,
                     hazard=dto.hazard,

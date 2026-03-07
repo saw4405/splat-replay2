@@ -33,6 +33,8 @@ class RecordingMetadataPatchDTO:
     kill: int | None = None
     death: int | None = None
     special: int | None = None
+    gold_medals: int | None = None
+    silver_medals: int | None = None
     allies: tuple[str, str, str, str] | None = None
     enemies: tuple[str, str, str, str] | None = None
 
@@ -55,6 +57,10 @@ class RecordingMetadataPatchDTO:
             payload["death"] = self.death
         if self.special is not None:
             payload["special"] = self.special
+        if self.gold_medals is not None:
+            payload["gold_medals"] = self.gold_medals
+        if self.silver_medals is not None:
+            payload["silver_medals"] = self.silver_medals
         if self.allies is not None:
             payload["allies"] = list(self.allies)
         if self.enemies is not None:

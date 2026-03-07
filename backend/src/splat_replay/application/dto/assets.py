@@ -27,6 +27,8 @@ class RecordedVideoDTO:
         kill: キル数
         death: デス数
         special: スペシャル数
+        gold_medals: 金表彰数
+        silver_medals: 銀表彰数
         allies: 味方4人のブキ
         enemies: 敵4人のブキ
         hazard: 危険度（サーモンラン）
@@ -53,6 +55,8 @@ class RecordedVideoDTO:
     kill: int | None
     death: int | None
     special: int | None
+    gold_medals: int | None
+    silver_medals: int | None
     allies: tuple[str, str, str, str] | None
     enemies: tuple[str, str, str, str] | None
     hazard: int | None

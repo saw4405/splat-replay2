@@ -3,7 +3,7 @@ from __future__ import annotations
 # ruff: noqa: E402
 import sys
 from pathlib import Path
-from typing import Callable, Optional
+from typing import Callable, Optional, cast
 
 import cv2
 import numpy as np
@@ -13,6 +13,7 @@ import pytest
 BASE = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(BASE / "src"))  # noqa: E402
 
+from splat_replay.application.interfaces import LoggerPort  # noqa: E402
 from splat_replay.domain.config import ImageMatchingSettings  # noqa: E402
 from splat_replay.domain.models import BattleResult  # noqa: E402
 from splat_replay.domain.models import (
@@ -31,8 +32,11 @@ from splat_replay.domain.services.analyzers import (  # noqa: E402
     FrameAnalyzer,
     SalmonFrameAnalyzer,
 )
-from splat_replay.infrastructure import MatcherRegistry  # noqa: E402
-from splat_replay.infrastructure import TesseractOCR
+from splat_replay.infrastructure import (  # noqa: E402
+    BattleMedalRecognizerAdapter,
+    MatcherRegistry,
+    TesseractOCR,
+)
 
 # config の YAML を読み込み、必要なパスをテスト用に上書きする
 BASE_DIR = Path(__file__).resolve().parent
@@ -44,17 +48,42 @@ MATCHER_SETTINGS = ImageMatchingSettings.load_from_yaml(
 TEMPLATE_DIR = BASE_DIR / "fixtures" / "templates"
 
 
+class _DummyLogger:
+    def debug(self, event: str, **kw: object) -> None:
+        _ = event, kw
+
+    def info(self, event: str, **kw: object) -> None:
+        _ = event, kw
+
+    def warning(self, event: str, **kw: object) -> None:
+        _ = event, kw
+
+    def error(self, event: str, **kw: object) -> None:
+        _ = event, kw
+
+    def exception(self, event: str, **kw: object) -> None:
+        _ = event, kw
+
+
 def create_analyzer() -> FrameAnalyzer:
     """レジストリを利用する ``FrameAnalyzer`` を返す。"""
     from splat_replay.infrastructure.adapters.image import ImageEditor
 
     matcher_registry = MatcherRegistry(MATCHER_SETTINGS)
     ocr = TesseractOCR()
+    medal_recognizer = BattleMedalRecognizerAdapter(
+        cast(LoggerPort, _DummyLogger())
+    )
 
     def image_editor_factory(image):
         return ImageEditor(image)
 
-    battle = BattleFrameAnalyzer(matcher_registry, ocr, image_editor_factory)
+    battle = BattleFrameAnalyzer(
+        matcher_registry,
+        ocr,
+        image_editor_factory,
+        medal_recognizer,
+    )
     salmon = SalmonFrameAnalyzer(matcher_registry)
     analyzer = FrameAnalyzer(battle, salmon, matcher_registry)
     return analyzer
@@ -456,7 +485,7 @@ async def test_detect_loading_end(
     "filename, expected",
     [
         ("battle_result_1.png", True),
-        # ("battle_result_2.png", True), # 未対応
+        ("battle_result_2.png", True),
         ("battle_result_3.png", False),
         ("battle_result_4.png", False),
     ],
@@ -486,19 +515,23 @@ async def test_detect_battle_result(
                 3,
                 2,
                 1,
+                0,
+                3,
             ),
         ),
-        # (     # 表彰なしは未対応
-        #     "battle_result_2.png",
-        #     BattleResult(
-        #         Match("Xマッチ"),
-        #         Rule("ガチホコ"),
-        #         Stage("マサバ海峡大橋"),
-        #         0,
-        #         3,
-        #         0,
-        #     ),
-        # ),
+        (
+            "battle_result_2.png",
+            BattleResult(
+                Match("Xマッチ"),
+                Rule("ガチホコ"),
+                Stage("マサバ海峡大橋"),
+                0,
+                3,
+                0,
+                0,
+                0,
+            ),
+        ),
         (
             "battle_result_3.png",
             BattleResult(
@@ -508,6 +541,8 @@ async def test_detect_battle_result(
                 5,
                 6,
                 1,
+                0,
+                3,
             ),
         ),
         (
@@ -519,6 +554,8 @@ async def test_detect_battle_result(
                 10,
                 6,
                 3,
+                1,
+                2,
             ),
         ),
         (
@@ -529,6 +566,8 @@ async def test_detect_battle_result(
                 Stage("コンブトラック"),
                 4,
                 4,
+                1,
+                2,
                 1,
             ),
         ),
@@ -541,6 +580,8 @@ async def test_detect_battle_result(
                 6,
                 2,
                 3,
+                3,
+                0,
             ),
         ),
         (
@@ -552,6 +593,8 @@ async def test_detect_battle_result(
                 11,
                 7,
                 3,
+                3,
+                0,
             ),
         ),
         (
@@ -563,6 +606,8 @@ async def test_detect_battle_result(
                 7,
                 7,
                 6,
+                0,
+                3,
             ),
         ),
         (
@@ -574,6 +619,8 @@ async def test_detect_battle_result(
                 17,
                 7,
                 4,
+                3,
+                0,
             ),
         ),
         (
@@ -585,6 +632,8 @@ async def test_detect_battle_result(
                 7,
                 5,
                 2,
+                2,
+                1,
             ),
         ),
         (
@@ -596,6 +645,8 @@ async def test_detect_battle_result(
                 17,
                 9,
                 4,
+                3,
+                0,
             ),
         ),
         (
@@ -607,6 +658,8 @@ async def test_detect_battle_result(
                 11,
                 4,
                 5,
+                3,
+                0,
             ),
         ),
         (
@@ -618,6 +671,8 @@ async def test_detect_battle_result(
                 7,
                 6,
                 4,
+                3,
+                0,
             ),
         ),
         (
@@ -629,6 +684,8 @@ async def test_detect_battle_result(
                 7,
                 5,
                 5,
+                0,
+                3,
             ),
         ),
         (
@@ -640,6 +697,8 @@ async def test_detect_battle_result(
                 8,
                 10,
                 4,
+                0,
+                3,
             ),
         ),
         (
@@ -651,6 +710,8 @@ async def test_detect_battle_result(
                 14,
                 10,
                 3,
+                2,
+                1,
             ),
         ),
         (
@@ -662,6 +723,8 @@ async def test_detect_battle_result(
                 13,
                 7,
                 5,
+                1,
+                2,
             ),
         ),
         (
@@ -673,6 +736,21 @@ async def test_detect_battle_result(
                 12,
                 8,
                 5,
+                3,
+                0,
+            ),
+        ),
+        (
+            "battle_result_19.png",
+            BattleResult(
+                Match("バンカラマッチ(チャレンジ)"),
+                Rule("ガチヤグラ"),
+                Stage("タラポートショッピングパーク"),
+                5,
+                6,
+                0,
+                2,
+                0,
             ),
         ),
     ],

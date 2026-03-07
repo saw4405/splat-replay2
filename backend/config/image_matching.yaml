@@ -32,7 +32,7 @@ composite_detection:
   battle_abort:
     and:
       - matcher: battle_abort_hsv
-      - matcher: battle_abort_template
+      - matcher: battle_abort_message_hsv
 
   battle_communication_error:
     and:
@@ -65,12 +65,13 @@ composite_detection:
 
   battle_result:
     and:
-      - matcher: battle_result_message_hsv
       - not:
           matcher: battle_result_icon_hsv
       - not:
           matcher: battle_result_gear_hsv
       - matcher: battle_result_background_hsv
+      - not:
+          matcher: battle_abort_message_hsv
 
 # マッチャーグループ定義
 matcher_groups:
@@ -479,14 +480,11 @@ simple_matchers:
     threshold: 0.9
     description: "バトル中止を素早く検出する"
 
-  battle_abort_template:
-    type: "template"
-    template_path: "assets/matching/battle_abort.png"
-    roi:
-      x: 1170
-      y: 200
-      width: 300
-      height: 150
+  battle_abort_message_hsv:
+    type: "hsv"
+    mask_path: "assets/matching/battle_abort_mask.png"
+    lower_bound: [0, 0, 200]
+    upper_bound: [179, 20, 255]
     threshold: 0.9
     description: "バトル中止を検出する"
 
@@ -2159,4 +2157,3 @@ simple_matchers:
     mask_path: "assets/matching/weapon/ボトルガイザー_mask.png"
     threshold: 0.82
     description: "ブキ照合テンプレート"
-

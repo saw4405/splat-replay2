@@ -76,7 +76,13 @@ class MetadataParser:
             except Exception:
                 pass
 
-        for field in ("kill", "death", "special"):
+        for field in (
+            "kill",
+            "death",
+            "special",
+            "gold_medals",
+            "silver_medals",
+        ):
             if field in data:
                 try:
                     value = data[field]

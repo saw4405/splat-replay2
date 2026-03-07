@@ -65,6 +65,8 @@ async def build_recorded_video_dto(
     kill_value: int | None = None
     death_value: int | None = None
     special_value: int | None = None
+    gold_medals_value: int | None = None
+    silver_medals_value: int | None = None
     allies: tuple[str, str, str, str] | None = metadata.allies
     enemies: tuple[str, str, str, str] | None = metadata.enemies
     hazard: int | None = None
@@ -80,6 +82,8 @@ async def build_recorded_video_dto(
         kill_value = metadata.result.kill
         death_value = metadata.result.death
         special_value = metadata.result.special
+        gold_medals_value = metadata.result.gold_medals
+        silver_medals_value = metadata.result.silver_medals
     elif isinstance(metadata.result, SalmonResult):
         stage_name = metadata.result.stage.name
         hazard = metadata.result.hazard
@@ -102,6 +106,8 @@ async def build_recorded_video_dto(
         kill=kill_value,
         death=death_value,
         special=special_value,
+        gold_medals=gold_medals_value,
+        silver_medals=silver_medals_value,
         allies=allies,
         enemies=enemies,
         hazard=hazard,

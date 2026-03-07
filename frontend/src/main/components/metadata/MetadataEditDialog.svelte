@@ -16,6 +16,8 @@
     kill: number;
     death: number;
     special: number;
+    goldMedals: number;
+    silverMedals: number;
     allies: WeaponSlots;
     enemies: WeaponSlots;
   }
@@ -51,6 +53,8 @@
     kill: 0,
     death: 0,
     special: 0,
+    goldMedals: 0,
+    silverMedals: 0,
     allies: ['', '', '', ''],
     enemies: ['', '', '', ''],
   };

@@ -43,6 +43,8 @@ export interface RecordedVideo {
   kill: number | null;
   death: number | null;
   special: number | null;
+  goldMedals: number | null;
+  silverMedals: number | null;
   allies: string[] | null;
   enemies: string[] | null;
   hazard: number | null;
@@ -80,6 +82,8 @@ export interface MetadataUpdate {
   kill?: number;
   death?: number;
   special?: number;
+  goldMedals?: number;
+  silverMedals?: number;
   allies?: string[];
   enemies?: string[];
 }

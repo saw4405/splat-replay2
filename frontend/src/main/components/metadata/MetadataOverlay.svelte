@@ -12,6 +12,7 @@
   let alertVariant: 'info' | 'success' | 'warning' | 'error' = 'info';
 
   type WeaponSlots = [string, string, string, string];
+  type MedalField = 'gold_medals' | 'silver_medals';
   type MetadataState = {
     game_mode: string;
     stage: string;
@@ -23,6 +24,8 @@
     kill: number;
     death: number;
     special: number;
+    gold_medals: number;
+    silver_medals: number;
     allies: WeaponSlots;
     enemies: WeaponSlots;
   };
@@ -38,6 +41,8 @@
     kill?: number;
     death?: number;
     special?: number;
+    gold_medals?: number;
+    silver_medals?: number;
     hazard?: number;
     golden_egg?: number;
     power_egg?: number;
@@ -62,6 +67,8 @@
     kill: 0,
     death: 0,
     special: 0,
+    gold_medals: 0,
+    silver_medals: 0,
     allies: ['', '', '', ''],
     enemies: ['', '', '', ''],
   };
@@ -78,6 +85,8 @@
     kill: false,
     death: false,
     special: false,
+    gold_medals: false,
+    silver_medals: false,
     allies: false,
     enemies: false,
   };
@@ -145,6 +154,40 @@
   function handleWeaponInput(team: 'allies' | 'enemies', index: number, event: Event): void {
     const input = event.currentTarget as HTMLInputElement;
     updateWeaponSlot(team, index, input.value);
+  }
+
+  function normaliseMedalCount(value: number): number {
+    if (!Number.isFinite(value)) {
+      return 0;
+    }
+    return Math.min(3, Math.max(0, Math.trunc(value)));
+  }
+
+  function normaliseMedalPair(
+    goldMedals: number,
+    silverMedals: number
+  ): {
+    gold_medals: number;
+    silver_medals: number;
+  } {
+    const nextGold = normaliseMedalCount(goldMedals);
+    const nextSilver = Math.min(normaliseMedalCount(silverMedals), 3 - nextGold);
+    return {
+      gold_medals: nextGold,
+      silver_medals: nextSilver,
+    };
+  }
+
+  function normaliseEditedMedalField(field: MedalField): void {
+    const otherField: MedalField = field === 'gold_medals' ? 'silver_medals' : 'gold_medals';
+    const otherValue = normaliseMedalCount(metadata[otherField]);
+    const maxCurrent = 3 - otherValue;
+    const nextValue = Math.min(normaliseMedalCount(metadata[field]), maxCurrent);
+    metadata = {
+      ...metadata,
+      [field]: nextValue,
+      [otherField]: otherValue,
+    };
   }
 
   async function fetchCurrentMetadata(): Promise<void> {
@@ -229,6 +272,25 @@
     } else {
       skippedFields.push('special (手動編集済み)');
     }
+    const nextGoldMedals = !manuallyEdited.gold_medals
+      ? (data.gold_medals ?? metadata.gold_medals)
+      : metadata.gold_medals;
+    const nextSilverMedals = !manuallyEdited.silver_medals
+      ? (data.silver_medals ?? metadata.silver_medals)
+      : metadata.silver_medals;
+    const normalisedMedals = normaliseMedalPair(nextGoldMedals, nextSilverMedals);
+    if (!manuallyEdited.gold_medals) {
+      metadata.gold_medals = normalisedMedals.gold_medals;
+      updatedFields.push('gold_medals');
+    } else {
+      skippedFields.push('gold_medals (手動編集済み)');
+    }
+    if (!manuallyEdited.silver_medals) {
+      metadata.silver_medals = normalisedMedals.silver_medals;
+      updatedFields.push('silver_medals');
+    } else {
+      skippedFields.push('silver_medals (手動編集済み)');
+    }
     if (!manuallyEdited.allies) {
       metadata.allies = normaliseWeaponSlots(data.allies);
       updatedFields.push('allies');
@@ -264,6 +326,8 @@
       kill: false,
       death: false,
       special: false,
+      gold_medals: false,
+      silver_medals: false,
       allies: false,
       enemies: false,
     };
@@ -283,6 +347,8 @@
       kill: 0,
       death: 0,
       special: 0,
+      gold_medals: 0,
+      silver_medals: 0,
       allies: ['', '', '', ''],
       enemies: ['', '', '', ''],
     };
@@ -326,6 +392,20 @@
       }
       if (manuallyEdited.special && metadata.special !== null && metadata.special !== undefined) {
         payload.special = metadata.special;
+      }
+      if (
+        manuallyEdited.gold_medals &&
+        metadata.gold_medals !== null &&
+        metadata.gold_medals !== undefined
+      ) {
+        payload.gold_medals = metadata.gold_medals;
+      }
+      if (
+        manuallyEdited.silver_medals &&
+        metadata.silver_medals !== null &&
+        metadata.silver_medals !== undefined
+      ) {
+        payload.silver_medals = metadata.silver_medals;
       }
       if (manuallyEdited.allies) {
         payload.allies = [...metadata.allies];
@@ -541,6 +621,38 @@
               bind:value={metadata.special}
               on:input={() => markEdited('special')}
               min="0"
+            />
+          </div>
+        </div>
+
+        <div class="stats-row medal-row">
+          <div class="field-group">
+            <label for="gold_medals">金表彰</label>
+            <input
+              id="gold_medals"
+              type="number"
+              bind:value={metadata.gold_medals}
+              on:input={() => {
+                markEdited('gold_medals');
+                normaliseEditedMedalField('gold_medals');
+              }}
+              min="0"
+              max="3"
+            />
+          </div>
+
+          <div class="field-group">
+            <label for="silver_medals">銀表彰</label>
+            <input
+              id="silver_medals"
+              type="number"
+              bind:value={metadata.silver_medals}
+              on:input={() => {
+                markEdited('silver_medals');
+                normaliseEditedMedalField('silver_medals');
+              }}
+              min="0"
+              max="3"
             />
           </div>
         </div>
@@ -786,6 +898,10 @@
   .stats-row input {
     text-align: center;
     width: 100%;
+  }
+
+  .medal-row {
+    grid-template-columns: repeat(2, 1fr);
   }
 
   .weapon-grid {

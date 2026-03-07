@@ -106,7 +106,7 @@ class UpdateRecordedMetadataUseCase:
         if not updates:
             return current
 
-        battle_fields = set(BATTLE_RESULT_REQUIRED_FIELDS)
+        battle_fields = set(RecordingMetadata.BATTLE_FIELDS)
         has_battle_updates = any(key in updates for key in battle_fields)
 
         if has_battle_updates and current.game_mode != GameMode.BATTLE:

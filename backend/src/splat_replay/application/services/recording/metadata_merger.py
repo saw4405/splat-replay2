@@ -359,6 +359,22 @@ class MetadataMerger:
             ):
                 merged = replace(merged, special=auto_update.special)
 
+        if "gold_medals" not in manual_fields:
+            if (
+                auto_update.gold_medals != base.gold_medals
+                and current.gold_medals == base.gold_medals
+            ):
+                merged = replace(merged, gold_medals=auto_update.gold_medals)
+
+        if "silver_medals" not in manual_fields:
+            if (
+                auto_update.silver_medals != base.silver_medals
+                and current.silver_medals == base.silver_medals
+            ):
+                merged = replace(
+                    merged, silver_medals=auto_update.silver_medals
+                )
+
         return merged
 
     def _merge_salmon_result(
@@ -477,6 +493,10 @@ class MetadataMerger:
             merged = replace(merged, death=current.death)
         if "special" in manual_fields:
             merged = replace(merged, special=current.special)
+        if "gold_medals" in manual_fields:
+            merged = replace(merged, gold_medals=current.gold_medals)
+        if "silver_medals" in manual_fields:
+            merged = replace(merged, silver_medals=current.silver_medals)
 
         return merged
 

@@ -104,6 +104,8 @@ def create_metadata_router(server: WebAPIServer) -> APIRouter:
             kill=metadata.kill,
             death=metadata.death,
             special=metadata.special,
+            gold_medals=metadata.gold_medals,
+            silver_medals=metadata.silver_medals,
             allies=_to_weapon_slots(metadata.allies),
             enemies=_to_weapon_slots(metadata.enemies),
         )
@@ -142,6 +144,8 @@ def create_metadata_router(server: WebAPIServer) -> APIRouter:
             kill=dto.kill,
             death=dto.death,
             special=dto.special,
+            gold_medals=dto.gold_medals,
+            silver_medals=dto.silver_medals,
             allies=list(dto.allies) if dto.allies else None,
             enemies=list(dto.enemies) if dto.enemies else None,
             hazard=dto.hazard,

@@ -36,13 +36,18 @@ from splat_replay.application.interfaces import (
 )
 from splat_replay.domain.config import VideoStorageSettings
 from splat_replay.domain.models import Frame
-from splat_replay.domain.ports import ImageMatcherPort, OCRPort
+from splat_replay.domain.ports import (
+    BattleMedalRecognizerPort,
+    ImageMatcherPort,
+    OCRPort,
+)
 from splat_replay.domain.ports.image_editor import (
     ImageEditorFactory,
     ImageEditorPort,
 )
 from splat_replay.domain.repositories import SetupStateRepository
 from splat_replay.infrastructure import (
+    BattleMedalRecognizerAdapter,
     CaptureDeviceChecker,
     CaptureDeviceEnumerator,
     EventBusPortAdapter,
@@ -104,6 +109,7 @@ def register_adapters(container: punq.Container) -> None:
 
     container.register(PowerPort, SystemPower)
     container.register(OCRPort, TesseractOCR)
+    container.register(BattleMedalRecognizerPort, BattleMedalRecognizerAdapter)
     container.register(UploadPort, YouTubeClient)
     container.register(AuthenticatedClientPort, YouTubeClient)
     container.register(SystemCommandPort, SystemCommandAdapter)

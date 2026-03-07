@@ -137,6 +137,10 @@
       .join(' / ');
   }
 
+  function formatMedals(gold: number | null, silver: number | null): string {
+    return `🥇x${gold ?? 0} 🥈x${silver ?? 0}`;
+  }
+
   onMount(() => {
     void loadMetadataOptions();
   });
@@ -405,6 +409,8 @@
                     )}
                   </span>
                 </div>
+              </div>
+              <div class="metadata-row">
                 <div class="metadata-item stat-item">
                   <span class="stat-icon">💀</span>
                   <span class="stat-value">{video.kill ?? 0}K/{video.death ?? 0}D</span>
@@ -412,6 +418,14 @@
                 <div class="metadata-item stat-item">
                   <span class="stat-icon">✨</span>
                   <span class="stat-value">SP×{video.special ?? 0}</span>
+                </div>
+              </div>
+              <div class="metadata-row">
+                <div class="metadata-item">
+                  <span class="metadata-label">表彰:</span>
+                  <span class="stat-value">
+                    {formatMedals(video.goldMedals, video.silverMedals)}
+                  </span>
                 </div>
               </div>
               <div class="metadata-row">
@@ -468,6 +482,8 @@
       kill: editingVideo.kill ?? 0,
       death: editingVideo.death ?? 0,
       special: editingVideo.special ?? 0,
+      goldMedals: editingVideo.goldMedals ?? 0,
+      silverMedals: editingVideo.silverMedals ?? 0,
       allies: normaliseWeaponSlots(editingVideo.allies),
       enemies: normaliseWeaponSlots(editingVideo.enemies),
     }}

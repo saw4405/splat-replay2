@@ -131,6 +131,9 @@ class TitleDescriptionGenerator:
                     "KILL": res.kill,
                     "DEATH": res.death,
                     "SPECIAL": res.special,
+                    "MEDALS": self._format_medals(
+                        res.gold_medals, res.silver_medals
+                    ),
                     "STAGE": res.stage.value,
                     "RATE": f"{asset.metadata.rate.label}{asset.metadata.rate}"
                     if asset.metadata.rate
@@ -214,3 +217,7 @@ class TitleDescriptionGenerator:
         hours, remainder = divmod(total_seconds, 3600)
         minutes, seconds = divmod(remainder, 60)
         return f"{hours:02}:{minutes:02}:{seconds:02}"
+
+    @staticmethod
+    def _format_medals(gold: int, silver: int) -> str:
+        return f"🥇x{gold} 🥈x{silver}"

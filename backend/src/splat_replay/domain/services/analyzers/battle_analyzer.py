@@ -19,12 +19,19 @@ from splat_replay.domain.models import (
     Udemae,
 )
 from splat_replay.domain.ports import (
+    BattleMedalRecognizerPort,
     ImageEditorFactory,
     ImageMatcherPort,
     OCRPort,
 )
 
 from .analyzer_plugin import AnalyzerPlugin
+
+
+class _NullBattleMedalRecognizer:
+    async def count_medals(self, frame: Frame) -> Tuple[int, int]:
+        _ = frame
+        return 0, 0
 
 
 class BattleFrameAnalyzer(AnalyzerPlugin):
@@ -35,10 +42,12 @@ class BattleFrameAnalyzer(AnalyzerPlugin):
         matcher: ImageMatcherPort,
         ocr: OCRPort,
         image_editor_factory: ImageEditorFactory,
+        medal_recognizer: BattleMedalRecognizerPort = _NullBattleMedalRecognizer(),
     ) -> None:
         self.matcher = matcher
         self.ocr = ocr
         self.image_editor_factory = image_editor_factory
+        self.medal_recognizer = medal_recognizer
         # 軽量キャッシュ (単一プロセス内での同一フレーム反復呼び出し高速化)
         self._xp_cache: Dict[int, XP] = {}
         self._result_cache: Dict[int, BattleResult] = {}
@@ -149,15 +158,16 @@ class BattleFrameAnalyzer(AnalyzerPlugin):
         if match is None:
             return None
 
-        # ルール / ステージ / キルレコード を並列取得
+        # ルール / ステージ / キルレコード / 表彰 を並列取得
         rule_task = asyncio.create_task(self.extract_battle_rule(frame))
         stage_task = asyncio.create_task(self.extract_battle_stage(frame))
         kill_task = asyncio.create_task(
             self.extract_battle_kill_record(frame, match)
         )
+        medal_task = asyncio.create_task(self.extract_battle_medals(frame))
 
-        rule, stage, kill_record = await asyncio.gather(
-            rule_task, stage_task, kill_task
+        rule, stage, kill_record, medal_counts = await asyncio.gather(
+            rule_task, stage_task, kill_task, medal_task
         )
 
         if rule is None:
@@ -173,9 +183,17 @@ class BattleFrameAnalyzer(AnalyzerPlugin):
             kill=kill_record[0],
             death=kill_record[1],
             special=kill_record[2],
+            gold_medals=medal_counts[0],
+            silver_medals=medal_counts[1],
         )
         self._result_cache[fp] = result
         return result
+
+    async def extract_battle_medals(self, frame: Frame) -> Tuple[int, int]:
+        try:
+            return await self.medal_recognizer.count_medals(frame)
+        except Exception:
+            return 0, 0
 
     async def extract_battle_match(self, frame: Frame) -> Optional[Match]:
         """バトルマッチの種類を取得する。"""
@@ -193,31 +211,40 @@ class BattleFrameAnalyzer(AnalyzerPlugin):
         return Stage(stage_name) if stage_name else None
 
     async def extract_battle_kill_record(
-        self, frame: Frame, match: Match, rule: Optional[Rule] = None
+        self, frame: Frame, match: Match
     ) -> Optional[Tuple[int, int, int]]:
         """キルレコードを取得する。"""
-        record_positions: Dict[str, Dict[str, int]] = {
-            "kill": {"x1": 1519, "y1": 293, "x2": 1548, "y2": 316},
-            "death": {"x1": 1597, "y1": 293, "x2": 1626, "y2": 316},
-            "special": {"x1": 1674, "y1": 293, "x2": 1703, "y2": 316},
-        }
-
-        kill_record = await self._extract_battle_kill_record(
-            frame, record_positions
-        )
+        candidate_positions: List[Dict[str, Dict[str, int]]] = [
+            {
+                "kill": {"x1": 1519, "y1": 293, "x2": 1548, "y2": 316},
+                "death": {"x1": 1597, "y1": 293, "x2": 1626, "y2": 316},
+                "special": {"x1": 1674, "y1": 293, "x2": 1703, "y2": 316},
+            },
+            {
+                "kill": {"x1": 1519, "y1": 410, "x2": 1548, "y2": 432},
+                "death": {"x1": 1597, "y1": 410, "x2": 1626, "y2": 432},
+                "special": {"x1": 1674, "y1": 410, "x2": 1703, "y2": 432},
+            },
+        ]
 
         # トリカラの攻撃側のときはキルレ表示の位置が異なるため、再度抽出する
-        if not kill_record and match == Match.TRICOLOR:
-            record_positions = {
-                "kill": {"x1": 1556, "y1": 293, "x2": 1585, "y2": 316},
-                "death": {"x1": 1616, "y1": 293, "x2": 1644, "y2": 316},
-                "special": {"x1": 1674, "y1": 293, "x2": 1703, "y2": 316},
-            }
+        if match == Match.TRICOLOR:
+            candidate_positions.append(
+                {
+                    "kill": {"x1": 1556, "y1": 293, "x2": 1585, "y2": 316},
+                    "death": {"x1": 1616, "y1": 293, "x2": 1644, "y2": 316},
+                    "special": {"x1": 1674, "y1": 293, "x2": 1703, "y2": 316},
+                }
+            )
+
+        for record_positions in candidate_positions:
             kill_record = await self._extract_battle_kill_record(
                 frame, record_positions
             )
+            if kill_record is not None:
+                return kill_record
 
-        return kill_record
+        return None
 
     async def _extract_battle_kill_record(
         self, frame: Frame, record_positions: Dict[str, Dict[str, int]]
@@ -449,32 +476,35 @@ class BattleFrameAnalyzer(AnalyzerPlugin):
                 or not isinstance(result, str)
             ):
                 return None
-            text = result.strip()
-            # 末尾の連続数字のみ採用し、装飾/記号の混入を除去
-            m = re.search(r"(\d+)\D*$", text)
-            digits = m.group(1) if m else ""
-            if not digits:
+            parsed = self._parse_numeric_ocr_result(result)
+            if parsed is None:
                 return None
-
-            # 先頭ゼロ除去(全てゼロなら0)
-            digits = digits.lstrip("0") or "0"
-
-            # 3桁以上の場合、ノイズによる誤認識の可能性
-            # kill/death/special は通常99以下なので、100以上は異常
-            if len(digits) >= 3:
-                val = int(digits)
-                if val >= 100:
-                    # 100以上の場合、先頭桁を除去して再評価
-                    digits = digits[1:]
-
-            try:
-                records[name] = int(digits)
-            except ValueError:
-                return None
+            records[name] = parsed
 
         if len(records) != 3:
             return None
         return records["kill"], records["death"], records["special"]
+
+    @staticmethod
+    def _parse_numeric_ocr_result(text: Optional[str]) -> Optional[int]:
+        if text is None:
+            return None
+        stripped = text.strip()
+        if not stripped:
+            return None
+        match = re.search(r"(\d+)\D*$", stripped)
+        digits = match.group(1) if match else ""
+        if not digits:
+            return None
+        digits = digits.lstrip("0") or "0"
+        if len(digits) >= 3:
+            value = int(digits)
+            if value >= 100:
+                digits = digits[1:]
+        try:
+            return int(digits)
+        except ValueError:
+            return None
 
     async def _extract_battle_kill_record_fast(
         self, frame: Frame, record_positions: Dict[str, Dict[str, int]]

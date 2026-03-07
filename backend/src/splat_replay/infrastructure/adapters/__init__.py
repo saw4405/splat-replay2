@@ -18,6 +18,7 @@ __all__ = [
     "MicrophoneEnumerator",
     "SpeechTranscriber",
     "GoogleTextToSpeech",
+    "BattleMedalRecognizerAdapter",
     "EventPublisherAdapter",
     "EventBusPortAdapter",
     "FramePublisherAdapter",
@@ -47,6 +48,7 @@ from .capture.capture_device_checker import (
 from .capture.ndi_capture import NDICapture
 from .image.image_drawer import ImageDrawer
 from .image.image_editor import ImageEditor
+from .medal_detection import BattleMedalRecognizerAdapter
 from .messaging.event_bus_adapter import EventBusPortAdapter
 from .messaging.event_publisher_adapter import EventPublisherAdapter
 from .messaging.frame_publisher_adapter import FramePublisherAdapter
