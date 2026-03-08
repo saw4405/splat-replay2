@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import datetime
+from enum import Enum
 from typing import List, Tuple
 
 from splat_replay.application.interfaces import (
@@ -134,12 +135,12 @@ class TitleDescriptionGenerator:
                     "MEDALS": self._format_medals(
                         res.gold_medals, res.silver_medals
                     ),
-                    "STAGE": res.stage.value,
+                    "STAGE": self._enum_value(res.stage),
                     "RATE": f"{asset.metadata.rate.label}{asset.metadata.rate}"
                     if asset.metadata.rate
                     else "",
-                    "BATTLE": res.match.value,
-                    "RULE": res.rule.value,
+                    "BATTLE": self._enum_value(res.match),
+                    "RULE": self._enum_value(res.rule),
                     "DAY": day,
                     "SCHEDULE": time_slot,
                     "START_TIME": asset.metadata.started_at,
@@ -161,13 +162,17 @@ class TitleDescriptionGenerator:
         match_name = "Unknown"
         rule_name = "Unknown"
         if first and isinstance(first, BattleResult):
-            match_name = first.match.value
-            rule_name = first.rule.value
+            match_name = self._enum_value(first.match, fallback="Unknown")
+            rule_name = self._enum_value(first.rule, fallback="Unknown")
 
         stage_names = [
             a.metadata.result.stage.value
             for a in assets
-            if a.metadata and isinstance(a.metadata.result, BattleResult)
+            if (
+                a.metadata
+                and isinstance(a.metadata.result, BattleResult)
+                and a.metadata.result.stage is not None
+            )
         ]
         unique_stages = list(dict.fromkeys(stage_names))
 
@@ -209,6 +214,10 @@ class TitleDescriptionGenerator:
             else ""
         )
         return title, description
+
+    @staticmethod
+    def _enum_value(value: Enum | None, *, fallback: str = "UNKNOWN") -> str:
+        return value.value if value is not None else fallback
 
     @staticmethod
     def _format_seconds(seconds: float) -> str:

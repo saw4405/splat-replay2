@@ -12,11 +12,12 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from fastapi import APIRouter
-from pydantic import BaseModel, Field, root_validator
-from splat_replay.domain.models import (
-    BattleResult,
-    RecordingMetadata,
-    SalmonResult,
+from pydantic import BaseModel
+from splat_replay.application.metadata import recording_metadata_to_dict
+from splat_replay.domain.models import RecordingMetadata
+from splat_replay.interface.web.schemas import (
+    RecordingMetadataResponse,
+    RecordingMetadataUpdateRequest,
 )
 
 if TYPE_CHECKING:
@@ -31,138 +32,22 @@ if TYPE_CHECKING:
 class StandardResponse(BaseModel):
     """標準レスポンススキーマ。"""
 
-    success: bool = Field(description="操作が成功したかどうか")
-    error: str | None = Field(None, description="エラーメッセージ（失敗時）")
-    state: str | None = Field(None, description="自動録画の状態")
+    success: bool
+    error: str | None = None
+    state: str | None = None
 
 
 class RecorderStateResponse(BaseModel):
     """録画状態レスポンススキーマ。"""
 
-    state: str = Field(description="録画状態 (STOPPED / RECORDING / PAUSED)")
-
-
-class RecordingMetadataResponse(BaseModel):
-    """録画メタデータレスポンススキーマ。"""
-
-    game_mode: str | None = Field(None, description="ゲームモード")
-    stage: str | None = Field(None, description="ステージ")
-    started_at: str | None = Field(None, description="開始時刻")
-    match: str | None = Field(None, description="マッチ")
-    rule: str | None = Field(None, description="ルール")
-    rate: str | None = Field(None, description="レート")
-    judgement: str | None = Field(None, description="判定")
-    kill: int | None = Field(None, description="キル数")
-    death: int | None = Field(None, description="デス数")
-    special: int | None = Field(None, description="スペシャル数")
-    gold_medals: int | None = Field(None, description="金表彰数")
-    silver_medals: int | None = Field(None, description="銀表彰数")
-    allies: list[str] | None = Field(None, description="味方4人のブキ")
-    enemies: list[str] | None = Field(None, description="敵4人のブキ")
-    hazard: int | None = Field(None, description="危険度")
-    golden_egg: int | None = Field(None, description="金イクラ数")
-    power_egg: int | None = Field(None, description="イクラ数")
-    rescue: int | None = Field(None, description="救助数")
-    rescued: int | None = Field(None, description="救助された数")
-
-
-class RecordingMetadataUpdateRequest(BaseModel):
-    """録画メタデータ更新リクエストスキーマ。"""
-
-    game_mode: str | None = None
-    started_at: str | None = None
-    match: str | None = None
-    rule: str | None = None
-    stage: str | None = None
-    rate: str | None = None
-    judgement: str | None = None
-    kill: int | None = None
-    death: int | None = None
-    special: int | None = None
-    gold_medals: int | None = Field(None, ge=0, le=3)
-    silver_medals: int | None = Field(None, ge=0, le=3)
-    allies: list[str] | None = None
-    enemies: list[str] | None = None
-    hazard: int | None = None
-    golden_egg: int | None = None
-    power_egg: int | None = None
-    rescue: int | None = None
-    rescued: int | None = None
-
-    @root_validator
-    def validate_medal_total(
-        cls, values: dict[str, object]
-    ) -> dict[str, object]:
-        gold_medals = values.get("gold_medals")
-        silver_medals = values.get("silver_medals")
-        if (
-            isinstance(gold_medals, int)
-            and isinstance(silver_medals, int)
-            and gold_medals + silver_medals > 3
-        ):
-            raise ValueError(
-                "gold_medals と silver_medals の合計は 3 以下で指定してください"
-            )
-        return values
+    state: str
 
 
 def _build_recording_metadata_response(
     metadata: RecordingMetadata,
 ) -> RecordingMetadataResponse:
-    stage: str | None = None
-    match: str | None = None
-    rule: str | None = None
-    kill: int | None = None
-    death: int | None = None
-    special: int | None = None
-    gold_medals: int | None = None
-    silver_medals: int | None = None
-    hazard: int | None = None
-    golden_egg: int | None = None
-    power_egg: int | None = None
-    rescue: int | None = None
-    rescued: int | None = None
-
-    result = metadata.result
-    if isinstance(result, BattleResult):
-        match = result.match.name
-        rule = result.rule.name
-        stage = result.stage.name
-        kill = result.kill
-        death = result.death
-        special = result.special
-        gold_medals = result.gold_medals
-        silver_medals = result.silver_medals
-    elif isinstance(result, SalmonResult):
-        stage = result.stage.name
-        hazard = result.hazard
-        golden_egg = result.golden_egg
-        power_egg = result.power_egg
-        rescue = result.rescue
-        rescued = result.rescued
-
-    return RecordingMetadataResponse(
-        game_mode=metadata.game_mode.name if metadata.game_mode else None,
-        stage=stage,
-        started_at=metadata.started_at.isoformat()
-        if metadata.started_at
-        else None,
-        match=match,
-        rule=rule,
-        rate=str(metadata.rate) if metadata.rate else None,
-        judgement=metadata.judgement.name if metadata.judgement else None,
-        kill=kill,
-        death=death,
-        special=special,
-        gold_medals=gold_medals,
-        silver_medals=silver_medals,
-        allies=list(metadata.allies) if metadata.allies else None,
-        enemies=list(metadata.enemies) if metadata.enemies else None,
-        hazard=hazard,
-        golden_egg=golden_egg,
-        power_egg=power_egg,
-        rescue=rescue,
-        rescued=rescued,
+    return RecordingMetadataResponse.parse_obj(
+        recording_metadata_to_dict(metadata)
     )
 
 
@@ -275,7 +160,7 @@ def create_recording_router(server: WebAPIServer) -> APIRouter:
         現在録画中のメタデータを手動で更新する。
         """
         try:
-            updates = request.dict(exclude_none=True)
+            updates = request.dict(exclude_unset=True)
             use_case = server.auto_recording_use_case_factory()
             await use_case.update_metadata(updates)
             server.logger.info("録画メタデータ更新", metadata=updates)

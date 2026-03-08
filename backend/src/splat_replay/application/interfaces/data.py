@@ -30,6 +30,7 @@ class BehaviorSettingsView(Protocol):
 
     edit_after_power_off: bool
     sleep_after_upload: bool
+    record_battle_history: bool
 
 
 class UploadSettingsView(Protocol):

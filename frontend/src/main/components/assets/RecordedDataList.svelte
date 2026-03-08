@@ -2,6 +2,7 @@
   import { createEventDispatcher, onMount } from 'svelte';
   import type { RecordedVideo } from '../../api/types';
   import { buildMetadataOptionMap, getMetadataOptions } from '../../api/metadata';
+  import { normaliseWeaponSlots, toEditableMetadata } from '../../metadata/editable';
   import MetadataEditDialog from '../metadata/MetadataEditDialog.svelte';
   import VideoPlayerDialog from '../media/VideoPlayerDialog.svelte';
   import ThumbnailZoomDialog from '../media/ThumbnailZoomDialog.svelte';
@@ -117,22 +118,14 @@
     return map[value] ?? value;
   }
 
-  function normaliseWeaponSlots(
-    value: string[] | null | undefined
-  ): [string, string, string, string] {
-    const slots = value?.slice(0, 4) ?? [];
-    while (slots.length < 4) {
-      slots.push('不明');
-    }
-    return [slots[0] ?? '不明', slots[1] ?? '不明', slots[2] ?? '不明', slots[3] ?? '不明'];
-  }
-
   function hasDetectedWeapon(value: string[] | null | undefined): boolean {
-    return normaliseWeaponSlots(value).some((weapon) => weapon.trim() !== '' && weapon !== '不明');
+    return normaliseWeaponSlots(value, '不明').some(
+      (weapon) => weapon.trim() !== '' && weapon !== '不明'
+    );
   }
 
   function formatWeaponSlots(value: string[] | null | undefined): string {
-    return normaliseWeaponSlots(value)
+    return normaliseWeaponSlots(value, '不明')
       .map((weapon) => weapon.trim() || '不明')
       .join(' / ');
   }
@@ -473,20 +466,7 @@
   <MetadataEditDialog
     bind:visible={showMetadataDialog}
     videoId={editingVideo.path}
-    metadata={{
-      match: editingVideo.match ?? '',
-      rule: editingVideo.rule ?? '',
-      stage: editingVideo.stage ?? '',
-      rate: editingVideo.rate ?? '',
-      judgement: editingVideo.judgement ?? '',
-      kill: editingVideo.kill ?? 0,
-      death: editingVideo.death ?? 0,
-      special: editingVideo.special ?? 0,
-      goldMedals: editingVideo.goldMedals ?? 0,
-      silverMedals: editingVideo.silverMedals ?? 0,
-      allies: normaliseWeaponSlots(editingVideo.allies),
-      enemies: normaliseWeaponSlots(editingVideo.enemies),
-    }}
+    metadata={toEditableMetadata(editingVideo)}
     on:save={handleSaveMetadata}
   />
 

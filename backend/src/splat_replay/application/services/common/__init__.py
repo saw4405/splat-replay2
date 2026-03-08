@@ -7,6 +7,9 @@ from splat_replay.application.services.common.progress import (
     ProgressEventStore,
     ProgressReporter,
 )
+from splat_replay.application.services.common.battle_history_service import (
+    BattleHistoryService,
+)
 from splat_replay.application.services.common.queries import AssetQueryService
 from splat_replay.application.services.common.settings_service import (
     SettingsService,
@@ -17,6 +20,7 @@ from splat_replay.application.services.common.subtitle_converter import (
 
 __all__ = [
     "AssetQueryService",
+    "BattleHistoryService",
     "ProgressEvent",
     "ProgressEventStore",
     "ProgressReporter",

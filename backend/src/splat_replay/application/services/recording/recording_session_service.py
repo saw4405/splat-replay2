@@ -15,8 +15,12 @@ from splat_replay.application.interfaces import (
     RecorderWithTranscriptionPort,
     VideoAssetRepositoryPort,
 )
+from splat_replay.application.metadata import recording_metadata_to_dict
 from splat_replay.application.services.recording.metadata_merger import (
     MetadataMerger,
+)
+from splat_replay.application.services.common.battle_history_service import (
+    BattleHistoryService,
 )
 from splat_replay.application.services.recording.recording_context import (
     RecordingContext,
@@ -66,6 +70,7 @@ class RecordingSessionService:
         logger: LoggerPort,
         context: RecordingContext,
         domain_publisher: DomainEventPublisher | None = None,
+        battle_history_service: BattleHistoryService | None = None,
     ):
         self.sm = state_machine
         self.recorder = recorder
@@ -74,6 +79,7 @@ class RecordingSessionService:
         self.logger = logger
         self._ctx = context
         self._domain_publisher = domain_publisher
+        self._battle_history_service = battle_history_service
         self._pending_stop_reason: Literal["stop", "cancel"] | None = None
 
         # StateMachine のリスナーを登録
@@ -301,7 +307,9 @@ class RecordingSessionService:
                 if self._domain_publisher:
                     self._domain_publisher.publish_domain_event(
                         RecordingMetadataUpdated(
-                            metadata=self._ctx.metadata.to_dict()
+                            metadata=recording_metadata_to_dict(
+                                self._ctx.metadata
+                            )
                         )
                     )
 
@@ -312,6 +320,10 @@ class RecordingSessionService:
             metadata=self._ctx.metadata,
         )
         self.logger.info("ビデオアセットを保存", asset=str(asset))
+        if self._battle_history_service is not None:
+            self._battle_history_service.sync_recording(
+                asset.video, self._ctx.metadata
+            )
 
         # 録画停止後、次のバトル検出のためにコンテキストをリセット
         await self.reset()
@@ -378,7 +390,9 @@ class RecordingSessionService:
         if self._domain_publisher is None:
             return
         self._domain_publisher.publish_domain_event(
-            RecordingMetadataUpdated(metadata=metadata.to_dict())
+            RecordingMetadataUpdated(
+                metadata=recording_metadata_to_dict(metadata)
+            )
         )
 
     # ================================================================

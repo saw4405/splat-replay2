@@ -15,6 +15,7 @@ from typing import TYPE_CHECKING, List
 from fastapi import APIRouter, HTTPException, Query, status
 from fastapi.responses import FileResponse, JSONResponse
 
+from splat_replay.interface.web.converters import to_recorded_video_item
 from splat_replay.interface.web.schemas import (
     EditedVideoItem,
     EditUploadStatus,
@@ -47,38 +48,7 @@ def create_assets_router(server: WebAPIServer) -> APIRouter:
         """録画済みビデオ一覧を取得。"""
         try:
             dtos = await server.list_recorded_videos_uc.execute()
-            # Application DTO → Interface DTO に変換
-            return [
-                RecordedVideoItem(
-                    id=dto.video_id,
-                    path=dto.path,
-                    filename=dto.filename,
-                    started_at=dto.started_at,
-                    game_mode=dto.game_mode,
-                    match=dto.match,
-                    rule=dto.rule,
-                    stage=dto.stage,
-                    rate=dto.rate,
-                    judgement=dto.judgement,
-                    kill=dto.kill,
-                    death=dto.death,
-                    special=dto.special,
-                    gold_medals=dto.gold_medals,
-                    silver_medals=dto.silver_medals,
-                    allies=list(dto.allies) if dto.allies else None,
-                    enemies=list(dto.enemies) if dto.enemies else None,
-                    hazard=dto.hazard,
-                    golden_egg=dto.golden_egg,
-                    power_egg=dto.power_egg,
-                    rescue=dto.rescue,
-                    rescued=dto.rescued,
-                    has_subtitle=dto.has_subtitle,
-                    has_thumbnail=dto.has_thumbnail,
-                    duration_seconds=dto.duration_seconds,
-                    size_bytes=dto.size_bytes,
-                )
-                for dto in dtos
-            ]
+            return [to_recorded_video_item(dto) for dto in dtos]
         except Exception as e:
             server.logger.error(
                 "録画一覧取得エラー", error=str(e), exc_info=True

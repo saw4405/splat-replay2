@@ -9,7 +9,9 @@ import punq
 from punq import Container
 
 from splat_replay.application.interfaces import (
+    BattleHistoryRepositoryPort,
     CapturePort,
+    ConfigPort,
     DomainEventPublisher,
     EventPublisher,
     FramePublisher,
@@ -22,6 +24,7 @@ from splat_replay.application.services import (
     AutoEditor,
     AutoRecorder,
     AutoUploader,
+    BattleHistoryService,
     DeviceChecker,
     ErrorHandler,
     PowerManager,
@@ -46,15 +49,33 @@ from splat_replay.application.services.process.auto_process_service import (
 from splat_replay.application.use_cases.auto_recording_use_case import (
     AutoRecordingUseCase,
 )
+from splat_replay.domain.config import AppSettings
 from splat_replay.domain.services import FrameAnalyzer
 from splat_replay.domain.services.state_machine import StateMachine
 
 
 def register_app_services(container: Container) -> None:
     """アプリケーションサービスを DI コンテナに登録する。"""
+    app_settings = container.resolve(AppSettings)
+    base_dir = app_settings.storage.base_dir
+
     container.register(DeviceChecker, DeviceChecker)
     container.register(
         RecordingPreparationService, RecordingPreparationService
+    )
+
+    def battle_history_service_factory() -> BattleHistoryService:
+        return BattleHistoryService(
+            repository=container.resolve(BattleHistoryRepositoryPort),
+            config=container.resolve(ConfigPort),
+            logger=container.resolve(LoggerPort),
+            base_dir=base_dir,
+        )
+
+    container.register(
+        BattleHistoryService,
+        factory=battle_history_service_factory,
+        scope=punq.Scope.singleton,
     )
 
     # AutoRecorder に DomainEventPublisher を注入
@@ -69,6 +90,7 @@ def register_app_services(container: Container) -> None:
         publisher = container.resolve(EventPublisher)
         frame_publisher = container.resolve(FramePublisher)
         domain_publisher = container.resolve(DomainEventPublisher)
+        battle_history_service = container.resolve(BattleHistoryService)
 
         return AutoRecorder(
             state_machine=state_machine,
@@ -81,6 +103,7 @@ def register_app_services(container: Container) -> None:
             publisher=publisher,
             frame_publisher=frame_publisher,
             domain_publisher=domain_publisher,
+            battle_history_service=battle_history_service,
         )
 
     container.register(AutoRecorder, factory=auto_recorder_factory)

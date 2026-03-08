@@ -23,5 +23,15 @@ class VideoStorageSettings(BaseModel):
         """編集済み動画を保存するフォルダ."""
         return self.base_dir / "edited"
 
+    @property
+    def history_dir(self) -> Path:
+        """対戦履歴を保存するフォルダ."""
+        return self.base_dir / "history"
+
+    @property
+    def battle_history_file(self) -> Path:
+        """対戦履歴ファイル."""
+        return self.history_dir / "battle_history.json"
+
     class Config:
         pass

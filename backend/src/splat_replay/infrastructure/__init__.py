@@ -27,6 +27,7 @@ __all__ = [
     "SpeechTranscriber",
     "GoogleTextToSpeech",
     "BattleMedalRecognizerAdapter",
+    "FileBattleHistoryRepository",
     "FileVideoAssetRepository",
     "SetupStateFileAdapter",
     "SystemCommandAdapter",
@@ -72,4 +73,4 @@ from .adapters import (
     YouTubeClient,
 )
 from .matchers import MatcherRegistry
-from .repositories import FileVideoAssetRepository
+from .repositories import FileBattleHistoryRepository, FileVideoAssetRepository

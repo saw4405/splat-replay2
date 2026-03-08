@@ -18,6 +18,10 @@ from dataclasses import replace
 from typing import Literal, Mapping
 
 from splat_replay.application.interfaces import CapturePort, LoggerPort
+from splat_replay.application.metadata import (
+    BATTLE_METADATA_FIELDS,
+    SALMON_METADATA_FIELDS,
+)
 from splat_replay.application.services.recording.frame_capture_producer import (
     FrameCaptureProducer,
 )
@@ -455,15 +459,13 @@ class AutoRecordingUseCase:
             # MetadataMerger を使用して更新を適用
             updated_metadata, applied_fields = (
                 self._merger.apply_manual_updates(
-                    current_context.metadata, combined_updates
+                    current_context.metadata,
+                    combined_updates,
                 )
             )
             manual_fields = current_context.manual_fields.union(applied_fields)
             if updated_metadata.result is None:
-                result_fields = (
-                    RecordingMetadata.BATTLE_FIELDS
-                    | RecordingMetadata.SALMON_FIELDS
-                )
+                result_fields = BATTLE_METADATA_FIELDS | SALMON_METADATA_FIELDS
                 pending_result_updates = {
                     key: value
                     for key, value in combined_updates.items()

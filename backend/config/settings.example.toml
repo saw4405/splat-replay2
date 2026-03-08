@@ -1,6 +1,7 @@
 [behavior]
 edit_after_power_off = true
 sleep_after_upload = false
+record_battle_history = true
 
 [capture_device]
 name = "Capture Device"

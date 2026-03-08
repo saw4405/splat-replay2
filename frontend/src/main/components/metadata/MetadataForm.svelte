@@ -1,24 +1,11 @@
 <script lang="ts">
   import type { MetadataOptionItem } from '../../api/types';
+  import type { EditableMetadata, WeaponSlots } from '../../metadata/editable';
 
   type WeaponTeam = 'allies' | 'enemies';
-  type WeaponSlots = [string, string, string, string];
   type MedalField = 'goldMedals' | 'silverMedals';
 
-  export let metadata: {
-    match: string;
-    rule: string;
-    stage: string;
-    rate: string;
-    judgement: string;
-    kill: number;
-    death: number;
-    special: number;
-    goldMedals: number;
-    silverMedals: number;
-    allies: WeaponSlots;
-    enemies: WeaponSlots;
-  };
+  export let metadata: EditableMetadata;
   export let matchOptions: MetadataOptionItem[] = [];
   export let ruleOptions: MetadataOptionItem[] = [];
   export let stageOptions: MetadataOptionItem[] = [];

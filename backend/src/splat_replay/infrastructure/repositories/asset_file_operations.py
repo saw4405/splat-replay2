@@ -9,6 +9,7 @@ import cv2
 from structlog.stdlib import BoundLogger
 
 from splat_replay.application.interfaces import DomainEventPublisher
+from splat_replay.application.metadata import recording_metadata_to_dict
 from splat_replay.domain.events import (
     AssetEditedDeleted,
     AssetEditedSaved,
@@ -45,15 +46,16 @@ class AssetFileOperations:
             raise ValueError("Metadata must have a started_at timestamp")
 
         if isinstance(metadata.result, BattleResult):
-            return "_".join(
-                [
-                    metadata.started_at.strftime("%Y%m%d_%H%M%S"),
-                    metadata.result.match.value,
-                    metadata.result.rule.value,
-                    metadata.judgement.value if metadata.judgement else "",
-                    metadata.result.stage.value,
-                ]
-            )
+            parts = [metadata.started_at.strftime("%Y%m%d_%H%M%S")]
+            if metadata.result.match is not None:
+                parts.append(metadata.result.match.value)
+            if metadata.result.rule is not None:
+                parts.append(metadata.result.rule.value)
+            if metadata.judgement is not None:
+                parts.append(metadata.judgement.value)
+            if metadata.result.stage is not None:
+                parts.append(metadata.result.stage.value)
+            return "_".join(parts)
         return metadata.started_at.strftime("%Y%m%d_%H%M%S")
 
     def save_subtitle(self, base_path: Path, content: str) -> bool:
@@ -170,7 +172,7 @@ class AssetFileOperations:
         try:
             metadata_path.parent.mkdir(parents=True, exist_ok=True)
             if isinstance(metadata, RecordingMetadata):
-                data = metadata.to_dict()
+                data = recording_metadata_to_dict(metadata)
             else:
                 data = metadata
             metadata_path.write_text(

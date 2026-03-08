@@ -12,6 +12,7 @@ from typing import Optional, cast
 import punq
 from splat_replay.application.interfaces import (
     AuthenticatedClientPort,
+    BattleHistoryRepositoryPort,
     CaptureDeviceEnumeratorPort,
     CaptureDevicePort,
     CapturePort,
@@ -53,6 +54,7 @@ from splat_replay.infrastructure import (
     EventBusPortAdapter,
     EventPublisherAdapter,
     FFmpegProcessor,
+    FileBattleHistoryRepository,
     FileVideoAssetRepository,
     FramePublisherAdapter,
     GoogleTextToSpeech,
@@ -188,6 +190,19 @@ def register_adapters(container: punq.Container) -> None:
 
     container.register(
         SettingsRepositoryPort, factory=_settings_repository_factory
+    )
+
+    def _battle_history_repo_factory() -> BattleHistoryRepositoryPort:
+        return FileBattleHistoryRepository(
+            cast(
+                VideoStorageSettings, container.resolve(VideoStorageSettings)
+            ),
+            cast(BoundLogger, container.resolve(BoundLogger)),
+        )
+
+    container.register(
+        BattleHistoryRepositoryPort,
+        factory=_battle_history_repo_factory,
     )
 
     # VideoAssetRepository は DomainEventPublisher を利用するため factory で注入

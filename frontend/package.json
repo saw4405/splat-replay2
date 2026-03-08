@@ -6,6 +6,7 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
+    "test": "node --experimental-strip-types --test \"src/**/*.test.ts\"",
     "check": "svelte-check --tsconfig ./tsconfig.json --threshold warning",
     "format": "prettier --write .",
     "format:check": "prettier --check .",

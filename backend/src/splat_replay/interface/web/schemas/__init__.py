@@ -19,6 +19,8 @@ from splat_replay.interface.web.schemas.metadata import (
     MetadataOptionItem,
     MetadataOptionsResponse,
     MetadataUpdateRequest,
+    RecordingMetadataResponse,
+    RecordingMetadataUpdateRequest,
     SubtitleBlock,
     SubtitleData,
 )
@@ -52,6 +54,8 @@ __all__ = [
     "MetadataOptionItem",
     "MetadataOptionsResponse",
     "MetadataUpdateRequest",
+    "RecordingMetadataResponse",
+    "RecordingMetadataUpdateRequest",
     "SubtitleBlock",
     "SubtitleData",
     # Settings

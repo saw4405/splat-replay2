@@ -5,13 +5,22 @@ from __future__ import annotations
 from dataclasses import replace
 from pathlib import Path
 from typing import TYPE_CHECKING
+from collections.abc import Mapping
 
 from splat_replay.application.dto import (
     RecordedVideoDTO,
     RecordingMetadataPatchDTO,
 )
+from splat_replay.application.metadata import (
+    BATTLE_METADATA_FIELDS,
+    BATTLE_RESULT_REQUIRED_FIELDS,
+    has_required_fields,
+)
 from splat_replay.application.services.common.recorded_video_mapper import (
     build_recorded_video_dto,
+)
+from splat_replay.application.services.common.battle_history_service import (
+    BattleHistoryService,
 )
 from splat_replay.application.services.editing.metadata_parser import (
     MetadataParser,
@@ -21,10 +30,6 @@ from splat_replay.domain.models import (
     GameMode,
     RecordingMetadata,
     SalmonResult,
-)
-from splat_replay.domain.models.recording_metadata import (
-    BATTLE_RESULT_REQUIRED_FIELDS,
-    has_required_fields,
 )
 
 if TYPE_CHECKING:
@@ -49,11 +54,13 @@ class UpdateRecordedMetadataUseCase:
         logger: LoggerPort,
         base_dir: Path,
         video_editor: VideoEditorPort,
+        battle_history_service: BattleHistoryService,
     ) -> None:
         self._repository = repository
         self._logger = logger
         self._base_dir = base_dir
         self._video_editor = video_editor
+        self._battle_history_service = battle_history_service
 
     async def execute(
         self, video_id: str, patch: RecordingMetadataPatchDTO
@@ -85,10 +92,13 @@ class UpdateRecordedMetadataUseCase:
         if asset is None or asset.metadata is None:
             raise FileNotFoundError(f"メタデータが見つかりません: {video_id}")
 
-        updates = patch.to_update_dict()
+        updates = patch.to_metadata_update_dict()
         updated_metadata = self._apply_updates(asset.metadata, updates)
 
         self._repository.save_edited_metadata(video_path, updated_metadata)
+        self._battle_history_service.sync_recording(
+            video_path, updated_metadata
+        )
         self._logger.info(f"録画メタデータを更新しました: {video_path}")
 
         return await build_recorded_video_dto(
@@ -101,12 +111,12 @@ class UpdateRecordedMetadataUseCase:
         )
 
     def _apply_updates(
-        self, current: RecordingMetadata, updates: dict[str, object]
+        self, current: RecordingMetadata, updates: Mapping[str, object]
     ) -> RecordingMetadata:
         if not updates:
             return current
 
-        battle_fields = set(RecordingMetadata.BATTLE_FIELDS)
+        battle_fields = set(BATTLE_METADATA_FIELDS)
         has_battle_updates = any(key in updates for key in battle_fields)
 
         if has_battle_updates and current.game_mode != GameMode.BATTLE:

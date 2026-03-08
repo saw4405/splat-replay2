@@ -16,6 +16,9 @@ from splat_replay.application.interfaces import (  # noqa: E402
     LoggerPort,
     VideoEditorPort,
 )
+from splat_replay.application.metadata import (  # noqa: E402
+    recording_metadata_to_dict,
+)
 from splat_replay.application.services.editing.metadata_parser import (  # noqa: E402
     MetadataParser,
 )
@@ -247,7 +250,7 @@ def test_recording_metadata_round_trip_with_medals() -> None:
         result=_build_battle_result(),
     )
 
-    restored = MetadataParser.from_dict(metadata.to_dict())
+    restored = MetadataParser.from_dict(recording_metadata_to_dict(metadata))
 
     assert restored == metadata
 

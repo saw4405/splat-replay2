@@ -14,15 +14,20 @@ from __future__ import annotations
 from dataclasses import replace
 from typing import Mapping
 
+from splat_replay.application.metadata import (
+    BATTLE_METADATA_FIELDS,
+    BATTLE_METADATA_FIELD_DEFINITIONS,
+    BATTLE_RESULT_REQUIRED_FIELDS,
+    COMMON_METADATA_FIELD_DEFINITIONS,
+    SALMON_METADATA_FIELDS,
+    SALMON_METADATA_FIELD_DEFINITIONS,
+    SALMON_RESULT_REQUIRED_FIELDS,
+    has_required_fields,
+)
 from splat_replay.domain.models import (
     BattleResult,
     RecordingMetadata,
     SalmonResult,
-)
-from splat_replay.domain.models.recording_metadata import (
-    BATTLE_RESULT_REQUIRED_FIELDS,
-    SALMON_RESULT_REQUIRED_FIELDS,
-    has_required_fields,
 )
 from splat_replay.application.services.editing.metadata_parser import (
     MetadataParser,
@@ -93,7 +98,7 @@ class MetadataMerger:
             )
         )
         result_fields = applied_fields.intersection(
-            RecordingMetadata.BATTLE_FIELDS | RecordingMetadata.SALMON_FIELDS
+            BATTLE_METADATA_FIELDS | SALMON_METADATA_FIELDS
         )
         return updated, frozenset(result_fields)
 
@@ -159,23 +164,16 @@ class MetadataMerger:
 
         merged = updated
 
-        # 基本フィールドの上書き
-        if "game_mode" in manual_fields:
-            merged = replace(merged, game_mode=current.game_mode)
-        if "started_at" in manual_fields:
-            merged = replace(merged, started_at=current.started_at)
-        if "rate" in manual_fields:
-            merged = replace(merged, rate=current.rate)
-        if "judgement" in manual_fields:
-            merged = replace(merged, judgement=current.judgement)
-        if "allies" in manual_fields:
-            merged = replace(merged, allies=current.allies)
-        if "enemies" in manual_fields:
-            merged = replace(merged, enemies=current.enemies)
+        for field in COMMON_METADATA_FIELD_DEFINITIONS:
+            if field.key in manual_fields:
+                merged = replace(
+                    merged,
+                    **{field.attr_name: getattr(current, field.attr_name)},
+                )
 
         # Result フィールドの上書き
         result_fields = manual_fields.intersection(
-            RecordingMetadata.BATTLE_FIELDS | RecordingMetadata.SALMON_FIELDS
+            BATTLE_METADATA_FIELDS | SALMON_METADATA_FIELDS
         )
         if result_fields:
             merged_result = self._apply_manual_result_overrides(
@@ -233,45 +231,14 @@ class MetadataMerger:
         """基本フィールドの 3way マージ。"""
         merged = current
 
-        # 各フィールドを個別にマージ
-        if "game_mode" not in manual_fields:
-            if (
-                auto_update.game_mode != base.game_mode
-                and current.game_mode == base.game_mode
-            ):
-                merged = replace(merged, game_mode=auto_update.game_mode)
-
-        if "started_at" not in manual_fields:
-            if (
-                auto_update.started_at != base.started_at
-                and current.started_at == base.started_at
-            ):
-                merged = replace(merged, started_at=auto_update.started_at)
-
-        if "rate" not in manual_fields:
-            if auto_update.rate != base.rate and current.rate == base.rate:
-                merged = replace(merged, rate=auto_update.rate)
-
-        if "judgement" not in manual_fields:
-            if (
-                auto_update.judgement != base.judgement
-                and current.judgement == base.judgement
-            ):
-                merged = replace(merged, judgement=auto_update.judgement)
-
-        if "allies" not in manual_fields:
-            if (
-                auto_update.allies != base.allies
-                and current.allies == base.allies
-            ):
-                merged = replace(merged, allies=auto_update.allies)
-
-        if "enemies" not in manual_fields:
-            if (
-                auto_update.enemies != base.enemies
-                and current.enemies == base.enemies
-            ):
-                merged = replace(merged, enemies=auto_update.enemies)
+        for field in COMMON_METADATA_FIELD_DEFINITIONS:
+            if field.key in manual_fields:
+                continue
+            base_value = getattr(base, field.attr_name)
+            auto_value = getattr(auto_update, field.attr_name)
+            current_value = getattr(current, field.attr_name)
+            if auto_value != base_value and current_value == base_value:
+                merged = replace(merged, **{field.attr_name: auto_value})
 
         return merged
 
@@ -331,49 +298,14 @@ class MetadataMerger:
         """BattleResult の 3way マージ。"""
         merged = current
 
-        # 各フィールドを個別にマージ
-        if "match" not in manual_fields:
-            if auto_update.match != base.match and current.match == base.match:
-                merged = replace(merged, match=auto_update.match)
-
-        if "rule" not in manual_fields:
-            if auto_update.rule != base.rule and current.rule == base.rule:
-                merged = replace(merged, rule=auto_update.rule)
-
-        if "stage" not in manual_fields:
-            if auto_update.stage != base.stage and current.stage == base.stage:
-                merged = replace(merged, stage=auto_update.stage)
-
-        if "kill" not in manual_fields:
-            if auto_update.kill != base.kill and current.kill == base.kill:
-                merged = replace(merged, kill=auto_update.kill)
-
-        if "death" not in manual_fields:
-            if auto_update.death != base.death and current.death == base.death:
-                merged = replace(merged, death=auto_update.death)
-
-        if "special" not in manual_fields:
-            if (
-                auto_update.special != base.special
-                and current.special == base.special
-            ):
-                merged = replace(merged, special=auto_update.special)
-
-        if "gold_medals" not in manual_fields:
-            if (
-                auto_update.gold_medals != base.gold_medals
-                and current.gold_medals == base.gold_medals
-            ):
-                merged = replace(merged, gold_medals=auto_update.gold_medals)
-
-        if "silver_medals" not in manual_fields:
-            if (
-                auto_update.silver_medals != base.silver_medals
-                and current.silver_medals == base.silver_medals
-            ):
-                merged = replace(
-                    merged, silver_medals=auto_update.silver_medals
-                )
+        for field in BATTLE_METADATA_FIELD_DEFINITIONS:
+            if field.key in manual_fields:
+                continue
+            base_value = getattr(base, field.attr_name)
+            auto_value = getattr(auto_update, field.attr_name)
+            current_value = getattr(current, field.attr_name)
+            if auto_value != base_value and current_value == base_value:
+                merged = replace(merged, **{field.attr_name: auto_value})
 
         return merged
 
@@ -387,45 +319,14 @@ class MetadataMerger:
         """SalmonResult の 3way マージ。"""
         merged = current
 
-        # 各フィールドを個別にマージ
-        if "hazard" not in manual_fields:
-            if (
-                auto_update.hazard != base.hazard
-                and current.hazard == base.hazard
-            ):
-                merged = replace(merged, hazard=auto_update.hazard)
-
-        if "stage" not in manual_fields:
-            if auto_update.stage != base.stage and current.stage == base.stage:
-                merged = replace(merged, stage=auto_update.stage)
-
-        if "golden_egg" not in manual_fields:
-            if (
-                auto_update.golden_egg != base.golden_egg
-                and current.golden_egg == base.golden_egg
-            ):
-                merged = replace(merged, golden_egg=auto_update.golden_egg)
-
-        if "power_egg" not in manual_fields:
-            if (
-                auto_update.power_egg != base.power_egg
-                and current.power_egg == base.power_egg
-            ):
-                merged = replace(merged, power_egg=auto_update.power_egg)
-
-        if "rescue" not in manual_fields:
-            if (
-                auto_update.rescue != base.rescue
-                and current.rescue == base.rescue
-            ):
-                merged = replace(merged, rescue=auto_update.rescue)
-
-        if "rescued" not in manual_fields:
-            if (
-                auto_update.rescued != base.rescued
-                and current.rescued == base.rescued
-            ):
-                merged = replace(merged, rescued=auto_update.rescued)
+        for field in SALMON_METADATA_FIELD_DEFINITIONS:
+            if field.key in manual_fields:
+                continue
+            base_value = getattr(base, field.attr_name)
+            auto_value = getattr(auto_update, field.attr_name)
+            current_value = getattr(current, field.attr_name)
+            if auto_value != base_value and current_value == base_value:
+                merged = replace(merged, **{field.attr_name: auto_value})
 
         return merged
 
@@ -445,8 +346,7 @@ class MetadataMerger:
         if updated is None:
             # Result 関連のフィールドが手動編集されていれば保持
             if manual_fields.intersection(
-                RecordingMetadata.BATTLE_FIELDS
-                | RecordingMetadata.SALMON_FIELDS
+                BATTLE_METADATA_FIELDS | SALMON_METADATA_FIELDS
             ):
                 return current
             return updated
@@ -481,22 +381,12 @@ class MetadataMerger:
         """BattleResult の手動編集を上書きする。"""
         merged = updated
 
-        if "match" in manual_fields:
-            merged = replace(merged, match=current.match)
-        if "rule" in manual_fields:
-            merged = replace(merged, rule=current.rule)
-        if "stage" in manual_fields:
-            merged = replace(merged, stage=current.stage)
-        if "kill" in manual_fields:
-            merged = replace(merged, kill=current.kill)
-        if "death" in manual_fields:
-            merged = replace(merged, death=current.death)
-        if "special" in manual_fields:
-            merged = replace(merged, special=current.special)
-        if "gold_medals" in manual_fields:
-            merged = replace(merged, gold_medals=current.gold_medals)
-        if "silver_medals" in manual_fields:
-            merged = replace(merged, silver_medals=current.silver_medals)
+        for field in BATTLE_METADATA_FIELD_DEFINITIONS:
+            if field.key in manual_fields:
+                merged = replace(
+                    merged,
+                    **{field.attr_name: getattr(current, field.attr_name)},
+                )
 
         return merged
 
@@ -509,17 +399,11 @@ class MetadataMerger:
         """SalmonResult の手動編集を上書きする。"""
         merged = updated
 
-        if "hazard" in manual_fields:
-            merged = replace(merged, hazard=current.hazard)
-        if "stage" in manual_fields:
-            merged = replace(merged, stage=current.stage)
-        if "golden_egg" in manual_fields:
-            merged = replace(merged, golden_egg=current.golden_egg)
-        if "power_egg" in manual_fields:
-            merged = replace(merged, power_egg=current.power_egg)
-        if "rescue" in manual_fields:
-            merged = replace(merged, rescue=current.rescue)
-        if "rescued" in manual_fields:
-            merged = replace(merged, rescued=current.rescued)
+        for field in SALMON_METADATA_FIELD_DEFINITIONS:
+            if field.key in manual_fields:
+                merged = replace(
+                    merged,
+                    **{field.attr_name: getattr(current, field.attr_name)},
+                )
 
         return merged

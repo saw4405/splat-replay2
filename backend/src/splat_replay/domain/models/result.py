@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Mapping
+from enum import Enum
+from typing import Mapping, TypeVar
 
 from splat_replay.domain.exceptions import ValidationError
 
@@ -37,6 +38,25 @@ def _as_int(value: object, field: str) -> int:
     raise TypeError(f"{field} must be int or str, got {type(value)!r}")
 
 
+TEnum = TypeVar("TEnum", bound=Enum)
+
+
+def _as_optional_enum_member(
+    value: object, enum_type: type[TEnum], field: str
+) -> TEnum | None:
+    if value is None or value == "":
+        return None
+    name = _as_str(value, field)
+    try:
+        return enum_type[name]
+    except KeyError as exc:
+        raise ValidationError(
+            f"{field} has invalid enum name: {name}",
+            error_code="FIELD_INVALID_ENUM_NAME",
+            cause=exc,
+        ) from exc
+
+
 def validate_medal_counts(gold_medals: int, silver_medals: int) -> None:
     if not (MEDAL_COUNT_MIN <= gold_medals <= MEDAL_COUNT_MAX):
         raise ValidationError(
@@ -63,9 +83,9 @@ class BattleResult:
     Use dataclasses.replace() for updates.
     """
 
-    match: Match
-    rule: Rule
-    stage: Stage
+    match: Match | None
+    rule: Rule | None
+    stage: Stage | None
     kill: int
     death: int
     special: int
@@ -75,11 +95,11 @@ class BattleResult:
     def __post_init__(self) -> None:
         validate_medal_counts(self.gold_medals, self.silver_medals)
 
-    def to_dict(self) -> dict[str, str | int]:
+    def to_dict(self) -> dict[str, str | int | None]:
         return {
-            "match": self.match.name,
-            "rule": self.rule.name,
-            "stage": self.stage.name,
+            "match": self.match.name if self.match is not None else None,
+            "rule": self.rule.name if self.rule is not None else None,
+            "stage": self.stage.name if self.stage is not None else None,
             "kill": self.kill,
             "death": self.death,
             "special": self.special,
@@ -89,18 +109,15 @@ class BattleResult:
 
     @classmethod
     def from_dict(cls, data: Mapping[str, object]) -> "BattleResult":
-        match_str = _as_str(data["match"], "match")
-        rule_str = _as_str(data["rule"], "rule")
-        stage_str = _as_str(data["stage"], "stage")
         kill = _as_int(data["kill"], "kill")
         death = _as_int(data["death"], "death")
         special = _as_int(data["special"], "special")
         gold_medals = _as_int(data.get("gold_medals", 0), "gold_medals")
         silver_medals = _as_int(data.get("silver_medals", 0), "silver_medals")
         return cls(
-            match=Match[match_str],
-            rule=Rule[rule_str],
-            stage=Stage[stage_str],
+            match=_as_optional_enum_member(data.get("match"), Match, "match"),
+            rule=_as_optional_enum_member(data.get("rule"), Rule, "rule"),
+            stage=_as_optional_enum_member(data.get("stage"), Stage, "stage"),
             kill=kill,
             death=death,
             special=special,

@@ -57,8 +57,8 @@ class RecordedVideoDTO:
     special: int | None
     gold_medals: int | None
     silver_medals: int | None
-    allies: tuple[str, str, str, str] | None
-    enemies: tuple[str, str, str, str] | None
+    allies: list[str] | None
+    enemies: list[str] | None
     hazard: int | None
     golden_egg: int | None
     power_egg: int | None

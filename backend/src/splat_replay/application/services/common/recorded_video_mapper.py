@@ -10,11 +10,25 @@ from splat_replay.application.interfaces import (
     VideoAssetRepositoryPort,
     VideoEditorPort,
 )
-from splat_replay.domain.models import (
-    BattleResult,
-    RecordingMetadata,
-    SalmonResult,
-)
+from splat_replay.application.metadata import recording_metadata_to_dict
+from splat_replay.application.metadata.codec import MetadataValue
+from splat_replay.domain.models import RecordingMetadata
+
+
+def _as_str(value: MetadataValue | None) -> str | None:
+    return value if isinstance(value, str) else None
+
+
+def _as_int(value: MetadataValue | None) -> int | None:
+    return value if isinstance(value, int) else None
+
+
+def _as_str_list(value: MetadataValue | None) -> list[str] | None:
+    if isinstance(value, list) and all(
+        isinstance(item, str) for item in value
+    ):
+        return value
+    return None
 
 
 async def build_recorded_video_dto(
@@ -52,69 +66,31 @@ async def build_recorded_video_dto(
     has_subtitle = repository.has_subtitle(video_path)
     has_thumbnail = repository.has_thumbnail(video_path)
 
-    started_at = (
-        metadata.started_at.isoformat() if metadata.started_at else None
-    )
-    game_mode = metadata.game_mode.name
-    rate_value = str(metadata.rate) if metadata.rate else None
-    judgement_value = metadata.judgement.name if metadata.judgement else None
-
-    match_name: str | None = None
-    rule_name: str | None = None
-    stage_name: str | None = None
-    kill_value: int | None = None
-    death_value: int | None = None
-    special_value: int | None = None
-    gold_medals_value: int | None = None
-    silver_medals_value: int | None = None
-    allies: tuple[str, str, str, str] | None = metadata.allies
-    enemies: tuple[str, str, str, str] | None = metadata.enemies
-    hazard: int | None = None
-    golden_egg: int | None = None
-    power_egg: int | None = None
-    rescue: int | None = None
-    rescued: int | None = None
-
-    if isinstance(metadata.result, BattleResult):
-        match_name = metadata.result.match.name
-        rule_name = metadata.result.rule.name
-        stage_name = metadata.result.stage.name
-        kill_value = metadata.result.kill
-        death_value = metadata.result.death
-        special_value = metadata.result.special
-        gold_medals_value = metadata.result.gold_medals
-        silver_medals_value = metadata.result.silver_medals
-    elif isinstance(metadata.result, SalmonResult):
-        stage_name = metadata.result.stage.name
-        hazard = metadata.result.hazard
-        golden_egg = metadata.result.golden_egg
-        power_egg = metadata.result.power_egg
-        rescue = metadata.result.rescue
-        rescued = metadata.result.rescued
+    payload = recording_metadata_to_dict(metadata)
 
     return RecordedVideoDTO(
         video_id=str(relative_path.as_posix()),
         path=str(video_path),
         filename=video_path.name,
-        started_at=started_at,
-        game_mode=game_mode,
-        match=match_name,
-        rule=rule_name,
-        stage=stage_name,
-        rate=rate_value,
-        judgement=judgement_value,
-        kill=kill_value,
-        death=death_value,
-        special=special_value,
-        gold_medals=gold_medals_value,
-        silver_medals=silver_medals_value,
-        allies=allies,
-        enemies=enemies,
-        hazard=hazard,
-        golden_egg=golden_egg,
-        power_egg=power_egg,
-        rescue=rescue,
-        rescued=rescued,
+        started_at=_as_str(payload.get("started_at")),
+        game_mode=_as_str(payload.get("game_mode")),
+        match=_as_str(payload.get("match")),
+        rule=_as_str(payload.get("rule")),
+        stage=_as_str(payload.get("stage")),
+        rate=_as_str(payload.get("rate")),
+        judgement=_as_str(payload.get("judgement")),
+        kill=_as_int(payload.get("kill")),
+        death=_as_int(payload.get("death")),
+        special=_as_int(payload.get("special")),
+        gold_medals=_as_int(payload.get("gold_medals")),
+        silver_medals=_as_int(payload.get("silver_medals")),
+        allies=_as_str_list(payload.get("allies")),
+        enemies=_as_str_list(payload.get("enemies")),
+        hazard=_as_int(payload.get("hazard")),
+        golden_egg=_as_int(payload.get("golden_egg")),
+        power_egg=_as_int(payload.get("power_egg")),
+        rescue=_as_int(payload.get("rescue")),
+        rescued=_as_int(payload.get("rescued")),
         has_subtitle=has_subtitle,
         has_thumbnail=has_thumbnail,
         duration_seconds=duration_seconds,

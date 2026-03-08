@@ -12,6 +12,7 @@ from splat_replay.application.interfaces import (
     VideoAssetRepositoryPort,
     VideoEditorPort,
 )
+from splat_replay.application.services import BattleHistoryService
 from splat_replay.application.services.common import SubtitleConverter
 from splat_replay.application.use_cases import AutoUseCase, UploadUseCase
 from splat_replay.application.use_cases.assets import (
@@ -100,6 +101,7 @@ def register_app_usecases(container: punq.Container) -> None:
             logger=container.resolve(LoggerPort),
             base_dir=base_dir,
             video_editor=container.resolve(VideoEditorPort),
+            battle_history_service=container.resolve(BattleHistoryService),
         )
 
     def get_recorded_subtitle_structured_factory() -> (

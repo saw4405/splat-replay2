@@ -21,6 +21,7 @@ from splat_replay.domain.models import (
     Stage,
 )
 from splat_replay.interface.web.converters import (
+    to_recorded_video_item,
     to_application_subtitle_data,
     to_interface_subtitle_data,
 )
@@ -48,15 +49,6 @@ def create_metadata_router(server: WebAPIServer) -> APIRouter:
     router = APIRouter(prefix="/api", tags=["metadata"])
 
     # === 録画済みビデオのメタデータ ===
-
-    def _to_weapon_slots(
-        value: list[str] | None,
-    ) -> tuple[str, str, str, str] | None:
-        if value is None:
-            return None
-        if len(value) != 4:
-            return None
-        return (value[0], value[1], value[2], value[3])
 
     @router.get(
         "/metadata/options",
@@ -95,19 +87,8 @@ def create_metadata_router(server: WebAPIServer) -> APIRouter:
         video_id: str, metadata: MetadataUpdateRequest
     ) -> RecordedVideoItem:
         """録画済みビデオのメタデータを更新。"""
-        patch = RecordingMetadataPatchDTO(
-            match=metadata.match,
-            rule=metadata.rule,
-            stage=metadata.stage,
-            rate=metadata.rate,
-            judgement=metadata.judgement,
-            kill=metadata.kill,
-            death=metadata.death,
-            special=metadata.special,
-            gold_medals=metadata.gold_medals,
-            silver_medals=metadata.silver_medals,
-            allies=_to_weapon_slots(metadata.allies),
-            enemies=_to_weapon_slots(metadata.enemies),
+        patch = RecordingMetadataPatchDTO.from_update_dict(
+            metadata.dict(exclude_none=True)
         )
         try:
             dto = await server.update_recorded_metadata_uc.execute(
@@ -130,34 +111,7 @@ def create_metadata_router(server: WebAPIServer) -> APIRouter:
                 detail="Failed to update metadata",
             ) from exc
 
-        return RecordedVideoItem(
-            id=dto.video_id,
-            path=dto.path,
-            filename=dto.filename,
-            started_at=dto.started_at,
-            game_mode=dto.game_mode,
-            match=dto.match,
-            rule=dto.rule,
-            stage=dto.stage,
-            rate=dto.rate,
-            judgement=dto.judgement,
-            kill=dto.kill,
-            death=dto.death,
-            special=dto.special,
-            gold_medals=dto.gold_medals,
-            silver_medals=dto.silver_medals,
-            allies=list(dto.allies) if dto.allies else None,
-            enemies=list(dto.enemies) if dto.enemies else None,
-            hazard=dto.hazard,
-            golden_egg=dto.golden_egg,
-            power_egg=dto.power_egg,
-            rescue=dto.rescue,
-            rescued=dto.rescued,
-            has_subtitle=dto.has_subtitle,
-            has_thumbnail=dto.has_thumbnail,
-            duration_seconds=dto.duration_seconds,
-            size_bytes=dto.size_bytes,
-        )
+        return to_recorded_video_item(dto)
 
     # === 録画済みビデオの字幕 ===
 

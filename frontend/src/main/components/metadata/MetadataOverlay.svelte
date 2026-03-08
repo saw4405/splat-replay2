@@ -5,91 +5,33 @@
   import { subscribeDomainEvents, type DomainEvent } from '../../domainEvents';
   import { getMetadataOptions } from '../../api/metadata';
   import type { MetadataOptionItem } from '../../api/types';
+  import {
+    applyIncomingLiveMetadata,
+    buildLiveMetadataPayload,
+    createEmptyLiveManualEditState,
+    createEmptyLiveMetadataState,
+    normaliseEditedLiveMedalField,
+    type LiveManualEditState,
+    type LiveMetadataPayload,
+    type LiveMetadataState,
+    type WeaponSlots,
+  } from '../../metadata/live';
 
   export let visible: boolean = false;
   let showAlertDialog = false; // アラートダイアログ表示フラグ
   let alertMessage = ''; // アラートメッセージ
   let alertVariant: 'info' | 'success' | 'warning' | 'error' = 'info';
 
-  type WeaponSlots = [string, string, string, string];
   type MedalField = 'gold_medals' | 'silver_medals';
-  type MetadataState = {
-    game_mode: string;
-    stage: string;
-    started_at: string;
-    match: string;
-    rule: string;
-    rate: string;
-    judgement: string;
-    kill: number;
-    death: number;
-    special: number;
-    gold_medals: number;
-    silver_medals: number;
-    allies: WeaponSlots;
-    enemies: WeaponSlots;
-  };
-
-  type MetadataPayload = {
-    game_mode?: string;
-    stage?: string;
-    started_at?: string;
-    match?: string;
-    rule?: string;
-    rate?: string;
-    judgement?: string;
-    kill?: number;
-    death?: number;
-    special?: number;
-    gold_medals?: number;
-    silver_medals?: number;
-    hazard?: number;
-    golden_egg?: number;
-    power_egg?: number;
-    rescue?: number;
-    rescued?: number;
-    allies?: string[];
-    enemies?: string[];
-  };
 
   // SSE接続
   let domainEventSource: EventSource | null = null;
 
   // メタデータ (SSE経由で更新)
-  let metadata: MetadataState = {
-    game_mode: '',
-    started_at: '',
-    match: '',
-    rule: '',
-    rate: '',
-    judgement: '',
-    stage: '',
-    kill: 0,
-    death: 0,
-    special: 0,
-    gold_medals: 0,
-    silver_medals: 0,
-    allies: ['', '', '', ''],
-    enemies: ['', '', '', ''],
-  };
+  let metadata: LiveMetadataState = createEmptyLiveMetadataState();
 
   // 手動編集フラグ (各フィールドごと)
-  let manuallyEdited = {
-    game_mode: false,
-    started_at: false,
-    match: false,
-    rule: false,
-    rate: false,
-    judgement: false,
-    stage: false,
-    kill: false,
-    death: false,
-    special: false,
-    gold_medals: false,
-    silver_medals: false,
-    allies: false,
-    enemies: false,
-  };
+  let manuallyEdited: LiveManualEditState = createEmptyLiveManualEditState();
 
   const placeholderLabel = {
     gameMode: '未取得',
@@ -128,17 +70,10 @@
   }
 
   // 各フィールドの手動編集をマーク
-  function markEdited(field: keyof typeof metadata): void {
+  function markEdited(field: keyof LiveMetadataState): void {
     manuallyEdited[field] = true;
     console.log(`フィールド "${field}" が手動編集されました`);
     console.log('手動編集フラグの状態:', manuallyEdited);
-  }
-
-  function normaliseWeaponSlots(values: string[] | undefined): WeaponSlots {
-    if (!values || values.length !== 4) {
-      return ['', '', '', ''];
-    }
-    return [values[0] ?? '', values[1] ?? '', values[2] ?? '', values[3] ?? ''];
   }
 
   function updateWeaponSlot(team: 'allies' | 'enemies', index: number, value: string): void {
@@ -156,38 +91,8 @@
     updateWeaponSlot(team, index, input.value);
   }
 
-  function normaliseMedalCount(value: number): number {
-    if (!Number.isFinite(value)) {
-      return 0;
-    }
-    return Math.min(3, Math.max(0, Math.trunc(value)));
-  }
-
-  function normaliseMedalPair(
-    goldMedals: number,
-    silverMedals: number
-  ): {
-    gold_medals: number;
-    silver_medals: number;
-  } {
-    const nextGold = normaliseMedalCount(goldMedals);
-    const nextSilver = Math.min(normaliseMedalCount(silverMedals), 3 - nextGold);
-    return {
-      gold_medals: nextGold,
-      silver_medals: nextSilver,
-    };
-  }
-
   function normaliseEditedMedalField(field: MedalField): void {
-    const otherField: MedalField = field === 'gold_medals' ? 'silver_medals' : 'gold_medals';
-    const otherValue = normaliseMedalCount(metadata[otherField]);
-    const maxCurrent = 3 - otherValue;
-    const nextValue = Math.min(normaliseMedalCount(metadata[field]), maxCurrent);
-    metadata = {
-      ...metadata,
-      [field]: nextValue,
-      [otherField]: otherValue,
-    };
+    metadata = normaliseEditedLiveMedalField(metadata, field);
   }
 
   async function fetchCurrentMetadata(): Promise<void> {
@@ -206,103 +111,12 @@
     }
   }
 
-  function updateMetadata(data: MetadataPayload): void {
+  function updateMetadata(data: LiveMetadataPayload): void {
     // 手動編集されていないフィールドのみ更新
     console.log('メタデータ自動更新を試行:', data);
-    let updatedFields: string[] = [];
-    let skippedFields: string[] = [];
-
-    if (!manuallyEdited.game_mode) {
-      metadata.game_mode = data.game_mode ?? '';
-      updatedFields.push('game_mode');
-    } else {
-      skippedFields.push('game_mode (手動編集済み)');
-    }
-    if (!manuallyEdited.started_at) {
-      metadata.started_at = data.started_at ?? '';
-      updatedFields.push('started_at');
-    } else {
-      skippedFields.push('started_at (手動編集済み)');
-    }
-    if (!manuallyEdited.match) {
-      metadata.match = data.match ?? '';
-      updatedFields.push('match');
-    } else {
-      skippedFields.push('match (手動編集済み)');
-    }
-    if (!manuallyEdited.rule) {
-      metadata.rule = data.rule ?? '';
-      updatedFields.push('rule');
-    } else {
-      skippedFields.push('rule (手動編集済み)');
-    }
-    if (!manuallyEdited.rate) {
-      metadata.rate = data.rate ?? '';
-      updatedFields.push('rate');
-    } else {
-      skippedFields.push('rate (手動編集済み)');
-    }
-    if (!manuallyEdited.judgement) {
-      metadata.judgement = data.judgement ?? '';
-      updatedFields.push('judgement');
-    } else {
-      skippedFields.push('judgement (手動編集済み)');
-    }
-    if (!manuallyEdited.stage) {
-      metadata.stage = data.stage ?? '';
-      updatedFields.push('stage');
-    } else {
-      skippedFields.push('stage (手動編集済み)');
-    }
-    if (!manuallyEdited.kill) {
-      metadata.kill = data.kill ?? 0;
-      updatedFields.push('kill');
-    } else {
-      skippedFields.push('kill (手動編集済み)');
-    }
-    if (!manuallyEdited.death) {
-      metadata.death = data.death ?? 0;
-      updatedFields.push('death');
-    } else {
-      skippedFields.push('death (手動編集済み)');
-    }
-    if (!manuallyEdited.special) {
-      metadata.special = data.special ?? 0;
-      updatedFields.push('special');
-    } else {
-      skippedFields.push('special (手動編集済み)');
-    }
-    const nextGoldMedals = !manuallyEdited.gold_medals
-      ? (data.gold_medals ?? metadata.gold_medals)
-      : metadata.gold_medals;
-    const nextSilverMedals = !manuallyEdited.silver_medals
-      ? (data.silver_medals ?? metadata.silver_medals)
-      : metadata.silver_medals;
-    const normalisedMedals = normaliseMedalPair(nextGoldMedals, nextSilverMedals);
-    if (!manuallyEdited.gold_medals) {
-      metadata.gold_medals = normalisedMedals.gold_medals;
-      updatedFields.push('gold_medals');
-    } else {
-      skippedFields.push('gold_medals (手動編集済み)');
-    }
-    if (!manuallyEdited.silver_medals) {
-      metadata.silver_medals = normalisedMedals.silver_medals;
-      updatedFields.push('silver_medals');
-    } else {
-      skippedFields.push('silver_medals (手動編集済み)');
-    }
-    if (!manuallyEdited.allies) {
-      metadata.allies = normaliseWeaponSlots(data.allies);
-      updatedFields.push('allies');
-    } else {
-      skippedFields.push('allies (手動編集済み)');
-    }
-    if (!manuallyEdited.enemies) {
-      metadata.enemies = normaliseWeaponSlots(data.enemies);
-      updatedFields.push('enemies');
-    } else {
-      skippedFields.push('enemies (手動編集済み)');
-    }
+    const result = applyIncomingLiveMetadata(metadata, manuallyEdited, data);
+    metadata = result.metadata;
+    const { updatedFields, skippedFields } = result;
 
     if (updatedFields.length > 0) {
       console.log('✓ 自動更新されたフィールド:', updatedFields);
@@ -315,43 +129,13 @@
   function resetManualEdits(): void {
     // すべての手動編集フラグをクリア
     console.log('手動編集フラグをすべてリセット');
-    manuallyEdited = {
-      game_mode: false,
-      started_at: false,
-      match: false,
-      rule: false,
-      rate: false,
-      judgement: false,
-      stage: false,
-      kill: false,
-      death: false,
-      special: false,
-      gold_medals: false,
-      silver_medals: false,
-      allies: false,
-      enemies: false,
-    };
+    manuallyEdited = createEmptyLiveManualEditState();
   }
 
   function resetMetadata(): void {
     // メタデータを初期状態にリセット
     console.log('メタデータをリセット');
-    metadata = {
-      game_mode: '',
-      started_at: '',
-      match: '',
-      rule: '',
-      rate: '',
-      judgement: '',
-      stage: '',
-      kill: 0,
-      death: 0,
-      special: 0,
-      gold_medals: 0,
-      silver_medals: 0,
-      allies: ['', '', '', ''],
-      enemies: ['', '', '', ''],
-    };
+    metadata = createEmptyLiveMetadataState();
   }
 
   function handleReset(): void {
@@ -362,57 +146,7 @@
 
   async function saveMetadata(): Promise<void> {
     try {
-      const payload: Record<string, string | number | string[]> = {};
-      if (manuallyEdited.game_mode && metadata.game_mode) {
-        payload.game_mode = metadata.game_mode;
-      }
-      if (manuallyEdited.started_at && metadata.started_at) {
-        payload.started_at = metadata.started_at;
-      }
-      if (manuallyEdited.match && metadata.match) {
-        payload.match = metadata.match;
-      }
-      if (manuallyEdited.rule && metadata.rule) {
-        payload.rule = metadata.rule;
-      }
-      if (manuallyEdited.rate && metadata.rate) {
-        payload.rate = metadata.rate;
-      }
-      if (manuallyEdited.judgement && metadata.judgement) {
-        payload.judgement = metadata.judgement;
-      }
-      if (manuallyEdited.stage && metadata.stage) {
-        payload.stage = metadata.stage;
-      }
-      if (manuallyEdited.kill && metadata.kill !== null && metadata.kill !== undefined) {
-        payload.kill = metadata.kill;
-      }
-      if (manuallyEdited.death && metadata.death !== null && metadata.death !== undefined) {
-        payload.death = metadata.death;
-      }
-      if (manuallyEdited.special && metadata.special !== null && metadata.special !== undefined) {
-        payload.special = metadata.special;
-      }
-      if (
-        manuallyEdited.gold_medals &&
-        metadata.gold_medals !== null &&
-        metadata.gold_medals !== undefined
-      ) {
-        payload.gold_medals = metadata.gold_medals;
-      }
-      if (
-        manuallyEdited.silver_medals &&
-        metadata.silver_medals !== null &&
-        metadata.silver_medals !== undefined
-      ) {
-        payload.silver_medals = metadata.silver_medals;
-      }
-      if (manuallyEdited.allies) {
-        payload.allies = [...metadata.allies];
-      }
-      if (manuallyEdited.enemies) {
-        payload.enemies = [...metadata.enemies];
-      }
+      const payload = buildLiveMetadataPayload(metadata, manuallyEdited);
       if (Object.keys(payload).length === 0) {
         alertMessage = '更新対象がありません';
         alertVariant = 'info';
@@ -452,7 +186,7 @@
     domainEventSource?.close();
     domainEventSource = subscribeDomainEvents((event: DomainEvent) => {
       if (event.type === 'domain.recording.metadata_updated') {
-        const payload = event.payload as { metadata?: MetadataPayload };
+        const payload = event.payload as { metadata?: LiveMetadataPayload };
         if (payload?.metadata) {
           updateMetadata(payload.metadata);
         }

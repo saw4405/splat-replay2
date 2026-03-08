@@ -13,6 +13,8 @@ __all__ = [
     "MetadataOptionItem",
     "MetadataOptionsResponse",
     "MetadataUpdateRequest",
+    "RecordingMetadataResponse",
+    "RecordingMetadataUpdateRequest",
     "SubtitleBlock",
     "SubtitleData",
 ]
@@ -35,8 +37,8 @@ class MetadataOptionsResponse(BaseModel):
     judgements: List[MetadataOptionItem]
 
 
-class MetadataUpdateRequest(BaseModel):
-    """録画済みビデオのメタデータ更新リクエスト"""
+class _BattleMetadataUpdateFields(BaseModel):
+    """バトル系メタデータ更新フィールド。"""
 
     match: Optional[str] = None
     rule: Optional[str] = None
@@ -66,6 +68,46 @@ class MetadataUpdateRequest(BaseModel):
                 "gold_medals と silver_medals の合計は 3 以下で指定してください"
             )
         return values
+
+
+class MetadataUpdateRequest(_BattleMetadataUpdateFields):
+    """録画済みビデオのメタデータ更新リクエスト"""
+
+
+class RecordingMetadataUpdateRequest(_BattleMetadataUpdateFields):
+    """録画中メタデータ更新リクエスト。"""
+
+    game_mode: Optional[str] = None
+    started_at: Optional[str] = None
+    hazard: Optional[int] = None
+    golden_egg: Optional[int] = None
+    power_egg: Optional[int] = None
+    rescue: Optional[int] = None
+    rescued: Optional[int] = None
+
+
+class RecordingMetadataResponse(BaseModel):
+    """録画中メタデータレスポンス。"""
+
+    game_mode: str | None = Field(None, description="ゲームモード")
+    stage: str | None = Field(None, description="ステージ")
+    started_at: str | None = Field(None, description="開始時刻")
+    match: str | None = Field(None, description="マッチ")
+    rule: str | None = Field(None, description="ルール")
+    rate: str | None = Field(None, description="レート")
+    judgement: str | None = Field(None, description="判定")
+    kill: int | None = Field(None, description="キル数")
+    death: int | None = Field(None, description="デス数")
+    special: int | None = Field(None, description="スペシャル数")
+    gold_medals: int | None = Field(None, description="金表彰数")
+    silver_medals: int | None = Field(None, description="銀表彰数")
+    allies: list[str] | None = Field(None, description="味方4人のブキ")
+    enemies: list[str] | None = Field(None, description="敵4人のブキ")
+    hazard: int | None = Field(None, description="危険度")
+    golden_egg: int | None = Field(None, description="金イクラ数")
+    power_egg: int | None = Field(None, description="イクラ数")
+    rescue: int | None = Field(None, description="救助数")
+    rescued: int | None = Field(None, description="救助された数")
 
 
 class SubtitleBlock(BaseModel):

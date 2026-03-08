@@ -47,6 +47,11 @@ class ThumbnailGenerator:
         result = assets[0].metadata.result if assets[0].metadata else None
         if result is None or isinstance(result, SalmonResult):
             return None
+        if result.match is None or result.rule is None:
+            self.logger.warning(
+                "マッチまたはルールが未設定のためサムネイル生成をスキップしました"
+            )
+            return None
 
         thumbnails = [
             asset.thumbnail
@@ -109,7 +114,11 @@ class ThumbnailGenerator:
         stage_names = [
             a.metadata.result.stage.value
             for a in assets
-            if a.metadata and isinstance(a.metadata.result, BattleResult)
+            if (
+                a.metadata
+                and isinstance(a.metadata.result, BattleResult)
+                and a.metadata.result.stage is not None
+            )
         ]
         unique_stage_names = list(dict.fromkeys(stage_names))
         stage1 = unique_stage_names[0] if unique_stage_names else None

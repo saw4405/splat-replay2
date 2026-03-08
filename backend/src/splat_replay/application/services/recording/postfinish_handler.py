@@ -8,6 +8,7 @@ from __future__ import annotations
 from dataclasses import replace
 
 from splat_replay.application.interfaces import EventBusPort, LoggerPort
+from splat_replay.application.metadata import recording_metadata_to_dict
 from splat_replay.application.services.recording.commands import (
     RecordingCommand,
 )
@@ -72,7 +73,9 @@ class PostFinishPhaseHandler:
                 )
                 # メタデータ更新通知（既存イベント）
                 self.event_bus.publish_domain_event(
-                    RecordingMetadataUpdated(metadata=ctx.metadata.to_dict())
+                    RecordingMetadataUpdated(
+                        metadata=recording_metadata_to_dict(ctx.metadata)
+                    )
                 )
             return RecordingCommand.none(ctx)
 

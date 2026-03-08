@@ -9,6 +9,10 @@ from splat_replay.application.interfaces import (
     VideoEditorPort,
 )
 from splat_replay.application.interfaces.data import FileStats
+from splat_replay.application.metadata import (
+    recording_metadata_to_dict,
+    serialize_metadata_value,
+)
 from splat_replay.domain.models import RecordingMetadata, VideoAsset
 
 
@@ -102,11 +106,14 @@ class AssetQueryService:
                 asset = self._repo.get_asset(video_path)
                 if not asset or not asset.metadata:
                     return None
-                raw = asset.metadata.to_dict()
+                raw = recording_metadata_to_dict(asset.metadata)
                 return {
-                    key: value
-                    if isinstance(value, str) or value is None
-                    else str(value)
+                    key: serialized
+                    if isinstance(
+                        serialized := serialize_metadata_value(value), str
+                    )
+                    or serialized is None
+                    else str(serialized)
                     for key, value in raw.items()
                 }
 

@@ -56,8 +56,14 @@ class VideoGroupingService:
 
             result = asset.metadata.result
             if isinstance(result, BattleResult):
-                match_name = result.match.value
-                rule_name = result.rule.value
+                match_name = (
+                    result.match.value
+                    if result.match is not None
+                    else "unknown"
+                )
+                rule_name = (
+                    result.rule.value if result.rule is not None else "unknown"
+                )
             elif isinstance(result, SalmonResult):
                 match_name = "salmon"
                 rule_name = result.stage.value

@@ -15,6 +15,7 @@ from splat_replay.application.interfaces import (
     WeaponRecognitionResult,
     WeaponSlotResult,
 )
+from splat_replay.application.metadata import recording_metadata_to_dict
 from splat_replay.application.services.recording.recording_context import (
     RecordingContext,
 )
@@ -610,7 +611,9 @@ class WeaponDetectionService:
             is_final=is_final,
         )
         self._event_bus.publish_domain_event(
-            RecordingMetadataUpdated(metadata=metadata.to_dict())
+            RecordingMetadataUpdated(
+                metadata=recording_metadata_to_dict(metadata)
+            )
         )
         self._event_bus.publish_domain_event(
             BattleWeaponsDetected(

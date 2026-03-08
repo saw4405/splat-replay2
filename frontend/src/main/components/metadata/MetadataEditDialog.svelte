@@ -4,23 +4,11 @@
   import MetadataForm from './MetadataForm.svelte';
   import { getMetadataOptions } from '../../api/metadata';
   import type { MetadataOptionItem } from '../../api/types';
-
-  type WeaponSlots = [string, string, string, string];
-
-  interface EditableMetadata {
-    match: string;
-    rule: string;
-    stage: string;
-    rate: string;
-    judgement: string;
-    kill: number;
-    death: number;
-    special: number;
-    goldMedals: number;
-    silverMedals: number;
-    allies: WeaponSlots;
-    enemies: WeaponSlots;
-  }
+  import {
+    cloneEditableMetadata,
+    createEmptyEditableMetadata,
+    type EditableMetadata,
+  } from '../../metadata/editable';
 
   const dispatch = createEventDispatcher();
 
@@ -28,36 +16,7 @@
   export let videoId: string = '';
   export let metadata: EditableMetadata;
 
-  function normaliseWeaponSlots(values: string[] | undefined): WeaponSlots {
-    const normalised = values?.slice(0, 4) ?? [];
-    while (normalised.length < 4) {
-      normalised.push('');
-    }
-    return [normalised[0] ?? '', normalised[1] ?? '', normalised[2] ?? '', normalised[3] ?? ''];
-  }
-
-  function createEditableMetadata(value: EditableMetadata): EditableMetadata {
-    return {
-      ...value,
-      allies: normaliseWeaponSlots(value.allies),
-      enemies: normaliseWeaponSlots(value.enemies),
-    };
-  }
-
-  let editedMetadata: EditableMetadata = {
-    match: '',
-    rule: '',
-    stage: '',
-    rate: '',
-    judgement: '',
-    kill: 0,
-    death: 0,
-    special: 0,
-    goldMedals: 0,
-    silverMedals: 0,
-    allies: ['', '', '', ''],
-    enemies: ['', '', '', ''],
-  };
+  let editedMetadata: EditableMetadata = createEmptyEditableMetadata();
   let matchOptions: MetadataOptionItem[] = [];
   let ruleOptions: MetadataOptionItem[] = [];
   let stageOptions: MetadataOptionItem[] = [];
@@ -66,7 +25,7 @@
   let previousVisible = false;
 
   $: if (visible && !previousVisible && metadata) {
-    editedMetadata = createEditableMetadata(metadata);
+    editedMetadata = cloneEditableMetadata(metadata);
     previousVisible = true;
   } else if (!visible) {
     previousVisible = false;

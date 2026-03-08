@@ -329,12 +329,32 @@ tasks:
   # ========================================
   test:
     desc: Run all tests
+    cmds:
+      - task: test:backend
+      - task: test:frontend
+
+  test:backend:
+    desc: Run backend tests
     dir: "{{.BACKEND_DIR}}"
     cmds:
       - uv run pytest -q
 
+  test:frontend:
+    desc: Run frontend tests
+    dir: "{{.FRONTEND_DIR}}"
+    deps:
+      - install:frontend
+    cmds:
+      - npm run test
+
   test:verbose:
     desc: Run all tests with verbose output
+    cmds:
+      - task: test:backend:verbose
+      - task: test:frontend
+
+  test:backend:verbose:
+    desc: Run backend tests with verbose output
     dir: "{{.BACKEND_DIR}}"
     cmds:
       - uv run pytest -v

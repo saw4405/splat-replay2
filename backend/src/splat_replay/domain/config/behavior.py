@@ -18,6 +18,15 @@ class BehaviorSettings(BaseModel):
         recommended=False,
         user_editable=True,
     )
+    record_battle_history: bool = Field(
+        default=True,
+        title="対戦履歴を累積記録する",
+        description=(
+            "ブキ判別結果と対戦メタデータを集計用の履歴として累積保存するかどうか"
+        ),
+        recommended=True,
+        user_editable=True,
+    )
 
     class Config:
         pass

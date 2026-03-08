@@ -12,6 +12,7 @@ __all__ = [
     "AutoRecorder",
     "AutoEditor",
     "AutoUploader",
+    "BattleHistoryService",
     "PowerManager",
     "ProgressReporter",
     "ProgressEventStore",
@@ -63,6 +64,7 @@ from .setup.setup_errors import (
 from .system import DeviceChecker, PowerManager
 from .upload import AutoUploader
 from .common import (
+    BattleHistoryService,
     ProgressEvent,
     ProgressEventStore,
     ProgressReporter,

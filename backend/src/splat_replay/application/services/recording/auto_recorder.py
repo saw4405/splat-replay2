@@ -23,6 +23,9 @@ from splat_replay.application.services.recording.frame_processing_service import
 from splat_replay.application.services.recording.phase_handler_registry import (
     PhaseHandlerRegistry,
 )
+from splat_replay.application.services.common.battle_history_service import (
+    BattleHistoryService,
+)
 from splat_replay.application.services.recording.publisher_worker import (
     PublisherWorker,
 )
@@ -75,6 +78,7 @@ class AutoRecorder:
         publisher: EventPublisher,
         frame_publisher: FramePublisher,
         domain_publisher: DomainEventPublisher,
+        battle_history_service: BattleHistoryService,
     ):
         self.logger = logger
         self._stop_event = asyncio.Event()
@@ -110,6 +114,7 @@ class AutoRecorder:
             logger=logger,
             context=self._ctx,
             domain_publisher=domain_publisher,
+            battle_history_service=battle_history_service,
         )
 
         self._frame_processor = FrameProcessingService(

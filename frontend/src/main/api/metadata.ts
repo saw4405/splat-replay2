@@ -13,6 +13,7 @@ import type {
   MetadataOptions,
   SubtitleData,
 } from './types';
+import { toMetadataUpdatePayload } from '../metadata/editable';
 import { JSON_HEADERS, safeReadText } from './utils';
 import { mapRecordedVideo } from './mappers';
 
@@ -39,7 +40,7 @@ export async function updateRecordedVideoMetadata(
   videoId: string,
   metadata: MetadataUpdate
 ): Promise<RecordedVideo> {
-  const { goldMedals, silverMedals, ...rest } = metadata;
+  const { goldMedals, silverMedals, ...rest } = toMetadataUpdatePayload(metadata);
   const payload = {
     ...rest,
     gold_medals: goldMedals,
