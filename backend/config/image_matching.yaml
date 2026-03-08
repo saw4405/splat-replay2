@@ -300,6 +300,7 @@ matcher_groups:
     - weapon_template_156
     - weapon_template_157
     - weapon_template_158
+    - weapon_template_159
 
 # 単一手法検出器（シンプルな検出用）
 simple_matchers:
@@ -2227,6 +2228,14 @@ simple_matchers:
     type: "template"
     template_path: "assets/matching/weapon/ラピッドブラスター.png"
     mask_path: "assets/matching/weapon/ラピッドブラスター_mask.png"
+    threshold: 0.82
+    description: "ブキ照合テンプレート"
+
+  weapon_template_159:
+    name: "ソイチューバーカスタム"
+    type: "template"
+    template_path: "assets/matching/weapon/ソイチューバーカスタム.png"
+    mask_path: "assets/matching/weapon/ソイチューバーカスタム_mask.png"
     threshold: 0.82
     description: "ブキ照合テンプレート"
 
