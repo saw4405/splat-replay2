@@ -32,6 +32,7 @@ class WeaponSlotResult:
     predicted_weapon: str
     is_unmatched: bool
     top_candidates: tuple[WeaponCandidateScore, ...]
+    detected_score: float | None = None
 
     @property
     def best_score(self) -> float:

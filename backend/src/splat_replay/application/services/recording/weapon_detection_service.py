@@ -703,6 +703,7 @@ def _build_previous_results(
                 predicted_weapon=label,
                 is_unmatched=False,
                 top_candidates=top_candidates,
+                detected_score=score if score >= 0.0 else None,
             )
         else:
             # 未判別スロット

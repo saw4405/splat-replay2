@@ -48,21 +48,21 @@ def save_unmatched_slots(
         slot_result = slot_results[slot]
         query_data = query_data_by_slot[slot]
         candidates = slot_debug_candidates_by_slot.get(slot, ())
-        top1 = candidates[0] if len(candidates) >= 1 else None
 
-        top1_weapon_for_file = _resolve_top1_weapon_for_file_name(
-            slot_result=slot_result,
-            top1=top1,
+        file_name_weapon, file_name_score = (
+            _resolve_file_name_weapon_and_score(
+                slot_result=slot_result,
+                candidates=candidates,
+            )
         )
-        top1_score_for_file = _resolve_top1_score_for_file_name(top1=top1)
         predicted_score = _resolve_predicted_score(
             slot_result=slot_result,
             candidates=candidates,
         )
         file_tag = _build_slot_file_tag(
             slot=slot,
-            top1_weapon=top1_weapon_for_file,
-            top1_score=top1_score_for_file,
+            weapon=file_name_weapon,
+            score=file_name_score,
         )
 
         slot_image_path = output_dir / f"{file_tag}_slot.png"
@@ -161,6 +161,8 @@ def _resolve_predicted_score(
     slot_result: WeaponSlotResult,
     candidates: tuple[SlotDebugCandidate, ...],
 ) -> float | None:
+    if not slot_result.is_unmatched and slot_result.detected_score is not None:
+        return slot_result.detected_score
     predicted = _find_candidate_by_weapon(
         candidates=candidates,
         weapon=slot_result.predicted_weapon,
@@ -172,23 +174,26 @@ def _resolve_predicted_score(
     return candidates[0].score
 
 
-def _resolve_top1_weapon_for_file_name(
+def _resolve_file_name_weapon_and_score(
     *,
     slot_result: WeaponSlotResult,
-    top1: SlotDebugCandidate | None,
-) -> str:
-    if top1 is not None:
-        return top1.weapon
-    return slot_result.predicted_weapon
+    candidates: tuple[SlotDebugCandidate, ...],
+) -> tuple[str, float | None]:
+    top1 = candidates[0] if candidates else None
+    if slot_result.is_unmatched:
+        if top1 is not None:
+            return top1.weapon, top1.score
+        return slot_result.predicted_weapon, None
 
-
-def _resolve_top1_score_for_file_name(
-    *,
-    top1: SlotDebugCandidate | None,
-) -> float | None:
-    if top1 is None:
-        return None
-    return top1.score
+    detected_score = slot_result.detected_score
+    if detected_score is None:
+        predicted = _find_candidate_by_weapon(
+            candidates=candidates,
+            weapon=slot_result.predicted_weapon,
+        )
+        if predicted is not None:
+            detected_score = predicted.score
+    return slot_result.predicted_weapon, detected_score
 
 
 def _find_candidate_by_weapon(
@@ -205,15 +210,15 @@ def _find_candidate_by_weapon(
 def _build_slot_file_tag(
     *,
     slot: str,
-    top1_weapon: str,
-    top1_score: float | None,
+    weapon: str,
+    score: float | None,
 ) -> str:
-    weapon = _sanitize_trace_id(top1_weapon)
-    if top1_score is None:
-        score = "na"
+    weapon_tag = _sanitize_trace_id(weapon)
+    if score is None:
+        score_tag = "na"
     else:
-        score = f"{top1_score:.4f}"
-    return f"{slot}_pred_{weapon}_score_{score}"
+        score_tag = f"{score:.4f}"
+    return f"{slot}_pred_{weapon_tag}_score_{score_tag}"
 
 
 def _as_path_string(path: Path) -> str:

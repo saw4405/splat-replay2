@@ -383,6 +383,7 @@ class WeaponRecognitionAdapter(WeaponRecognitionPort):
                         predicted_weapon=constants.UNKNOWN_WEAPON_LABEL,
                         is_unmatched=True,
                         top_candidates=(),
+                        detected_score=None,
                     )
                     if save_unmatched_report:
                         slot_debug_candidates_by_slot[slot] = ()
@@ -601,6 +602,11 @@ class WeaponRecognitionAdapter(WeaponRecognitionPort):
                 predicted_weapon=predicted_weapon,
                 is_unmatched=is_unmatched,
                 top_candidates=top_candidates,
+                detected_score=(
+                    accepted_candidate.score
+                    if accepted_candidate is not None
+                    else None
+                ),
             ),
             debug_candidates,
         )
