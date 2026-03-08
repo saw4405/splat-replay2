@@ -629,6 +629,7 @@ async def test_detect_weapon_display_true(
         "no_weapon_icons_screen_3.png",
         "no_weapon_icons_screen_4.png",
         "no_weapon_icons_screen_5.png",
+        "no_weapon_icons_screen_6.png",
     ],
 )
 async def test_detect_weapon_display_false(
@@ -664,7 +665,8 @@ async def test_detect_weapon_display_false_when_outline_matched_slots_is_three(
         slot_images,
         model_masks,
         cancel_generation=None,
-        max_shift=None: (  # noqa: E501
+        max_shift=None,
+        slot_order=None: (  # noqa: E501
             3,
             iou_by_slot,
             8,
@@ -700,7 +702,8 @@ async def test_detect_weapon_display_true_when_outline_matched_slots_is_four(
         slot_images,
         model_masks,
         cancel_generation=None,
-        max_shift=None: (  # noqa: E501
+        max_shift=None,
+        slot_order=None: (  # noqa: E501
             4,
             iou_by_slot,
             4,
@@ -740,10 +743,12 @@ async def test_detect_weapon_display_uses_fast_path_without_fallback_when_fast_p
         model_masks: dict[str, np.ndarray],
         cancel_generation: int | None = None,
         max_shift: int | None = None,
+        slot_order: tuple[str, ...] | None = None,
     ) -> tuple[int, dict[str, float], int]:
         _ = slot_images
         _ = model_masks
         _ = cancel_generation
+        _ = slot_order
         shifts.append(max_shift)
         return (4, iou_by_slot, 4)
 
@@ -796,10 +801,12 @@ async def test_detect_weapon_display_runs_precise_fallback_when_fast_pass_fails(
         model_masks: dict[str, np.ndarray],
         cancel_generation: int | None = None,
         max_shift: int | None = None,
+        slot_order: tuple[str, ...] | None = None,
     ) -> tuple[int, dict[str, float], int]:
         _ = slot_images
         _ = model_masks
         _ = cancel_generation
+        _ = slot_order
         shifts.append(max_shift)
         if max_shift == constants.OUTLINE_ALIGN_FAST_MAX_SHIFT:
             return (3, fast_iou, 8)
@@ -821,6 +828,62 @@ async def test_detect_weapon_display_runs_precise_fallback_when_fast_pass_fails(
     assert fields["fallback_used"] is True
     assert fields["processed_slots"] == 5
     assert fields["fast_shift"] == constants.OUTLINE_ALIGN_FAST_MAX_SHIFT
+
+
+@pytest.mark.asyncio
+async def test_detect_weapon_display_runs_precise_fallback_when_fast_needs_extra_slots(
+    recognizer: WeaponRecognitionAdapter,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    frame = _load_image(FIXTURE_DIR / "no_weapon_icons_screen_6.png")
+    metrics = TeamColorScreenMetrics(
+        allies_max_distance=0.0,
+        enemies_max_distance=0.0,
+        teams_min_distance=999.0,
+    )
+    spy_logger = _SpyLogger()
+    recognizer._logger = spy_logger
+    monkeypatch.setattr(
+        "splat_replay.infrastructure.adapters.weapon_detection.recognizer.detect_weapon_display_screen",
+        lambda _: (True, metrics),
+    )
+    monkeypatch.setattr(recognizer, "_get_outline_model_masks", lambda: {})
+
+    fast_iou = {slot: 0.0 for slot in constants.SLOT_ORDER}
+    for slot in constants.ENEMY_SLOTS:
+        fast_iou[slot] = constants.WEAPON_DISPLAY_OUTLINE_MIN_IOU
+    precise_iou = dict(fast_iou)
+    slot_orders: list[tuple[str, ...] | None] = []
+
+    def _count_outline_matched_slots(
+        *,
+        slot_images: dict[str, np.ndarray],
+        model_masks: dict[str, np.ndarray],
+        cancel_generation: int | None = None,
+        max_shift: int | None = None,
+        slot_order: tuple[str, ...] | None = None,
+    ) -> tuple[int, dict[str, float], int, float]:
+        _ = slot_images
+        _ = model_masks
+        _ = cancel_generation
+        slot_orders.append(slot_order)
+        if max_shift == constants.OUTLINE_ALIGN_FAST_MAX_SHIFT:
+            return (4, fast_iou, 8, 0.081)
+        return (4, precise_iou, 4, 0.079)
+
+    monkeypatch.setattr(
+        recognizer,
+        "_count_outline_matched_slots",
+        _count_outline_matched_slots,
+    )
+
+    assert await recognizer.detect_weapon_display(frame) is False
+    assert spy_logger.debug_calls
+    _, fields = spy_logger.debug_calls[-1]
+    assert fields["fallback_used"] is True
+    assert fields["processed_slots"] == 4
+    assert fields["display_weapon_region_ratio_passed"] is False
+    assert slot_orders == [None, constants.ENEMY_SLOTS]
 
 
 @pytest.mark.asyncio

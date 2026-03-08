@@ -130,9 +130,17 @@ class WeaponRecognitionAdapter(WeaponRecognitionPort):
                 fast_processed_slots,
                 fast_weapon_region_ratio,
             ) = self._unpack_outline_count_result(fast_result)
+            # fast path が最小必要数に達していても、4 枠を超えて探索して
+            # ようやく成立した場合は片側だけの誤一致の可能性があるため、
+            # precise path で再検証する。
+            should_run_precise_validation = (
+                fast_processed_slots
+                > constants.WEAPON_DISPLAY_OUTLINE_MIN_MATCHED_SLOTS
+            )
             if (
                 fast_matched_slots
                 >= constants.WEAPON_DISPLAY_OUTLINE_MIN_MATCHED_SLOTS
+                and not should_run_precise_validation
             ):
                 outline_matched_slots = fast_matched_slots
                 outline_iou_by_slot = fast_iou_by_slot
@@ -140,12 +148,39 @@ class WeaponRecognitionAdapter(WeaponRecognitionPort):
                 display_weapon_region_ratio = fast_weapon_region_ratio
             else:
                 fallback_used = True
-                precise_result = self._count_outline_matched_slots(
-                    slot_images=slot_images,
-                    model_masks=model_masks,
-                    cancel_generation=cancel_generation,
-                    max_shift=constants.OUTLINE_ALIGN_MAX_SHIFT,
-                )
+                precise_result: (
+                    tuple[int, dict[str, float], int, float | None] | None
+                ) = None
+                if (
+                    fast_matched_slots
+                    >= constants.WEAPON_DISPLAY_OUTLINE_MIN_MATCHED_SLOTS
+                    and should_run_precise_validation
+                ):
+                    matched_fast_slots = self._extract_outline_matched_slots(
+                        fast_iou_by_slot
+                    )
+                    precise_result = self._count_outline_matched_slots(
+                        slot_images=slot_images,
+                        model_masks=model_masks,
+                        cancel_generation=cancel_generation,
+                        max_shift=constants.OUTLINE_ALIGN_MAX_SHIFT,
+                        slot_order=matched_fast_slots,
+                    )
+                    precise_matched_slots, _, _, _ = (
+                        self._unpack_outline_count_result(precise_result)
+                    )
+                    if (
+                        precise_matched_slots
+                        < constants.WEAPON_DISPLAY_OUTLINE_MIN_MATCHED_SLOTS
+                    ):
+                        precise_result = None
+                if precise_result is None:
+                    precise_result = self._count_outline_matched_slots(
+                        slot_images=slot_images,
+                        model_masks=model_masks,
+                        cancel_generation=cancel_generation,
+                        max_shift=constants.OUTLINE_ALIGN_MAX_SHIFT,
+                    )
                 (
                     outline_matched_slots,
                     outline_iou_by_slot,
@@ -239,18 +274,21 @@ class WeaponRecognitionAdapter(WeaponRecognitionPort):
         model_masks: dict[str, np.ndarray],
         cancel_generation: int | None = None,
         max_shift: int | None = None,
+        slot_order: tuple[str, ...] | None = None,
     ) -> tuple[int, dict[str, float], int, float | None]:
         if cancel_generation is None:
             cancel_generation = self._capture_cancel_generation()
         if max_shift is None:
             max_shift = constants.OUTLINE_ALIGN_MAX_SHIFT
+        if slot_order is None:
+            slot_order = constants.SLOT_ORDER
         matched_slots = 0
         processed_slots = 0
         matched_slot_weapon_region_ratios: list[float] = []
         iou_by_slot: dict[str, float] = {
             slot: 0.0 for slot in constants.SLOT_ORDER
         }
-        for slot in constants.SLOT_ORDER:
+        for slot in slot_order:
             self._ensure_not_cancelled(cancel_generation)
             processed_slots += 1
             detected_mask = detect_slot_team_region(slot_images[slot])
@@ -294,6 +332,16 @@ class WeaponRecognitionAdapter(WeaponRecognitionPort):
             iou_by_slot,
             processed_slots,
             display_weapon_region_ratio,
+        )
+
+    @staticmethod
+    def _extract_outline_matched_slots(
+        iou_by_slot: dict[str, float],
+    ) -> tuple[str, ...]:
+        return tuple(
+            slot
+            for slot in constants.SLOT_ORDER
+            if iou_by_slot[slot] >= constants.WEAPON_DISPLAY_OUTLINE_MIN_IOU
         )
 
     @staticmethod
