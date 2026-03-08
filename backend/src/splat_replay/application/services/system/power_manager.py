@@ -22,9 +22,13 @@ class PowerManager:
         self.logger = logger
         self.config = config
 
-    async def sleep(self) -> None:
-        settings = self.config.get_behavior_settings()
-        if not settings.sleep_after_upload:
+    async def sleep(self, *, sleep_after_upload: bool | None = None) -> None:
+        enabled = sleep_after_upload
+        if enabled is None:
+            settings = self.config.get_behavior_settings()
+            enabled = settings.sleep_after_upload
+
+        if not enabled:
             self.logger.info("PC スリープは無効化されています")
             return
 

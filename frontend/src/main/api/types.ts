@@ -20,6 +20,9 @@ export interface EditUploadStatus {
   startedAt: string | null;
   finishedAt: string | null;
   error: string | null;
+  sleepAfterUploadDefault: boolean;
+  sleepAfterUploadEffective: boolean;
+  sleepAfterUploadOverridden: boolean;
 }
 
 export interface EditUploadTriggerResponse {

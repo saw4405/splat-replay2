@@ -62,6 +62,9 @@ export type RawEditUploadStatus = {
   started_at: string | null;
   finished_at: string | null;
   error: string | null;
+  sleep_after_upload_default: boolean;
+  sleep_after_upload_effective: boolean;
+  sleep_after_upload_overridden: boolean;
 };
 
 export type RawEditUploadTriggerResponse = {
@@ -137,6 +140,9 @@ export function mapEditUploadStatus(raw: RawEditUploadStatus): EditUploadStatus 
     startedAt: raw.started_at ?? null,
     finishedAt: raw.finished_at ?? null,
     error: raw.error ?? null,
+    sleepAfterUploadDefault: Boolean(raw.sleep_after_upload_default),
+    sleepAfterUploadEffective: Boolean(raw.sleep_after_upload_effective),
+    sleepAfterUploadOverridden: Boolean(raw.sleep_after_upload_overridden),
   };
 }
 

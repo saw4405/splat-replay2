@@ -7,6 +7,7 @@ Clean Architectureの原則に基づき、interface層のDTOを定義する。
 from __future__ import annotations
 
 from splat_replay.interface.web.schemas.common import (
+    EditUploadProcessOptionsUpdateRequest,
     EditUploadState,
     EditUploadStatus,
     EditUploadTriggerResponse,
@@ -44,6 +45,7 @@ from splat_replay.interface.web.schemas.setup import (
 
 __all__ = [
     # Common
+    "EditUploadProcessOptionsUpdateRequest",
     "EditUploadState",
     "EditUploadStatus",
     "EditUploadTriggerResponse",

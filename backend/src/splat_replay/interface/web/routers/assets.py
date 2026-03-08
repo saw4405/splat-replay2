@@ -15,9 +15,11 @@ from typing import TYPE_CHECKING, List
 from fastapi import APIRouter, HTTPException, Query, status
 from fastapi.responses import FileResponse, JSONResponse
 
+from splat_replay.application.dto.assets import EditUploadStatusDTO
 from splat_replay.interface.web.converters import to_recorded_video_item
 from splat_replay.interface.web.schemas import (
     EditedVideoItem,
+    EditUploadProcessOptionsUpdateRequest,
     EditUploadStatus,
     EditUploadTriggerResponse,
     RecordedVideoItem,
@@ -37,6 +39,17 @@ def create_assets_router(server: WebAPIServer) -> APIRouter:
         設定済みのAPIRouter
     """
     router = APIRouter(prefix="/api", tags=["assets"])
+
+    def _to_edit_upload_status(dto: EditUploadStatusDTO) -> EditUploadStatus:
+        return EditUploadStatus(
+            state=dto.state,
+            started_at=None,
+            finished_at=None,
+            error=dto.message if dto.state == "failed" else None,
+            sleep_after_upload_default=dto.sleep_after_upload_default,
+            sleep_after_upload_effective=dto.sleep_after_upload_effective,
+            sleep_after_upload_overridden=dto.sleep_after_upload_overridden,
+        )
 
     # === 録画済みアセット ===
 
@@ -207,20 +220,13 @@ def create_assets_router(server: WebAPIServer) -> APIRouter:
                 await server.auto_process_service.start_auto_process()
             else:
                 await server.start_edit_upload_uc.execute()
-            # バックグラウンドタスクを開始したため、状態は"running"として返す
-            # (実際のAutoEditorの状態更新は非同期タスク内で行われるため、
-            #  このタイミングでは"idle"の可能性があるが、論理的には"running"が正しい)
+            status_dto = await server.get_edit_upload_status_uc.execute()
             return JSONResponse(
                 status_code=status.HTTP_202_ACCEPTED,
                 content={
                     "accepted": True,
                     "message": "編集・アップロード処理を開始しました",
-                    "status": {
-                        "state": "running",
-                        "started_at": None,
-                        "finished_at": None,
-                        "error": None,
-                    },
+                    "status": _to_edit_upload_status(status_dto).dict(),
                 },
             )
         except RuntimeError as e:
@@ -231,12 +237,7 @@ def create_assets_router(server: WebAPIServer) -> APIRouter:
                 content={
                     "accepted": False,
                     "message": str(e),
-                    "status": {
-                        "state": status_dto.state,
-                        "started_at": None,
-                        "finished_at": None,
-                        "error": None,
-                    },
+                    "status": _to_edit_upload_status(status_dto).dict(),
                 },
             )
 
@@ -247,12 +248,28 @@ def create_assets_router(server: WebAPIServer) -> APIRouter:
     async def get_edit_upload_status() -> EditUploadStatus:
         """編集・アップロード処理の状態を取得。"""
         dto = await server.get_edit_upload_status_uc.execute()
-        # Application DTO → Interface DTO に変換
-        # Note: Application DTOのstateは文字列、Interface DTOはLiteral型
-        # Note: 現在はstarted_at/finished_atは未実装のためNone
-        return EditUploadStatus(
-            state=dto.state,
-        )
+        return _to_edit_upload_status(dto)
+
+    @router.patch(
+        "/process/edit-upload/options",
+        response_model=EditUploadStatus,
+    )
+    async def update_edit_upload_process_options(
+        request: EditUploadProcessOptionsUpdateRequest,
+    ) -> EditUploadStatus:
+        """編集中・アップロード中の一時オプションを更新する。"""
+        try:
+            server.start_edit_upload_uc.update_sleep_after_upload(
+                request.sleep_after_upload
+            )
+        except RuntimeError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=str(exc),
+            ) from exc
+
+        dto = await server.get_edit_upload_status_uc.execute()
+        return _to_edit_upload_status(dto)
 
     return router
 

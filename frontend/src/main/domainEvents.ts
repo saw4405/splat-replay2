@@ -80,11 +80,13 @@ export interface AutoProcessPendingPayload {
 export interface AutoSleepPendingPayload {
   timeout_seconds: number;
   message: string;
+  sleep_after_upload?: boolean;
 }
 
 export interface EditUploadCompletedPayload {
   success: boolean;
   message: string;
+  sleep_after_upload?: boolean;
   trigger?: 'auto' | 'manual';
 }
 

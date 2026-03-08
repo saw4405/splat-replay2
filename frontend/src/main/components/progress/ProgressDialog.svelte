@@ -1,7 +1,8 @@
 ﻿<script lang="ts">
   import { onDestroy } from 'svelte';
+  import { fetchEditUploadStatus, updateEditUploadProcessOptions } from '../../api/assets';
   import BaseDialog from '../../../common/components/BaseDialog.svelte';
-  import type { ProgressEvent } from '../../api/types';
+  import type { EditUploadStatus, ProgressEvent } from '../../api/types';
 
   type ConnectionState = 'idle' | 'connecting' | 'open' | 'error';
   type TaskStatus = 'idle' | 'running' | 'succeeded' | 'failed';
@@ -48,6 +49,13 @@
   let retryCountdown = 0;
 
   let connectionState: ConnectionState = 'idle';
+  let editUploadStatus: EditUploadStatus | null = null;
+  let optionLoading = false;
+  let optionSaving = false;
+  let optionErrorMessage = '';
+  let optionHintMessage: string | null = null;
+  let wasOpen = false;
+  let statusRequestId = 0;
 
   const dialogMinHeight = 'min(70vh, 46rem)';
   const dialogMaxHeight = '90vh';
@@ -115,11 +123,31 @@
 
   $: anyRunning = taskList.some((task) => task.status === 'running');
   $: anyFailure = taskList.some((task) => task.status === 'failed');
+  $: sleepAfterUploadEnabled = editUploadStatus?.sleepAfterUploadEffective ?? false;
+  $: sleepToggleDisabled =
+    optionLoading ||
+    optionSaving ||
+    !editUploadStatus ||
+    editUploadStatus.state !== 'running' ||
+    allFinished;
+  $: optionHintMessage = getOptionHintMessage();
 
   $: if (isOpen) {
     ensureStream();
   } else {
     pauseStream();
+  }
+
+  $: if (isOpen !== wasOpen) {
+    wasOpen = isOpen;
+    if (isOpen) {
+      optionErrorMessage = '';
+      void loadEditUploadStatus();
+    } else {
+      optionErrorMessage = '';
+      optionLoading = false;
+      optionSaving = false;
+    }
   }
 
   onDestroy(() => {
@@ -241,6 +269,72 @@
     }
   }
 
+  async function loadEditUploadStatus(): Promise<void> {
+    const requestId = ++statusRequestId;
+    optionLoading = true;
+    try {
+      const status = await fetchEditUploadStatus();
+      if (requestId !== statusRequestId) {
+        return;
+      }
+      editUploadStatus = status;
+      optionErrorMessage = '';
+    } catch (error) {
+      if (requestId !== statusRequestId) {
+        return;
+      }
+      optionErrorMessage =
+        error instanceof Error ? error.message : '今回の処理オプションの取得に失敗しました。';
+    } finally {
+      if (requestId === statusRequestId) {
+        optionLoading = false;
+      }
+    }
+  }
+
+  async function handleSleepAfterUploadChange(event: Event): Promise<void> {
+    if (sleepToggleDisabled) {
+      return;
+    }
+
+    const target = event.currentTarget as HTMLInputElement;
+    const nextValue = target.checked;
+
+    optionSaving = true;
+    optionErrorMessage = '';
+    try {
+      editUploadStatus = await updateEditUploadProcessOptions({
+        sleepAfterUpload: nextValue,
+      });
+    } catch (error) {
+      optionErrorMessage =
+        error instanceof Error ? error.message : '今回の処理オプションの更新に失敗しました。';
+      target.checked = sleepAfterUploadEnabled;
+      void loadEditUploadStatus();
+    } finally {
+      optionSaving = false;
+    }
+  }
+
+  function getOptionHintMessage(): string | null {
+    if (optionSaving) {
+      return '反映中です...';
+    }
+    if (optionLoading) {
+      return '読込中です...';
+    }
+    if (!editUploadStatus) {
+      return null;
+    }
+    if (editUploadStatus.state === 'idle') {
+      return '処理開始後に変更できます。';
+    }
+    if (editUploadStatus.state !== 'running') {
+      return '処理完了後は変更できません。';
+    }
+    return null;
+  }
+
   function applyEvent(event: ProgressEvent): void {
     switch (event.kind) {
       case 'start':
@@ -297,6 +391,9 @@
       lastUpdated: Date.now(),
     };
     tasks = { ...tasks, [taskId]: task };
+    if (isOpen && !optionSaving && (!editUploadStatus || editUploadStatus.state !== 'running')) {
+      void loadEditUploadStatus();
+    }
   }
 
   function handleItems(event: ProgressEvent): void {
@@ -746,6 +843,51 @@
       </div>
     {/if}
 
+    <section class="process-options-panel">
+      <div class="process-options-body">
+        <div class="process-options-meta">
+          <label
+            id="progress-sleep-after-upload-label"
+            class="process-options-label"
+            for="progress-sleep-after-upload"
+          >
+            アップロード終了後にスリープする
+          </label>
+
+          <div class="process-options-state">
+            {#if optionHintMessage}
+              <span class="process-options-hint">{optionHintMessage}</span>
+            {/if}
+          </div>
+        </div>
+
+        <label
+          class="toggle-switch"
+          class:disabled={sleepToggleDisabled}
+          for="progress-sleep-after-upload"
+        >
+          <input
+            id="progress-sleep-after-upload"
+            type="checkbox"
+            checked={sleepAfterUploadEnabled}
+            disabled={sleepToggleDisabled}
+            aria-labelledby="progress-sleep-after-upload-label"
+            aria-describedby="progress-sleep-after-upload-description"
+            on:change={handleSleepAfterUploadChange}
+          />
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+
+      <p id="progress-sleep-after-upload-description" class="assistive">
+        保存済み設定は変更せず、この処理の完了時だけスリープ有無を切り替えます。
+      </p>
+
+      {#if optionErrorMessage}
+        <p class="process-options-error" role="alert">{optionErrorMessage}</p>
+      {/if}
+    </section>
+
     <div class="content-region">
       {#if taskList.length === 0}
         <div class="empty-state">
@@ -880,6 +1022,183 @@
     flex-direction: column;
     gap: 1rem;
     scrollbar-gutter: stable both-edges;
+  }
+
+  .process-options-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    padding: 1rem 1.25rem;
+    border-radius: 1rem;
+    background: linear-gradient(
+      135deg,
+      rgba(var(--theme-rgb-white), 0.07) 0%,
+      rgba(var(--theme-rgb-white), 0.03) 100%
+    );
+    border: 1px solid rgba(var(--theme-rgb-white), 0.08);
+    box-shadow:
+      0 0.5rem 1.5rem rgba(var(--theme-rgb-black), 0.18),
+      inset 0 1px 0 rgba(var(--theme-rgb-white), 0.08);
+    flex-shrink: 0;
+  }
+
+  .assistive {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+
+  .process-options-body {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+  }
+
+  .process-options-meta {
+    display: flex;
+    flex: 1 1 auto;
+    min-width: 0;
+    flex-direction: column;
+    gap: 0.4rem;
+  }
+
+  .process-options-label {
+    display: inline-flex;
+    align-items: center;
+    margin: 0;
+    color: rgba(var(--theme-rgb-white), 0.94);
+    font-size: 0.98rem;
+    font-weight: 600;
+    line-height: 1.35;
+  }
+
+  .process-options-state {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem 0.9rem;
+    align-items: center;
+    color: rgba(var(--theme-rgb-white), 0.82);
+    font-size: 0.9rem;
+  }
+
+  .process-options-hint {
+    color: rgba(var(--theme-rgb-white), 0.66);
+  }
+
+  .process-options-error {
+    margin: 0;
+    color: var(--theme-status-danger-soft);
+    font-size: 0.88rem;
+  }
+
+  input[type='checkbox'] {
+    position: absolute;
+    opacity: 0;
+    width: 0;
+    height: 0;
+  }
+
+  .toggle-switch {
+    position: relative;
+    display: inline-block;
+    width: 3.5rem;
+    height: 2rem;
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+
+  .toggle-switch.disabled {
+    cursor: not-allowed;
+    opacity: 0.6;
+  }
+
+  .toggle-slider {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+      135deg,
+      rgba(var(--theme-rgb-slate), 0.28) 0%,
+      rgba(var(--theme-rgb-slate-500), 0.28) 100%
+    );
+    border: 1px solid rgba(var(--theme-rgb-slate), 0.45);
+    border-radius: 2rem;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow:
+      inset 0 0.125rem 0.25rem rgba(var(--theme-rgb-black), 0.25),
+      0 0.125rem 0.25rem rgba(var(--theme-rgb-black), 0.15);
+  }
+
+  .toggle-slider::before {
+    content: '';
+    position: absolute;
+    height: 1.5rem;
+    width: 1.5rem;
+    left: 0.25rem;
+    bottom: 0.25rem;
+    background: linear-gradient(
+      135deg,
+      rgba(var(--theme-rgb-white), 0.95) 0%,
+      rgba(var(--theme-rgb-light-slate), 0.9) 100%
+    );
+    border-radius: 50%;
+    transition: inherit;
+    box-shadow:
+      0 0.25rem 0.5rem rgba(var(--theme-rgb-black), 0.35),
+      0 0.125rem 0.25rem rgba(var(--theme-rgb-black), 0.25);
+  }
+
+  input[type='checkbox']:checked + .toggle-slider {
+    background: linear-gradient(
+      135deg,
+      rgba(var(--theme-rgb-accent), 0.92) 0%,
+      rgba(var(--theme-rgb-accent), 0.78) 100%
+    );
+    border-color: rgba(var(--theme-rgb-accent), 0.65);
+    box-shadow:
+      inset 0 0.125rem 0.35rem rgba(var(--theme-rgb-black), 0.15),
+      0 0.5rem 1rem rgba(var(--theme-rgb-accent), 0.28);
+  }
+
+  input[type='checkbox']:checked + .toggle-slider::before {
+    transform: translateX(1.5rem);
+    background: linear-gradient(
+      135deg,
+      rgba(var(--theme-rgb-white), 1) 0%,
+      rgba(var(--theme-rgb-light-green-bg), 0.96) 100%
+    );
+    box-shadow:
+      0 0.3rem 0.6rem rgba(var(--theme-rgb-black), 0.28),
+      0 0.125rem 0.5rem rgba(var(--theme-rgb-accent), 0.4);
+  }
+
+  input[type='checkbox']:focus + .toggle-slider {
+    outline: 0.125rem solid rgba(var(--theme-rgb-accent), 0.55);
+    outline-offset: 0.125rem;
+  }
+
+  .toggle-switch:not(.disabled):hover .toggle-slider {
+    border-color: rgba(var(--theme-rgb-accent), 0.5);
+    box-shadow:
+      inset 0 0.125rem 0.35rem rgba(var(--theme-rgb-black), 0.22),
+      0 0.25rem 0.75rem rgba(var(--theme-rgb-accent), 0.24);
+  }
+
+  .toggle-switch:not(.disabled) input[type='checkbox']:checked + .toggle-slider:hover {
+    background: linear-gradient(
+      135deg,
+      rgba(var(--theme-rgb-accent), 1) 0%,
+      rgba(var(--theme-rgb-accent), 0.86) 100%
+    );
+    box-shadow:
+      inset 0 0.125rem 0.35rem rgba(var(--theme-rgb-black), 0.18),
+      0 0.4rem 1.1rem rgba(var(--theme-rgb-accent), 0.4);
   }
 
   .connection-banner {
@@ -1321,6 +1640,10 @@
   @media (max-width: 640px) {
     .dialog-body {
       padding: 1rem;
+    }
+
+    .process-options-body {
+      gap: 0.75rem;
     }
 
     .content-region {

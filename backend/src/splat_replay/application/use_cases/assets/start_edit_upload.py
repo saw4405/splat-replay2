@@ -44,6 +44,8 @@ class StartEditUploadUseCase:
         self._task: asyncio.Task[None] | None = None
         self._state: EditUploadState = "idle"
         self._message: str = ""
+        self._sleep_after_upload_default = False
+        self._sleep_after_upload_effective = False
 
     async def execute(self, *, trigger: EditUploadTrigger = "manual") -> None:
         """編集・アップロード処理を開始。
@@ -55,6 +57,7 @@ class StartEditUploadUseCase:
         if self._task is not None and not self._task.done():
             raise RuntimeError("編集・アップロード処理が既に実行中です")
 
+        self._reset_runtime_options()
         self._state = "running"
         self._message = "編集・アップロード処理を開始しました"
         # バックグラウンドタスクとして起動
@@ -74,6 +77,7 @@ class StartEditUploadUseCase:
             self._message = "編集・アップロード処理が完了しました"
             self._logger.info("編集・アップロード処理が完了しました")
         except Exception as e:
+            sleep_after_upload = self.get_sleep_after_upload_effective()
             self._state = "failed"
             self._message = f"編集・アップロード処理に失敗しました: {e}"
             self._logger.error(f"編集・アップロード処理中にエラーが発生: {e}")
@@ -81,16 +85,19 @@ class StartEditUploadUseCase:
                 EditUploadCompleted(
                     success=False,
                     message=str(e),
+                    sleep_after_upload=sleep_after_upload,
                     trigger=trigger,
                 )
             )
             self._schedule_auto_sleep(trigger)
             raise
 
+        sleep_after_upload = self.get_sleep_after_upload_effective()
         self._event_bus.publish_domain_event(
             EditUploadCompleted(
                 success=True,
                 message="編集・アップロード処理が完了しました",
+                sleep_after_upload=sleep_after_upload,
                 trigger=trigger,
             )
         )
@@ -104,11 +111,53 @@ class StartEditUploadUseCase:
         """現在の状態メッセージを取得する。"""
         return self._message
 
+    def update_sleep_after_upload(self, enabled: bool) -> None:
+        """今回の処理に限ったスリープ設定を更新する。"""
+        if not self.is_running():
+            raise RuntimeError(
+                "編集中またはアップロード中の処理がないため変更できません"
+            )
+
+        self._sleep_after_upload_effective = enabled
+        self._logger.info(
+            "編集・アップロード処理の一時スリープ設定を更新しました",
+            sleep_after_upload=enabled,
+        )
+
+    def get_sleep_after_upload_default(self) -> bool:
+        """保存済み設定の既定値を返す。"""
+        default, _, _ = self._resolve_sleep_after_upload_state()
+        return default
+
+    def get_sleep_after_upload_effective(self) -> bool:
+        """今回の処理で有効なスリープ設定を返す。"""
+        _, effective, _ = self._resolve_sleep_after_upload_state()
+        return effective
+
+    def is_sleep_after_upload_overridden(self) -> bool:
+        """今回の処理で一時上書き中かどうかを返す。"""
+        _, _, overridden = self._resolve_sleep_after_upload_state()
+        return overridden
+
+    def _reset_runtime_options(self) -> None:
+        settings = self._config.get_behavior_settings()
+        self._sleep_after_upload_default = settings.sleep_after_upload
+        self._sleep_after_upload_effective = settings.sleep_after_upload
+
+    def _resolve_sleep_after_upload_state(self) -> tuple[bool, bool, bool]:
+        if self._state == "idle":
+            default = self._config.get_behavior_settings().sleep_after_upload
+            return default, default, False
+
+        default = self._sleep_after_upload_default
+        effective = self._sleep_after_upload_effective
+        return default, effective, effective != default
+
     def _schedule_auto_sleep(self, trigger: EditUploadTrigger) -> None:
         if trigger != "manual":
             return
-        settings = self._config.get_behavior_settings()
-        if not settings.sleep_after_upload:
+        sleep_after_upload = self.get_sleep_after_upload_effective()
+        if not sleep_after_upload:
             return
         self._event_bus.publish_domain_event(
             AutoSleepPending(
@@ -117,5 +166,6 @@ class StartEditUploadUseCase:
                     "編集・アップロードが完了しました。15秒後に自動スリープします。"
                     "続けて作業する場合はキャンセルしてください。"
                 ),
+                sleep_after_upload=sleep_after_upload,
             )
         )

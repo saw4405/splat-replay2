@@ -56,6 +56,7 @@ class AutoProcessService:
         self.repo = repo
         self._is_auto_processing = False
         self._auto_sleep_allowed = False
+        self._pending_sleep_after_upload: bool | None = None
 
         # イベント購読
         # Note: EventBusPortの実装によってはsubscribeメソッドのシグネチャが異なる可能性があるが、
@@ -174,16 +175,21 @@ class AutoProcessService:
         # Payload access depends on Event structure.
         # infrastructure.messaging.Event has .payload dict
         success = False
+        sleep_after_upload = False
         if hasattr(ev, "payload") and isinstance(ev.payload, dict):
             success = bool(ev.payload.get("success", False))
+            sleep_after_upload_value = ev.payload.get("sleep_after_upload")
+            if isinstance(sleep_after_upload_value, bool):
+                sleep_after_upload = sleep_after_upload_value
 
         if self._is_auto_processing:
             self._is_auto_processing = False
 
         if trigger == "manual":
-            settings = self.config.get_behavior_settings()
-            if settings.sleep_after_upload:
-                self._auto_sleep_allowed = True
+            self._auto_sleep_allowed = sleep_after_upload
+            self._pending_sleep_after_upload = (
+                sleep_after_upload if sleep_after_upload else None
+            )
             return
 
         if not success:
@@ -191,14 +197,16 @@ class AutoProcessService:
                 "自動編集・アップロードが失敗しました。スリープ設定が有効なら通知します。"
             )
 
-        settings = self.config.get_behavior_settings()
-        if not settings.sleep_after_upload:
+        if not sleep_after_upload:
+            self._auto_sleep_allowed = False
+            self._pending_sleep_after_upload = None
             self.logger.info(
                 "自動スリープしない設定のため、スリープ通知をスキップします。"
             )
             return
 
         self._auto_sleep_allowed = True
+        self._pending_sleep_after_upload = sleep_after_upload
         self.event_bus.publish_domain_event(
             AutoSleepPending(
                 timeout_seconds=15.0,
@@ -206,12 +214,18 @@ class AutoProcessService:
                     "編集・アップロードが完了しました。15秒後に自動スリープします。"
                     "続けて作業する場合はキャンセルしてください。"
                 ),
+                sleep_after_upload=sleep_after_upload,
             )
         )
 
-    def handle_auto_sleep_pending(self, _event_obj: object) -> None:
+    def handle_auto_sleep_pending(self, event_obj: object) -> None:
         """自動スリープの開始待ちを受け取ったときの処理。"""
         self._auto_sleep_allowed = True
+        ev = cast(Any, event_obj)
+        if hasattr(ev, "payload") and isinstance(ev.payload, dict):
+            sleep_after_upload = ev.payload.get("sleep_after_upload")
+            if isinstance(sleep_after_upload, bool):
+                self._pending_sleep_after_upload = sleep_after_upload
 
     async def start_auto_sleep(self) -> None:
         """自動スリープを開始する。"""
@@ -219,9 +233,11 @@ class AutoProcessService:
             raise RuntimeError("自動スリープが許可されていません")
 
         self._auto_sleep_allowed = False
+        sleep_after_upload = self._pending_sleep_after_upload
+        self._pending_sleep_after_upload = None
 
         self.logger.info("自動スリープを開始します。")
         self.event_bus.publish_domain_event(AutoSleepStarted())
         # スリープ直前にログが残るよう少し待機
         await asyncio.sleep(3)
-        await self.power_manager.sleep()
+        await self.power_manager.sleep(sleep_after_upload=sleep_after_upload)

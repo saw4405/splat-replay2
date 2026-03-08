@@ -57,4 +57,7 @@ class GetEditUploadStatusUseCase:
             state=state,
             message=str(message),
             progress=progress if isinstance(progress, int) else 0,
+            sleep_after_upload_default=self._start_edit_upload_uc.get_sleep_after_upload_default(),
+            sleep_after_upload_effective=self._start_edit_upload_uc.get_sleep_after_upload_effective(),
+            sleep_after_upload_overridden=self._start_edit_upload_uc.is_sleep_after_upload_overridden(),
         )

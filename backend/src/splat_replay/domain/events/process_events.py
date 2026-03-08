@@ -17,6 +17,7 @@ class EditUploadCompleted(DomainEvent):
 
     success: bool
     message: str
+    sleep_after_upload: bool
     trigger: EditUploadTrigger = "manual"
 
 
@@ -45,6 +46,7 @@ class AutoSleepPending(DomainEvent):
 
     timeout_seconds: float
     message: str
+    sleep_after_upload: bool = True
 
 
 @dataclass(frozen=True, kw_only=True)

@@ -109,6 +109,38 @@ export async function fetchEditUploadStatus(): Promise<EditUploadStatus> {
 }
 
 /**
+ * 編集中・アップロード中の一時オプションを更新
+ */
+export async function updateEditUploadProcessOptions(options: {
+  sleepAfterUpload: boolean;
+}): Promise<EditUploadStatus> {
+  const response = await fetch('/api/process/edit-upload/options', {
+    method: 'PATCH',
+    headers: JSON_HEADERS,
+    body: JSON.stringify({
+      sleep_after_upload: options.sleepAfterUpload,
+    }),
+  });
+
+  let body: unknown = null;
+  try {
+    body = await response.json();
+  } catch {
+    body = null;
+  }
+
+  if (!response.ok) {
+    const detail =
+      body && typeof body === 'object' && 'detail' in body && typeof body.detail === 'string'
+        ? body.detail
+        : await safeReadText(response);
+    throw new Error(detail || 'Failed to update edit/upload process options');
+  }
+
+  return mapEditUploadStatus(body as Parameters<typeof mapEditUploadStatus>[0]);
+}
+
+/**
  * 録画済みビデオを削除
  */
 export async function deleteRecordedVideo(videoId: string): Promise<void> {

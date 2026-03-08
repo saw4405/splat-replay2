@@ -109,8 +109,14 @@ class EditUploadStatusDTO:
         state: 状態（idle/running/succeeded/failed）
         message: 状態メッセージ
         progress: 進捗率（0-100）
+        sleep_after_upload_default: 保存済み設定の既定値
+        sleep_after_upload_effective: 今回の処理で有効な値
+        sleep_after_upload_overridden: 今回の処理で一時上書き中かどうか
     """
 
     state: EditUploadState
     message: str
     progress: int
+    sleep_after_upload_default: bool
+    sleep_after_upload_effective: bool
+    sleep_after_upload_overridden: bool

@@ -158,11 +158,17 @@
 
     const finishedAt = new Date().toISOString();
     const startedAt = processStatus?.startedAt ?? null;
+    const sleepAfterUploadDefault = processStatus?.sleepAfterUploadDefault ?? false;
+    const sleepAfterUploadEffective =
+      payload.sleep_after_upload ?? processStatus?.sleepAfterUploadEffective ?? false;
     processStatus = {
       state: payload.success ? 'succeeded' : 'failed',
       startedAt,
       finishedAt,
       error: payload.success ? null : payload.message,
+      sleepAfterUploadDefault,
+      sleepAfterUploadEffective,
+      sleepAfterUploadOverridden: sleepAfterUploadEffective !== sleepAfterUploadDefault,
     };
 
     showProgressDialog = false;
