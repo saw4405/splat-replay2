@@ -1,59 +1,186 @@
 <script lang="ts">
   import type { MetadataOptionItem } from '../../api/types';
-  import type { EditableMetadata, WeaponSlots } from '../../metadata/editable';
+  import type { EditableMetadata } from '../../metadata/editable';
+  import { normaliseMedalPair, type WeaponSlots } from '../../metadata/shared';
 
   type WeaponTeam = 'allies' | 'enemies';
   type MedalField = 'goldMedals' | 'silverMedals';
+  type FieldLabels = {
+    gameMode: string;
+    startedAt: string;
+    match: string;
+    rule: string;
+    stage: string;
+    rate: string;
+    judgement: string;
+    kill: string;
+    death: string;
+    special: string;
+    goldMedals: string;
+    silverMedals: string;
+    allies: string;
+    enemies: string;
+  };
+  type PlaceholderLabels = {
+    gameMode: string;
+    startedAt: string;
+    match: string;
+    rule: string;
+    stage: string;
+    judgement: string;
+    rate: string;
+  };
 
   export let metadata: EditableMetadata;
+  export let variant: 'dialog' | 'overlay' = 'dialog';
+  export let showGameMode: boolean = false;
+  export let gameModeOptions: MetadataOptionItem[] = [];
   export let matchOptions: MetadataOptionItem[] = [];
   export let ruleOptions: MetadataOptionItem[] = [];
   export let stageOptions: MetadataOptionItem[] = [];
   export let judgementOptions: MetadataOptionItem[] = [];
-
-  const placeholderLabel = {
+  export let fieldLabels: FieldLabels = {
+    gameMode: 'ゲームモード',
+    startedAt: '開始時間',
+    match: 'マッチ',
+    rule: 'ルール',
+    stage: 'ステージ',
+    rate: 'レート',
+    judgement: '判定',
+    kill: 'キル数',
+    death: 'デス数',
+    special: 'スペシャル',
+    goldMedals: '金表彰',
+    silverMedals: '銀表彰',
+    allies: '味方ブキ',
+    enemies: '敵ブキ',
+  };
+  export let placeholderLabels: PlaceholderLabels = {
+    gameMode: '未取得',
+    startedAt: '例: 2026-03-09 12:34:56',
     match: '未取得',
     rule: '未取得',
     stage: '未取得',
     judgement: '未判定',
     rate: '未検出',
   };
+  export let startedAtActionText: string | null = null;
+  export let onStartedAtAction: (() => void) | null = null;
+  export let onFieldEdited: ((field: keyof EditableMetadata) => void) | null = null;
+
+  function notifyFieldEdited(field: keyof EditableMetadata): void {
+    onFieldEdited?.(field);
+  }
+
+  function updateMetadataField<K extends keyof EditableMetadata>(
+    field: K,
+    value: EditableMetadata[K]
+  ): void {
+    metadata = {
+      ...metadata,
+      [field]: value,
+    };
+    notifyFieldEdited(field);
+  }
+
+  function handleTextInput(field: keyof EditableMetadata, event: Event): void {
+    const input = event.currentTarget as HTMLInputElement;
+    updateMetadataField(field, input.value as EditableMetadata[typeof field]);
+  }
+
+  function handleSelectChange(field: keyof EditableMetadata, event: Event): void {
+    const select = event.currentTarget as HTMLSelectElement;
+    updateMetadataField(field, select.value as EditableMetadata[typeof field]);
+  }
+
+  function parseNumberInput(value: string): number {
+    const parsed = Number.parseInt(value, 10);
+    return Number.isNaN(parsed) ? 0 : parsed;
+  }
+
+  function handleNumberInput(field: 'kill' | 'death' | 'special', event: Event): void {
+    const input = event.currentTarget as HTMLInputElement;
+    updateMetadataField(field, parseNumberInput(input.value));
+  }
 
   function handleWeaponInput(team: WeaponTeam, index: number, event: Event): void {
     const input = event.currentTarget as HTMLInputElement;
     const nextSlots = [...metadata[team]] as WeaponSlots;
     nextSlots[index] = input.value;
-    metadata = {
-      ...metadata,
-      [team]: nextSlots,
-    };
+    updateMetadataField(team, nextSlots);
   }
 
-  function normaliseMedalCount(value: number): number {
-    if (!Number.isFinite(value)) {
-      return 0;
-    }
-    return Math.min(3, Math.max(0, Math.trunc(value)));
+  function handleMedalInput(field: MedalField, event: Event): void {
+    const input = event.currentTarget as HTMLInputElement;
+    const nextMetadata = {
+      ...metadata,
+      [field]: parseNumberInput(input.value),
+    };
+    const normalisedMedals = normaliseMedalPair(nextMetadata.goldMedals, nextMetadata.silverMedals);
+    metadata = {
+      ...nextMetadata,
+      goldMedals: normalisedMedals.goldMedals,
+      silverMedals: normalisedMedals.silverMedals,
+    };
+    notifyFieldEdited(field);
   }
 
-  function normaliseMedalInput(field: MedalField): void {
-    const otherField: MedalField = field === 'goldMedals' ? 'silverMedals' : 'goldMedals';
-    const otherValue = normaliseMedalCount(metadata[otherField]);
-    const maxCurrent = 3 - otherValue;
-    const nextValue = Math.min(normaliseMedalCount(metadata[field]), maxCurrent);
-    metadata = {
-      ...metadata,
-      [field]: nextValue,
-      [otherField]: otherValue,
-    };
+  function handleStartedAtAction(): void {
+    onStartedAtAction?.();
   }
 </script>
 
-<div class="metadata-form">
+<div class="metadata-form" class:variant-overlay={variant === 'overlay'}>
+  {#if showGameMode}
+    <div class="form-group">
+      <label for="game_mode">{fieldLabels.gameMode}</label>
+      <select
+        id="game_mode"
+        value={metadata.gameMode}
+        on:change={(event) => handleSelectChange('gameMode', event)}
+      >
+        <option value="">{placeholderLabels.gameMode}</option>
+        {#each gameModeOptions as mode}
+          <option value={mode.key}>{mode.label}</option>
+        {/each}
+      </select>
+    </div>
+  {/if}
+
   <div class="form-group">
-    <label for="match">マッチ</label>
-    <select id="match" bind:value={metadata.match}>
-      <option value="">{placeholderLabel.match}</option>
+    <label for="started_at">{fieldLabels.startedAt}</label>
+    {#if startedAtActionText}
+      <div class="datetime-field">
+        <input
+          id="started_at"
+          type="text"
+          value={metadata.startedAt}
+          placeholder={placeholderLabels.startedAt}
+          on:input={(event) => handleTextInput('startedAt', event)}
+        />
+        <button type="button" class="started-at-action" on:click={handleStartedAtAction}>
+          {startedAtActionText}
+        </button>
+      </div>
+    {:else}
+      <input
+        id="started_at"
+        type="text"
+        value={metadata.startedAt}
+        placeholder={placeholderLabels.startedAt}
+        on:input={(event) => handleTextInput('startedAt', event)}
+      />
+    {/if}
+  </div>
+
+  <div class="form-group">
+    <label for="match">{fieldLabels.match}</label>
+    <select
+      id="match"
+      value={metadata.match}
+      on:change={(event) => handleSelectChange('match', event)}
+    >
+      <option value="">{placeholderLabels.match}</option>
       {#each matchOptions as match}
         <option value={match.key}>{match.label}</option>
       {/each}
@@ -61,9 +188,13 @@
   </div>
 
   <div class="form-group">
-    <label for="rule">ルール</label>
-    <select id="rule" bind:value={metadata.rule}>
-      <option value="">{placeholderLabel.rule}</option>
+    <label for="rule">{fieldLabels.rule}</label>
+    <select
+      id="rule"
+      value={metadata.rule}
+      on:change={(event) => handleSelectChange('rule', event)}
+    >
+      <option value="">{placeholderLabels.rule}</option>
       {#each ruleOptions as rule}
         <option value={rule.key}>{rule.label}</option>
       {/each}
@@ -71,9 +202,13 @@
   </div>
 
   <div class="form-group">
-    <label for="stage">ステージ</label>
-    <select id="stage" bind:value={metadata.stage}>
-      <option value="">{placeholderLabel.stage}</option>
+    <label for="stage">{fieldLabels.stage}</label>
+    <select
+      id="stage"
+      value={metadata.stage}
+      on:change={(event) => handleSelectChange('stage', event)}
+    >
+      <option value="">{placeholderLabels.stage}</option>
       {#each stageOptions as stage}
         <option value={stage.key}>{stage.label}</option>
       {/each}
@@ -81,14 +216,24 @@
   </div>
 
   <div class="form-group">
-    <label for="rate">レート</label>
-    <input id="rate" type="text" bind:value={metadata.rate} placeholder={placeholderLabel.rate} />
+    <label for="rate">{fieldLabels.rate}</label>
+    <input
+      id="rate"
+      type="text"
+      value={metadata.rate}
+      placeholder={placeholderLabels.rate}
+      on:input={(event) => handleTextInput('rate', event)}
+    />
   </div>
 
   <div class="form-group">
-    <label for="judgement">判定</label>
-    <select id="judgement" bind:value={metadata.judgement}>
-      <option value="">{placeholderLabel.judgement}</option>
+    <label for="judgement">{fieldLabels.judgement}</label>
+    <select
+      id="judgement"
+      value={metadata.judgement}
+      on:change={(event) => handleSelectChange('judgement', event)}
+    >
+      <option value="">{placeholderLabels.judgement}</option>
       {#each judgementOptions as judgement}
         <option value={judgement.key}>{judgement.label}</option>
       {/each}
@@ -97,50 +242,68 @@
 
   <div class="stats-grid">
     <div class="form-group">
-      <label for="kill">キル数</label>
-      <input id="kill" type="number" min="0" bind:value={metadata.kill} />
+      <label for="kill">{fieldLabels.kill}</label>
+      <input
+        id="kill"
+        type="number"
+        min="0"
+        value={metadata.kill}
+        on:input={(event) => handleNumberInput('kill', event)}
+      />
     </div>
 
     <div class="form-group">
-      <label for="death">デス数</label>
-      <input id="death" type="number" min="0" bind:value={metadata.death} />
+      <label for="death">{fieldLabels.death}</label>
+      <input
+        id="death"
+        type="number"
+        min="0"
+        value={metadata.death}
+        on:input={(event) => handleNumberInput('death', event)}
+      />
     </div>
 
     <div class="form-group">
-      <label for="special">スペシャル</label>
-      <input id="special" type="number" min="0" bind:value={metadata.special} />
+      <label for="special">{fieldLabels.special}</label>
+      <input
+        id="special"
+        type="number"
+        min="0"
+        value={metadata.special}
+        on:input={(event) => handleNumberInput('special', event)}
+      />
     </div>
   </div>
 
   <div class="medals-grid">
     <div class="form-group">
-      <label for="gold_medals">金表彰</label>
+      <label for="gold_medals">{fieldLabels.goldMedals}</label>
       <input
         id="gold_medals"
         type="number"
         min="0"
         max="3"
-        bind:value={metadata.goldMedals}
-        on:input={() => normaliseMedalInput('goldMedals')}
+        value={metadata.goldMedals}
+        on:input={(event) => handleMedalInput('goldMedals', event)}
       />
     </div>
 
     <div class="form-group">
-      <label for="silver_medals">銀表彰</label>
+      <label for="silver_medals">{fieldLabels.silverMedals}</label>
       <input
         id="silver_medals"
         type="number"
         min="0"
         max="3"
-        bind:value={metadata.silverMedals}
-        on:input={() => normaliseMedalInput('silverMedals')}
+        value={metadata.silverMedals}
+        on:input={(event) => handleMedalInput('silverMedals', event)}
       />
     </div>
   </div>
 
   <div class="weapon-grid">
     <div class="weapon-team">
-      <h3>味方ブキ</h3>
+      <h3>{fieldLabels.allies}</h3>
       {#each metadata.allies as weapon, index}
         <div class="form-group">
           <label for={`ally_weapon_${index + 1}`}>味方{index + 1}</label>
@@ -156,7 +319,7 @@
     </div>
 
     <div class="weapon-team">
-      <h3>敵ブキ</h3>
+      <h3>{fieldLabels.enemies}</h3>
       {#each metadata.enemies as weapon, index}
         <div class="form-group">
           <label for={`enemy_weapon_${index + 1}`}>敵{index + 1}</label>
@@ -242,6 +405,33 @@
     padding-right: 2.5rem;
   }
 
+  .datetime-field {
+    display: flex;
+    gap: 0.5rem;
+  }
+
+  .datetime-field input {
+    flex: 1;
+  }
+
+  .started-at-action {
+    padding: 0.5rem 1rem;
+    border: 1px solid rgba(var(--theme-rgb-white), 0.2);
+    border-radius: 999px;
+    background: rgba(var(--theme-rgb-white), 0.08);
+    color: var(--theme-color-white);
+    font-size: 0.8125rem;
+    font-weight: 600;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: all 0.2s ease;
+  }
+
+  .started-at-action:hover {
+    background: rgba(var(--theme-rgb-white), 0.14);
+    border-color: rgba(var(--theme-rgb-white), 0.28);
+  }
+
   .stats-grid {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
@@ -288,6 +478,116 @@
     .weapon-grid {
       grid-template-columns: 1fr;
     }
+  }
+
+  .variant-overlay .form-group label {
+    font-size: 0.8125rem;
+    letter-spacing: 0.02em;
+  }
+
+  .variant-overlay input,
+  .variant-overlay select {
+    padding: 0.55rem 0.85rem;
+    border-radius: calc(var(--glass-radius) - 8px);
+    border: 1px solid rgba(var(--theme-rgb-white), 0.14);
+    background: linear-gradient(
+      145deg,
+      rgba(var(--theme-rgb-dark-alt), 0.75) 0%,
+      rgba(var(--theme-rgb-surface-muted-2), 0.68) 100%
+    );
+    color: var(--text-primary);
+    font-size: 0.875rem;
+    box-shadow:
+      inset 0 1px 0 rgba(var(--theme-rgb-white), 0.06),
+      0 1px 12px rgba(var(--theme-rgb-black), 0.25);
+  }
+
+  .variant-overlay select {
+    background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='rgba(var(--theme-rgb-white), 0.7)' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
+    background-repeat: no-repeat;
+    background-position: right 0.75rem center;
+    background-size: 1rem;
+  }
+
+  .variant-overlay input:focus,
+  .variant-overlay select:focus {
+    border-color: rgba(var(--theme-rgb-accent), 0.55);
+    background: linear-gradient(
+      135deg,
+      rgba(var(--theme-rgb-accent), 0.22) 0%,
+      rgba(var(--theme-rgb-accent), 0.08) 100%
+    );
+    box-shadow:
+      0 0 0 2px rgba(var(--theme-rgb-ring-strong), 0.75),
+      0 0 0 4px rgba(var(--theme-rgb-accent), 0.2),
+      0 12px 24px rgba(var(--theme-rgb-accent), 0.18),
+      inset 0 1px 3px rgba(var(--theme-rgb-black), 0.12);
+  }
+
+  .variant-overlay input:hover,
+  .variant-overlay select:hover {
+    border-color: rgba(var(--theme-rgb-white), 0.22);
+    background: linear-gradient(
+      135deg,
+      rgba(var(--theme-rgb-white), 0.12) 0%,
+      rgba(var(--theme-rgb-white), 0.06) 100%
+    );
+  }
+
+  .variant-overlay input::placeholder {
+    color: rgba(var(--theme-rgb-white), 0.45);
+  }
+
+  .variant-overlay .stats-grid {
+    gap: 0.5rem;
+  }
+
+  .variant-overlay .stats-grid input {
+    text-align: center;
+  }
+
+  .variant-overlay .weapon-grid {
+    gap: 0.75rem;
+  }
+
+  .variant-overlay .weapon-team {
+    gap: 0.5rem;
+    padding: 0.65rem;
+    border: 1px solid rgba(var(--theme-rgb-accent), 0.2);
+    border-radius: calc(var(--glass-radius) - 8px);
+    background: rgba(var(--theme-rgb-surface-card-dark), 0.4);
+  }
+
+  .variant-overlay .weapon-team h3 {
+    font-size: 0.78rem;
+    letter-spacing: 0.04em;
+    color: var(--accent-color);
+  }
+
+  .variant-overlay .started-at-action {
+    background: linear-gradient(
+      135deg,
+      rgba(var(--theme-rgb-accent), 0.24) 0%,
+      rgba(var(--theme-rgb-accent), 0.14) 100%
+    );
+    border-color: rgba(var(--theme-rgb-accent), 0.45);
+    color: var(--accent-color);
+    box-shadow:
+      0 6px 18px rgba(var(--theme-rgb-accent), 0.2),
+      inset 0 1px 0 rgba(var(--theme-rgb-white), 0.18);
+  }
+
+  .variant-overlay .started-at-action:hover {
+    background: linear-gradient(
+      135deg,
+      rgba(var(--theme-rgb-accent), 0.38) 0%,
+      rgba(var(--theme-rgb-accent), 0.24) 100%
+    );
+    border-color: rgba(var(--theme-rgb-accent), 0.6);
+    box-shadow:
+      0 6px 18px rgba(var(--theme-rgb-accent), 0.28),
+      0 0 20px rgba(var(--theme-rgb-accent), 0.2),
+      inset 0 1px 0 rgba(var(--theme-rgb-white), 0.2);
   }
 
   @media (max-width: 640px) {

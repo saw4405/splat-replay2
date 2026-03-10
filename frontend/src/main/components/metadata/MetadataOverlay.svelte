@@ -2,19 +2,21 @@
   import { onMount, onDestroy } from 'svelte';
   import { slide } from 'svelte/transition';
   import NotificationDialog from '../../../common/components/NotificationDialog.svelte';
+  import MetadataForm from './MetadataForm.svelte';
   import { subscribeDomainEvents, type DomainEvent } from '../../domainEvents';
   import { getMetadataOptions } from '../../api/metadata';
   import type { MetadataOptionItem } from '../../api/types';
+  import { createEmptyEditableMetadata, type EditableMetadata } from '../../metadata/editable';
   import {
     applyIncomingLiveMetadata,
-    buildLiveMetadataPayload,
-    createEmptyLiveManualEditState,
     createEmptyLiveMetadataState,
-    normaliseEditedLiveMedalField,
+    createEmptyLiveManualEditState,
+    buildLiveMetadataPayload,
+    toEditableLiveMetadata,
+    toLiveMetadataState,
     type LiveManualEditState,
     type LiveMetadataPayload,
     type LiveMetadataState,
-    type WeaponSlots,
   } from '../../metadata/live';
 
   export let visible: boolean = false;
@@ -22,13 +24,12 @@
   let alertMessage = ''; // アラートメッセージ
   let alertVariant: 'info' | 'success' | 'warning' | 'error' = 'info';
 
-  type MedalField = 'gold_medals' | 'silver_medals';
-
   // SSE接続
   let domainEventSource: EventSource | null = null;
 
   // メタデータ (SSE経由で更新)
   let metadata: LiveMetadataState = createEmptyLiveMetadataState();
+  let editableMetadata: EditableMetadata = createEmptyEditableMetadata();
 
   // 手動編集フラグ (各フィールドごと)
   let manuallyEdited: LiveManualEditState = createEmptyLiveManualEditState();
@@ -47,6 +48,22 @@
   let ruleOptions: MetadataOptionItem[] = [];
   let stageOptions: MetadataOptionItem[] = [];
   let judgementOptions: MetadataOptionItem[] = [];
+  const editableFieldToLiveField: Record<keyof EditableMetadata, keyof LiveMetadataState> = {
+    gameMode: 'game_mode',
+    startedAt: 'started_at',
+    match: 'match',
+    rule: 'rule',
+    stage: 'stage',
+    rate: 'rate',
+    judgement: 'judgement',
+    kill: 'kill',
+    death: 'death',
+    special: 'special',
+    goldMedals: 'gold_medals',
+    silverMedals: 'silver_medals',
+    allies: 'allies',
+    enemies: 'enemies',
+  };
 
   let hasLoadedInitial = false;
 
@@ -65,34 +82,27 @@
 
   function setNow(): void {
     const now = new Date();
-    metadata.started_at = now.toISOString().replace('T', ' ').substring(0, 19);
-    manuallyEdited.started_at = true;
+    editableMetadata = {
+      ...editableMetadata,
+      startedAt: now.toISOString().replace('T', ' ').substring(0, 19),
+    };
+    metadata = toLiveMetadataState(editableMetadata);
+    markEdited('started_at');
   }
 
   // 各フィールドの手動編集をマーク
   function markEdited(field: keyof LiveMetadataState): void {
-    manuallyEdited[field] = true;
+    manuallyEdited = {
+      ...manuallyEdited,
+      [field]: true,
+    };
     console.log(`フィールド "${field}" が手動編集されました`);
     console.log('手動編集フラグの状態:', manuallyEdited);
   }
 
-  function updateWeaponSlot(team: 'allies' | 'enemies', index: number, value: string): void {
-    const updated = [...metadata[team]] as WeaponSlots;
-    updated[index] = value;
-    metadata = {
-      ...metadata,
-      [team]: updated,
-    };
-    markEdited(team);
-  }
-
-  function handleWeaponInput(team: 'allies' | 'enemies', index: number, event: Event): void {
-    const input = event.currentTarget as HTMLInputElement;
-    updateWeaponSlot(team, index, input.value);
-  }
-
-  function normaliseEditedMedalField(field: MedalField): void {
-    metadata = normaliseEditedLiveMedalField(metadata, field);
+  function handleFieldEdited(field: keyof EditableMetadata): void {
+    metadata = toLiveMetadataState(editableMetadata);
+    markEdited(editableFieldToLiveField[field]);
   }
 
   async function fetchCurrentMetadata(): Promise<void> {
@@ -116,6 +126,7 @@
     console.log('メタデータ自動更新を試行:', data);
     const result = applyIncomingLiveMetadata(metadata, manuallyEdited, data);
     metadata = result.metadata;
+    editableMetadata = toEditableLiveMetadata(result.metadata);
     const { updatedFields, skippedFields } = result;
 
     if (updatedFields.length > 0) {
@@ -136,6 +147,7 @@
     // メタデータを初期状態にリセット
     console.log('メタデータをリセット');
     metadata = createEmptyLiveMetadataState();
+    editableMetadata = toEditableLiveMetadata(metadata);
   }
 
   function handleReset(): void {
@@ -241,189 +253,20 @@
   <div class="overlay" transition:slide={{ duration: 300, axis: 'x' }}>
     <div class="panel">
       <div class="panel-content glass-scroller">
-        <div class="field-group">
-          <label for="game_mode">ゲームモード</label>
-          <select
-            id="game_mode"
-            bind:value={metadata.game_mode}
-            on:change={() => markEdited('game_mode')}
-          >
-            <option value="">{placeholderLabel.gameMode}</option>
-            {#each gameModeOptions as mode}
-              <option value={mode.key}>{mode.label}</option>
-            {/each}
-          </select>
-        </div>
-
-        <div class="field-group">
-          <label for="started_at">マッチング開始</label>
-          <div class="datetime-field">
-            <input
-              id="started_at"
-              type="text"
-              bind:value={metadata.started_at}
-              on:input={() => markEdited('started_at')}
-              placeholder={placeholderLabel.startedAt}
-            />
-            <button type="button" class="now-btn" on:click={setNow}>Now</button>
-          </div>
-        </div>
-
-        <div class="field-group">
-          <label for="match">マッチタイプ</label>
-          <select id="match" bind:value={metadata.match} on:change={() => markEdited('match')}>
-            <option value="">{placeholderLabel.match}</option>
-            {#each matchOptions as match}
-              <option value={match.key}>{match.label}</option>
-            {/each}
-          </select>
-        </div>
-
-        <div class="field-group">
-          <label for="rule">ルール</label>
-          <select id="rule" bind:value={metadata.rule} on:change={() => markEdited('rule')}>
-            <option value="">{placeholderLabel.rule}</option>
-            {#each ruleOptions as rule}
-              <option value={rule.key}>{rule.label}</option>
-            {/each}
-          </select>
-        </div>
-
-        <div class="field-group">
-          <label for="rate">レート</label>
-          <input
-            id="rate"
-            type="text"
-            bind:value={metadata.rate}
-            on:input={() => markEdited('rate')}
-            placeholder={placeholderLabel.rate}
-          />
-        </div>
-
-        <div class="field-group">
-          <label for="judgement">判定</label>
-          <select
-            id="judgement"
-            bind:value={metadata.judgement}
-            on:change={() => markEdited('judgement')}
-          >
-            <option value="">{placeholderLabel.judgement}</option>
-            {#each judgementOptions as judgement}
-              <option value={judgement.key}>{judgement.label}</option>
-            {/each}
-          </select>
-        </div>
-
-        <div class="field-group">
-          <label for="stage">ステージ</label>
-          <select id="stage" bind:value={metadata.stage} on:change={() => markEdited('stage')}>
-            <option value="">{placeholderLabel.stage}</option>
-            {#each stageOptions as stage}
-              <option value={stage.key}>{stage.label}</option>
-            {/each}
-          </select>
-        </div>
-
-        <div class="stats-row">
-          <div class="field-group">
-            <label for="kill">キル数</label>
-            <input
-              id="kill"
-              type="number"
-              bind:value={metadata.kill}
-              on:input={() => markEdited('kill')}
-              min="0"
-            />
-          </div>
-
-          <div class="field-group">
-            <label for="death">デス数</label>
-            <input
-              id="death"
-              type="number"
-              bind:value={metadata.death}
-              on:input={() => markEdited('death')}
-              min="0"
-            />
-          </div>
-
-          <div class="field-group">
-            <label for="special">SP</label>
-            <input
-              id="special"
-              type="number"
-              bind:value={metadata.special}
-              on:input={() => markEdited('special')}
-              min="0"
-            />
-          </div>
-        </div>
-
-        <div class="stats-row medal-row">
-          <div class="field-group">
-            <label for="gold_medals">金表彰</label>
-            <input
-              id="gold_medals"
-              type="number"
-              bind:value={metadata.gold_medals}
-              on:input={() => {
-                markEdited('gold_medals');
-                normaliseEditedMedalField('gold_medals');
-              }}
-              min="0"
-              max="3"
-            />
-          </div>
-
-          <div class="field-group">
-            <label for="silver_medals">銀表彰</label>
-            <input
-              id="silver_medals"
-              type="number"
-              bind:value={metadata.silver_medals}
-              on:input={() => {
-                markEdited('silver_medals');
-                normaliseEditedMedalField('silver_medals');
-              }}
-              min="0"
-              max="3"
-            />
-          </div>
-        </div>
-
-        <div class="weapon-grid">
-          <div class="weapon-team">
-            <h3>味方ブキ</h3>
-            {#each metadata.allies as weapon, index}
-              <div class="field-group">
-                <label for={`ally_weapon_${index + 1}`}>味方{index + 1}</label>
-                <input
-                  id={`ally_weapon_${index + 1}`}
-                  type="text"
-                  value={weapon}
-                  placeholder="不明"
-                  on:input={(event) => handleWeaponInput('allies', index, event)}
-                />
-              </div>
-            {/each}
-          </div>
-
-          <div class="weapon-team">
-            <h3>敵ブキ</h3>
-            {#each metadata.enemies as weapon, index}
-              <div class="field-group">
-                <label for={`enemy_weapon_${index + 1}`}>敵{index + 1}</label>
-                <input
-                  id={`enemy_weapon_${index + 1}`}
-                  type="text"
-                  value={weapon}
-                  placeholder="不明"
-                  on:input={(event) => handleWeaponInput('enemies', index, event)}
-                />
-              </div>
-            {/each}
-          </div>
-        </div>
+        <MetadataForm
+          bind:metadata={editableMetadata}
+          variant="overlay"
+          showGameMode={true}
+          {gameModeOptions}
+          {matchOptions}
+          {ruleOptions}
+          {stageOptions}
+          {judgementOptions}
+          placeholderLabels={placeholderLabel}
+          startedAtActionText="Now"
+          onStartedAtAction={setNow}
+          onFieldEdited={handleFieldEdited}
+        />
       </div>
 
       <div class="panel-footer">
@@ -470,195 +313,6 @@
     flex: 1;
     overflow-y: auto;
     border-radius: calc(var(--glass-radius) - 4px);
-  }
-
-  .field-group {
-    display: flex;
-    flex-direction: column;
-    gap: 0.5rem;
-  }
-
-  .field-group label {
-    font-size: 0.8125rem;
-    font-weight: 500;
-    color: var(--accent-color);
-    text-align: left;
-    letter-spacing: 0.02em;
-  }
-
-  .field-group input,
-  .field-group select {
-    padding: 0.55rem 0.85rem;
-    border-radius: calc(var(--glass-radius) - 8px);
-    border: 1px solid rgba(var(--theme-rgb-white), 0.14);
-    background: linear-gradient(
-      145deg,
-      rgba(var(--theme-rgb-dark-alt), 0.75) 0%,
-      rgba(var(--theme-rgb-surface-muted-2), 0.68) 100%
-    );
-    color: var(--text-primary);
-    font-size: 0.875rem;
-    transition: all 0.25s ease;
-    box-shadow:
-      inset 0 1px 0 rgba(var(--theme-rgb-white), 0.06),
-      0 1px 12px rgba(var(--theme-rgb-black), 0.25);
-  }
-
-  /* selectのドロップダウンリスト */
-  .field-group select option {
-    background: var(--theme-panel-navy);
-    color: var(--theme-color-white);
-    padding: 0.5rem;
-  }
-
-  /* selectのカスタム矢印 */
-  .field-group select {
-    cursor: pointer;
-    -webkit-appearance: none;
-    -moz-appearance: none;
-    appearance: none;
-    background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='rgba(var(--theme-rgb-white), 0.7)' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
-    background-repeat: no-repeat;
-    background-position: right 0.75rem center;
-    background-size: 1rem;
-    padding-right: 2.5rem;
-  }
-
-  .field-group input:focus,
-  .field-group select:focus {
-    outline: none;
-    border-color: rgba(var(--theme-rgb-accent), 0.55);
-    background: linear-gradient(
-      135deg,
-      rgba(var(--theme-rgb-accent), 0.22) 0%,
-      rgba(var(--theme-rgb-accent), 0.08) 100%
-    );
-    box-shadow:
-      0 0 0 2px rgba(var(--theme-rgb-ring-strong), 0.75),
-      0 0 0 4px rgba(var(--theme-rgb-accent), 0.2),
-      0 12px 24px rgba(var(--theme-rgb-accent), 0.18),
-      inset 0 1px 3px rgba(var(--theme-rgb-black), 0.12);
-  }
-
-  .field-group input:hover,
-  .field-group select:hover {
-    border-color: rgba(var(--theme-rgb-white), 0.22);
-    background: linear-gradient(
-      135deg,
-      rgba(var(--theme-rgb-white), 0.12) 0%,
-      rgba(var(--theme-rgb-white), 0.06) 100%
-    );
-  }
-
-  .field-group input::placeholder {
-    color: rgba(var(--theme-rgb-white), 0.45);
-  }
-
-  .datetime-field {
-    display: flex;
-    gap: 0.5rem;
-  }
-
-  .datetime-field input {
-    flex: 1;
-  }
-
-  .now-btn {
-    padding: 0.5rem 1rem;
-    background: linear-gradient(
-      135deg,
-      rgba(var(--theme-rgb-accent), 0.24) 0%,
-      rgba(var(--theme-rgb-accent), 0.14) 100%
-    );
-    border: 1px solid rgba(var(--theme-rgb-accent), 0.45);
-    border-radius: 999px;
-    color: var(--accent-color);
-    font-size: 0.8125rem;
-    font-weight: 600;
-    cursor: pointer;
-    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-    white-space: nowrap;
-    position: relative;
-    overflow: hidden;
-    box-shadow:
-      0 6px 18px rgba(var(--theme-rgb-accent), 0.2),
-      inset 0 1px 0 rgba(var(--theme-rgb-white), 0.18);
-  }
-
-  .now-btn::before {
-    content: '';
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    width: 0;
-    height: 0;
-    border-radius: 50%;
-    background: rgba(var(--theme-rgb-white), 0.15);
-    transform: translate(-50%, -50%);
-    transition:
-      width 0.5s ease,
-      height 0.5s ease;
-  }
-
-  .now-btn:hover::before {
-    width: 200px;
-    height: 200px;
-  }
-
-  .now-btn:hover {
-    background: linear-gradient(
-      135deg,
-      rgba(var(--theme-rgb-accent), 0.38) 0%,
-      rgba(var(--theme-rgb-accent), 0.24) 100%
-    );
-    border-color: rgba(var(--theme-rgb-accent), 0.6);
-    transform: translateY(-2px);
-    box-shadow:
-      0 6px 18px rgba(var(--theme-rgb-accent), 0.28),
-      0 0 20px rgba(var(--theme-rgb-accent), 0.2),
-      inset 0 1px 0 rgba(var(--theme-rgb-white), 0.2);
-  }
-
-  .stats-row {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 0.5rem;
-  }
-
-  .stats-row .field-group {
-    min-width: 0;
-  }
-
-  .stats-row input {
-    text-align: center;
-    width: 100%;
-  }
-
-  .medal-row {
-    grid-template-columns: repeat(2, 1fr);
-  }
-
-  .weapon-grid {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 0.75rem;
-  }
-
-  .weapon-team {
-    display: flex;
-    flex-direction: column;
-    gap: 0.5rem;
-    padding: 0.65rem;
-    border: 1px solid rgba(var(--theme-rgb-accent), 0.2);
-    border-radius: calc(var(--glass-radius) - 8px);
-    background: rgba(var(--theme-rgb-surface-card-dark), 0.4);
-  }
-
-  .weapon-team h3 {
-    margin: 0;
-    font-size: 0.78rem;
-    letter-spacing: 0.04em;
-    color: var(--accent-color);
   }
 
   .panel-footer {

@@ -244,7 +244,7 @@ RECORDED_METADATA_PATCH_FIELDS: frozenset[str] = frozenset(
     for field in METADATA_FIELD_DEFINITIONS
     if field.editable
     and field.category != "salmon"
-    and field.key not in {"game_mode", "started_at"}
+    and field.key != "game_mode"
 )
 
 BATTLE_RESULT_REQUIRED_FIELDS: tuple[str, ...] = tuple(

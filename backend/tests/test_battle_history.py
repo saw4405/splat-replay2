@@ -606,6 +606,7 @@ async def test_update_recorded_metadata_use_case_syncs_history(
     dto = await use_case.execute(
         "recorded/battle5.mp4",
         RecordingMetadataPatchDTO(
+            started_at="2026-03-05T23:45:01",
             judgement="LOSE",
             allies=("ヒッセン", "52ガロン", "ジム", "ラピ"),
         ),
@@ -613,6 +614,9 @@ async def test_update_recorded_metadata_use_case_syncs_history(
 
     assert dto.video_id == "recorded/battle5.mp4"
     assert repository.saved_metadata is not None
+    assert repository.saved_metadata.started_at == datetime(
+        2026, 3, 5, 23, 45, 1
+    )
     assert repository.saved_metadata.judgement == Judgement.LOSE
     assert repository.saved_metadata.allies == (
         "ヒッセン",

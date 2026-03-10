@@ -53,6 +53,7 @@ class SubtitleDTO:
 class RecordingMetadataPatchDTO:
     """録画メタデータ更新パッチDTO。"""
 
+    started_at: str | None = None
     match: str | None = None
     rule: str | None = None
     stage: str | None = None
@@ -72,6 +73,7 @@ class RecordingMetadataPatchDTO:
     ) -> RecordingMetadataPatchDTO:
         """外部入力の辞書から更新 DTO を組み立てる。"""
         return cls(
+            started_at=_as_optional_str(data.get("started_at")),
             match=_as_optional_str(data.get("match")),
             rule=_as_optional_str(data.get("rule")),
             stage=_as_optional_str(data.get("stage")),

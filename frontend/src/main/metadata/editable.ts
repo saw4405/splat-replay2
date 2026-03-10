@@ -1,8 +1,27 @@
 import type { MetadataUpdate, RecordedVideo } from '../api/types';
+import { formatMetadataDateTime, normaliseWeaponSlots, type WeaponSlots } from './shared';
 
-export type WeaponSlots = [string, string, string, string];
+export { normaliseWeaponSlots, type WeaponSlots } from './shared';
+
+type MetadataUpdatePayload = Partial<{
+  started_at: string;
+  match: string;
+  rule: string;
+  stage: string;
+  rate: string;
+  judgement: string;
+  kill: number;
+  death: number;
+  special: number;
+  goldMedals: number;
+  silverMedals: number;
+  allies: string[];
+  enemies: string[];
+}>;
 
 export interface EditableMetadata {
+  gameMode: string;
+  startedAt: string;
   match: string;
   rule: string;
   stage: string;
@@ -19,24 +38,10 @@ export interface EditableMetadata {
 
 const EMPTY_WEAPON_SLOTS: WeaponSlots = ['', '', '', ''];
 
-export function normaliseWeaponSlots(
-  value: string[] | null | undefined,
-  emptyValue = ''
-): WeaponSlots {
-  const slots = value?.slice(0, 4) ?? [];
-  while (slots.length < 4) {
-    slots.push(emptyValue);
-  }
-  return [
-    slots[0] ?? emptyValue,
-    slots[1] ?? emptyValue,
-    slots[2] ?? emptyValue,
-    slots[3] ?? emptyValue,
-  ];
-}
-
 export function createEmptyEditableMetadata(): EditableMetadata {
   return {
+    gameMode: '',
+    startedAt: '',
     match: '',
     rule: '',
     stage: '',
@@ -62,6 +67,8 @@ export function cloneEditableMetadata(value: EditableMetadata): EditableMetadata
 
 export function toEditableMetadata(video: RecordedVideo): EditableMetadata {
   return {
+    gameMode: video.gameMode ?? '',
+    startedAt: formatMetadataDateTime(video.startedAt),
     match: video.match ?? '',
     rule: video.rule ?? '',
     stage: video.stage ?? '',
@@ -79,9 +86,19 @@ export function toEditableMetadata(video: RecordedVideo): EditableMetadata {
 
 export function toMetadataUpdatePayload(
   metadata: MetadataUpdate | EditableMetadata
-): MetadataUpdate {
+): MetadataUpdatePayload {
   return {
-    ...metadata,
+    started_at: formatMetadataDateTime(metadata.startedAt),
+    match: metadata.match,
+    rule: metadata.rule,
+    stage: metadata.stage,
+    rate: metadata.rate,
+    judgement: metadata.judgement,
+    kill: metadata.kill,
+    death: metadata.death,
+    special: metadata.special,
+    goldMedals: metadata.goldMedals,
+    silverMedals: metadata.silverMedals,
     allies: metadata.allies ? [...metadata.allies] : undefined,
     enemies: metadata.enemies ? [...metadata.enemies] : undefined,
   };

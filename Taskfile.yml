@@ -80,6 +80,7 @@ tasks:
     desc: Build complete application (frontend + backend + package)
     cmds:
       - task: clean:dist
+      - task: clean:frontend:dist
       - task: build:frontend
       - task: build:backend
       - task: build:postprocess
@@ -97,6 +98,7 @@ tasks:
       - src/**/*.css
       - "*.html"
       - "*.config.*"
+      - src/generated/**/*
     generates:
       - dist/**/*
 
@@ -383,6 +385,13 @@ tasks:
       - cmd: powershell -NoProfile -Command "if (Test-Path 'dist') { Remove-Item -Recurse -Force 'dist' }"
         ignore_error: true
       - cmd: powershell -NoProfile -Command "if (Test-Path 'node_modules') { Remove-Item -Recurse -Force 'node_modules' }"
+        ignore_error: true
+
+  clean:frontend:dist:
+    desc: Clean frontend dist only (keep node_modules)
+    dir: "{{.FRONTEND_DIR}}"
+    cmds:
+      - cmd: powershell -NoProfile -Command "if (Test-Path 'dist') { Remove-Item -Recurse -Force 'dist' }"
         ignore_error: true
 
   # ========================================

@@ -127,7 +127,7 @@
   function formatWeaponSlots(value: string[] | null | undefined): string {
     return normaliseWeaponSlots(value, '不明')
       .map((weapon) => weapon.trim() || '不明')
-      .join(' / ');
+      .join(', ');
   }
 
   function formatMedals(gold: number | null, silver: number | null): string {
@@ -155,6 +155,15 @@
   function handleEditMetadata(video: RecordedVideo): void {
     editingVideo = video;
     showMetadataDialog = true;
+  }
+
+  function triggerActionOnKeydown(event: KeyboardEvent, action: () => void): void {
+    if (event.key !== 'Enter' && event.key !== ' ') {
+      return;
+    }
+
+    event.preventDefault();
+    action();
   }
 
   function handleEditSubtitle(event: MouseEvent, video: RecordedVideo): void {
@@ -303,60 +312,71 @@
         </button>
 
         <div class="video-content">
-          <!-- サムネイル -->
-          <div class="video-thumbnail-container">
-            <span class="video-timestamp">{formatTimestamp(video.startedAt)}</span>
-            <div class="video-thumbnail">
-              <img
-                src={getThumbnailUrl(video.filename)}
-                alt={video.filename}
-                on:error={handleImageError}
-              />
-              <div class="thumbnail-overlay">
-                <button
-                  class="overlay-button play-button"
-                  on:click={() => handlePlayVideo(video)}
-                  title="動画を再生"
-                >
-                  <svg
-                    width="24"
-                    height="24"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    xmlns="http://www.w3.org/2000/svg"
-                  >
-                    <path d="M8 5V19L19 12L8 5Z" fill="currentColor" />
-                  </svg>
-                </button>
-                <button
-                  class="overlay-button zoom-button"
-                  on:click={() => handleZoomThumbnail(video)}
-                  title="拡大表示"
-                >
-                  <svg
-                    width="24"
-                    height="24"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    xmlns="http://www.w3.org/2000/svg"
-                  >
-                    <path
-                      d="M15 3H21V9M9 21H3V15M21 3L14 10M3 21L10 14"
-                      stroke="currentColor"
-                      stroke-width="2"
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                    />
-                  </svg>
-                </button>
-              </div>
-            </div>
-          </div>
-
           <!-- メタデータと字幕のコンテナ -->
           <div class="metadata-container">
+            <!-- サムネイル -->
+            <div class="video-thumbnail-container">
+              <div class="video-thumbnail">
+                <img
+                  src={getThumbnailUrl(video.filename)}
+                  alt={video.filename}
+                  on:error={handleImageError}
+                />
+                <div class="thumbnail-overlay">
+                  <button
+                    class="overlay-button play-button"
+                    on:click={() => handlePlayVideo(video)}
+                    title="動画を再生"
+                  >
+                    <svg
+                      width="24"
+                      height="24"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      xmlns="http://www.w3.org/2000/svg"
+                    >
+                      <path d="M8 5V19L19 12L8 5Z" fill="currentColor" />
+                    </svg>
+                  </button>
+                  <button
+                    class="overlay-button zoom-button"
+                    on:click={() => handleZoomThumbnail(video)}
+                    title="拡大表示"
+                  >
+                    <svg
+                      width="24"
+                      height="24"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      xmlns="http://www.w3.org/2000/svg"
+                    >
+                      <path
+                        d="M15 3H21V9M9 21H3V15M21 3L14 10M3 21L10 14"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      />
+                    </svg>
+                  </button>
+                </div>
+              </div>
+            </div>
+
             <!-- メタデータ (クリック可能) -->
-            <button class="video-metadata" on:click={() => handleEditMetadata(video)}>
+            <div
+              class="video-metadata"
+              role="button"
+              tabindex="0"
+              on:click={() => handleEditMetadata(video)}
+              on:keydown={(event) => triggerActionOnKeydown(event, () => handleEditMetadata(video))}
+            >
+              <div class="metadata-row">
+                <div class="metadata-item">
+                  <span class="metadata-label">開始時間:</span>
+                  <span class="metadata-value">{formatTimestamp(video.startedAt)}</span>
+                </div>
+              </div>
               <div class="metadata-row">
                 <div class="metadata-item" class:incomplete={!video.match}>
                   <span class="metadata-label">マッチ:</span>
@@ -405,10 +425,12 @@
               </div>
               <div class="metadata-row">
                 <div class="metadata-item stat-item">
+                  <span class="metadata-label">キルレ:</span>
                   <span class="stat-icon">💀</span>
                   <span class="stat-value">{video.kill ?? 0}K/{video.death ?? 0}D</span>
                 </div>
-                <div class="metadata-item stat-item">
+                <div class="metadata-item stat-item special-stat-item">
+                  <span class="metadata-label metadata-label-placeholder" aria-hidden="true"></span>
                   <span class="stat-icon">✨</span>
                   <span class="stat-value">SP×{video.special ?? 0}</span>
                 </div>
@@ -422,28 +444,41 @@
                 </div>
               </div>
               <div class="metadata-row">
-                <div class="metadata-item" class:incomplete={!hasDetectedWeapon(video.allies)}>
+                <div
+                  class="metadata-item weapon-item"
+                  class:incomplete={!hasDetectedWeapon(video.allies)}
+                >
                   <span class="metadata-label">味方ブキ:</span>
                   <span class="metadata-value">{formatWeaponSlots(video.allies)}</span>
                 </div>
               </div>
               <div class="metadata-row">
-                <div class="metadata-item" class:incomplete={!hasDetectedWeapon(video.enemies)}>
+                <div
+                  class="metadata-item weapon-item"
+                  class:incomplete={!hasDetectedWeapon(video.enemies)}
+                >
                   <span class="metadata-label">敵ブキ:</span>
                   <span class="metadata-value">{formatWeaponSlots(video.enemies)}</span>
                 </div>
               </div>
-            </button>
-
-            <div class="metadata-row stats-row"></div>
+            </div>
 
             <!-- 字幕情報（独立した要素） -->
-            <button
+            <div
               class="subtitle-metadata"
               on:click={(e) => {
                 e.stopPropagation();
                 handleEditSubtitle(e, video);
               }}
+              on:keydown={(event) =>
+                triggerActionOnKeydown(event, () => {
+                  editingVideo = video;
+                  currentVideoUrl = getVideoUrl(video.path);
+                  currentVideoTitle = video.filename;
+                  showSubtitleEditor = true;
+                })}
+              role="button"
+              tabindex="0"
             >
               <div class="metadata-row">
                 <div class="metadata-item subtitle-item">
@@ -453,7 +488,7 @@
                   </span>
                 </div>
               </div>
-            </button>
+            </div>
           </div>
         </div>
       </div>
@@ -629,35 +664,37 @@
   }
 
   .video-content {
-    display: grid;
-    grid-template-columns: 160px 1fr;
-    gap: 1rem;
+    display: block;
+    --thumbnail-width: clamp(184px, calc(12vw + 56px), 240px);
+  }
+
+  .video-content::after {
+    content: '';
+    display: block;
+    clear: both;
   }
 
   .metadata-container {
-    display: flex;
-    flex-direction: column;
-    gap: 0;
+    display: block;
+    min-width: 0;
+  }
+
+  .metadata-container::after {
+    content: '';
+    display: block;
+    clear: both;
   }
 
   .video-thumbnail-container {
-    display: flex;
-    flex-direction: column;
-    gap: 0.5rem;
-  }
-
-  .video-timestamp {
-    font-size: 0.85rem;
-    font-weight: 600;
-    color: var(--accent-color);
-    word-break: break-all;
-    overflow-wrap: break-word;
+    float: right;
+    width: min(var(--thumbnail-width), 100%);
+    margin: 0.75rem 0.75rem 0.75rem 1rem;
   }
 
   .video-thumbnail {
     position: relative;
-    width: 160px;
-    height: 90px;
+    width: 100%;
+    aspect-ratio: 16 / 9;
     border-radius: 6px;
     overflow: hidden;
     background: rgba(var(--theme-rgb-black), 0.4);
@@ -721,59 +758,97 @@
   }
 
   .video-metadata {
-    display: flex;
-    flex-direction: column;
-    gap: 0.5rem;
+    --metadata-label-width: 4rem;
+    display: block;
     font-size: 0.85rem;
     background: transparent;
     border: none;
-    padding: 0.5rem;
+    padding: 0 0.5rem 0.5rem;
     border-radius: 6px;
     cursor: pointer;
     text-align: left;
     transition: all 0.2s ease;
-    width: 100%;
+    outline: none;
   }
 
   .video-metadata:hover {
     background: rgba(var(--theme-rgb-accent), 0.08);
   }
 
+  .video-metadata:focus-visible {
+    box-shadow: 0 0 0 1px rgba(var(--theme-rgb-accent), 0.55);
+    background: rgba(var(--theme-rgb-accent), 0.1);
+  }
+
   /* 字幕メタデータ */
   .subtitle-metadata {
-    display: flex;
-    flex-direction: column;
-    gap: 0.5rem;
+    --metadata-label-width: 4rem;
+    display: block;
     font-size: 0.85rem;
     background: transparent;
     border: none;
-    padding: 0.5rem;
+    border-top: 1px solid rgba(var(--theme-rgb-white), 0.1);
+    margin-top: 0.35rem;
+    padding: 0.75rem 0.5rem 0.5rem;
     border-radius: 6px;
     cursor: pointer;
     text-align: left;
     transition: all 0.2s ease;
-    width: 100%;
+    outline: none;
   }
 
   .subtitle-metadata:hover {
     background: rgba(var(--theme-rgb-accent), 0.08);
   }
 
+  .subtitle-metadata:focus-visible {
+    box-shadow: 0 0 0 1px rgba(var(--theme-rgb-accent), 0.55);
+    background: rgba(var(--theme-rgb-accent), 0.1);
+  }
+
   .metadata-row {
-    display: flex;
-    gap: 0.5rem;
-    flex-wrap: wrap;
+    display: block;
+    margin: 0 0 0.35rem;
+  }
+
+  .metadata-row:last-child {
+    margin-bottom: 0;
   }
 
   .metadata-item {
+    display: inline-flex;
+    flex-wrap: nowrap;
+    gap: 0.35rem;
+    align-items: baseline;
+    margin: 0 0.75rem 0.25rem 0;
+    vertical-align: top;
+    min-width: 0;
+  }
+
+  .weapon-item {
     display: flex;
-    gap: 0.25rem;
-    align-items: center;
+    flex-wrap: nowrap;
+    align-items: flex-start;
+    width: 100%;
+    margin-right: 0;
+    gap: 0.35rem;
+  }
+
+  .weapon-item .metadata-label {
+    flex: 0 0 var(--metadata-label-width);
+  }
+
+  .weapon-item .metadata-value {
+    flex: 1 1 auto;
+    min-width: 0;
+    word-break: break-word;
   }
 
   .metadata-label {
     color: rgba(var(--theme-rgb-white), 0.6);
     font-size: 0.8rem;
+    flex: 0 0 var(--metadata-label-width);
+    width: var(--metadata-label-width);
   }
 
   .metadata-value {
@@ -781,6 +856,16 @@
     font-weight: 500;
     word-break: break-all;
     overflow-wrap: break-word;
+    min-width: 0;
+  }
+
+  .metadata-label-placeholder {
+    visibility: hidden;
+  }
+
+  .special-stat-item .metadata-label-placeholder {
+    flex-basis: 0.5rem;
+    width: 0.5rem;
   }
 
   .metadata-item.incomplete .metadata-value {
@@ -798,11 +883,6 @@
     font-weight: 600;
   }
 
-  .stats-row {
-    padding-top: 0.25rem;
-    border-top: 1px solid rgba(var(--theme-rgb-white), 0.1);
-  }
-
   .stat-item {
     gap: 0.35rem;
   }
@@ -815,6 +895,7 @@
     color: rgba(var(--theme-rgb-white), 0.9);
     font-weight: 500;
     font-size: 0.85rem;
+    min-width: 0;
   }
 
   /* 字幕情報アイテム */
@@ -848,6 +929,29 @@
   @media (max-width: 1024px) {
     .video-list {
       min-height: clamp(3rem, 20vh, 6rem);
+    }
+
+    .video-content {
+      --thumbnail-width: clamp(244px, 30vw, 304px);
+    }
+  }
+
+  @media (max-width: 768px) {
+    .video-content {
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+      --thumbnail-width: min(100%, 344px);
+    }
+
+    .video-content::after {
+      content: none;
+    }
+
+    .video-thumbnail-container {
+      float: none;
+      align-self: flex-end;
+      margin: 0;
     }
   }
 </style>

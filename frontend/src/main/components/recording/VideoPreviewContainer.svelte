@@ -51,6 +51,7 @@
     | 'silver_medals'
     | 'allies'
     | 'enemies';
+  type BattleStatFieldKey = 'kill' | 'death' | 'special';
   type MetadataEventPayload = Partial<Record<MetadataFieldKey, MetadataValue>>;
   type MetadataNotification = {
     id: number;
@@ -64,6 +65,7 @@
     normalize?: (value: MetadataValue) => string | null;
   };
   const PLACEHOLDER_VALUES = new Set(['未取得', '']);
+  const battleStatFieldKeys: BattleStatFieldKey[] = ['kill', 'death', 'special'];
   const startedAtFormatter = new Intl.DateTimeFormat('ja-JP', {
     month: '2-digit',
     day: '2-digit',
@@ -104,9 +106,6 @@
       label: '判定',
       format: (value) => formatEnumValue(value, metadataOptionMap?.judgements ?? null),
     },
-    { key: 'kill', label: 'キル数', format: formatNumericValue },
-    { key: 'death', label: 'デス数', format: formatNumericValue },
-    { key: 'special', label: 'スペシャル', format: formatNumericValue },
   ];
 
   async function readApiErrorMessage(response: Response): Promise<string> {
@@ -238,10 +237,6 @@
     return optionMap[normalized] ?? normalized;
   }
 
-  function formatNumericValue(value: MetadataValue): string | null {
-    return normalizeRawValue(value);
-  }
-
   function normalizeStoredMedalCount(value: string | undefined): number {
     if (!value) {
       return 0;
@@ -270,6 +265,26 @@
 
   function formatMedalSummary(gold: number, silver: number): string {
     return `🥇x${gold} 🥈x${silver}`;
+  }
+
+  function normalizeStoredBattleStatCount(value: string | undefined): number | null {
+    if (!value) {
+      return null;
+    }
+    const parsed = Number.parseInt(value, 10);
+    return Number.isNaN(parsed) ? null : parsed;
+  }
+
+  function formatBattleStatSummary(
+    metadata: Partial<Record<MetadataFieldKey, string>>
+  ): string | null {
+    const kill = normalizeStoredBattleStatCount(metadata.kill);
+    const death = normalizeStoredBattleStatCount(metadata.death);
+    const special = normalizeStoredBattleStatCount(metadata.special);
+    if (kill === null || death === null || special === null) {
+      return null;
+    }
+    return `💀 ${kill}K/${death}D ✨SP×${special}`;
   }
 
   function normalizeWeaponSlots(value: MetadataValue): string[] | null {
@@ -320,6 +335,56 @@
       }
       updates.push(`${teamLabel}${index + 1}: ${nextSlot}`);
     }
+  }
+
+  function handleBattleStatMetadataUpdate(
+    payload: MetadataEventPayload,
+    nextMetadata: Partial<Record<MetadataFieldKey, string>>,
+    updates: string[]
+  ): void {
+    let hasBattleStatChange = false;
+
+    battleStatFieldKeys.forEach((key) => {
+      if (!(key in payload)) {
+        return;
+      }
+
+      const rawValue = payload[key];
+      const normalizedForComparison = normalizeRawValue(rawValue);
+      const previousValue = lastMetadata[key];
+
+      console.log(`[handleMetadataUpdate] ${key}:`, {
+        rawValue,
+        normalizedForComparison,
+        previousValue,
+      });
+
+      if (normalizedForComparison === null) {
+        delete nextMetadata[key];
+        if (previousValue !== undefined) {
+          hasBattleStatChange = true;
+        }
+        return;
+      }
+
+      nextMetadata[key] = normalizedForComparison;
+      if (previousValue !== normalizedForComparison) {
+        hasBattleStatChange = true;
+      }
+    });
+
+    if (!hasBattleStatChange) {
+      return;
+    }
+
+    const formatted = formatBattleStatSummary(nextMetadata);
+    if (formatted === null) {
+      console.log('[handleMetadataUpdate] battle_stats: フォーマット結果がnullのためスキップ');
+      return;
+    }
+
+    console.log(`[handleMetadataUpdate] battle_stats: 通知追加 - キルレ：${formatted}`);
+    updates.push(`キルレ: ${formatted}`);
   }
 
   function formatStartedAtValue(value: MetadataValue): string | null {
@@ -415,6 +480,8 @@
       console.log(`[handleMetadataUpdate] ${key}: 通知追加 - ${label}: ${formatted}`);
       updates.push(`${label}: ${formatted}`);
     });
+
+    handleBattleStatMetadataUpdate(payload, nextMetadata, updates);
 
     if ('allies' in payload) {
       handleWeaponTeamMetadataUpdate('allies', payload.allies, nextMetadata, updates);

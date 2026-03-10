@@ -73,6 +73,8 @@ class _BattleMetadataUpdateFields(BaseModel):
 class MetadataUpdateRequest(_BattleMetadataUpdateFields):
     """録画済みビデオのメタデータ更新リクエスト"""
 
+    started_at: Optional[str] = None
+
 
 class RecordingMetadataUpdateRequest(_BattleMetadataUpdateFields):
     """録画中メタデータ更新リクエスト。"""

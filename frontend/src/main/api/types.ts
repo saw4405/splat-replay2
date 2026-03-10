@@ -77,6 +77,7 @@ export interface EditedVideo {
 
 // メタデータ・字幕
 export interface MetadataUpdate {
+  startedAt?: string;
   match?: string;
   rule?: string;
   stage?: string;

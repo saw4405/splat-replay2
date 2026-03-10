@@ -6,6 +6,8 @@ import {
   buildLiveMetadataPayload,
   createEmptyLiveManualEditState,
   createEmptyLiveMetadataState,
+  toEditableLiveMetadata,
+  toLiveMetadataState,
   type LiveManualEditState,
   type LiveMetadataState,
 } from './live.ts';
@@ -135,4 +137,26 @@ test('applyIncomingLiveMetadata keeps manual values and updates untouched fields
   assert.deepEqual(result.metadata.allies, ['S1', 'S2', 'S3', 'S4']);
   assert.match(result.skippedFields.join(','), /match \(手動編集済み\)/);
   assert.match(result.skippedFields.join(','), /gold_medals \(手動編集済み\)/);
+});
+
+test('toEditableLiveMetadata は live state を共通フォーム状態へ変換する', () => {
+  const editable = toEditableLiveMetadata(createMetadata());
+
+  assert.equal(editable.gameMode, 'BATTLE');
+  assert.equal(editable.startedAt, '2026-03-08 12:00:00');
+  assert.equal(editable.goldMedals, 2);
+  assert.deepEqual(editable.allies, ['A', 'B', 'C', 'D']);
+});
+
+test('toLiveMetadataState は共通フォーム状態を live state へ戻し表彰数を正規化する', () => {
+  const editable = toEditableLiveMetadata(createMetadata());
+  editable.goldMedals = 2;
+  editable.silverMedals = 3;
+
+  const live = toLiveMetadataState(editable);
+
+  assert.equal(live.game_mode, 'BATTLE');
+  assert.equal(live.started_at, '2026-03-08 12:00:00');
+  assert.equal(live.gold_medals, 2);
+  assert.equal(live.silver_medals, 1);
 });

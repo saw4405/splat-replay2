@@ -1,4 +1,12 @@
-export type WeaponSlots = [string, string, string, string];
+import type { EditableMetadata } from './editable';
+import {
+  normaliseMedalCount,
+  normaliseMedalPair,
+  normaliseWeaponSlots,
+  type WeaponSlots,
+} from './shared';
+
+export type { WeaponSlots } from './shared';
 
 type MedalField = 'gold_medals' | 'silver_medals';
 
@@ -48,19 +56,6 @@ export type LiveMetadataUpdateResult = {
 
 const EMPTY_WEAPON_SLOTS: WeaponSlots = ['', '', '', ''];
 
-function normaliseWeaponSlots(value: string[] | null | undefined, emptyValue = ''): WeaponSlots {
-  const slots = value?.slice(0, 4) ?? [];
-  while (slots.length < 4) {
-    slots.push(emptyValue);
-  }
-  return [
-    slots[0] ?? emptyValue,
-    slots[1] ?? emptyValue,
-    slots[2] ?? emptyValue,
-    slots[3] ?? emptyValue,
-  ];
-}
-
 export function createEmptyLiveMetadataState(): LiveMetadataState {
   return {
     game_mode: '',
@@ -99,27 +94,47 @@ export function createEmptyLiveManualEditState(): LiveManualEditState {
   };
 }
 
-function normaliseMedalCount(value: number): number {
-  if (!Number.isFinite(value)) {
-    return 0;
-  }
-  return Math.min(3, Math.max(0, Math.trunc(value)));
+function toNullableString(value: string): string | null {
+  return value === '' ? null : value;
 }
 
-function normaliseMedalPair(
-  goldMedals: number,
-  silverMedals: number
-): Pick<LiveMetadataState, 'gold_medals' | 'silver_medals'> {
-  const nextGold = normaliseMedalCount(goldMedals);
-  const nextSilver = Math.min(normaliseMedalCount(silverMedals), 3 - nextGold);
+export function toEditableLiveMetadata(metadata: LiveMetadataState): EditableMetadata {
   return {
-    gold_medals: nextGold,
-    silver_medals: nextSilver,
+    gameMode: metadata.game_mode,
+    startedAt: metadata.started_at,
+    match: metadata.match,
+    rule: metadata.rule,
+    stage: metadata.stage,
+    rate: metadata.rate,
+    judgement: metadata.judgement,
+    kill: metadata.kill,
+    death: metadata.death,
+    special: metadata.special,
+    goldMedals: metadata.gold_medals,
+    silverMedals: metadata.silver_medals,
+    allies: [...metadata.allies] as WeaponSlots,
+    enemies: [...metadata.enemies] as WeaponSlots,
   };
 }
 
-function toNullableString(value: string): string | null {
-  return value === '' ? null : value;
+export function toLiveMetadataState(metadata: EditableMetadata): LiveMetadataState {
+  const normalisedMedals = normaliseMedalPair(metadata.goldMedals, metadata.silverMedals);
+  return {
+    game_mode: metadata.gameMode,
+    started_at: metadata.startedAt,
+    match: metadata.match,
+    rule: metadata.rule,
+    rate: metadata.rate,
+    judgement: metadata.judgement,
+    stage: metadata.stage,
+    kill: metadata.kill,
+    death: metadata.death,
+    special: metadata.special,
+    gold_medals: normalisedMedals.goldMedals,
+    silver_medals: normalisedMedals.silverMedals,
+    allies: [...metadata.allies] as WeaponSlots,
+    enemies: [...metadata.enemies] as WeaponSlots,
+  };
 }
 
 export function normaliseEditedLiveMedalField(
@@ -180,8 +195,8 @@ export function applyIncomingLiveMetadata(
     ? (data.silver_medals ?? metadata.silver_medals)
     : metadata.silver_medals;
   const normalisedMedals = normaliseMedalPair(nextGoldMedals, nextSilverMedals);
-  syncField('gold_medals', normalisedMedals.gold_medals);
-  syncField('silver_medals', normalisedMedals.silver_medals);
+  syncField('gold_medals', normalisedMedals.goldMedals);
+  syncField('silver_medals', normalisedMedals.silverMedals);
   syncField('allies', normaliseWeaponSlots(data.allies));
   syncField('enemies', normaliseWeaponSlots(data.enemies));
 

@@ -64,6 +64,7 @@ def test_recorded_metadata_patch_dto_from_update_dict_normalises_weapon_slots() 
 ):
     patch = RecordingMetadataPatchDTO.from_update_dict(
         {
+            "started_at": "2026-03-01T12:34:56",
             "match": Match.X.name,
             "allies": ["A", "B", "C", "D"],
             "enemies": ["E", "F", "G", "H"],
@@ -71,6 +72,7 @@ def test_recorded_metadata_patch_dto_from_update_dict_normalises_weapon_slots() 
         }
     )
 
+    assert patch.started_at == "2026-03-01T12:34:56"
     assert patch.match == Match.X.name
     assert patch.allies == ("A", "B", "C", "D")
     assert patch.enemies == ("E", "F", "G", "H")
@@ -80,12 +82,14 @@ def test_recorded_metadata_patch_dto_to_metadata_update_dict_preserves_internal_
     None
 ):
     patch = RecordingMetadataPatchDTO(
+        started_at="2026-03-01T12:34:56",
         match=Match.X.name,
         allies=("A", "B", "C", "D"),
         enemies=("E", "F", "G", "H"),
     )
 
     assert patch.to_metadata_update_dict() == {
+        "started_at": "2026-03-01T12:34:56",
         "match": Match.X.name,
         "allies": ("A", "B", "C", "D"),
         "enemies": ("E", "F", "G", "H"),

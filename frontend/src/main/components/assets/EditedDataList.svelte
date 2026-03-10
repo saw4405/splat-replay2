@@ -170,57 +170,57 @@
         </button>
 
         <div class="video-content">
-          <!-- サムネイル -->
-          <div class="video-thumbnail-container">
-            <div class="video-thumbnail">
-              <img
-                src={getThumbnailUrl(video.filename)}
-                alt={video.filename}
-                on:error={handleImageError}
-              />
-              <div class="thumbnail-overlay">
-                <button
-                  class="overlay-button play-button"
-                  on:click={() => handlePlayVideo(video)}
-                  title="動画を再生"
-                >
-                  <svg
-                    width="24"
-                    height="24"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    xmlns="http://www.w3.org/2000/svg"
-                  >
-                    <path d="M8 5V19L19 12L8 5Z" fill="currentColor" />
-                  </svg>
-                </button>
-                <button
-                  class="overlay-button zoom-button"
-                  on:click={() => handleZoomThumbnail(video)}
-                  title="拡大表示"
-                >
-                  <svg
-                    width="24"
-                    height="24"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    xmlns="http://www.w3.org/2000/svg"
-                  >
-                    <path
-                      d="M15 3H21V9M9 21H3V15M21 3L14 10M3 21L10 14"
-                      stroke="currentColor"
-                      stroke-width="2"
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                    />
-                  </svg>
-                </button>
-              </div>
-            </div>
-          </div>
-
           <!-- メタデータと字幕のコンテナ -->
           <div class="metadata-container">
+            <!-- サムネイル -->
+            <div class="video-thumbnail-container">
+              <div class="video-thumbnail">
+                <img
+                  src={getThumbnailUrl(video.filename)}
+                  alt={video.filename}
+                  on:error={handleImageError}
+                />
+                <div class="thumbnail-overlay">
+                  <button
+                    class="overlay-button play-button"
+                    on:click={() => handlePlayVideo(video)}
+                    title="動画を再生"
+                  >
+                    <svg
+                      width="24"
+                      height="24"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      xmlns="http://www.w3.org/2000/svg"
+                    >
+                      <path d="M8 5V19L19 12L8 5Z" fill="currentColor" />
+                    </svg>
+                  </button>
+                  <button
+                    class="overlay-button zoom-button"
+                    on:click={() => handleZoomThumbnail(video)}
+                    title="拡大表示"
+                  >
+                    <svg
+                      width="24"
+                      height="24"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      xmlns="http://www.w3.org/2000/svg"
+                    >
+                      <path
+                        d="M15 3H21V9M9 21H3V15M21 3L14 10M3 21L10 14"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      />
+                    </svg>
+                  </button>
+                </div>
+              </div>
+            </div>
+
             <!-- 動画情報 (タイトルと説明) -->
             <div class="video-info">
               {#if video.title}
@@ -407,27 +407,37 @@
   }
 
   .video-content {
-    display: grid;
-    grid-template-columns: 160px 1fr;
-    gap: 1rem;
+    display: block;
+    --thumbnail-width: clamp(184px, calc(12vw + 56px), 240px);
+  }
+
+  .video-content::after {
+    content: '';
+    display: block;
+    clear: both;
   }
 
   .metadata-container {
-    display: flex;
-    flex-direction: column;
-    gap: 0;
+    display: block;
+    min-width: 0;
+  }
+
+  .metadata-container::after {
+    content: '';
+    display: block;
+    clear: both;
   }
 
   .video-thumbnail-container {
-    display: flex;
-    flex-direction: column;
-    gap: 0.5rem;
+    float: right;
+    width: min(var(--thumbnail-width), 100%);
+    margin: 0.75rem 0.75rem 0.75rem 1rem;
   }
 
   .video-thumbnail {
     position: relative;
-    width: 160px;
-    height: 90px;
+    width: 100%;
+    aspect-ratio: 16 / 9;
     border-radius: 6px;
     overflow: hidden;
     background: rgba(var(--theme-rgb-black), 0.4);
@@ -492,33 +502,34 @@
 
   /* 動画情報 (タイトル・説明) */
   .video-info {
-    display: flex;
-    flex-direction: column;
-    gap: 0.35rem;
+    display: block;
     font-size: 0.85rem;
-    padding: 0.5rem;
+    padding: 0 0.5rem 0.5rem;
     border-radius: 6px;
   }
 
   .info-item {
-    display: flex;
-    gap: 0.5rem;
-    align-items: flex-start;
+    display: block;
+    margin: 0 0 0.35rem;
+  }
+
+  .info-item:last-child {
+    margin-bottom: 0;
   }
 
   .info-label {
+    display: inline;
     color: rgba(var(--theme-rgb-white), 0.6);
     font-size: 0.8rem;
-    min-width: 60px;
-    flex-shrink: 0;
+    margin-right: 0.35rem;
   }
 
   .info-value {
+    display: inline;
     color: var(--accent-color);
     font-weight: 500;
     word-break: break-all;
     overflow-wrap: break-word;
-    flex: 1;
   }
 
   .info-value-dim {
@@ -529,24 +540,25 @@
 
   /* 字幕情報 */
   .subtitle-info {
-    display: flex;
-    flex-direction: column;
-    gap: 0.5rem;
+    display: block;
     font-size: 0.85rem;
-    padding: 0.5rem;
+    border-top: 1px solid rgba(var(--theme-rgb-white), 0.1);
+    margin-top: 0.35rem;
+    padding: 0.75rem 0.5rem 0.5rem;
     border-radius: 6px;
   }
 
   .metadata-row {
-    display: flex;
-    gap: 0.5rem;
-    flex-wrap: wrap;
+    display: block;
   }
 
   .metadata-item {
-    display: flex;
+    display: inline-flex;
+    flex-wrap: wrap;
     gap: 0.25rem;
-    align-items: center;
+    align-items: baseline;
+    margin: 0 0.75rem 0.25rem 0;
+    vertical-align: top;
   }
 
   .metadata-label {
@@ -592,6 +604,29 @@
   @media (max-width: 1024px) {
     .video-list {
       min-height: clamp(3rem, 20vh, 6rem);
+    }
+
+    .video-content {
+      --thumbnail-width: clamp(244px, 30vw, 304px);
+    }
+  }
+
+  @media (max-width: 768px) {
+    .video-content {
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+      --thumbnail-width: min(100%, 344px);
+    }
+
+    .video-content::after {
+      content: none;
+    }
+
+    .video-thumbnail-container {
+      float: none;
+      align-self: flex-end;
+      margin: 0;
     }
   }
 </style>
