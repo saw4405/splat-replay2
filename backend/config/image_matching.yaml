@@ -301,6 +301,10 @@ matcher_groups:
     - weapon_template_157
     - weapon_template_158
     - weapon_template_159
+    - weapon_template_160
+    - weapon_template_161
+    - weapon_template_162
+    - weapon_template_163
 
 # 単一手法検出器（シンプルな検出用）
 simple_matchers:
@@ -2236,6 +2240,38 @@ simple_matchers:
     type: "template"
     template_path: "assets/matching/weapon/ソイチューバーカスタム.png"
     mask_path: "assets/matching/weapon/ソイチューバーカスタム_mask.png"
+    threshold: 0.82
+    description: "ブキ照合テンプレート"
+
+  weapon_template_160:
+    name: "カーボンローラー"
+    type: "template"
+    template_path: "assets/matching/weapon/カーボンローラー.png"
+    mask_path: "assets/matching/weapon/カーボンローラー_mask.png"
+    threshold: 0.82
+    description: "ブキ照合テンプレート"
+
+  weapon_template_161:
+    name: "クラッシュブラスターネオ"
+    type: "template"
+    template_path: "assets/matching/weapon/クラッシュブラスターネオ.png"
+    mask_path: "assets/matching/weapon/クラッシュブラスターネオ_mask.png"
+    threshold: 0.82
+    description: "ブキ照合テンプレート"
+
+  weapon_template_162:
+    name: "スパイガジェット繚"
+    type: "template"
+    template_path: "assets/matching/weapon/スパイガジェット繚.png"
+    mask_path: "assets/matching/weapon/スパイガジェット繚_mask.png"
+    threshold: 0.82
+    description: "ブキ照合テンプレート"
+
+  weapon_template_163:
+    name: "バケットスロッシャーデコ"
+    type: "template"
+    template_path: "assets/matching/weapon/バケットスロッシャーデコ.png"
+    mask_path: "assets/matching/weapon/バケットスロッシャーデコ_mask.png"
     threshold: 0.82
     description: "ブキ照合テンプレート"
 
