@@ -1,4 +1,7 @@
-﻿<script lang="ts">
+﻿<svelte:options accessors />
+
+<script lang="ts">
+  import { onDestroy } from 'svelte';
   import BaseDialog from '../../../common/components/BaseDialog.svelte';
   import FieldItem from './FieldItem.svelte';
   import type { FieldValue, SettingField, SettingsResponse, SettingsSection } from './types';
@@ -8,18 +11,42 @@
   let sections: SettingsSection[] = [];
   let loading = false;
   let saving = false;
-  let loaded = false;
   let errorMessage = '';
   let successMessage = '';
   let activeSectionId: string | null = null;
+  let previousOpen = false;
+  let successMessageTimer: ReturnType<typeof setTimeout> | null = null;
 
   $: activeSection = sections.find((section) => section.id === activeSectionId) ?? null;
 
-  $: if (open && !loaded && !loading) {
-    void loadSettings();
+  // openの変化を監視し、明示的にハンドラを呼び出す
+  $: {
+    if (open && !previousOpen) {
+      handleDialogOpen();
+    } else if (!open && previousOpen) {
+      handleDialogClose();
+    }
+    previousOpen = open;
   }
 
-  $: if (!open && loaded) {
+  onDestroy(() => {
+    clearSuccessMessageTimer();
+  });
+
+  function clearSuccessMessageTimer(): void {
+    if (successMessageTimer !== null) {
+      clearTimeout(successMessageTimer);
+      successMessageTimer = null;
+    }
+  }
+
+  function handleDialogOpen(): void {
+    if (!loading && sections.length === 0) {
+      void loadSettings();
+    }
+  }
+
+  function handleDialogClose(): void {
     resetState();
   }
 
@@ -27,10 +54,10 @@
     sections = [];
     loading = false;
     saving = false;
-    loaded = false;
     errorMessage = '';
     successMessage = '';
     activeSectionId = null;
+    clearSuccessMessageTimer();
   }
 
   function filterEditableFields(fields: SettingField[]): SettingField[] {
@@ -63,22 +90,24 @@
     loading = true;
     errorMessage = '';
     successMessage = '';
+    clearSuccessMessageTimer();
     try {
       const response = await fetch('/api/settings', { cache: 'no-store' });
       if (!response.ok) {
         throw new Error(`failed with status ${response.status}`);
       }
       const data = (await response.json()) as SettingsResponse;
-      const sectionsData = data.sections;
-      const sectionsClone =
-        typeof structuredClone === 'function'
-          ? structuredClone(sectionsData)
-          : (JSON.parse(JSON.stringify(sectionsData)) as SettingsSection[]);
+      // 浅いコピーを作成してから フィルタリング（参照の共有を避ける）
+      const sectionsClone = data.sections.map((section) => ({
+        ...section,
+        fields: section.fields.map((field) => ({ ...field })),
+      }));
       sections = filterEditableSections(sectionsClone);
       activeSectionId = sections[0]?.id ?? null;
-      loaded = true;
     } catch (error: unknown) {
       errorMessage = error instanceof Error ? error.message : '設定の取得に失敗しました。';
+      sections = [];
+      activeSectionId = null;
     } finally {
       loading = false;
     }
@@ -89,8 +118,12 @@
   }
 
   function handleFieldValueChange(field: SettingField, value: FieldValue): void {
+    // Immutable更新: field.valueを変更後、sections全体を再構築
     field.value = value;
-    sections = sections;
+    sections = sections.map((section) => ({
+      ...section,
+      fields: section.fields.map((f) => ({ ...f })),
+    }));
   }
 
   function handleGroupFieldValueChange(
@@ -103,7 +136,14 @@
       group.value = {};
     }
     (group.value as Record<string, FieldValue>)[child.id] = value;
-    sections = sections;
+    // Immutable更新: sections全体を再構築
+    sections = sections.map((section) => ({
+      ...section,
+      fields: section.fields.map((f) => ({
+        ...f,
+        children: f.children ? f.children.map((c) => ({ ...c })) : undefined,
+      })),
+    }));
   }
 
   function collectSectionValues(section: SettingsSection): Record<string, FieldValue> {
@@ -148,6 +188,7 @@
     saving = true;
     errorMessage = '';
     successMessage = '';
+    clearSuccessMessageTimer();
     try {
       const payload = {
         sections: sections.map((section) => ({
@@ -173,6 +214,11 @@
         throw new Error(detail);
       }
       successMessage = '設定を保存しました。';
+      // 3秒後に成功メッセージを自動でクリア
+      successMessageTimer = setTimeout(() => {
+        successMessage = '';
+        successMessageTimer = null;
+      }, 3000);
     } catch (error: unknown) {
       errorMessage = error instanceof Error ? error.message : '設定の保存に失敗しました。';
     } finally {
@@ -212,18 +258,19 @@
     <p class="status error">{errorMessage}</p>
   {:else}
     <div class="dialog-content">
-      <nav class="tabs">
+      <nav class="tabs" data-testid="settings-tabs">
         {#each sections as section (section.id)}
           <button
             class:selected={section.id === activeSectionId}
             type="button"
             on:click={() => selectSection(section.id)}
+            data-testid={`settings-section-${section.id}`}
           >
             {section.label}
           </button>
         {/each}
       </nav>
-      <div class="fields">
+      <div class="fields" data-testid="settings-fields">
         {#if activeSection}
           <div class="fields-scroll">
             {#each activeSection.fields as field (field.id)}

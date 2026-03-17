@@ -350,6 +350,7 @@
     tabindex="0"
     on:click={toggleDrawer}
     on:keydown={(e) => e.key === 'Enter' && toggleDrawer()}
+    data-testid="bottom-drawer-toggle"
   >
     <div class="header-left">
       <div class="expand-hint">
@@ -388,7 +389,7 @@
           <span class="badge-icon">🎬</span>
           <div class="badge-info">
             <span class="badge-label">録画済</span>
-            <span class="badge-count">{recordedCount}</span>
+            <span class="badge-count" data-testid="recorded-count">{recordedCount}</span>
           </div>
         </div>
 

@@ -115,10 +115,19 @@ class _WeaponDetectionServiceSpy:
         return context
 
 
+class _FixedClock:
+    def __init__(self, now: float) -> None:
+        self._now = now
+
+    def now(self) -> float:
+        return self._now
+
+
 def _build_handler(
     *,
     analyzer: _AnalyzerStub,
     weapon_detection_service: _WeaponDetectionServiceSpy,
+    clock: _FixedClock | None = None,
 ) -> InGamePhaseHandler:
     return InGamePhaseHandler(
         analyzer=cast(FrameAnalyzer, analyzer),
@@ -128,6 +137,7 @@ def _build_handler(
             WeaponDetectionService,
             weapon_detection_service,
         ),
+        clock=clock,
     )
 
 
@@ -201,3 +211,20 @@ async def test_cancel_called_on_communication_error() -> None:
     assert command.action is RecordingAction.CANCEL_RECORDING
     assert weapon_service.cancel_calls == 1
     assert weapon_service.process_calls == 1
+
+
+@pytest.mark.asyncio
+async def test_time_limit_uses_injected_clock() -> None:
+    analyzer = _AnalyzerStub()
+    weapon_service = _WeaponDetectionServiceSpy()
+    handler = _build_handler(
+        analyzer=analyzer,
+        weapon_detection_service=weapon_service,
+        clock=_FixedClock(701.0),
+    )
+    context = RecordingContext(battle_started_at=100.0)
+
+    command = await handler.handle(_frame(), context, RecordState.RECORDING)
+
+    assert command.action is RecordingAction.STOP_RECORDING
+    assert weapon_service.cancel_calls == 1

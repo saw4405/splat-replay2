@@ -17,6 +17,7 @@ WEAPON_DEF_KEY_PATTERN = re.compile(r"^\s{2}(weapon_template_(\d{3})):\s*$")
 TEMPLATE_PATH_PATTERN = re.compile(
     r'^\s{4}template_path:\s*"assets/matching/weapon/(.+)\.png"\s*$'
 )
+NAME_FIELD_PATTERN = re.compile(r'^\s{4}name:\s*"(.+)"\s*$')
 TOP_LEVEL_KEY_PATTERN = re.compile(r"^[^\s#][^:]*:\s*(?:#.*)?$")
 WEAPON_CSV_NAME_FIELD = "武器名"
 
@@ -35,12 +36,22 @@ class SectionRange:
 class ExistingDefinition:
     key: str
     weapon_name: str
+    template_name: str
 
 
 @dataclass(frozen=True)
 class PlannedAddition:
     key: str
     weapon_name: str
+    template_name: str
+    mask_name: str
+
+
+@dataclass(frozen=True)
+class WeaponAsset:
+    template_name: str
+    weapon_name: str
+    mask_name: str
 
 
 @dataclass(frozen=True)
@@ -159,22 +170,32 @@ def _find_existing_weapon_definitions(
             simple_matchers_end=simple_matchers_section.end,
         )
         weapon_name: str | None = None
+        template_name: str | None = None
         for inner_idx in range(idx + 1, block_end):
+            name_match = NAME_FIELD_PATTERN.match(
+                lines[inner_idx].rstrip("\r\n")
+            )
+            if name_match is not None:
+                weapon_name = name_match.group(1)
             template_match = TEMPLATE_PATH_PATTERN.match(
                 lines[inner_idx].rstrip("\r\n")
             )
             if template_match is not None:
-                weapon_name = template_match.group(1)
-                break
+                template_name = template_match.group(1)
 
-        if weapon_name is None:
+        if weapon_name is None or template_name is None:
             raise SyncError(
-                f"{key} から template_path を抽出できません。"
-                " expected=assets/matching/weapon/<name>.png"
+                f"{key} から name/template_path を抽出できません。"
+                ' expected=name: "<weapon>", '
+                'template_path: "assets/matching/weapon/<name>.png"'
             )
 
         definitions.append(
-            ExistingDefinition(key=key, weapon_name=weapon_name)
+            ExistingDefinition(
+                key=key,
+                weapon_name=weapon_name,
+                template_name=template_name,
+            )
         )
 
     if not definitions:
@@ -185,33 +206,66 @@ def _find_existing_weapon_definitions(
     return definitions
 
 
-def _collect_assets(assets_dir: Path) -> list[str]:
+def _extract_variant_base_weapon_name(template_name: str) -> str | None:
+    if "_variant" not in template_name:
+        return None
+    base_name, _, _suffix = template_name.partition("_variant")
+    if not base_name:
+        return None
+    return base_name
+
+
+def _resolve_mask_name(*, assets_dir: Path, template_name: str) -> str | None:
+    direct_mask_path = assets_dir / f"{template_name}_mask.png"
+    if direct_mask_path.exists():
+        return template_name
+
+    base_weapon_name = _extract_variant_base_weapon_name(template_name)
+    if base_weapon_name is None:
+        return None
+
+    fallback_mask_path = assets_dir / f"{base_weapon_name}_mask.png"
+    if fallback_mask_path.exists():
+        return base_weapon_name
+    return None
+
+
+def _collect_assets(assets_dir: Path) -> list[WeaponAsset]:
     if not assets_dir.is_dir():
         raise SyncError(f"assets ディレクトリが見つかりません: {assets_dir}")
 
-    weapon_names: list[str] = []
+    assets: list[WeaponAsset] = []
+    missing_masks: list[str] = []
     for png_path in sorted(assets_dir.glob("*.png")):
         stem = png_path.stem
         if stem.endswith("_mask"):
             continue
-        weapon_names.append(stem)
+        mask_name = _resolve_mask_name(
+            assets_dir=assets_dir,
+            template_name=stem,
+        )
+        if mask_name is None:
+            missing_masks.append(stem)
+            continue
+        assets.append(
+            WeaponAsset(
+                template_name=stem,
+                weapon_name=_extract_variant_base_weapon_name(stem) or stem,
+                mask_name=mask_name,
+            )
+        )
 
-    if not weapon_names:
-        raise SyncError(f"ブキ画像が見つかりません: {assets_dir}")
-
-    missing_masks = [
-        name
-        for name in weapon_names
-        if not (assets_dir / f"{name}_mask.png").exists()
-    ]
     if missing_masks:
         raise SyncError(
             "mask が不足しています: "
             + ", ".join(sorted(missing_masks))
-            + " (expected: <name>_mask.png)"
+            + " (expected: <name>_mask.png or <base>_mask.png for variants)"
         )
 
-    return weapon_names
+    if not assets:
+        raise SyncError(f"ブキ画像が見つかりません: {assets_dir}")
+
+    return assets
 
 
 def _load_csv_weapons(csv_path: Path) -> list[CsvWeaponRow]:
@@ -312,17 +366,17 @@ def _extract_config_weapon_names(
 
 
 def _validate_name_consistency(
-    *, asset_weapons: list[str], config_weapon_names: list[str]
+    *, asset_templates: list[str], config_template_names: list[str]
 ) -> list[str]:
-    asset_set = set(asset_weapons)
-    config_set = set(config_weapon_names)
+    asset_set = set(asset_templates)
+    config_set = set(config_template_names)
 
-    if len(asset_set) != len(asset_weapons):
+    if len(asset_set) != len(asset_templates):
         raise SyncError("assets 側でブキ名が重複しています。")
 
-    if len(config_set) != len(config_weapon_names):
+    if len(config_set) != len(config_template_names):
         counts: dict[str, int] = {}
-        for name in config_weapon_names:
+        for name in config_template_names:
             counts[name] = counts.get(name, 0) + 1
         duplicates = sorted(
             name for name, count in counts.items() if count > 1
@@ -344,13 +398,13 @@ def _validate_name_consistency(
 
 def _build_plan(
     *,
-    weapon_assets: list[str],
+    weapon_assets: list[WeaponAsset],
     definitions: list[ExistingDefinition],
 ) -> list[PlannedAddition]:
-    config_names = [definition.weapon_name for definition in definitions]
+    config_names = [definition.template_name for definition in definitions]
     missing_names = _validate_name_consistency(
-        asset_weapons=weapon_assets,
-        config_weapon_names=config_names,
+        asset_templates=[asset.template_name for asset in weapon_assets],
+        config_template_names=config_names,
     )
     if not missing_names:
         return []
@@ -360,11 +414,17 @@ def _build_plan(
     )
     planned: list[PlannedAddition] = []
     next_id = max_id + 1
-    for weapon_name in missing_names:
+    assets_by_template = {
+        asset.template_name: asset for asset in weapon_assets
+    }
+    for template_name in missing_names:
+        asset = assets_by_template[template_name]
         planned.append(
             PlannedAddition(
                 key=f"weapon_template_{next_id:03d}",
-                weapon_name=weapon_name,
+                weapon_name=asset.weapon_name,
+                template_name=asset.template_name,
+                mask_name=asset.mask_name,
             )
         )
         next_id += 1
@@ -381,8 +441,8 @@ def _build_definition_block_lines(
                 f"  {item.key}:{newline}",
                 f'    name: "{item.weapon_name}"{newline}',
                 f'    type: "template"{newline}',
-                f'    template_path: "assets/matching/weapon/{item.weapon_name}.png"{newline}',
-                f'    mask_path: "assets/matching/weapon/{item.weapon_name}_mask.png"{newline}',
+                f'    template_path: "assets/matching/weapon/{item.template_name}.png"{newline}',
+                f'    mask_path: "assets/matching/weapon/{item.mask_name}_mask.png"{newline}',
                 f"    threshold: {threshold:g}{newline}",
                 f'    description: "ブキ照合テンプレート"{newline}',
                 newline,
@@ -523,9 +583,9 @@ def run_sync(
             _extract_config_weapon_names(updated_text)
         )
         _validate_name_consistency(
-            asset_weapons=asset_weapons,
-            config_weapon_names=[
-                definition.weapon_name for definition in updated_definitions
+            asset_templates=[asset.template_name for asset in asset_weapons],
+            config_template_names=[
+                definition.template_name for definition in updated_definitions
             ],
         )
         _validate_yaml_load(config_path=config_path, repo_root=Path.cwd())

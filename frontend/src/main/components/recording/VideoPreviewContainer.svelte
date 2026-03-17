@@ -7,6 +7,7 @@
   import CameraPermissionDialog from '../permission/CameraPermissionDialog.svelte';
   import { subscribeDomainEvents, type DomainEvent } from '../../domainEvents';
   import { buildMetadataOptionMap, getMetadataOptions } from '../../api/metadata';
+  import { getRecorderPreviewMode } from '../../api/recording';
   import { notifyRecordingReady } from '../../notification';
 
   type PreviewState = 'checking' | 'connected' | 'disconnected' | 'error';
@@ -35,6 +36,7 @@
   let isMetadataOpen = false;
   let isRefreshingDeviceStatus = false; // 多重実行防止フラグ
   let isCameraPermissionDialogOpen = false;
+  let isVideoFileInput = false;
   type MetadataValue = string | number | string[] | null | undefined;
   type MetadataFieldKey =
     | 'game_mode'
@@ -56,7 +58,7 @@
   type MetadataNotification = {
     id: number;
     text: string;
-    timer: ReturnType<typeof window.setTimeout>;
+    timer: number;
   };
   type MetadataFieldDescriptor = {
     key: MetadataFieldKey;
@@ -652,8 +654,24 @@
     }
   }
 
+  async function refreshPreviewMode(): Promise<void> {
+    try {
+      isVideoFileInput = (await getRecorderPreviewMode()) === 'video_file';
+      if (isVideoFileInput) {
+        isCameraPermissionDialogOpen = false;
+      }
+    } catch (error) {
+      console.error('Failed to refresh preview mode:', error);
+    }
+  }
+
   async function checkAndShowCameraPermissionDialog(): Promise<void> {
     try {
+      isVideoFileInput = (await getRecorderPreviewMode()) === 'video_file';
+      if (isVideoFileInput) {
+        return;
+      }
+
       const response = await fetch('/api/settings/camera-permission-dialog');
       if (!response.ok) {
         throw new Error(`status ${response.status}`);
@@ -716,6 +734,7 @@
 
   onMount(() => {
     void loadMetadataOptions();
+    void refreshPreviewMode();
     void refreshDeviceStatus();
     deviceStatusTimer = window.setInterval(() => {
       void refreshDeviceStatus();
@@ -751,7 +770,11 @@
   });
 </script>
 
-<div class="preview-container glass-surface">
+<div
+  class="preview-container glass-surface"
+  data-testid="preview-container"
+  data-device-state={deviceState}
+>
   {#if deviceState === 'connected'}
     <div class="metadata-button-container">
       <button
@@ -760,6 +783,7 @@
         on:click={toggleMetadata}
         aria-label={isMetadataOpen ? 'メタデータを閉じる' : 'メタデータを表示'}
         title={isMetadataOpen ? 'メタデータを閉じる' : 'メタデータを表示'}
+        data-testid="metadata-toggle-button"
       >
         {#if isMetadataOpen}
           <X class="icon" aria-hidden="true" stroke-width={1.75} />
@@ -768,9 +792,9 @@
         {/if}
       </button>
       {#if !isMetadataOpen && metadataNotifications.length > 0}
-        <div class="metadata-notifications">
+        <div class="metadata-notifications" data-testid="metadata-notifications">
           {#each metadataNotifications as notification (notification.id)}
-            <div class="metadata-notification glass-pill">
+            <div class="metadata-notification glass-pill" data-testid="metadata-notification">
               {notification.text}
             </div>
           {/each}

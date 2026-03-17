@@ -1,4 +1,4 @@
-"""FrameAnalyzer の各メソッドを 1/60 秒 (約16.667ms) 以内に終わるか判定するテスト。
+"""FrameAnalyzer の各メソッドを 1/30 秒 (約33.333ms) 以内に終わるか判定するテスト。
 
 注意:
   - 現状で閾値を超えるメソッド (OCR や複合処理を含む) は Fail になります。
@@ -16,13 +16,14 @@ from typing import Awaitable, Callable, Protocol, Sequence
 
 import cv2
 import pytest
-from splat_replay.domain.models import GameMode  # noqa: E402
 from test_frame_analyzer import TEMPLATE_DIR, create_analyzer  # noqa: E402
+
+from splat_replay.domain.models import GameMode  # noqa: E402
 
 # ==== 設定 ====
 DEFAULT_THRESHOLD_SEC = (
-    1.0 / 60.0 / 4.0
-)  # 60fpsで1フレーム当たり4つの解析をする想定
+    1.0 / 30.0 / 4.0
+)  # 30fpsで1フレーム当たり4つの解析をする想定
 THRESHOLD_SEC = float(os.getenv("PERF_THRESHOLD_SEC", DEFAULT_THRESHOLD_SEC))
 ITER = 5  # 本計測回数 (平均化用)
 
@@ -73,7 +74,7 @@ CASES: list[SpeedCase] = [
         "extract_rate",
         "rate_XP1971.9.png",
         prepare=_prepare_extract_rate,
-        threshold_sec=0.06,  # OCRも含むので緩和
+        threshold_sec=0.1,  # OCRも含むので緩和（30fps対応）
     ),
     SpeedCase(
         "detect_matching_start", "detect_matching_start", "matching_1.png"

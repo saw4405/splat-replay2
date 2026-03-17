@@ -108,7 +108,8 @@
 
 ## 参考（一次情報）
 
-- `README.md`（全体概要 / 開発環境）
+- `README.md`（全体概要 / エンドユーザー向け情報）
+- `docs/DEVELOPMENT.md`（開発環境 / テスト実行 / 品質確認）
 - `Taskfile.yml`（タスク定義）
 - `backend/pyproject.toml`（依存・import-lint 設定）
 - `frontend/package.json`（フロントエンドコマンド）

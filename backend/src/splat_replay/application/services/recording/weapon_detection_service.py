@@ -8,6 +8,7 @@ from dataclasses import dataclass, replace
 from typing import Literal
 
 from splat_replay.application.interfaces import (
+    ClockPort,
     EventBusPort,
     LoggerPort,
     WeaponCandidateScore,
@@ -45,6 +46,11 @@ SLOT_NAMES = (
 _WeaponTaskKind = Literal["display_ng", "recognized", "finalized", "error"]
 
 
+class _WallClock:
+    def now(self) -> float:
+        return time.time()
+
+
 @dataclass(frozen=True)
 class _WeaponTaskResult:
     """バックグラウンドタスクの処理結果。"""
@@ -71,7 +77,7 @@ def _to_four_tuple(items: list[str]) -> tuple[str, str, str, str]:
 
 
 class WeaponDetectionService:
-    """ブキ判別実行と20秒制御を担当する。
+    """ブキ判別実行と検出窓の制御を担当する。
 
     `request_cancel()` は即時復帰し、generation を進めて旧タスク結果を無効化する。
     """
@@ -81,10 +87,14 @@ class WeaponDetectionService:
         recognizer: WeaponRecognitionPort,
         logger: LoggerPort,
         event_bus: EventBusPort,
+        detection_window_seconds: float = DETECTION_WINDOW_SECONDS,
+        clock: ClockPort | None = None,
     ) -> None:
         self._recognizer = recognizer
         self._logger = logger
         self._event_bus = event_bus
+        self._detection_window_seconds = detection_window_seconds
+        self._clock = clock or _WallClock()
         self._generation = 0
         self._active_battle_started_at: float | None = None
         self._inflight_task: asyncio.Task[_WeaponTaskResult] | None = None
@@ -121,8 +131,8 @@ class WeaponDetectionService:
         if context.weapon_detection_done:
             return context
 
-        elapsed = max(0.0, time.time() - context.battle_started_at)
-        if elapsed > DETECTION_WINDOW_SECONDS:
+        elapsed = max(0.0, self._clock.now() - context.battle_started_at)
+        if elapsed > self._detection_window_seconds:
             self._window_closed = True
         elif not self._window_closed:
             self._pending_frame = frame.copy()

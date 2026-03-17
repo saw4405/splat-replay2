@@ -16,6 +16,7 @@ from splat_replay.application.interfaces import (
     CaptureDeviceEnumeratorPort,
     CaptureDevicePort,
     CapturePort,
+    ClockPort,
     DomainEventPublisher,
     EventBusPort,
     EventPublisher,
@@ -48,8 +49,10 @@ from splat_replay.domain.ports.image_editor import (
 )
 from splat_replay.domain.repositories import SetupStateRepository
 from splat_replay.infrastructure import (
+    AdaptiveCapture,
+    AdaptiveCaptureDeviceChecker,
+    AdaptiveVideoRecorder,
     BattleMedalRecognizerAdapter,
-    CaptureDeviceChecker,
     CaptureDeviceEnumerator,
     EventBusPortAdapter,
     EventPublisherAdapter,
@@ -63,8 +66,6 @@ from splat_replay.infrastructure import (
     IntegratedSpeechRecognizer,
     MatcherRegistry,
     MicrophoneEnumerator,
-    NDICapture,
-    OBSRecorderController,
     RecorderWithTranscription,
     SetupStateFileAdapter,
     SpeechTranscriber,
@@ -79,23 +80,29 @@ from splat_replay.infrastructure import (
 from splat_replay.infrastructure.config import load_settings_from_toml
 from splat_replay.infrastructure.filesystem import paths
 from splat_replay.infrastructure.runtime import AppRuntime
+from splat_replay.infrastructure.adapters.system.capture_clock import (
+    CaptureClock,
+)
 from structlog.stdlib import BoundLogger
 
 
 def register_adapters(container: punq.Container) -> None:
     """アダプターを DI コンテナに登録する。"""
-    container.register(CaptureDevicePort, CaptureDeviceChecker)
+    container.register(CaptureDevicePort, AdaptiveCaptureDeviceChecker)
     container.register(CaptureDeviceEnumeratorPort, CaptureDeviceEnumerator)
     container.register(MicrophoneEnumeratorPort, MicrophoneEnumerator)
-    # ========== DEBUG/FIX START ==========
-    # 修正: CapturePort をシングルトンとして登録
-    # 理由: setup() で初期化された NDI 接続を、FrameCaptureProducer でも使用する必要がある
-    # 元のコード: container.register(CapturePort, NDICapture)
-    container.register(CapturePort, NDICapture, scope=punq.Scope.singleton)
-    # ========== DEBUG/FIX END ==========
-    # Single OBS controller prevents duplicate event callbacks/logs.
     container.register(
-        VideoRecorderPort, OBSRecorderController, scope=punq.Scope.singleton
+        CapturePort, AdaptiveCapture, scope=punq.Scope.singleton
+    )
+    container.register(
+        ClockPort,
+        factory=lambda: CaptureClock(container.resolve(CapturePort)),
+        scope=punq.Scope.singleton,
+    )
+    container.register(
+        VideoRecorderPort,
+        AdaptiveVideoRecorder,
+        scope=punq.Scope.singleton,
     )
     container.register(VideoEditorPort, FFmpegProcessor)
 

@@ -8,9 +8,11 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
+
 from splat_replay.interface.web.routers import (
     create_assets_router,
     create_events_router,
+    create_file_serving_router,
     create_metadata_router,
     create_notifications_router,
     create_process_router,
@@ -119,6 +121,10 @@ def create_app(server: WebAPIServer, enable_lifespan: bool = True) -> FastAPI:
     assets_router = create_assets_router(server)
     app.include_router(assets_router)
 
+    # ファイル配信ルーター（静的リソース配信、/apiプレフィックス無し）
+    file_serving_router = create_file_serving_router(server)
+    app.include_router(file_serving_router)
+
     # 通知ルーターを登録
     notifications_router = create_notifications_router(server.assets_dir)
     app.include_router(notifications_router)
@@ -144,6 +150,29 @@ def create_app(server: WebAPIServer, enable_lifespan: bool = True) -> FastAPI:
                 raise HTTPException(
                     status_code=404, detail="API endpoint not found"
                 )
+
+            # セキュリティ: パストラバーサル・不正パス検出
+            # 1. ..を含むパス
+            # 2. 絶対パスの開始
+            # 3. システムディレクトリの疑い（etc, usr, var, sys, proc等）
+            suspicious_patterns = [
+                "etc/",
+                "usr/",
+                "var/",
+                "sys/",
+                "proc/",
+                "root/",
+                "home/",
+            ]
+            if (
+                ".." in full_path
+                or full_path.startswith("/")
+                or any(
+                    full_path.startswith(pattern)
+                    for pattern in suspicious_patterns
+                )
+            ):
+                raise HTTPException(status_code=400, detail="Invalid path")
 
             # ファイルが存在する場合はそれを返す
             file_path = frontend_dist / full_path

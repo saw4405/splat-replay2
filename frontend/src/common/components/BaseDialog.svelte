@@ -24,18 +24,25 @@
     }
   };
 
+  let keydownListenerAttached = false;
+
   $: resolvedMinHeight = minHeight ?? `clamp(37.5rem, 80vh, ${maxHeight})`;
 
   $: {
-    if (open) {
+    if (open && !keydownListenerAttached) {
       window.addEventListener('keydown', handleKeydown);
-    } else {
+      keydownListenerAttached = true;
+    } else if (!open && keydownListenerAttached) {
       window.removeEventListener('keydown', handleKeydown);
+      keydownListenerAttached = false;
     }
   }
 
   onDestroy(() => {
-    window.removeEventListener('keydown', handleKeydown);
+    if (keydownListenerAttached) {
+      window.removeEventListener('keydown', handleKeydown);
+      keydownListenerAttached = false;
+    }
   });
 
   function closeDialog(): void {
@@ -97,6 +104,7 @@
               <button
                 type="button"
                 class="action-button secondary"
+                data-testid="dialog-cancel-button"
                 on:click={handleSecondaryClick}
                 disabled={disableSecondaryButton}
               >
@@ -106,6 +114,7 @@
               <button
                 type="button"
                 class="action-button primary"
+                data-testid="dialog-confirm-button"
                 on:click={handlePrimaryClick}
                 disabled={disablePrimaryButton}
               >
@@ -118,6 +127,7 @@
               <button
                 type="button"
                 class="action-button primary"
+                data-testid="dialog-confirm-button"
                 on:click={handlePrimaryClick}
                 disabled={disablePrimaryButton}
               >

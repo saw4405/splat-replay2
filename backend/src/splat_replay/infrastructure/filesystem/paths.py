@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import sys
 from pathlib import Path
 
@@ -63,7 +64,9 @@ CONFIG_DIR = RUNTIME_ROOT / "config"
 VIDEOS_DIR = RUNTIME_ROOT / "videos"  # 録画/編集済動画のベースディレクトリ
 
 # よく利用する設定ファイル/認証ファイル
-SETTINGS_FILE = CONFIG_DIR / "settings.toml"
+SETTINGS_FILE = Path(
+    os.getenv("SPLAT_REPLAY_SETTINGS_FILE", str(CONFIG_DIR / "settings.toml"))
+)
 IMAGE_MATCHING_FILE = CONFIG_DIR / "image_matching.yaml"
 
 # アセットサブディレクトリ

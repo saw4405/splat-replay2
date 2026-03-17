@@ -5,8 +5,12 @@ import sys
 from dataclasses import fields as dataclass_fields
 from pathlib import Path
 
+import pytest
+
 BASE = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(BASE / "src"))
+
+pytestmark = pytest.mark.contract
 
 from splat_replay.application.dto import (  # noqa: E402
     RecordedVideoDTO,

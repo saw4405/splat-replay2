@@ -10,6 +10,7 @@ from dataclasses import replace
 from typing import TYPE_CHECKING, Literal
 
 from splat_replay.application.interfaces import (
+    ClockPort,
     DomainEventPublisher,
     LoggerPort,
     RecorderWithTranscriptionPort,
@@ -46,6 +47,11 @@ if TYPE_CHECKING:
     from typing import Awaitable, Callable
 
 
+class _WallClock:
+    def now(self) -> float:
+        return time.time()
+
+
 class RecordingSessionService:
     """録画セッションの制御を担当するサービス。
 
@@ -71,6 +77,7 @@ class RecordingSessionService:
         context: RecordingContext,
         domain_publisher: DomainEventPublisher | None = None,
         battle_history_service: BattleHistoryService | None = None,
+        clock: ClockPort | None = None,
     ):
         self.sm = state_machine
         self.recorder = recorder
@@ -81,6 +88,7 @@ class RecordingSessionService:
         self._domain_publisher = domain_publisher
         self._battle_history_service = battle_history_service
         self._pending_stop_reason: Literal["stop", "cancel"] | None = None
+        self._clock = clock or _WallClock()
 
         # StateMachine のリスナーを登録
         self.sm.add_listener(self._on_state_change)
@@ -146,8 +154,11 @@ class RecordingSessionService:
                 "外部操作で録画が開始されました。バトル状態に遷移します。"
             )
             # マッチング開始時間が設定されていなければ現在時刻を設定
-            if self._ctx.battle_started_at is None:
-                self._ctx = replace(self._ctx, battle_started_at=time.time())
+            if self._ctx.battle_started_at <= 0.0:
+                self._ctx = replace(
+                    self._ctx,
+                    battle_started_at=self._clock.now(),
+                )
             # StateMachine を RECORDING に遷移
             try:
                 await self.sm.handle(RecordEvent.START)
@@ -204,7 +215,10 @@ class RecordingSessionService:
         if self.sm.state is not RecordState.STOPPED:
             self.logger.warning("Recording already started")
             return
-        self._ctx = replace(self._ctx, battle_started_at=time.time())
+        self._ctx = replace(
+            self._ctx,
+            battle_started_at=self._clock.now(),
+        )
         await self.sm.handle(RecordEvent.START)
         await self.recorder.start()
 
@@ -371,7 +385,7 @@ class RecordingSessionService:
                 event = RecordingCancelled(session_id="current")
             else:
                 duration = (
-                    time.time() - self._ctx.battle_started_at
+                    self._clock.now() - self._ctx.battle_started_at
                     if self._ctx.battle_started_at
                     else None
                 )

@@ -5,6 +5,7 @@ from __future__ import annotations
 import contextlib
 import io
 import logging
+import os
 from logging.handlers import TimedRotatingFileHandler
 from pathlib import Path
 from typing import Iterator, cast
@@ -18,14 +19,25 @@ from splat_replay.infrastructure.filesystem import RUNTIME_ROOT
 _initialized = False
 
 
+def _resolve_log_dir(log_dir: str | Path | None) -> Path:
+    if log_dir is not None:
+        return Path(log_dir)
+
+    settings_file = os.getenv("SPLAT_REPLAY_SETTINGS_FILE")
+    if settings_file:
+        return Path(settings_file).resolve().parent / "logs"
+
+    return RUNTIME_ROOT / "logs"
+
+
 def initialize_logger(
-    log_dir: str | Path = RUNTIME_ROOT / "logs",
+    log_dir: str | Path | None = None,
     log_file: str = "splat-replay.log",
 ) -> None:
     """ログ設定を初回のみ初期化する。"""
     global _initialized
     if not _initialized:
-        log_dir_path = Path(log_dir)
+        log_dir_path = _resolve_log_dir(log_dir)
         log_dir_path.mkdir(parents=True, exist_ok=True)
 
         console_formatter = structlog.stdlib.ProcessorFormatter(

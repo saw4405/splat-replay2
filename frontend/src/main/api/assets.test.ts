@@ -1,41 +1,48 @@
-import assert from 'node:assert/strict';
-import test from 'node:test';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 
 import { updateEditUploadProcessOptions } from './assets.ts';
 
-test('updateEditUploadProcessOptions はレスポンスを camelCase に変換して返す', async () => {
-  const originalFetch = globalThis.fetch;
+describe('assets API', () => {
+  let originalFetch: typeof globalThis.fetch;
 
-  globalThis.fetch = async (input, init) => {
-    assert.equal(input, '/api/process/edit-upload/options');
-    assert.equal(init?.method, 'PATCH');
-    assert.deepStrictEqual(JSON.parse(String(init?.body)), {
-      sleep_after_upload: true,
-    });
+  beforeEach(() => {
+    originalFetch = globalThis.fetch;
+  });
 
-    return new Response(
-      JSON.stringify({
-        state: 'running',
-        started_at: null,
-        finished_at: null,
-        error: null,
-        sleep_after_upload_default: false,
-        sleep_after_upload_effective: true,
-        sleep_after_upload_overridden: true,
-      }),
-      {
-        status: 200,
-        headers: { 'Content-Type': 'application/json' },
-      }
-    );
-  };
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+  });
 
-  try {
+  it('updateEditUploadProcessOptions はレスポンスを camelCase に変換して返す', async () => {
+    globalThis.fetch = async (input, init) => {
+      expect(input).toBe('/api/process/edit-upload/options');
+      expect(init?.method).toBe('PATCH');
+      expect(JSON.parse(String(init?.body))).toEqual({
+        sleep_after_upload: true,
+      });
+
+      return new Response(
+        JSON.stringify({
+          state: 'running',
+          started_at: null,
+          finished_at: null,
+          error: null,
+          sleep_after_upload_default: false,
+          sleep_after_upload_effective: true,
+          sleep_after_upload_overridden: true,
+        }),
+        {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        }
+      );
+    };
+
     const status = await updateEditUploadProcessOptions({
       sleepAfterUpload: true,
     });
 
-    assert.deepStrictEqual(status, {
+    expect(status).toEqual({
       state: 'running',
       startedAt: null,
       finishedAt: null,
@@ -44,29 +51,19 @@ test('updateEditUploadProcessOptions はレスポンスを camelCase に変換�
       sleepAfterUploadEffective: true,
       sleepAfterUploadOverridden: true,
     });
-  } finally {
-    globalThis.fetch = originalFetch;
-  }
-});
+  });
 
-test('updateEditUploadProcessOptions は detail を優先してエラー化する', async () => {
-  const originalFetch = globalThis.fetch;
+  it('updateEditUploadProcessOptions は detail を優先してエラー化する', async () => {
+    globalThis.fetch = async () =>
+      new Response(JSON.stringify({ detail: '編集中ではありません' }), {
+        status: 409,
+        headers: { 'Content-Type': 'application/json' },
+      });
 
-  globalThis.fetch = async () =>
-    new Response(JSON.stringify({ detail: '編集中ではありません' }), {
-      status: 409,
-      headers: { 'Content-Type': 'application/json' },
-    });
-
-  try {
-    await assert.rejects(
-      () =>
-        updateEditUploadProcessOptions({
-          sleepAfterUpload: false,
-        }),
-      /編集中ではありません/
-    );
-  } finally {
-    globalThis.fetch = originalFetch;
-  }
+    await expect(
+      updateEditUploadProcessOptions({
+        sleepAfterUpload: false,
+      })
+    ).rejects.toThrow('編集中ではありません');
+  });
 });

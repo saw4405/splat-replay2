@@ -56,6 +56,13 @@ class CapturePort(Protocol):
         """Capture a single frame."""
         ...
 
+    def current_time_seconds(self) -> Optional[float]:
+        """入力ソース上の現在位置を秒単位で返す。
+
+        live_capture のように位置を持たない入力は None を返す。
+        """
+        ...
+
     def teardown(self) -> None:
         """Teardown capture device."""
         ...

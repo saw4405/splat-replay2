@@ -53,6 +53,43 @@ CANDIDATE_CONFIDENCE_RESCUE_MIN_GAP: Final[float] = 0.0085
 CANDIDATE_CONFIDENCE_RESCUE_MIN_EDGE_RATIO: Final[float] = 0.09
 CANDIDATE_CONFIDENCE_RESCUE_MIN_TEAM_EDGE_RATIO: Final[float] = 0.07
 CANDIDATE_CONFIDENCE_RESCUE_MAX_THRESHOLD: Final[float] = 0.95
+# 一部の近縁ブキは top2 が特定ペアかつ score 差が小さい場合だけ、
+# variant を含めたペア限定再判定を行う。
+PAIR_VARIANT_RERANK_RULES: Final[tuple[tuple[tuple[str, str], float], ...]] = (
+    (("4Kスコープ", "リッター4K"), 0.03),
+    (("スプラスコープ", "スプラチャージャー"), 0.07),
+)
+# pair rerank 後も confidence では逆転しない family だけ、
+# variant 追加で大きく改善した側を限定的に rescue する。
+PAIR_VARIANT_RESCUE_RULES: Final[
+    tuple[tuple[tuple[str, str], str, float], ...]
+] = ((("スプラスコープ", "スプラチャージャー"), "スプラスコープ", 0.05),)
+# 一部の残件は top1 が特定ブキかつ raw score が低いケースに偏るため、
+# そのときだけ family 候補を variant 込みで限定再判定する。
+TOP1_VARIANT_RERANK_RULES: Final[
+    tuple[tuple[str, tuple[str, ...], float], ...]
+] = (
+    (
+        "パブロ",
+        ("パブロ", "パブロ・ヒュー", "N-ZAP89", "Rブラスターエリートデコ"),
+        0.86,
+    ),
+    (
+        "カーボンローラー",
+        ("カーボンローラー", "カーボンローラーデコ"),
+        0.86,
+    ),
+    (
+        "ダイナモローラー",
+        ("ダイナモローラー", "ダイナモローラーテスラ"),
+        0.84,
+    ),
+    (
+        "トライストリンガー",
+        ("トライストリンガー", "トライストリンガーコラボ"),
+        0.80,
+    ),
+)
 # variant テンプレートは、通常判定が拮抗した場合のみ再判定に使用する。
 VARIANT_FALLBACK_MAX_CONFIDENCE_GAP: Final[float] = 0.02
 # ブキ表示が実質見えていない低信号スロットは強制的に UNKNOWN とする。
@@ -77,6 +114,10 @@ OUTLINE_INPUT_PREFIX: Final[dict[str, str]] = {
 }
 
 WEAPON_TEMPLATE_MATCHER_GROUP: Final[str] = "weapon_templates"
+LABELING_VARIANT_MANIFEST_RELATIVE_PATH: Final[Path] = Path(
+    "matching/weapon/generated_labeling_variants/manifest.json"
+)
+LABELING_VARIANT_RERANK_TOP_WEAPONS: Final[int] = 5
 
 UNMATCHED_OUTPUT_DIR: Final[Path] = (
     RUNTIME_ROOT / "outputs" / "predict_weapons" / "unmatched"

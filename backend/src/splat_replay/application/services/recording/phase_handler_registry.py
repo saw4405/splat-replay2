@@ -7,7 +7,11 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from splat_replay.application.interfaces import EventBusPort, LoggerPort
+from splat_replay.application.interfaces import (
+    ClockPort,
+    EventBusPort,
+    LoggerPort,
+)
 from splat_replay.application.services.recording.commands import (
     RecordingCommand,
 )
@@ -56,6 +60,7 @@ class PhaseHandlerRegistry:
         logger: LoggerPort,
         event_bus: EventBusPort,
         weapon_detection_service: WeaponDetectionService,
+        clock: ClockPort | None = None,
     ):
         # フェーズハンドラの初期化
         self._standby = StandbyPhaseHandler(analyzer, logger, event_bus)
@@ -65,6 +70,7 @@ class PhaseHandlerRegistry:
             logger,
             event_bus,
             weapon_detection_service,
+            clock=clock,
         )
         self._post_finish = PostFinishPhaseHandler(analyzer, logger, event_bus)
         self._result = ResultPhaseHandler(analyzer, logger, event_bus)

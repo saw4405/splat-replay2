@@ -42,6 +42,18 @@ class LoggerPort(Protocol):
         ...
 
 
+class ClockPort(Protocol):
+    """現在時刻取得のポート。
+
+    live_capture では壁時計、video_file では入力ソース上の経過時刻を
+    同一インターフェースで扱う。
+    """
+
+    def now(self) -> float:
+        """現在時刻を秒単位で返す。"""
+        ...
+
+
 class ConfigPort(Protocol):
     """設定値取得のポート。
 

@@ -43,12 +43,12 @@
   function getThumbnailUrl(filename: string): string {
     // ファイル名から拡張子を除去して .png を追加
     const nameWithoutExt = filename.replace(/\.[^/.]+$/, '');
-    return `/api/thumbnails/edited/${encodeURIComponent(nameWithoutExt)}.png`;
+    return `/thumbnails/edited/${encodeURIComponent(nameWithoutExt)}.png`;
   }
 
   function getVideoUrl(videoId: string): string {
     // videoIdはフルパスなので、そのまま使用
-    return `/api/videos/edited/${encodeURIComponent(videoId)}`;
+    return `/videos/edited/${encodeURIComponent(videoId)}`;
   }
 
   function handleImageError(e: Event): void {

@@ -1,7 +1,6 @@
 """Settings repository adapter backed by AppSettings TOML."""
 
 from __future__ import annotations
-
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Dict, List, Mapping, cast
 

@@ -59,6 +59,9 @@ class NDICapture(CapturePort):
                 return as_frame(frame_bgr)
         return None
 
+    def current_time_seconds(self) -> Optional[float]:
+        return None
+
     def teardown(self) -> None:
         """キャプチャデバイスを閉じる。"""
         if self.receiver.is_connected():

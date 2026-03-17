@@ -4,8 +4,9 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from pathlib import Path
+from typing import Literal
 
-from splat_replay.application.interfaces import EventBusPort
+from splat_replay.application.interfaces import EventBusPort, FrameSource
 from splat_replay.application.services import (
     AutoRecorder,
     DeviceChecker,
@@ -67,6 +68,8 @@ class WebAPIServer:
     auto_process_service: AutoProcessService
     progress_store: ProgressEventStore
     event_bus: EventBusPort
+    frame_source: FrameSource
+    preview_mode_resolver: Callable[[], Literal["live_capture", "video_file"]]
     project_root: Path
     runtime_root: Path
     base_dir: Path
@@ -103,6 +106,10 @@ class WebAPIServer:
         auto_process_service: AutoProcessService,
         progress_store: ProgressEventStore,
         event_bus: EventBusPort,
+        frame_source: FrameSource,
+        preview_mode_resolver: Callable[
+            [], Literal["live_capture", "video_file"]
+        ],
         project_root: Path,
         runtime_root: Path,
         base_dir: Path,
@@ -136,6 +143,8 @@ class WebAPIServer:
             auto_process_service: 自動処理サービス
             progress_store: 進捗イベントストア
             event_bus: イベントバス
+            frame_source: 最新フレーム参照元
+            preview_mode_resolver: プレビュー入力種別の解決関数
             project_root: プロジェクトルートディレクトリ
             runtime_root: ランタイムルートディレクトリ
             base_dir: 録画ファイル保存先ディレクトリ
@@ -165,6 +174,8 @@ class WebAPIServer:
         self.auto_process_service = auto_process_service
         self.progress_store = progress_store
         self.event_bus = event_bus
+        self.frame_source = frame_source
+        self.preview_mode_resolver = preview_mode_resolver
         self.project_root = project_root
         self.runtime_root = runtime_root
         self.base_dir = base_dir

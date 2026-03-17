@@ -309,9 +309,9 @@ async def test_auto_process_completion_uses_effective_sleep_setting() -> None:
 
 
 @pytest.mark.asyncio
-async def test_start_auto_sleep_executes_power_sleep_when_runtime_override_enabled(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
+async def test_start_auto_sleep_executes_power_sleep_when_runtime_override_enabled() -> (
+    None
+):
     event_bus = _DummyEventBus()
     use_case, editor, _ = _build_start_use_case(
         sleep_after_upload=False,
@@ -326,6 +326,10 @@ async def test_start_auto_sleep_executes_power_sleep_when_runtime_override_enabl
         ),
         logger=cast(LoggerPort, _DummyLogger()),
     )
+
+    async def _no_wait(_seconds: float) -> None:
+        return None
+
     service = AutoProcessService(
         event_bus=cast(EventBusPort, event_bus),
         start_edit_upload_uc=use_case,
@@ -336,14 +340,7 @@ async def test_start_auto_sleep_executes_power_sleep_when_runtime_override_enabl
         ),
         logger=cast(LoggerPort, _DummyLogger()),
         repo=cast(VideoAssetRepositoryPort, _DummyVideoAssetRepository()),
-    )
-
-    async def _no_wait(_seconds: float) -> None:
-        return None
-
-    monkeypatch.setattr(
-        "splat_replay.application.services.process.auto_process_service.asyncio.sleep",
-        _no_wait,
+        sleep_func=_no_wait,
     )
 
     await use_case.execute()
@@ -367,6 +364,7 @@ async def test_start_auto_sleep_executes_power_sleep_when_runtime_override_enabl
     assert _has_event(event_bus.events, AutoSleepStarted)
 
 
+@pytest.mark.contract
 def test_update_edit_upload_process_options_returns_200_with_updated_status() -> (
     None
 ):
@@ -406,6 +404,7 @@ def test_update_edit_upload_process_options_returns_200_with_updated_status() ->
     }
 
 
+@pytest.mark.contract
 def test_update_edit_upload_process_options_returns_409_when_not_running(
     client: TestClient,
 ) -> None:

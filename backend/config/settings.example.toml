@@ -30,7 +30,7 @@ vad_aggressiveness = 2
 vad_min_speech_frames = 3
 vad_min_speech_ratio = 0.1
 
-[video_storage]
+[storage]
 base_dir = "videos"
 
 [video_edit]

@@ -330,7 +330,7 @@ tasks:
   # テスト
   # ========================================
   test:
-    desc: Run all tests
+    desc: Run all tests (logic tests only, excludes component/integration/e2e/performance)
     cmds:
       - task: test:backend
       - task: test:frontend
@@ -342,12 +342,160 @@ tasks:
       - uv run pytest -q
 
   test:frontend:
-    desc: Run frontend tests
+    desc: Run frontend logic tests (Vitest)
     dir: "{{.FRONTEND_DIR}}"
     deps:
       - install:frontend
     cmds:
       - npm run test
+
+  test:frontend:logic:
+    desc: Run frontend logic tests (Vitest)
+    dir: "{{.FRONTEND_DIR}}"
+    deps:
+      - install:frontend
+    cmds:
+      - npm run test:logic
+
+  test:frontend:component:
+    desc: Run frontend component tests (Vitest)
+    dir: "{{.FRONTEND_DIR}}"
+    deps:
+      - install:frontend
+    cmds:
+      - npm run test:component
+
+  test:frontend:integration:
+    desc: Run frontend integration tests (Vitest)
+    dir: "{{.FRONTEND_DIR}}"
+    deps:
+      - install:frontend
+    cmds:
+      - npm run test:integration
+
+  test:frontend:unit:
+    desc: Run all frontend unit tests (logic + component + integration)
+    dir: "{{.FRONTEND_DIR}}"
+    deps:
+      - install:frontend
+    cmds:
+      - npm run test:unit
+
+  test:contract:
+    desc: Run contract and boundary tests
+    dir: "{{.BACKEND_DIR}}"
+    deps:
+      - install:backend
+    cmds:
+      - uv run pytest -q -m "contract and not perf"
+
+  test:workflow:smoke:
+    desc: Run lightweight replay workflow regression with the first bundled asset
+    dir: "{{.FRONTEND_DIR}}"
+    deps:
+      - install:backend
+      - install:frontend
+    env:
+      SPLAT_REPLAY_E2E_MODE: smoke
+    cmds:
+      - npm run test:e2e
+
+  test:workflow:full:
+    desc: Run full replay workflow regression with all bundled assets in clean-run mode
+    dir: "{{.FRONTEND_DIR}}"
+    deps:
+      - install:backend
+      - install:frontend
+    env:
+      CI: "1"
+      SPLAT_REPLAY_E2E_MODE: full
+    cmds:
+      - npm run test:e2e
+
+  test:performance:
+    desc: Run performance regression tests
+    dir: "{{.BACKEND_DIR}}"
+    deps:
+      - install:backend
+    cmds:
+      - uv run pytest -q -m perf
+
+  test:release:
+    desc: Run release-quality regression gate
+    cmds:
+      - task: verify
+      - task: test:workflow:full
+
+  test:release:performance:
+    desc: Run release-quality regression gate including performance tests
+    cmds:
+      - task: verify
+      - task: test:performance
+      - task: test:workflow:full
+
+  test:e2e:
+    desc: Run frontend Playwright E2E tests with bundled replay assets
+    cmds:
+      - task: test:frontend:e2e
+
+  test:e2e:headed:
+    desc: Run frontend Playwright E2E tests with visible browser and bundled replay assets
+    cmds:
+      - task: test:frontend:e2e:headed
+
+  test:frontend:e2e:
+    desc: Run frontend Playwright E2E tests with bundled replay assets
+    dir: "{{.FRONTEND_DIR}}"
+    deps:
+      - install:backend
+      - install:frontend
+    cmds:
+      - npm run test:e2e
+
+  test:frontend:e2e:headed:
+    desc: Run frontend Playwright E2E tests with visible browser and bundled replay assets
+    dir: "{{.FRONTEND_DIR}}"
+    deps:
+      - install:backend
+      - install:frontend
+    cmds:
+      - npm run test:e2e -- --headed
+
+  test:frontend:e2e:settings:
+    desc: Run E2E settings persistence tests for bundled replay assets
+    dir: "{{.FRONTEND_DIR}}"
+    deps:
+      - install:backend
+      - install:frontend
+    cmds:
+      - npm run test:e2e -- tests/e2e/settings-persistence.spec.ts
+
+  test:frontend:e2e:settings:headed:
+    desc: Run E2E settings persistence tests with visible browser for bundled replay assets
+    dir: "{{.FRONTEND_DIR}}"
+    deps:
+      - install:backend
+      - install:frontend
+    cmds:
+      - npm run test:e2e -- --headed tests/e2e/settings-persistence.spec.ts
+
+  test:frontend:e2e:auto-recording:
+    desc: Run E2E auto recording workflow tests for bundled replay assets
+    dir: "{{.FRONTEND_DIR}}"
+    deps:
+      - install:backend
+      - install:frontend
+    cmds:
+      - npm run test:e2e -- tests/e2e/auto-recording-workflow.spec.ts
+
+  test:frontend:e2e:auto-recording:headed:
+    desc: Run E2E auto recording workflow tests with visible browser for bundled replay assets
+    dir: "{{.FRONTEND_DIR}}"
+    deps:
+      - install:backend
+      - install:frontend
+    cmds:
+      - npm run test:e2e -- --headed tests/e2e/auto-recording-workflow.spec.ts
 
   test:verbose:
     desc: Run all tests with verbose output
@@ -360,6 +508,39 @@ tasks:
     dir: "{{.BACKEND_DIR}}"
     cmds:
       - uv run pytest -v
+
+  # ========================================
+  # Coverage (カバレッジ測定)
+  # ========================================
+  coverage:
+    desc: Run coverage for all code (backend + frontend)
+    cmds:
+      - task: coverage:backend
+      - task: coverage:frontend
+
+  coverage:backend:
+    desc: Run backend coverage measurement
+    dir: "{{.BACKEND_DIR}}"
+    deps:
+      - install:backend
+    cmds:
+      - uv run pytest --cov=splat_replay --cov-report=term --cov-report=html tests/
+      - cmd: 'powershell -NoProfile -Command "Write-Host ''''; Write-Host ''カバレッジレポート生成完了:'' -ForegroundColor Green; Write-Host ''  {{.BACKEND_DIR}}/htmlcov/index.html'' -ForegroundColor Yellow; Write-Host ''''"'
+
+  coverage:frontend:
+    desc: Run frontend coverage measurement
+    dir: "{{.FRONTEND_DIR}}"
+    deps:
+      - install:frontend
+    cmds:
+      - npm run test:coverage
+      - cmd: 'powershell -NoProfile -Command "Write-Host ''''; Write-Host ''カバレッジレポート生成完了:'' -ForegroundColor Green; Write-Host ''  {{.FRONTEND_DIR}}/coverage/index.html'' -ForegroundColor Yellow; Write-Host ''''"'
+
+  coverage:report:
+    desc: Open coverage reports in browser
+    cmds:
+      - cmd: 'powershell -NoProfile -Command "if (Test-Path ''{{.BACKEND_DIR}}/htmlcov/index.html'') { Start-Process ''{{.BACKEND_DIR}}/htmlcov/index.html'' } else { Write-Host ''Backend カバレッジレポートが見つかりません。task coverage:backend を実行してください。'' -ForegroundColor Yellow }"'
+      - cmd: 'powershell -NoProfile -Command "if (Test-Path ''{{.FRONTEND_DIR}}/coverage/index.html'') { Start-Process ''{{.FRONTEND_DIR}}/coverage/index.html'' } else { Write-Host ''Frontend カバレッジレポートが見つかりません。task coverage:frontend を実行してください。'' -ForegroundColor Yellow }"'
 
   # ========================================
   # クリーンアップ

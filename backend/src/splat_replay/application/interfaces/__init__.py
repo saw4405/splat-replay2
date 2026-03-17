@@ -22,6 +22,7 @@ from splat_replay.application.interfaces.audio import (
     TextToSpeechPort,
 )
 from splat_replay.application.interfaces.common import (
+    ClockPort,
     ConfigPort,
     FileSystemPort,
     LoggerPort,
@@ -105,6 +106,7 @@ __all__ = [
     # Common
     "BattleHistoryRecord",
     "BattleHistoryRepositoryPort",
+    "ClockPort",
     "ConfigPort",
     "FileSystemPort",
     "LoggerPort",

@@ -27,11 +27,11 @@ from splat_replay.interface.web.schemas import (
     CaptureDeviceRequest,
     InstallationStatusResponse,
     MessageResponse,
+    MicrophoneDeviceListResponse,
     OBSConfigResponse,
     OBSWebSocketPasswordRequest,
     SystemCheckResponse,
     VideoDeviceListResponse,
-    MicrophoneDeviceListResponse,
     YouTubePrivacyStatusRequest,
 )
 

@@ -3,6 +3,7 @@ from typing import Awaitable, Callable, Iterable
 
 from splat_replay.application.interfaces import (
     CapturePort,
+    ClockPort,
     DomainEventPublisher,
     EventBusPort,
     EventPublisher,
@@ -33,6 +34,7 @@ from splat_replay.application.services.recording.recording_context import (
     RecordingContext,
 )
 from splat_replay.application.services.recording.weapon_detection_service import (
+    DETECTION_WINDOW_SECONDS,
     WeaponDetectionService,
 )
 from splat_replay.application.services.recording.recording_session_service import (
@@ -79,6 +81,8 @@ class AutoRecorder:
         frame_publisher: FramePublisher,
         domain_publisher: DomainEventPublisher,
         battle_history_service: BattleHistoryService,
+        weapon_detection_window_seconds: float = DETECTION_WINDOW_SECONDS,
+        clock: ClockPort | None = None,
     ):
         self.logger = logger
         self._stop_event = asyncio.Event()
@@ -115,6 +119,7 @@ class AutoRecorder:
             context=self._ctx,
             domain_publisher=domain_publisher,
             battle_history_service=battle_history_service,
+            clock=clock,
         )
 
         self._frame_processor = FrameProcessingService(
@@ -161,6 +166,8 @@ class AutoRecorder:
             recognizer=weapon_recognizer,
             logger=logger,
             event_bus=event_bus_adapter,
+            detection_window_seconds=weapon_detection_window_seconds,
+            clock=clock,
         )
 
         self._phase_handlers = PhaseHandlerRegistry(
@@ -168,6 +175,7 @@ class AutoRecorder:
             logger=logger,
             event_bus=event_bus_adapter,
             weapon_detection_service=weapon_detection_service,
+            clock=clock,
         )
 
     # ================================================================

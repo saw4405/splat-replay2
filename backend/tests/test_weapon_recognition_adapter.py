@@ -420,6 +420,472 @@ async def test_predict_slot_uses_variant_fallback_when_confidence_gap_is_small(
 
 
 @pytest.mark.asyncio
+async def test_predict_slot_uses_labeling_variant_rerank_before_variant_fallback(
+    recognizer: WeaponRecognitionAdapter,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    ranked_base = [
+        _ranked_candidate(weapon="候補1", score=0.840, threshold=0.820),
+        _ranked_candidate(weapon="候補2", score=0.826, threshold=0.820),
+    ]
+    ranked_with_labeling_variant = [
+        _ranked_candidate(weapon="候補2", score=0.910, threshold=0.820),
+        _ranked_candidate(weapon="候補1", score=0.840, threshold=0.820),
+    ]
+    variant_called = False
+
+    async def _stub_rank_weapon_candidates(
+        query_padded_gray: np.ndarray,
+        *,
+        cancel_generation: int,
+    ) -> list[_RankedCandidate]:
+        _ = query_padded_gray
+        _ = cancel_generation
+        return ranked_base
+
+    async def _stub_rerank_top_candidates_with_labeling_variants(
+        *,
+        ranked: list[_RankedCandidate],
+        query_padded_gray: np.ndarray,
+        cancel_generation: int,
+    ) -> tuple[list[_RankedCandidate], bool]:
+        _ = ranked
+        _ = query_padded_gray
+        _ = cancel_generation
+        return ranked_with_labeling_variant, True
+
+    async def _stub_rank_weapon_candidates_with_variant(
+        query_padded_gray: np.ndarray,
+        *,
+        cancel_generation: int,
+    ) -> list[_RankedCandidate]:
+        nonlocal variant_called
+        _ = query_padded_gray
+        _ = cancel_generation
+        variant_called = True
+        return ranked_base
+
+    monkeypatch.setattr(
+        recognizer,
+        "_rank_weapon_candidates",
+        _stub_rank_weapon_candidates,
+    )
+    monkeypatch.setattr(
+        recognizer,
+        "_rerank_top_candidates_with_labeling_variants",
+        _stub_rerank_top_candidates_with_labeling_variants,
+    )
+    monkeypatch.setattr(
+        recognizer,
+        "_rank_weapon_candidates_with_variant",
+        _stub_rank_weapon_candidates_with_variant,
+    )
+    monkeypatch.setattr(
+        recognizer,
+        "_labeling_variant_sources_by_weapon",
+        {"候補2": ()},
+    )
+    monkeypatch.setattr(
+        recognizer,
+        "_variant_template_sources_by_weapon",
+        {"候補2": ()},
+    )
+
+    slot_result, _debug_candidates = await recognizer._predict_slot(
+        slot=constants.ALLY_SLOTS[0],
+        query_padded_gray=np.zeros((16, 16), dtype=np.uint8),
+        cancel_generation=recognizer._capture_cancel_generation(),
+    )
+
+    assert slot_result.predicted_weapon == "候補2"
+    assert variant_called is False
+
+
+@pytest.mark.asyncio
+async def test_predict_slot_tries_variant_fallback_when_labeling_rerank_not_applied(
+    recognizer: WeaponRecognitionAdapter,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    ranked_base = [
+        _ranked_candidate(weapon="候補1", score=0.840, threshold=0.820),
+        _ranked_candidate(weapon="候補2", score=0.826, threshold=0.820),
+    ]
+    ranked_with_variant = [
+        _ranked_candidate(weapon="候補2", score=0.910, threshold=0.820),
+        _ranked_candidate(weapon="候補1", score=0.840, threshold=0.820),
+    ]
+    variant_called = False
+
+    async def _stub_rank_weapon_candidates(
+        query_padded_gray: np.ndarray,
+        *,
+        cancel_generation: int,
+    ) -> list[_RankedCandidate]:
+        _ = query_padded_gray
+        _ = cancel_generation
+        return ranked_base
+
+    async def _stub_rerank_top_candidates_with_labeling_variants(
+        *,
+        ranked: list[_RankedCandidate],
+        query_padded_gray: np.ndarray,
+        cancel_generation: int,
+    ) -> tuple[list[_RankedCandidate], bool]:
+        _ = ranked
+        _ = query_padded_gray
+        _ = cancel_generation
+        return ranked_base, False
+
+    async def _stub_rank_weapon_candidates_with_variant(
+        query_padded_gray: np.ndarray,
+        *,
+        cancel_generation: int,
+    ) -> list[_RankedCandidate]:
+        nonlocal variant_called
+        _ = query_padded_gray
+        _ = cancel_generation
+        variant_called = True
+        return ranked_with_variant
+
+    monkeypatch.setattr(
+        recognizer,
+        "_rank_weapon_candidates",
+        _stub_rank_weapon_candidates,
+    )
+    monkeypatch.setattr(
+        recognizer,
+        "_rerank_top_candidates_with_labeling_variants",
+        _stub_rerank_top_candidates_with_labeling_variants,
+    )
+    monkeypatch.setattr(
+        recognizer,
+        "_rank_weapon_candidates_with_variant",
+        _stub_rank_weapon_candidates_with_variant,
+    )
+    monkeypatch.setattr(
+        recognizer,
+        "_labeling_variant_sources_by_weapon",
+        {"候補2": ()},
+    )
+    monkeypatch.setattr(
+        recognizer,
+        "_variant_template_sources_by_weapon",
+        {"候補2": ()},
+    )
+
+    slot_result, _debug_candidates = await recognizer._predict_slot(
+        slot=constants.ALLY_SLOTS[0],
+        query_padded_gray=np.zeros((16, 16), dtype=np.uint8),
+        cancel_generation=recognizer._capture_cancel_generation(),
+    )
+
+    assert slot_result.predicted_weapon == "候補2"
+    assert variant_called is True
+
+
+def test_resolve_pair_variant_rerank_target_returns_configured_pair(
+    recognizer: WeaponRecognitionAdapter,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    ranked = [
+        _ranked_candidate(
+            weapon="リッター4K", score=0.844185, threshold=0.820
+        ),
+        _ranked_candidate(
+            weapon="4Kスコープ", score=0.814654, threshold=0.820
+        ),
+    ]
+
+    monkeypatch.setattr(
+        recognizer,
+        "_variant_template_sources_by_weapon",
+        {"4Kスコープ": ()},
+    )
+
+    assert recognizer._resolve_pair_variant_rerank_target(ranked) == (
+        "4Kスコープ",
+        "リッター4K",
+    )
+
+
+@pytest.mark.asyncio
+async def test_predict_slot_uses_pair_variant_rerank_for_configured_pair(
+    recognizer: WeaponRecognitionAdapter,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    ranked_base = [
+        _ranked_candidate(
+            weapon="リッター4K", score=0.844185, threshold=0.820
+        ),
+        _ranked_candidate(
+            weapon="4Kスコープ", score=0.814654, threshold=0.820
+        ),
+    ]
+    ranked_with_pair_variant = [
+        _ranked_candidate(
+            weapon="4Kスコープ", score=0.844966, threshold=0.820
+        ),
+        _ranked_candidate(
+            weapon="リッター4K", score=0.844185, threshold=0.820
+        ),
+    ]
+    pair_rerank_called = False
+
+    async def _stub_rank_weapon_candidates(
+        query_padded_gray: np.ndarray,
+        *,
+        cancel_generation: int,
+    ) -> list[_RankedCandidate]:
+        _ = query_padded_gray
+        _ = cancel_generation
+        return ranked_base
+
+    async def _stub_rerank_specific_weapons_with_variants(
+        *,
+        ranked: list[_RankedCandidate],
+        query_padded_gray: np.ndarray,
+        cancel_generation: int,
+        weapons: tuple[str, ...],
+    ) -> tuple[list[_RankedCandidate], bool]:
+        nonlocal pair_rerank_called
+        _ = ranked
+        _ = query_padded_gray
+        _ = cancel_generation
+        assert weapons == ("4Kスコープ", "リッター4K")
+        pair_rerank_called = True
+        return ranked_with_pair_variant, True
+
+    monkeypatch.setattr(
+        recognizer,
+        "_rank_weapon_candidates",
+        _stub_rank_weapon_candidates,
+    )
+    monkeypatch.setattr(
+        recognizer,
+        "_rerank_specific_weapons_with_variants",
+        _stub_rerank_specific_weapons_with_variants,
+    )
+    monkeypatch.setattr(
+        recognizer,
+        "_should_try_variant_fallback",
+        lambda **_: False,
+    )
+    monkeypatch.setattr(
+        recognizer,
+        "_variant_template_sources_by_weapon",
+        {"4Kスコープ": ()},
+    )
+
+    slot_result, _debug_candidates = await recognizer._predict_slot(
+        slot=constants.ALLY_SLOTS[0],
+        query_padded_gray=np.zeros((16, 16), dtype=np.uint8),
+        cancel_generation=recognizer._capture_cancel_generation(),
+    )
+
+    assert pair_rerank_called is True
+    assert slot_result.predicted_weapon == "4Kスコープ"
+    assert slot_result.top_candidates[0].weapon == "4Kスコープ"
+
+
+@pytest.mark.asyncio
+async def test_predict_slot_uses_pair_variant_rescue_for_scope_pair(
+    recognizer: WeaponRecognitionAdapter,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    ranked_base = [
+        _ranked_candidate(
+            weapon="スプラチャージャー", score=0.918809, threshold=0.820
+        ),
+        _ranked_candidate(
+            weapon="スプラスコープ", score=0.910483, threshold=0.900
+        ),
+    ]
+    ranked_with_pair_variant = [
+        _ranked_candidate(
+            weapon="スプラスコープ", score=1.000000, threshold=0.900
+        ),
+        _ranked_candidate(
+            weapon="スプラチャージャー", score=0.918809, threshold=0.820
+        ),
+    ]
+    variant_fallback_called = False
+
+    async def _stub_rank_weapon_candidates(
+        query_padded_gray: np.ndarray,
+        *,
+        cancel_generation: int,
+    ) -> list[_RankedCandidate]:
+        _ = query_padded_gray
+        _ = cancel_generation
+        return ranked_base
+
+    async def _stub_rerank_specific_weapons_with_variants(
+        *,
+        ranked: list[_RankedCandidate],
+        query_padded_gray: np.ndarray,
+        cancel_generation: int,
+        weapons: tuple[str, ...],
+    ) -> tuple[list[_RankedCandidate], bool]:
+        _ = ranked
+        _ = query_padded_gray
+        _ = cancel_generation
+        assert weapons == ("スプラスコープ", "スプラチャージャー")
+        return ranked_with_pair_variant, True
+
+    async def _stub_rank_weapon_candidates_with_variant(
+        query_padded_gray: np.ndarray,
+        *,
+        cancel_generation: int,
+    ) -> list[_RankedCandidate]:
+        nonlocal variant_fallback_called
+        _ = query_padded_gray
+        _ = cancel_generation
+        variant_fallback_called = True
+        return ranked_with_pair_variant
+
+    monkeypatch.setattr(
+        recognizer,
+        "_rank_weapon_candidates",
+        _stub_rank_weapon_candidates,
+    )
+    monkeypatch.setattr(
+        recognizer,
+        "_rerank_specific_weapons_with_variants",
+        _stub_rerank_specific_weapons_with_variants,
+    )
+    monkeypatch.setattr(
+        recognizer,
+        "_rank_weapon_candidates_with_variant",
+        _stub_rank_weapon_candidates_with_variant,
+    )
+    monkeypatch.setattr(
+        recognizer,
+        "_variant_template_sources_by_weapon",
+        {"スプラスコープ": ()},
+    )
+
+    slot_result, _debug_candidates = await recognizer._predict_slot(
+        slot=constants.ALLY_SLOTS[0],
+        query_padded_gray=np.zeros((16, 16), dtype=np.uint8),
+        cancel_generation=recognizer._capture_cancel_generation(),
+    )
+
+    assert slot_result.predicted_weapon == "スプラスコープ"
+    assert slot_result.top_candidates[0].weapon == "スプラスコープ"
+    assert variant_fallback_called is False
+
+
+def test_resolve_top1_variant_rerank_target_returns_configured_family(
+    recognizer: WeaponRecognitionAdapter,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    ranked = [
+        _ranked_candidate(weapon="パブロ", score=0.850885, threshold=0.870),
+        _ranked_candidate(weapon="ホクサイ", score=0.712197, threshold=0.880),
+        _ranked_candidate(
+            weapon="パブロ・ヒュー", score=0.460728, threshold=0.785
+        ),
+    ]
+
+    monkeypatch.setattr(
+        recognizer,
+        "_variant_template_sources_by_weapon",
+        {"パブロ・ヒュー": ()},
+    )
+
+    assert recognizer._resolve_top1_variant_rerank_target(ranked) == (
+        "パブロ",
+        "パブロ・ヒュー",
+        "N-ZAP89",
+        "Rブラスターエリートデコ",
+    )
+
+
+@pytest.mark.asyncio
+async def test_predict_slot_uses_top1_variant_rerank_for_configured_family(
+    recognizer: WeaponRecognitionAdapter,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    ranked_base = [
+        _ranked_candidate(weapon="パブロ", score=0.850885, threshold=0.870),
+        _ranked_candidate(weapon="ホクサイ", score=0.712197, threshold=0.880),
+        _ranked_candidate(
+            weapon="パブロ・ヒュー", score=0.460728, threshold=0.785
+        ),
+        _ranked_candidate(weapon="N-ZAP89", score=0.370000, threshold=0.820),
+    ]
+    ranked_with_top1_variant = [
+        _ranked_candidate(
+            weapon="パブロ・ヒュー", score=1.000000, threshold=0.785
+        ),
+        _ranked_candidate(weapon="パブロ", score=0.850885, threshold=0.870),
+        _ranked_candidate(weapon="ホクサイ", score=0.712197, threshold=0.880),
+        _ranked_candidate(weapon="N-ZAP89", score=0.370000, threshold=0.820),
+    ]
+    top1_rerank_called = False
+
+    async def _stub_rank_weapon_candidates(
+        query_padded_gray: np.ndarray,
+        *,
+        cancel_generation: int,
+    ) -> list[_RankedCandidate]:
+        _ = query_padded_gray
+        _ = cancel_generation
+        return ranked_base
+
+    async def _stub_rerank_specific_weapons_with_variants(
+        *,
+        ranked: list[_RankedCandidate],
+        query_padded_gray: np.ndarray,
+        cancel_generation: int,
+        weapons: tuple[str, ...],
+    ) -> tuple[list[_RankedCandidate], bool]:
+        nonlocal top1_rerank_called
+        _ = ranked
+        _ = query_padded_gray
+        _ = cancel_generation
+        assert weapons == (
+            "パブロ",
+            "パブロ・ヒュー",
+            "N-ZAP89",
+            "Rブラスターエリートデコ",
+        )
+        top1_rerank_called = True
+        return ranked_with_top1_variant, True
+
+    monkeypatch.setattr(
+        recognizer,
+        "_rank_weapon_candidates",
+        _stub_rank_weapon_candidates,
+    )
+    monkeypatch.setattr(
+        recognizer,
+        "_rerank_specific_weapons_with_variants",
+        _stub_rerank_specific_weapons_with_variants,
+    )
+    monkeypatch.setattr(
+        recognizer,
+        "_should_try_variant_fallback",
+        lambda **_: False,
+    )
+    monkeypatch.setattr(
+        recognizer,
+        "_variant_template_sources_by_weapon",
+        {"パブロ・ヒュー": ()},
+    )
+
+    slot_result, _debug_candidates = await recognizer._predict_slot(
+        slot=constants.ALLY_SLOTS[0],
+        query_padded_gray=np.zeros((16, 16), dtype=np.uint8),
+        cancel_generation=recognizer._capture_cancel_generation(),
+    )
+
+    assert top1_rerank_called is True
+    assert slot_result.predicted_weapon == "パブロ・ヒュー"
+    assert slot_result.top_candidates[0].weapon == "パブロ・ヒュー"
+
+
+@pytest.mark.asyncio
 async def test_predict_slot_forces_unknown_when_low_signal(
     recognizer: WeaponRecognitionAdapter,
     monkeypatch: pytest.MonkeyPatch,

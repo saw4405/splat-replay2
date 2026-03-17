@@ -22,19 +22,17 @@
   let showPassword = false;
   let listText = '';
 
-  $: if (field.type === 'list') {
-    listText = Array.isArray(field.value) ? field.value.join('\n') : '';
-  }
-
-  function commitPrimitive(value: PrimitiveValue): void {
-    if (parentGroup) {
-      updateGroupField(parentGroup, field, value);
-    } else {
-      updateField(field, value);
+  // field.value のみに依存するように最適化（field全体への依存を回避）
+  $: {
+    if (field.type === 'list' && Array.isArray(field.value)) {
+      const newListText = field.value.join('\n');
+      if (newListText !== listText) {
+        listText = newListText;
+      }
     }
   }
 
-  function _commitField(value: FieldValue): void {
+  function commitPrimitive(value: PrimitiveValue): void {
     if (parentGroup) {
       updateGroupField(parentGroup, field, value);
     } else {
@@ -91,7 +89,7 @@
 </script>
 
 {#if field.type === 'group' && field.children}
-  <fieldset class="field-group">
+  <fieldset class="field-group" data-testid={`settings-field-${sectionId}-${pathTokens.join('-')}`}>
     <legend class:recommended={field.recommended}>{field.label}</legend>
     {#if field.description}
       <p class="field-description">{field.description}</p>
@@ -110,7 +108,11 @@
     </div>
   </fieldset>
 {:else}
-  <div class="field-item" data-type={field.type}>
+  <div
+    class="field-item"
+    data-type={field.type}
+    data-testid={`settings-field-${sectionId}-${pathTokens.join('-')}`}
+  >
     <div class="field-header">
       <label id={labelElementId} for={elementId} class:recommended={field.recommended}>
         {field.label}

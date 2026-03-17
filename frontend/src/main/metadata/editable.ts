@@ -1,7 +1,7 @@
-import type { MetadataUpdate, RecordedVideo } from '../api/types';
-import { formatMetadataDateTime, normaliseWeaponSlots, type WeaponSlots } from './shared';
+import type { MetadataUpdate, RecordedVideo } from '../api/types.ts';
+import { formatMetadataDateTime, normaliseWeaponSlots, type WeaponSlots } from './shared.ts';
 
-export { normaliseWeaponSlots, type WeaponSlots } from './shared';
+export { normaliseWeaponSlots, type WeaponSlots } from './shared.ts';
 
 type MetadataUpdatePayload = Partial<{
   started_at: string;

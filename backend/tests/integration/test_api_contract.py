@@ -9,6 +9,8 @@ from __future__ import annotations
 import pytest
 from fastapi.testclient import TestClient
 
+pytestmark = pytest.mark.contract
+
 # Frontend が依存する全エンドポイントの契約
 # フォーマット: (メソッド, パス, 期待ステータスコード or リスト)
 # ステータスコードが None の場合は 404 以外であることのみチェック
@@ -54,6 +56,8 @@ FRONTEND_API_CONTRACT: list[tuple[str, str, int | list[int] | None]] = [
     ("POST", "/api/recorder/resume", None),
     ("POST", "/api/recorder/stop", None),
     ("GET", "/api/recorder/state", 200),
+    ("GET", "/api/recorder/preview-mode", 200),
+    ("GET", "/api/recorder/preview-frame", [200, 204]),
     # Recording metadata
     ("GET", "/api/recorder/metadata", 200),
     ("PATCH", "/api/recorder/metadata", None),

@@ -171,3 +171,4 @@ async def upload_video(xp: float):
 - `backend/src/splat_replay/application/AGENTS.md` - アプリケーション層ガイドライン
 - `backend/src/splat_replay/infrastructure/AGENTS.md` - インフラ層ガイドライン
 - `docs/internal_design.md` - 設計思想
+- `docs/test_strategy.md` - テスト戦略

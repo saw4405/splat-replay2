@@ -11,7 +11,7 @@ import type {
   EditedVideo,
   EditUploadStatus,
   EditUploadTriggerResponse,
-} from './types';
+} from './types.ts';
 
 // バックエンドのレスポンス型
 export type RawRecordedVideo = {

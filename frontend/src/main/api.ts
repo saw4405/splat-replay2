@@ -18,10 +18,9 @@ export type {
   SubtitleData,
   ProgressEventKind,
   ProgressEvent,
-} from './api/types';
-
+} from './api/types.ts';
 // 録画制御API
-export { startRecorder, getRecorderState } from './api/recording';
+export { startRecorder, getRecorderState } from './api/recording.ts';
 
 // アセットAPI
 export {
@@ -31,16 +30,16 @@ export {
   fetchEditUploadStatus,
   deleteRecordedVideo,
   deleteEditedVideo,
-} from './api/assets';
+} from './api/assets.ts';
 
 // メタデータ・字幕API
 export {
   updateRecordedVideoMetadata,
   getRecordedSubtitle,
   updateRecordedSubtitle,
-} from './api/metadata';
+} from './api/metadata.ts';
 
-import { processApi } from './api/process';
+import { processApi } from './api/process.ts';
 
 export const api = {
   process: processApi,

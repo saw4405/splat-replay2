@@ -6,6 +6,7 @@
     type DomainEvent,
     type SpeechRecognizedPayload,
   } from '../../domainEvents';
+  import { getRecorderPreviewMode } from '../../api/recording';
 
   let eventSource: EventSource | null = null;
   let videoEl: HTMLVideoElement | null = null;
@@ -19,14 +20,19 @@
   let cameraStartInFlight: boolean = false;
   let previewToggleFocused: boolean = false;
   let toggleVisible: boolean = true;
+  let isVideoFileInput = false;
+  let previewImageUrl: string | null = null;
+  let previewImageObjectUrl: string | null = null;
+  let previewFramePollTimer: number | null = null;
+  let previewFrameFetchInFlight = false;
 
   // Speech recognition preview state
   type SpeechState = 'idle' | 'listening' | 'recognized';
   let speechState: SpeechState = 'idle';
   let speechText: string = '';
-  let speechFadeTimeout: ReturnType<typeof setTimeout> | null = null;
-  let speechListeningTimeout: ReturnType<typeof setTimeout> | null = null;
-  let speechRecognizedMinTimeout: ReturnType<typeof setTimeout> | null = null;
+  let speechFadeTimeout: number | null = null;
+  let speechListeningTimeout: number | null = null;
+  let speechRecognizedMinTimeout: number | null = null;
   let speechRecognizedMinUntil: number | null = null;
   let speechPendingListeningUntil: number | null = null;
   const SPEECH_FADE_DELAY_MS = 5000;
@@ -35,6 +41,7 @@
 
   const CAMERA_START_MAX_ATTEMPTS = 3;
   const CAMERA_START_RETRY_DELAY_MS = 500;
+  const PREVIEW_FRAME_POLL_INTERVAL_MS = 250;
 
   function sleep(ms: number): Promise<void> {
     return new Promise((resolve) => {
@@ -50,6 +57,70 @@
     previewVisible = !previewVisible;
   }
 
+  function clearPreviewImage(): void {
+    if (previewImageObjectUrl) {
+      URL.revokeObjectURL(previewImageObjectUrl);
+      previewImageObjectUrl = null;
+    }
+    previewImageUrl = null;
+  }
+
+  async function refreshPreviewFrame(): Promise<void> {
+    if (!isVideoFileInput || previewFrameFetchInFlight) {
+      return;
+    }
+
+    previewFrameFetchInFlight = true;
+    try {
+      const response = await fetch('/api/recorder/preview-frame', {
+        cache: 'no-store',
+      });
+      if (response.status === 204) {
+        return;
+      }
+      if (!response.ok) {
+        throw new Error(`status ${response.status}`);
+      }
+
+      const blob = await response.blob();
+      if (!blob.size) {
+        return;
+      }
+
+      const nextObjectUrl = URL.createObjectURL(blob);
+      if (previewImageObjectUrl) {
+        URL.revokeObjectURL(previewImageObjectUrl);
+      }
+      previewImageObjectUrl = nextObjectUrl;
+      previewImageUrl = nextObjectUrl;
+    } catch (error) {
+      console.error('Failed to refresh preview frame:', error);
+    } finally {
+      previewFrameFetchInFlight = false;
+    }
+  }
+
+  function stopPreviewFramePolling(clearFrame: boolean = false): void {
+    if (previewFramePollTimer) {
+      window.clearInterval(previewFramePollTimer);
+      previewFramePollTimer = null;
+    }
+    if (clearFrame) {
+      clearPreviewImage();
+    }
+  }
+
+  function startPreviewFramePolling(): void {
+    if (previewFramePollTimer || !previewVisible || !isVideoFileInput) {
+      return;
+    }
+
+    void refreshPreviewFrame();
+    previewFramePollTimer = window.setInterval(() => {
+      void refreshPreviewFrame();
+    }, PREVIEW_FRAME_POLL_INTERVAL_MS);
+  }
+
   function isSpeechDisplayAvailable(): boolean {
     return recorderState !== 'STOPPED';
   }
@@ -63,7 +134,7 @@
     if (speechListeningTimeout) {
       clearTimeout(speechListeningTimeout);
     }
-    speechListeningTimeout = setTimeout(() => {
+    speechListeningTimeout = window.setTimeout(() => {
       speechState = 'idle';
       speechListeningTimeout = null;
     }, durationMs);
@@ -144,7 +215,7 @@
               if (speechFadeTimeout) {
                 clearTimeout(speechFadeTimeout);
               }
-              speechFadeTimeout = setTimeout(() => {
+              speechFadeTimeout = window.setTimeout(() => {
                 speechFadeTimeout = null;
                 finishRecognizedDisplay();
               }, SPEECH_FADE_DELAY_MS);
@@ -163,7 +234,7 @@
                   clearTimeout(speechFadeTimeout);
                   speechFadeTimeout = null;
                 }
-                speechRecognizedMinTimeout = setTimeout(() => {
+                speechRecognizedMinTimeout = window.setTimeout(() => {
                   speechRecognizedMinTimeout = null;
                   finishRecognizedDisplay();
                 }, remaining);
@@ -313,39 +384,56 @@
     return out;
   }
 
+  async function syncPreviewConfiguration(): Promise<void> {
+    isVideoFileInput = (await getRecorderPreviewMode()) === 'video_file';
+    if (isVideoFileInput) {
+      selectedDeviceId = null;
+      stopCamera();
+      startPreviewFramePolling();
+      return;
+    }
+
+    stopPreviewFramePolling(true);
+
+    const res = await fetch('/api/settings', { cache: 'no-store' });
+    if (!res.ok) {
+      throw new Error(`status ${res.status}`);
+    }
+
+    const data = (await res.json()) as { sections?: unknown[] };
+
+    let web: Record<string, unknown> | null = null;
+    if (Array.isArray(data?.sections)) {
+      const all = sectionsToSettings(data.sections);
+      web = all['web_server'] || {};
+    }
+    const name = String(web?.virtual_camera_name || 'OBS Virtual Camera');
+    console.log('Configured virtual camera name:', name);
+    await enumerateVideoDevices();
+    const found = devices.find((d) => (d.label || '').includes(name));
+    if (found) {
+      selectedDeviceId = found.deviceId;
+      console.log('Using virtual camera device:', found);
+      await ensureCameraStream(found.deviceId);
+      return;
+    }
+
+    console.warn(
+      'Virtual camera not found:',
+      name,
+      'available:',
+      devices.map((d) => d.label)
+    );
+  }
+
   onMount(() => {
     (async () => {
       connectRecorderStateEvents();
 
       try {
-        const res = await fetch('/api/settings', { cache: 'no-store' });
-        if (res.ok) {
-          const data = await res.json();
-          let web: Record<string, unknown> | null = null;
-          if (Array.isArray(data?.sections)) {
-            const all = sectionsToSettings(data.sections);
-            web = all['web_server'] || {};
-          }
-          const name = String(web?.virtual_camera_name || 'OBS Virtual Camera');
-          console.log('Configured virtual camera name:', name);
-          await enumerateVideoDevices();
-          const found = devices.find((d) => (d.label || '').includes(name));
-          if (found) {
-            selectedDeviceId = found.deviceId;
-            console.log('Using virtual camera device:', found);
-            await ensureCameraStream(found.deviceId);
-            return;
-          } else {
-            console.warn(
-              'Virtual camera not found:',
-              name,
-              'available:',
-              devices.map((d) => d.label)
-            );
-          }
-        }
+        await syncPreviewConfiguration();
       } catch (err) {
-        console.error('Failed to fetch preview_mode from settings:', err);
+        console.error('Failed to configure video preview:', err);
       }
     })();
   });
@@ -364,6 +452,7 @@
       clearTimeout(speechRecognizedMinTimeout);
     }
     stopCamera();
+    stopPreviewFramePolling(true);
   });
 
   $: previewToggleLabel = previewVisible
@@ -371,7 +460,7 @@
     : 'プレビュー映像を表示する';
   $: toggleVisible = previewVisible ? isHovered || previewToggleFocused : true;
 
-  $: if (previewVisible) {
+  $: if (previewVisible && !isVideoFileInput) {
     if (!mediaStream) {
       if (selectedDeviceId) {
         void ensureCameraStream(selectedDeviceId);
@@ -389,6 +478,12 @@
       } catch {}
       videoEl.srcObject = null;
     }
+  }
+
+  $: if (previewVisible && isVideoFileInput) {
+    startPreviewFramePolling();
+  } else {
+    stopPreviewFramePolling(!isVideoFileInput);
   }
 
   // 録画状態に応じた表示設定
@@ -493,6 +588,7 @@
   role="button"
   aria-label="ビデオプレビューと録画コントロール"
   tabindex="0"
+  data-testid="video-preview"
   on:mouseenter={() => (isHovered = true)}
   on:mouseleave={() => (isHovered = false)}
   on:focus={() => (isHovered = true)}
@@ -502,7 +598,7 @@
   <div class="status-control-bar" class:hovered={isHovered}>
     <div class="status-section">
       <Circle size={16} fill={recorderVisuals.dotColor} strokeWidth={0} />
-      <span class="status-label">{recorderVisuals.label}</span>
+      <span class="status-label" data-testid="video-preview-status">{recorderVisuals.label}</span>
     </div>
 
     <div class="controls-section" class:visible={isHovered}>
@@ -549,8 +645,21 @@
     {/if}
   </button>
 
-  {#if previewVisible}
+  {#if previewVisible && !isVideoFileInput}
     <video bind:this={videoEl} class="preview-canvas" playsinline muted></video>
+  {:else if previewVisible}
+    <div class="video-file-preview-surface">
+      {#if previewImageUrl}
+        <img
+          src={previewImageUrl}
+          alt="プレビュー映像"
+          class="preview-canvas"
+          data-testid="video-file-preview-image"
+        />
+      {:else}
+        <div class="video-file-preview-empty" data-testid="video-file-preview-surface"></div>
+      {/if}
+    </div>
   {/if}
 
   <!-- Speech recognition preview overlay -->
@@ -740,6 +849,9 @@
     image-rendering: auto;
     /* Preserve 3D transform context for overlays */
     transform-style: preserve-3d;
+    object-fit: contain;
+    object-position: center;
+    background: var(--theme-color-black);
   }
 
   video.preview-canvas {
@@ -747,9 +859,25 @@
     width: 100%;
     height: 100%;
     transform: translateZ(0);
-    object-fit: contain;
-    object-position: center;
+  }
+
+  .video-file-preview-surface {
+    position: relative;
+    width: 100%;
+    height: 100%;
     background: var(--theme-color-black);
+  }
+
+  .video-file-preview-empty {
+    width: 100%;
+    height: 100%;
+    background:
+      radial-gradient(circle at top, rgba(var(--theme-rgb-accent), 0.18), transparent 52%),
+      linear-gradient(
+        135deg,
+        rgba(var(--theme-rgb-surface-preview), 0.78) 0%,
+        rgba(var(--theme-rgb-black), 0.6) 100%
+      );
   }
 
   .preview-toggle {

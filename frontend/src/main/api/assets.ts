@@ -12,14 +12,14 @@ import type {
   EditedVideo,
   EditUploadStatus,
   EditUploadTriggerResponse,
-} from './types';
-import { JSON_HEADERS, safeReadText } from './utils';
+} from './types.ts';
+import { JSON_HEADERS, safeReadText } from './utils.ts';
 import {
   mapRecordedVideo,
   mapEditedVideo,
   mapEditUploadStatus,
   mapEditUploadTrigger,
-} from './mappers';
+} from './mappers.ts';
 
 /**
  * 録画済みビデオ一覧を取得

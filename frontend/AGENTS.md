@@ -96,9 +96,84 @@ npm run check       # svelte-check 実行
 
 ---
 
-## 5. テーマ化とスタイリング
+## 5. テスト
 
-### 5.1 テーマ変数の使用
+### 5.1 テストの分類と命名規約
+
+frontend では **Vitest + @testing-library/svelte に統一** し、以下の 4 種類のテストを使い分ける：
+
+- **logic テスト** (`.test.ts`): 純粋な TypeScript ロジック（Vitest で実行）
+- **component テスト** (`.component.test.ts`): UI コンポーネント単体（Vitest + @testing-library/svelte で実行）
+- **integration テスト** (`.integration.test.ts`): 複数コンポーネント連携（Vitest + @testing-library/svelte で実行）
+- **workflow テスト** (`.spec.ts`): E2E 回帰確認（Playwright で実行）
+
+**詳細なテスト戦略・分類定義は [`docs/test_strategy.md`](../docs/test_strategy.md) を参照**。
+
+### 5.2 テストコマンド
+
+**frontendディレクトリで実行**:
+
+```bash
+npm run test                  # logic テストのみ（Vitest）
+npm run test:logic            # logic テストのみ（上と同じ）
+npm run test:component        # component テストのみ（Vitest）
+npm run test:integration      # integration テストのみ（Vitest）
+npm run test:unit             # logic + component + integration の一括実行
+npm run test:e2e              # Playwright E2E テスト
+```
+
+または Taskfile 経由（ルートディレクトリから）:
+
+```bash
+task.exe test:frontend:logic
+task.exe test:frontend:component
+task.exe test:frontend:integration
+task.exe test:frontend:unit
+task.exe test:workflow:smoke      # E2E 軽量版
+task.exe test:workflow:full       # E2E 全件
+```
+
+**キャッシュディレクトリの分離**: テストは専用のキャッシュディレクトリ (`node_modules/.vite-test/`) を使用するよう設定されています。これにより、開発サーバー (`npm run dev`) のキャッシュとテストのキャッシュが干渉しないようになっています。
+
+### 5.3 テストファイルの配置
+
+- **logic テスト**: テスト対象ファイルと同じディレクトリに `.test.ts` で配置
+- **component/integration テスト**: テスト対象コンポーネントと同じディレクトリに `.component.test.ts` または `.integration.test.ts` で配置
+- **E2E テスト**: `frontend/tests/e2e/` に配置
+
+### 5.4 component/integration テストの書き方
+
+**注記**: logic テストも Vitest で実行するため、同じ API を使用できます。
+
+```typescript
+import { describe, it, expect } from 'vitest';
+import { render, screen } from '@testing-library/svelte';
+import userEvent from '@testing-library/user-event';
+import MyComponent from './MyComponent.svelte';
+
+describe('MyComponent.svelte', () => {
+  it('props が表示される', () => {
+    render(MyComponent, { props: { title: 'テスト' } });
+    expect(screen.getByText('テスト')).toBeInTheDocument();
+  });
+
+  it('ボタンをクリックするとイベントが発火する', async () => {
+    const user = userEvent.setup();
+    const { component } = render(MyComponent);
+    const mockHandler = vi.fn();
+    component.$on('click', mockHandler);
+
+    await user.click(screen.getByRole('button'));
+    expect(mockHandler).toHaveBeenCalledTimes(1);
+  });
+});
+```
+
+---
+
+## 6. テーマ化とスタイリング
+
+### 6.1 テーマ変数の使用
 
 **必須**: すべての色・スタイル定義はテーマ変数を使用すること。
 
@@ -129,7 +204,7 @@ npm run check       # svelte-check 実行
 }
 ```
 
-### 5.2 グラスモーフィズムユーティリティ
+### 6.2 グラスモーフィズムユーティリティ
 
 `app.css` で定義されたグラスモーフィズムユーティリティクラスを活用：
 
@@ -142,7 +217,7 @@ npm run check       # svelte-check 実行
 
 ---
 
-## 6. 禁止事項（明確に NG）
+## 7. 禁止事項（明確に NG）
 
 - ブラウザ標準ダイアログ（`alert()`, `confirm()`, `prompt()`）の使用
 - Svelte コンポーネントの型に `unknown` や `any` を使用
@@ -151,9 +226,9 @@ npm run check       # svelte-check 実行
 
 ---
 
-## 7. ディレクトリ構成
+## 8. ディレクトリ構成
 
-### 7.1 現在の構成（2025-12-31時点）
+### 8.1 現在の構成（2025-12-31時点）
 
 ```text
 frontend/src/
@@ -209,7 +284,7 @@ frontend/src/
 
 ---
 
-## 8. ルートのAGENTS.mdとの関係
+## 9. ルートのAGENTS.mdとの関係
 
 このドキュメントは、ルートの `AGENTS.md` を補完するものであり：
 

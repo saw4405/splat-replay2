@@ -12,10 +12,10 @@ import type {
   MetadataOptionItem,
   MetadataOptions,
   SubtitleData,
-} from './types';
-import { toMetadataUpdatePayload } from '../metadata/editable';
-import { JSON_HEADERS, safeReadText } from './utils';
-import { mapRecordedVideo } from './mappers';
+} from './types.ts';
+import { toMetadataUpdatePayload } from '../metadata/editable.ts';
+import { JSON_HEADERS, safeReadText } from './utils.ts';
+import { mapRecordedVideo } from './mappers.ts';
 
 type RawMetadataOptionItem = {
   key: string;
@@ -114,6 +114,15 @@ export async function getMetadataOptions(): Promise<MetadataOptions> {
     }
   })();
   return metadataOptionsPromise;
+}
+
+/**
+ * メタデータオプションのキャッシュをクリア
+ * テスト用途で使用します
+ */
+export function clearMetadataOptionsCache(): void {
+  metadataOptionsCache = null;
+  metadataOptionsPromise = null;
 }
 
 /**

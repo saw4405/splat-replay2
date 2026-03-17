@@ -1,5 +1,8 @@
 ﻿<script lang="ts">
+  import { createEventDispatcher } from 'svelte';
   import BaseDialog from './BaseDialog.svelte';
+
+  const dispatch = createEventDispatcher();
 
   export let isOpen = false;
   export let message = '';
@@ -7,13 +10,13 @@
   export let cancelText = 'キャンセル';
 
   function handleConfirm(): void {
+    dispatch('confirm');
     isOpen = false;
-    dispatchEvent(new CustomEvent('confirm'));
   }
 
   function handleCancel(): void {
+    dispatch('cancel');
     isOpen = false;
-    dispatchEvent(new CustomEvent('cancel'));
   }
 </script>
 

@@ -9,7 +9,6 @@
 
 from __future__ import annotations
 
-from pathlib import Path
 from typing import TYPE_CHECKING, List
 
 from fastapi import APIRouter, HTTPException, Query, status
@@ -82,51 +81,6 @@ def create_assets_router(server: WebAPIServer) -> APIRouter:
                 content={"status": "not_found"},
             )
 
-    @router.get("/videos/recorded/{video_id:path}")
-    async def get_recorded_video(video_id: str) -> FileResponse:
-        """録画済みビデオファイルを取得。
-
-        video_id は base_dir からの相対パス（例: recorded/xxx.mp4）
-        """
-        video_path = Path(video_id)
-        # 絶対パスでない場合は base_dir からの相対として解決
-        if not video_path.is_absolute():
-            video_path = server.base_dir / video_id
-
-        if not video_path.exists():
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Video not found: {video_id}",
-            )
-        return FileResponse(
-            path=str(video_path),
-            media_type="video/mp4",
-            filename=video_path.name,
-        )
-
-    @router.get("/thumbnails/recorded/{filename}")
-    async def get_recorded_thumbnail(filename: str) -> FileResponse:
-        """録画済みビデオのサムネイルを取得。"""
-        # base_dir/recorded（録画ファイルの保存先）から解決
-        thumbnail_path = server.base_dir / "recorded" / filename
-        server.logger.debug(
-            "サムネイル取得",
-            filename=filename,
-            base_dir=str(server.base_dir),
-            thumbnail_path=str(thumbnail_path),
-            exists=thumbnail_path.exists(),
-        )
-        if not thumbnail_path.exists():
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Thumbnail not found: {filename}",
-            )
-        return FileResponse(
-            path=str(thumbnail_path),
-            media_type="image/png",
-            filename=thumbnail_path.name,
-        )
-
     # === 編集済みアセット ===
 
     @router.get(
@@ -167,43 +121,7 @@ def create_assets_router(server: WebAPIServer) -> APIRouter:
                 content={"status": "not_found"},
             )
 
-    @router.get("/videos/edited/{video_id:path}")
-    async def get_edited_video(video_id: str) -> FileResponse:
-        """編集済みビデオファイルを取得。
-
-        video_id は base_dir からの相対パス（例: edited/xxx.mkv）
-        """
-        video_path = Path(video_id)
-        # 絶対パスでない場合は base_dir からの相対として解決
-        if not video_path.is_absolute():
-            video_path = server.base_dir / video_id
-
-        if not video_path.exists():
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Video not found: {video_id}",
-            )
-        return FileResponse(
-            path=str(video_path),
-            media_type="video/mp4",
-            filename=video_path.name,
-        )
-
-    @router.get("/thumbnails/edited/{filename}")
-    async def get_edited_thumbnail(filename: str) -> FileResponse:
-        """編集済みビデオのサムネイルを取得。"""
-        # base_dir/edited（編集ファイルの保存先）から解決
-        thumbnail_path = server.base_dir / "edited" / filename
-        if not thumbnail_path.exists():
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Thumbnail not found: {filename}",
-            )
-        return FileResponse(
-            path=str(thumbnail_path),
-            media_type="image/png",
-            filename=thumbnail_path.name,
-        )
+    # === 編集・アップロード ===
 
     # === 編集・アップロード処理 ===
 
@@ -274,4 +192,195 @@ def create_assets_router(server: WebAPIServer) -> APIRouter:
     return router
 
 
-__all__ = ["create_assets_router"]
+def create_file_serving_router(server: WebAPIServer) -> APIRouter:
+    """ファイル配信ルーターを作成（/apiプレフィックス無し）。
+
+    Args:
+        server: WebAPIServerインスタンス
+
+    Returns:
+        設定済みのAPIRouter
+    """
+    router = APIRouter(tags=["files"])
+
+    # === 録画済みビデオファイル配信 ===
+
+    @router.get("/videos/recorded/{video_id:path}")
+    async def get_recorded_video(video_id: str) -> FileResponse:
+        """録画済みビデオファイルを取得。
+
+        video_id は base_dir からの相対パス（例: recorded/xxx.mp4）
+        """
+        try:
+            # パストラバーサル対策: 絶対パスを解決しbase_dir配下にあるか確認
+            video_path = (server.base_dir / video_id).resolve()
+            base_resolved = server.base_dir.resolve()
+
+            # base_dir配下にあるか確認
+            if not str(video_path).startswith(str(base_resolved)):
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Invalid path",
+                )
+
+            if not video_path.exists():
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail=f"Video not found: {video_id}",
+                )
+
+            if not video_path.is_file():
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Path is not a file",
+                )
+        except (ValueError, OSError) as exc:
+            # パス解決エラー
+            server.logger.warning(
+                "不正なパスアクセス", video_id=video_id, error=str(exc)
+            )
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid path",
+            ) from exc
+        except HTTPException:
+            # HTTPExceptionは再送出
+            raise
+
+        return FileResponse(
+            path=str(video_path),
+            media_type="video/mp4",
+            filename=video_path.name,
+        )
+
+    @router.get("/thumbnails/recorded/{filename}")
+    async def get_recorded_thumbnail(filename: str) -> FileResponse:
+        """録画済みビデオのサムネイルを取得。"""
+        try:
+            # パストラバーサル対策
+            thumbnail_path = (
+                server.base_dir / "recorded" / filename
+            ).resolve()
+            base_resolved = (server.base_dir / "recorded").resolve()
+
+            if not str(thumbnail_path).startswith(str(base_resolved)):
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Invalid path",
+                )
+
+            if not thumbnail_path.exists():
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail=f"Thumbnail not found: {filename}",
+                )
+
+            if not thumbnail_path.is_file():
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Path is not a file",
+                )
+        except (ValueError, OSError) as exc:
+            server.logger.warning(
+                "不正なパスアクセス", filename=filename, error=str(exc)
+            )
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid path",
+            ) from exc
+
+        return FileResponse(
+            path=str(thumbnail_path),
+            media_type="image/png",
+            filename=thumbnail_path.name,
+        )
+
+    # === 編集済みビデオファイル配信 ===
+
+    @router.get("/videos/edited/{video_id:path}")
+    async def get_edited_video(video_id: str) -> FileResponse:
+        """編集済みビデオファイルを取得。
+
+        video_id は base_dir からの相対パス（例: edited/xxx.mkv）
+        """
+        try:
+            # パストラバーサル対策
+            video_path = (server.base_dir / video_id).resolve()
+            base_resolved = server.base_dir.resolve()
+
+            if not str(video_path).startswith(str(base_resolved)):
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Invalid path",
+                )
+
+            if not video_path.exists():
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail=f"Video not found: {video_id}",
+                )
+
+            if not video_path.is_file():
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Path is not a file",
+                )
+        except (ValueError, OSError) as exc:
+            server.logger.warning(
+                "不正なパスアクセス", video_id=video_id, error=str(exc)
+            )
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid path",
+            ) from exc
+
+        return FileResponse(
+            path=str(video_path),
+            media_type="video/mp4",
+            filename=video_path.name,
+        )
+
+    @router.get("/thumbnails/edited/{filename}")
+    async def get_edited_thumbnail(filename: str) -> FileResponse:
+        """編集済みビデオのサムネイルを取得。"""
+        try:
+            # パストラバーサル対策
+            thumbnail_path = (server.base_dir / "edited" / filename).resolve()
+            base_resolved = (server.base_dir / "edited").resolve()
+
+            if not str(thumbnail_path).startswith(str(base_resolved)):
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Invalid path",
+                )
+
+            if not thumbnail_path.exists():
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail=f"Thumbnail not found: {filename}",
+                )
+
+            if not thumbnail_path.is_file():
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Path is not a file",
+                )
+        except (ValueError, OSError) as exc:
+            server.logger.warning(
+                "不正なパスアクセス", filename=filename, error=str(exc)
+            )
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid path",
+            ) from exc
+
+        return FileResponse(
+            path=str(thumbnail_path),
+            media_type="image/png",
+            filename=thumbnail_path.name,
+        )
+
+    return router
+
+
+__all__ = ["create_assets_router", "create_file_serving_router"]

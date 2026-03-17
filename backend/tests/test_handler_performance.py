@@ -17,31 +17,34 @@ from typing import Callable, Mapping, Optional, Set, cast
 import cv2
 import numpy as np
 import pytest
-from splat_replay.application.interfaces import EventBusPort  # noqa: E402
-from splat_replay.application.interfaces import WeaponRecognitionResult  # noqa: E402
-from splat_replay.application.interfaces import (
-    LoggerPort,
-    WeaponRecognitionPort,
-    WeaponSlotResult,
-)
-from splat_replay.application.interfaces.messaging import EventSubscription  # noqa: E402
-from splat_replay.application.services.recording.ingame_handler import (
-    InGamePhaseHandler,
-)  # noqa: E402
-from splat_replay.application.services.recording.recording_context import (
-    RecordingContext,
-)  # noqa: E402
-from splat_replay.application.services.recording.weapon_detection_service import (
-    WeaponDetectionService,
-)  # noqa: E402
-from splat_replay.domain.events import DomainEvent  # noqa: E402
-from splat_replay.domain.services import RecordState  # noqa: E402
 
 # Reuse analyzer factory and template dir from analyzer tests
 from test_frame_analyzer import TEMPLATE_DIR, create_analyzer  # noqa: E402
 
-# ハンドラーの handle は 1/60 秒以内を目標値とする
-THRESHOLD_SEC = 1.0 / 60.0
+from splat_replay.application.interfaces import (
+    EventBusPort,  # noqa: E402
+    LoggerPort,
+    WeaponRecognitionPort,
+    WeaponRecognitionResult,  # noqa: E402
+    WeaponSlotResult,
+)
+from splat_replay.application.interfaces.messaging import (
+    EventSubscription,  # noqa: E402
+)
+from splat_replay.application.services.recording.ingame_handler import (
+    InGamePhaseHandler,  # noqa: E402
+)
+from splat_replay.application.services.recording.recording_context import (
+    RecordingContext,  # noqa: E402
+)
+from splat_replay.application.services.recording.weapon_detection_service import (
+    WeaponDetectionService,  # noqa: E402
+)
+from splat_replay.domain.events import DomainEvent  # noqa: E402
+from splat_replay.domain.services import RecordState  # noqa: E402
+
+# ハンドラーの handle は 1/30 秒以内を目標値とする（30fps対応）
+THRESHOLD_SEC = 1.0 / 30.0
 ITER = 5
 
 

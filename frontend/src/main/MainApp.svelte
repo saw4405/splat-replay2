@@ -65,6 +65,7 @@
       aria-label="Settings"
       on:click={openSettings}
       title="設定"
+      data-testid="settings-button"
     >
       <Settings class="icon" aria-hidden="true" stroke-width={1.75} />
     </button>

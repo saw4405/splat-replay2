@@ -58,33 +58,46 @@ class RecordedAssetRepository:
         dest.mkdir(parents=True, exist_ok=True)
 
         name_root = self._file_ops.generate_filename(metadata)
+        base_path = dest / name_root
+        target = base_path.with_suffix(video.suffix)
+        moved_files: list[tuple[Path, Path]] = []
+        created_files: list[Path] = []
 
-        # 字幕ファイルの移動
-        if srt is not None:
-            srt = srt.resolve()
-            srt.rename(dest / f"{name_root}.srt")
-
-        # 動画ファイルの移動
-        target = dest / f"{name_root}{video.suffix}"
         try:
-            shutil.move(str(video), target)
+            # 動画ファイルの移動
+            source_video = video.resolve()
+            shutil.move(str(source_video), target)
+            moved_files.append((target, source_video))
+
+            # 字幕ファイルの移動
+            if srt is not None:
+                source_subtitle = srt.resolve()
+                subtitle_path = base_path.with_suffix(".srt")
+                source_subtitle.rename(subtitle_path)
+                moved_files.append((subtitle_path, source_subtitle))
+
+            # スクリーンショットの保存
+            if screenshot is not None:
+                if not self._file_ops.save_thumbnail(base_path, screenshot):
+                    raise RuntimeError("サムネイルの保存に失敗しました")
+                created_files.append(base_path.with_suffix(".png"))
+
+            # メタデータの保存
+            if not self._file_ops.save_metadata(base_path, metadata):
+                raise RuntimeError("メタデータの保存に失敗しました")
+            created_files.append(base_path.with_suffix(".json"))
         except Exception:
-            target = video
-
-        # スクリーンショットの保存
-        if screenshot is not None:
-            self._file_ops.save_thumbnail(dest / name_root, screenshot)
-
-        # メタデータの保存
-        self._file_ops.save_metadata(dest / name_root, metadata)
+            self._cleanup_created_files(created_files)
+            self._rollback_moved_files(moved_files)
+            raise
 
         self.logger.info("録画ファイル保存", path=str(target))
 
         # イベント発行
         self._event_publisher.publish_recorded_saved(
             video=target,
-            has_subtitle=(dest / f"{name_root}.srt").exists(),
-            has_thumbnail=(dest / f"{name_root}.png").exists(),
+            has_subtitle=base_path.with_suffix(".srt").exists(),
+            has_thumbnail=base_path.with_suffix(".png").exists(),
             started_at=metadata.started_at.isoformat()
             if metadata.started_at
             else None,
@@ -92,10 +105,30 @@ class RecordedAssetRepository:
 
         return VideoAsset(
             video=target,
-            subtitle=dest / f"{name_root}.srt",
-            thumbnail=dest / f"{name_root}.png",
+            subtitle=base_path.with_suffix(".srt"),
+            thumbnail=base_path.with_suffix(".png"),
             metadata=metadata,
         )
+
+    def _cleanup_created_files(self, paths: list[Path]) -> None:
+        """保存途中に作成したファイルを削除する。"""
+        for path in reversed(paths):
+            path.unlink(missing_ok=True)
+
+    def _rollback_moved_files(self, paths: list[tuple[Path, Path]]) -> None:
+        """保存途中に移動したファイルを元の場所へ戻す。"""
+        for current_path, original_path in reversed(paths):
+            if not current_path.exists() or original_path.exists():
+                continue
+            try:
+                shutil.move(str(current_path), original_path)
+            except Exception as exc:
+                self.logger.warning(
+                    "保存失敗時のロールバックに失敗しました",
+                    current_path=str(current_path),
+                    original_path=str(original_path),
+                    error=str(exc),
+                )
 
     def get_asset(self, video: Path) -> VideoAsset | None:
         """録画アセットを取得する。

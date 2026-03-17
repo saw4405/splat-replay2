@@ -1,7 +1,6 @@
 """Configuration loaders and savers (infrastructure layer)."""
 
 from __future__ import annotations
-
 import tomllib
 from enum import Enum
 from pathlib import Path
@@ -25,18 +24,19 @@ from splat_replay.infrastructure.filesystem import paths
 
 
 def load_settings_from_toml(
-    path: Path = paths.SETTINGS_FILE,
+    path: Path | None = None,
     create_if_missing: bool = True,
 ) -> AppSettings:
     """
     TOML ファイルから設定を読み込む。
     指定ファイルが存在しない場合、create_if_missing=True ならデフォルト値で作成。
     """
-    file_existed = path.exists()
+    resolved_path = path or paths.SETTINGS_FILE
+    file_existed = resolved_path.exists()
 
     raw: Dict[str, Dict[str, object]] = {}
     if file_existed:
-        with path.open("rb") as f:
+        with resolved_path.open("rb") as f:
             raw = tomllib.load(f)
 
     kwargs: Dict[str, Any] = {}
@@ -50,8 +50,8 @@ def load_settings_from_toml(
     settings = AppSettings(**kwargs)
 
     if not file_existed and create_if_missing:
-        path.parent.mkdir(parents=True, exist_ok=True)
-        save_settings_to_toml(settings, path)
+        resolved_path.parent.mkdir(parents=True, exist_ok=True)
+        save_settings_to_toml(settings, resolved_path)
 
     return settings
 
@@ -99,14 +99,16 @@ def convert_to_serializable_dict(settings: AppSettings) -> Dict[str, object]:
 
 
 def save_settings_to_toml(
-    settings: AppSettings, path: Path = paths.SETTINGS_FILE
+    settings: AppSettings, path: Path | None = None
 ) -> None:
     """設定を TOML ファイルに保存する。"""
+    resolved_path = path or paths.SETTINGS_FILE
     toml_data = convert_to_serializable_dict(settings)
 
     # TOML ファイルに書き込み
     toml_text = tomli_w.dumps(toml_data)
-    path.write_text(toml_text, encoding="utf-8")
+    resolved_path.parent.mkdir(parents=True, exist_ok=True)
+    resolved_path.write_text(toml_text, encoding="utf-8")
 
 
 def _is_list(field_type: object) -> bool:

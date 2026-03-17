@@ -1,0 +1,21 @@
+{
+  "game_mode": "BATTLE",
+  "started_at": "2026-03-12T22:22:00.999005",
+  "rate": null,
+  "judgement": "WIN",
+  "allies": ["トライストリンガー", "52ガロン", "カーボンローラーデコ", "スパッタリー・ヒュー"],
+  "enemies": [
+    "LACT-450デコ",
+    "スプラチャージャーコラボ",
+    "ノーチラス79",
+    "ホットブラスターカスタム"
+  ],
+  "match": "REGULAR",
+  "rule": "TURF_WAR",
+  "stage": "MINCEMEAT_METALWORKS",
+  "kill": 13,
+  "death": 2,
+  "special": 3,
+  "gold_medals": 3,
+  "silver_medals": 0
+}

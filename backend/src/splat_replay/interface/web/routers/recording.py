@@ -9,9 +9,12 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 
+import cv2
 from fastapi import APIRouter
+from fastapi.responses import Response
+from starlette import status
 from pydantic import BaseModel
 from splat_replay.application.metadata import recording_metadata_to_dict
 from splat_replay.domain.models import RecordingMetadata
@@ -41,6 +44,12 @@ class RecorderStateResponse(BaseModel):
     """録画状態レスポンススキーマ。"""
 
     state: str
+
+
+class RecorderPreviewModeResponse(BaseModel):
+    """プレビュー入力種別レスポンス。"""
+
+    mode: Literal["live_capture", "video_file"]
 
 
 def _build_recording_metadata_response(
@@ -140,6 +149,38 @@ def create_recording_router(server: WebAPIServer) -> APIRouter:
         """録画状態取得。"""
         state = server.auto_recorder.get_state()
         return RecorderStateResponse(state=state)
+
+    @router.get("/preview-frame")
+    async def get_preview_frame() -> Response:
+        """最新フレームの JPEG プレビューを取得。"""
+        frame = server.frame_source.get_latest()
+        if frame is None:
+            return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+        success, encoded = cv2.imencode(
+            ".jpg",
+            frame,
+            [int(cv2.IMWRITE_JPEG_QUALITY), 80],
+        )
+        if not success:
+            server.logger.warning("プレビューフレームの JPEG 化に失敗しました")
+            return Response(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+        return Response(
+            content=encoded.tobytes(),
+            media_type="image/jpeg",
+            headers={
+                "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+                "Pragma": "no-cache",
+                "Expires": "0",
+            },
+        )
+
+    @router.get("/preview-mode", response_model=RecorderPreviewModeResponse)
+    async def get_preview_mode() -> RecorderPreviewModeResponse:
+        """プレビュー入力種別を取得。"""
+        mode = server.preview_mode_resolver()
+        return RecorderPreviewModeResponse(mode=mode)
 
     @router.get("/metadata", response_model=RecordingMetadataResponse)
     async def get_recording_metadata() -> RecordingMetadataResponse:

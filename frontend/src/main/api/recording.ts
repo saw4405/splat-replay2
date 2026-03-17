@@ -5,8 +5,13 @@
  * - 録画の開始・状態取得
  */
 
-import type { RecorderState, RecorderStateResponse } from './types';
-import { JSON_HEADERS, safeReadText } from './utils';
+import type {
+  RecorderPreviewMode,
+  RecorderPreviewModeResponse,
+  RecorderState,
+  RecorderStateResponse,
+} from './types.ts';
+import { JSON_HEADERS, safeReadText } from './utils.ts';
 
 /**
  * 録画を開始
@@ -35,4 +40,19 @@ export async function getRecorderState(): Promise<RecorderState> {
   }
   const body: RecorderStateResponse = await response.json();
   return body.state;
+}
+
+/**
+ * プレビュー入力種別を取得
+ */
+export async function getRecorderPreviewMode(): Promise<RecorderPreviewMode> {
+  const response = await fetch('/api/recorder/preview-mode', {
+    headers: JSON_HEADERS,
+  });
+  if (!response.ok) {
+    const detail = await safeReadText(response);
+    throw new Error(detail || 'Failed to fetch recorder preview mode');
+  }
+  const body: RecorderPreviewModeResponse = await response.json();
+  return body.mode;
 }

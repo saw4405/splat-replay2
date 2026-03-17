@@ -11,6 +11,7 @@ from punq import Container
 from splat_replay.application.interfaces import (
     BattleHistoryRepositoryPort,
     CapturePort,
+    ClockPort,
     ConfigPort,
     DomainEventPublisher,
     EventPublisher,
@@ -91,6 +92,7 @@ def register_app_services(container: Container) -> None:
         frame_publisher = container.resolve(FramePublisher)
         domain_publisher = container.resolve(DomainEventPublisher)
         battle_history_service = container.resolve(BattleHistoryService)
+        clock = container.resolve(ClockPort)
 
         return AutoRecorder(
             state_machine=state_machine,
@@ -104,6 +106,7 @@ def register_app_services(container: Container) -> None:
             frame_publisher=frame_publisher,
             domain_publisher=domain_publisher,
             battle_history_service=battle_history_service,
+            clock=clock,
         )
 
     container.register(AutoRecorder, factory=auto_recorder_factory)

@@ -23,7 +23,12 @@ from splat_replay.domain.models import Frame
 from splat_replay.infrastructure.filesystem import ASSETS_DIR
 from splat_replay.infrastructure.matchers import TemplateMatcher
 
-from . import constants, outline_models, unmatched_report
+from . import (
+    constants,
+    labeling_variant_bank,
+    outline_models,
+    unmatched_report,
+)
 from .query_builder import (
     QuerySlotData,
     build_padded_gray_by_slot,
@@ -83,6 +88,9 @@ class WeaponRecognitionAdapter(WeaponRecognitionPort):
                 base=self._template_sources_by_weapon,
                 addition=self._variant_template_sources_by_weapon,
             )
+        )
+        self._labeling_variant_sources_by_weapon = (
+            self._load_labeling_variant_sources()
         )
         self._matching_assets_dir = self._resolve_matching_assets_dir()
         self._outline_model_masks: dict[str, np.ndarray] | None = None
@@ -506,6 +514,70 @@ class WeaponRecognitionAdapter(WeaponRecognitionPort):
             cancel_generation=cancel_generation,
         )
         self._ensure_not_cancelled(cancel_generation)
+        labeling_variant_rerank_attempted = False
+        labeling_variant_rerank_applied = False
+        if self._labeling_variant_sources_by_weapon:
+            labeling_variant_rerank_attempted = True
+            (
+                ranked,
+                labeling_variant_rerank_applied,
+            ) = await self._rerank_top_candidates_with_labeling_variants(
+                ranked=ranked,
+                query_padded_gray=query_padded_gray,
+                cancel_generation=cancel_generation,
+            )
+            self._ensure_not_cancelled(cancel_generation)
+        ranked_before_pair_variant_rerank = list(ranked)
+        pair_variant_rerank_attempted = False
+        pair_variant_rerank_applied = False
+        pair_variant_rerank_weapons: tuple[str, str] | None = None
+        pair_variant_rerank_max_score_gap: float | None = None
+        pair_variant_rerank_target = self._resolve_pair_variant_rerank_target(
+            ranked
+        )
+        if pair_variant_rerank_target is not None:
+            pair_variant_rerank_attempted = True
+            pair_variant_rerank_weapons = pair_variant_rerank_target
+            pair_variant_rerank_max_score_gap = (
+                self._resolve_pair_variant_rerank_max_score_gap(
+                    pair_variant_rerank_target
+                )
+            )
+            (
+                ranked,
+                pair_variant_rerank_applied,
+            ) = await self._rerank_specific_weapons_with_variants(
+                ranked=ranked,
+                query_padded_gray=query_padded_gray,
+                cancel_generation=cancel_generation,
+                weapons=pair_variant_rerank_target,
+            )
+            self._ensure_not_cancelled(cancel_generation)
+        top1_variant_rerank_attempted = False
+        top1_variant_rerank_applied = False
+        top1_variant_rerank_weapons: tuple[str, ...] | None = None
+        top1_variant_rerank_max_top_score: float | None = None
+        top1_variant_rerank_target = self._resolve_top1_variant_rerank_target(
+            ranked
+        )
+        if top1_variant_rerank_target is not None:
+            top1_variant_rerank_attempted = True
+            top1_variant_rerank_weapons = top1_variant_rerank_target
+            top1_variant_rerank_max_top_score = (
+                self._resolve_top1_variant_rerank_max_top_score(
+                    top1_variant_rerank_target
+                )
+            )
+            (
+                ranked,
+                top1_variant_rerank_applied,
+            ) = await self._rerank_specific_weapons_with_variants(
+                ranked=ranked,
+                query_padded_gray=query_padded_gray,
+                cancel_generation=cancel_generation,
+                weapons=top1_variant_rerank_target,
+            )
+            self._ensure_not_cancelled(cancel_generation)
         (
             accepted_candidate,
             selected_confidence,
@@ -515,15 +587,38 @@ class WeaponRecognitionAdapter(WeaponRecognitionPort):
             ranked=ranked,
             slot_signal_metrics=slot_signal_metrics,
         )
-        if low_signal_forced_unknown:
-            accepted_candidate = None
-            rescue_applied = False
-        variant_fallback_attempted = False
-        variant_applied = False
-        if not low_signal_forced_unknown and self._should_try_variant_fallback(
+        pair_variant_rescue_applied = False
+        pair_variant_rescue_gain: float | None = None
+        (
+            accepted_candidate,
+            selected_confidence,
+            second_confidence,
+            pair_variant_rescue_applied,
+            pair_variant_rescue_gain,
+        ) = self._maybe_apply_pair_variant_rescue(
+            original_ranked=ranked_before_pair_variant_rerank,
+            reranked=ranked,
             accepted_candidate=accepted_candidate,
             selected_confidence=selected_confidence,
             second_confidence=second_confidence,
+            pair_variant_rerank_target=pair_variant_rerank_target,
+        )
+        if low_signal_forced_unknown:
+            accepted_candidate = None
+            rescue_applied = False
+            pair_variant_rescue_applied = False
+            pair_variant_rescue_gain = None
+        variant_fallback_attempted = False
+        variant_applied = False
+        if (
+            not low_signal_forced_unknown
+            and not labeling_variant_rerank_applied
+            and not pair_variant_rescue_applied
+            and self._should_try_variant_fallback(
+                accepted_candidate=accepted_candidate,
+                selected_confidence=selected_confidence,
+                second_confidence=second_confidence,
+            )
         ):
             variant_fallback_attempted = True
             ranked_with_variant = (
@@ -607,6 +702,43 @@ class WeaponRecognitionAdapter(WeaponRecognitionPort):
                 constants.CANDIDATE_CONFIDENCE_ACCEPT_THRESHOLD
                 - constants.CANDIDATE_CONFIDENCE_RESCUE_MARGIN,
                 6,
+            ),
+            labeling_variant_rerank_attempted=(
+                labeling_variant_rerank_attempted
+            ),
+            labeling_variant_rerank_applied=labeling_variant_rerank_applied,
+            labeling_variant_rerank_top_weapons=(
+                constants.LABELING_VARIANT_RERANK_TOP_WEAPONS
+            ),
+            pair_variant_rerank_attempted=pair_variant_rerank_attempted,
+            pair_variant_rerank_applied=pair_variant_rerank_applied,
+            pair_variant_rerank_weapons=(
+                list(pair_variant_rerank_weapons)
+                if pair_variant_rerank_weapons is not None
+                else None
+            ),
+            pair_variant_rerank_max_score_gap=(
+                round(pair_variant_rerank_max_score_gap, 6)
+                if pair_variant_rerank_max_score_gap is not None
+                else None
+            ),
+            top1_variant_rerank_attempted=top1_variant_rerank_attempted,
+            top1_variant_rerank_applied=top1_variant_rerank_applied,
+            top1_variant_rerank_weapons=(
+                list(top1_variant_rerank_weapons)
+                if top1_variant_rerank_weapons is not None
+                else None
+            ),
+            top1_variant_rerank_max_top_score=(
+                round(top1_variant_rerank_max_top_score, 6)
+                if top1_variant_rerank_max_top_score is not None
+                else None
+            ),
+            pair_variant_rescue_applied=pair_variant_rescue_applied,
+            pair_variant_rescue_gain=(
+                round(pair_variant_rescue_gain, 6)
+                if pair_variant_rescue_gain is not None
+                else None
             ),
             variant_fallback_attempted=variant_fallback_attempted,
             variant_applied=variant_applied,
@@ -763,6 +895,212 @@ class WeaponRecognitionAdapter(WeaponRecognitionPort):
         confidence_gap = selected_confidence - second_confidence
         return confidence_gap <= constants.VARIANT_FALLBACK_MAX_CONFIDENCE_GAP
 
+    def _resolve_pair_variant_rerank_target(
+        self, ranked: list[_RankedCandidate]
+    ) -> tuple[str, str] | None:
+        if len(ranked) < 2 or not self._variant_template_sources_by_weapon:
+            return None
+        score_gap = ranked[0].score - ranked[1].score
+        top_pair = {ranked[0].weapon, ranked[1].weapon}
+        for weapon_pair, max_score_gap in constants.PAIR_VARIANT_RERANK_RULES:
+            if top_pair != set(weapon_pair):
+                continue
+            if score_gap > max_score_gap:
+                return None
+            if not any(
+                weapon in self._variant_template_sources_by_weapon
+                for weapon in weapon_pair
+            ):
+                return None
+            return weapon_pair
+        return None
+
+    def _resolve_pair_variant_rerank_max_score_gap(
+        self, weapons: tuple[str, str]
+    ) -> float | None:
+        for weapon_pair, max_score_gap in constants.PAIR_VARIANT_RERANK_RULES:
+            if set(weapons) == set(weapon_pair):
+                return max_score_gap
+        return None
+
+    def _resolve_top1_variant_rerank_target(
+        self, ranked: list[_RankedCandidate]
+    ) -> tuple[str, ...] | None:
+        if not ranked or not self._variant_template_sources_by_weapon:
+            return None
+        top_candidate = ranked[0]
+        for (
+            dominant_weapon,
+            weapons,
+            max_top_score,
+        ) in constants.TOP1_VARIANT_RERANK_RULES:
+            if top_candidate.weapon != dominant_weapon:
+                continue
+            if top_candidate.score > max_top_score:
+                continue
+            if not any(
+                weapon in self._variant_template_sources_by_weapon
+                for weapon in weapons
+                if weapon != dominant_weapon
+            ):
+                continue
+            return weapons
+        return None
+
+    def _resolve_top1_variant_rerank_max_top_score(
+        self, weapons: tuple[str, ...]
+    ) -> float | None:
+        for (
+            dominant_weapon,
+            rule_weapons,
+            max_top_score,
+        ) in constants.TOP1_VARIANT_RERANK_RULES:
+            _ = dominant_weapon
+            if tuple(rule_weapons) == tuple(weapons):
+                return max_top_score
+        return None
+
+    def _resolve_pair_variant_rescue_rule(
+        self, weapons: tuple[str, str]
+    ) -> tuple[str, float] | None:
+        for (
+            weapon_pair,
+            favored_weapon,
+            min_gain,
+        ) in constants.PAIR_VARIANT_RESCUE_RULES:
+            if set(weapons) == set(weapon_pair):
+                return favored_weapon, min_gain
+        return None
+
+    def _find_ranked_candidate(
+        self, ranked: list[_RankedCandidate], weapon: str
+    ) -> _RankedCandidate | None:
+        for candidate in ranked:
+            if candidate.weapon == weapon:
+                return candidate
+        return None
+
+    def _maybe_apply_pair_variant_rescue(
+        self,
+        *,
+        original_ranked: list[_RankedCandidate],
+        reranked: list[_RankedCandidate],
+        accepted_candidate: _RankedCandidate | None,
+        selected_confidence: float | None,
+        second_confidence: float | None,
+        pair_variant_rerank_target: tuple[str, str] | None,
+    ) -> tuple[
+        _RankedCandidate | None,
+        float | None,
+        float | None,
+        bool,
+        float | None,
+    ]:
+        if pair_variant_rerank_target is None:
+            return (
+                accepted_candidate,
+                selected_confidence,
+                second_confidence,
+                False,
+                None,
+            )
+        rescue_rule = self._resolve_pair_variant_rescue_rule(
+            pair_variant_rerank_target
+        )
+        if rescue_rule is None:
+            return (
+                accepted_candidate,
+                selected_confidence,
+                second_confidence,
+                False,
+                None,
+            )
+
+        favored_weapon, min_gain = rescue_rule
+        favored_original = self._find_ranked_candidate(
+            original_ranked, favored_weapon
+        )
+        favored_reranked = self._find_ranked_candidate(
+            reranked, favored_weapon
+        )
+        if favored_original is None or favored_reranked is None:
+            return (
+                accepted_candidate,
+                selected_confidence,
+                second_confidence,
+                False,
+                None,
+            )
+
+        gain = favored_reranked.score - favored_original.score
+        if gain < min_gain - constants.SCORE_TIE_EPSILON:
+            return (
+                accepted_candidate,
+                selected_confidence,
+                second_confidence,
+                False,
+                None,
+            )
+
+        opponent_weapon = (
+            pair_variant_rerank_target[0]
+            if pair_variant_rerank_target[1] == favored_weapon
+            else pair_variant_rerank_target[1]
+        )
+        opponent_reranked = self._find_ranked_candidate(
+            reranked, opponent_weapon
+        )
+        if opponent_reranked is None:
+            return (
+                accepted_candidate,
+                selected_confidence,
+                second_confidence,
+                False,
+                None,
+            )
+        if (
+            favored_reranked.score
+            < opponent_reranked.score - constants.SCORE_TIE_EPSILON
+        ):
+            return (
+                accepted_candidate,
+                selected_confidence,
+                second_confidence,
+                False,
+                None,
+            )
+
+        favored_confidence = self._candidate_confidence(favored_reranked)
+        if (
+            favored_confidence
+            < constants.CANDIDATE_CONFIDENCE_ACCEPT_THRESHOLD
+        ):
+            return (
+                accepted_candidate,
+                selected_confidence,
+                second_confidence,
+                False,
+                None,
+            )
+        if (
+            accepted_candidate is not None
+            and accepted_candidate.weapon == favored_weapon
+        ):
+            return (
+                accepted_candidate,
+                selected_confidence,
+                second_confidence,
+                False,
+                None,
+            )
+        return (
+            favored_reranked,
+            favored_confidence,
+            self._candidate_confidence(opponent_reranked),
+            True,
+            gain,
+        )
+
     def _should_replace_with_variant_result(
         self,
         *,
@@ -862,6 +1200,113 @@ class WeaponRecognitionAdapter(WeaponRecognitionPort):
             cancel_generation=cancel_generation,
             template_sources_by_weapon=self._template_sources_with_variant_by_weapon,
         )
+
+    async def _rerank_top_candidates_with_labeling_variants(
+        self,
+        *,
+        ranked: list[_RankedCandidate],
+        query_padded_gray: np.ndarray,
+        cancel_generation: int,
+    ) -> tuple[list[_RankedCandidate], bool]:
+        if not ranked or not self._labeling_variant_sources_by_weapon:
+            return ranked, False
+
+        target_weapons = {
+            candidate.weapon
+            for candidate in ranked[
+                : constants.LABELING_VARIANT_RERANK_TOP_WEAPONS
+            ]
+            if candidate.weapon in self._labeling_variant_sources_by_weapon
+        }
+        if not target_weapons:
+            return ranked, False
+
+        target_sources_by_weapon: dict[str, tuple[_TemplateSource, ...]] = {}
+        for weapon in target_weapons:
+            base_sources = self._template_sources_by_weapon.get(weapon, ())
+            labeling_variant_sources = (
+                self._labeling_variant_sources_by_weapon.get(weapon, ())
+            )
+            merged_sources = base_sources + labeling_variant_sources
+            if merged_sources:
+                target_sources_by_weapon[weapon] = merged_sources
+        if not target_sources_by_weapon:
+            return ranked, False
+
+        reranked_subset = await self._rank_weapon_candidates_from_sources(
+            query_padded_gray=query_padded_gray,
+            cancel_generation=cancel_generation,
+            template_sources_by_weapon=target_sources_by_weapon,
+        )
+        return self._merge_reranked_subset(
+            ranked=ranked,
+            reranked_subset=reranked_subset,
+        )
+
+    async def _rerank_specific_weapons_with_variants(
+        self,
+        *,
+        ranked: list[_RankedCandidate],
+        query_padded_gray: np.ndarray,
+        cancel_generation: int,
+        weapons: tuple[str, ...],
+    ) -> tuple[list[_RankedCandidate], bool]:
+        target_sources_by_weapon: dict[str, tuple[_TemplateSource, ...]] = {}
+        for weapon in weapons:
+            merged_sources = self._template_sources_with_variant_by_weapon.get(
+                weapon, ()
+            )
+            if merged_sources:
+                target_sources_by_weapon[weapon] = merged_sources
+        if len(target_sources_by_weapon) < 2:
+            return ranked, False
+
+        reranked_subset = await self._rank_weapon_candidates_from_sources(
+            query_padded_gray=query_padded_gray,
+            cancel_generation=cancel_generation,
+            template_sources_by_weapon=target_sources_by_weapon,
+        )
+        return self._merge_reranked_subset(
+            ranked=ranked,
+            reranked_subset=reranked_subset,
+        )
+
+    def _merge_reranked_subset(
+        self,
+        *,
+        ranked: list[_RankedCandidate],
+        reranked_subset: list[_RankedCandidate],
+    ) -> tuple[list[_RankedCandidate], bool]:
+        reranked_by_weapon = {
+            candidate.weapon: candidate for candidate in reranked_subset
+        }
+        updated_candidates: list[_RankedCandidate] = []
+        applied = False
+        for candidate in ranked:
+            replacement = reranked_by_weapon.get(candidate.weapon)
+            if replacement is None:
+                updated_candidates.append(candidate)
+                continue
+            updated_candidates.append(replacement)
+            if (
+                replacement.score
+                > candidate.score + constants.SCORE_TIE_EPSILON
+            ):
+                applied = True
+
+        def _compare(left: _RankedCandidate, right: _RankedCandidate) -> int:
+            diff = left.score - right.score
+            if diff > constants.SCORE_TIE_EPSILON:
+                return -1
+            if diff < -constants.SCORE_TIE_EPSILON:
+                return 1
+            if left.weapon < right.weapon:
+                return -1
+            if left.weapon > right.weapon:
+                return 1
+            return 0
+
+        return sorted(updated_candidates, key=cmp_to_key(_compare)), applied
 
     async def _rank_weapon_candidates_from_sources(
         self,
@@ -996,6 +1441,58 @@ class WeaponRecognitionAdapter(WeaponRecognitionPort):
             },
         )
 
+    def _load_labeling_variant_sources(
+        self,
+    ) -> dict[str, tuple[_TemplateSource, ...]]:
+        manifest_path = (
+            self._assets_dir
+            / constants.LABELING_VARIANT_MANIFEST_RELATIVE_PATH
+        )
+        try:
+            records = labeling_variant_bank.load_labeling_variant_records(
+                manifest_path
+            )
+        except labeling_variant_bank.LabelingVariantManifestError as exc:
+            self._logger.warning(
+                "ラベリング追加テンプレート manifest の読み込みに失敗",
+                manifest_path=str(manifest_path),
+                error=str(exc),
+            )
+            return {}
+        if not records:
+            return {}
+
+        grouped: dict[str, list[_TemplateSource]] = {}
+        for record in records:
+            base_sources = self._template_sources_by_weapon.get(record.weapon)
+            if not base_sources:
+                self._logger.warning(
+                    "ラベリング追加テンプレートの対象ブキが未定義",
+                    weapon=record.weapon,
+                    manifest_path=str(manifest_path),
+                )
+                continue
+            source = self._build_template_source_from_paths(
+                template_path=record.template_path,
+                mask_path=record.mask_path,
+                threshold=base_sources[0].threshold,
+            )
+            if source is None:
+                self._logger.warning(
+                    "ラベリング追加テンプレートの読み込みをスキップ",
+                    weapon=record.weapon,
+                    template_path=record.template_path,
+                    mask_path=record.mask_path,
+                )
+                continue
+            grouped.setdefault(record.weapon, []).append(source)
+
+        return {
+            weapon: tuple(sources)
+            for weapon, sources in grouped.items()
+            if sources
+        }
+
     def _is_variant_template_source(self, cfg: MatcherConfig) -> bool:
         if not cfg.template_path:
             return False
@@ -1044,6 +1541,39 @@ class WeaponRecognitionAdapter(WeaponRecognitionPort):
             template_path=template_path,
             mask_path=mask_path,
             threshold=cfg.threshold,
+        )
+
+    def _build_template_source_from_paths(
+        self,
+        *,
+        template_path: str,
+        mask_path: str,
+        threshold: float,
+    ) -> _TemplateSource | None:
+        resolved_template_path = _resolve_asset_path(
+            template_path,
+            assets_dir=self._assets_dir,
+        )
+        resolved_mask_path = _resolve_asset_path(
+            mask_path,
+            assets_dir=self._assets_dir,
+        )
+        if (
+            not resolved_template_path.is_file()
+            or not resolved_mask_path.is_file()
+        ):
+            return None
+        matcher = TemplateMatcher(
+            template_path=resolved_template_path,
+            mask_path=resolved_mask_path,
+            threshold=threshold,
+            response_top_k=constants.TEMPLATE_RESPONSE_TOP_K,
+        )
+        return _TemplateSource(
+            matcher=matcher,
+            template_path=resolved_template_path,
+            mask_path=resolved_mask_path,
+            threshold=threshold,
         )
 
     def _resolve_matching_assets_dir(self) -> Path:

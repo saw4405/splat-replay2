@@ -1,6 +1,9 @@
 """各種アダプタ実装を公開するモジュール。"""
 
 __all__ = [
+    "AdaptiveCapture",
+    "AdaptiveCaptureDeviceChecker",
+    "AdaptiveVideoRecorder",
     "CaptureDeviceChecker",
     "CaptureDeviceEnumerator",
     "NDICapture",
@@ -32,6 +35,8 @@ __all__ = [
     "ProcessEnvironmentAdapter",
     "TomlSettingsRepository",
     "WeaponRecognitionAdapter",
+    "VideoFileCapture",
+    "ReplayRecorderController",
 ]
 
 from .audio import (
@@ -41,11 +46,16 @@ from .audio import (
     SpeechTranscriber,
 )
 from .capture.capture import Capture
+from .capture.adaptive_capture import AdaptiveCapture
+from .capture.adaptive_capture_device_checker import (
+    AdaptiveCaptureDeviceChecker,
+)
 from .capture.capture_device_checker import (
     CaptureDeviceChecker,
     CaptureDeviceEnumerator,
 )
 from .capture.ndi_capture import NDICapture
+from .capture.video_file_capture import VideoFileCapture
 from .image.image_drawer import ImageDrawer
 from .image.image_editor import ImageEditor
 from .medal_detection import BattleMedalRecognizerAdapter
@@ -69,5 +79,7 @@ from .text.subtitle_editor import SubtitleEditor
 from .text.tesseract_ocr import TesseractOCR
 from .upload.youtube_client import YouTubeClient
 from .video.ffmpeg_processor import FFmpegProcessor
+from .video.adaptive_video_recorder import AdaptiveVideoRecorder
+from .video.replay_recorder_controller import ReplayRecorderController
 from .video.recorder_with_transcription import RecorderWithTranscription
 from .weapon_detection import WeaponRecognitionAdapter

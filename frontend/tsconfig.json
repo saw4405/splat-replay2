@@ -4,6 +4,8 @@
     "target": "ESNext",
     "useDefineForClassFields": true,
     "module": "ESNext",
+    "noEmit": true,
+    "allowImportingTsExtensions": true,
     "resolveJsonModule": true,
     "allowJs": true,
     "checkJs": true,

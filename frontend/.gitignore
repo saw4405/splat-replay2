@@ -9,6 +9,11 @@ dist/
 # Generated
 src/generated/
 
+# Test
+coverage/
+.vitest/
+node_modules/.vite-test/
+
 # Environment
 .env
 .env.local

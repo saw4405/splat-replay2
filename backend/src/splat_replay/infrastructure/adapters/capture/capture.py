@@ -74,6 +74,9 @@ class Capture(CapturePort):
             return None
         return as_frame(frame)
 
+    def current_time_seconds(self) -> Optional[float]:
+        return None
+
     def teardown(self) -> None:
         """キャプチャデバイスを閉じる。"""
         if self.video_capture is not None and self.video_capture.isOpened():

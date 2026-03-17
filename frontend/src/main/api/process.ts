@@ -1,4 +1,4 @@
-import { JSON_HEADERS, safeReadText } from './utils';
+import { JSON_HEADERS, safeReadText } from './utils.ts';
 
 export const processApi = {
   start: async (): Promise<void> => {

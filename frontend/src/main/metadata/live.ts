@@ -1,12 +1,12 @@
-import type { EditableMetadata } from './editable';
+import type { EditableMetadata } from './editable.ts';
 import {
   normaliseMedalCount,
   normaliseMedalPair,
   normaliseWeaponSlots,
   type WeaponSlots,
-} from './shared';
+} from './shared.ts';
 
-export type { WeaponSlots } from './shared';
+export type { WeaponSlots } from './shared.ts';
 
 type MedalField = 'gold_medals' | 'silver_medals';
 

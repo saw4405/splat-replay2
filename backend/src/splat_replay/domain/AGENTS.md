@@ -126,3 +126,4 @@
 
 - ルート `AGENTS.md` - 全体方針とレイヤ間ルール
 - `docs/internal_design.md` - 設計思想の詳細
+- `docs/test_strategy.md` - テスト戦略

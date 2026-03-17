@@ -6,7 +6,7 @@
 from __future__ import annotations
 
 import asyncio
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any, Awaitable, Callable, cast
 
 from splat_replay.application.interfaces import (
     ConfigPort,
@@ -47,6 +47,7 @@ class AutoProcessService:
         config: ConfigPort,
         logger: LoggerPort,
         repo: VideoAssetRepositoryPort,
+        sleep_func: Callable[[float], Awaitable[None]] = asyncio.sleep,
     ) -> None:
         self.event_bus = event_bus
         self.start_edit_upload_uc = start_edit_upload_uc
@@ -54,6 +55,7 @@ class AutoProcessService:
         self.config = config
         self.logger = logger
         self.repo = repo
+        self._sleep = sleep_func
         self._is_auto_processing = False
         self._auto_sleep_allowed = False
         self._pending_sleep_after_upload: bool | None = None
@@ -239,5 +241,5 @@ class AutoProcessService:
         self.logger.info("自動スリープを開始します。")
         self.event_bus.publish_domain_event(AutoSleepStarted())
         # スリープ直前にログが残るよう少し待機
-        await asyncio.sleep(3)
+        await self._sleep(3)
         await self.power_manager.sleep(sleep_after_upload=sleep_after_upload)

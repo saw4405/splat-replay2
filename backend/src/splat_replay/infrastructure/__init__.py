@@ -6,6 +6,9 @@ __all__ = [
     "filesystem",
     "logging",
     "MatcherRegistry",
+    "AdaptiveCapture",
+    "AdaptiveCaptureDeviceChecker",
+    "AdaptiveVideoRecorder",
     "CaptureDeviceChecker",
     "CaptureDeviceEnumerator",
     "Capture",
@@ -37,10 +40,15 @@ __all__ = [
     "FileSystemPathsAdapter",
     "LocalFileSystemAdapter",
     "ProcessEnvironmentAdapter",
+    "ReplayRecorderController",
+    "VideoFileCapture",
     "WeaponRecognitionAdapter",
 ]
 
 from .adapters import (
+    AdaptiveCapture,
+    AdaptiveCaptureDeviceChecker,
+    AdaptiveVideoRecorder,
     Capture,
     BattleMedalRecognizerAdapter,
     CaptureDeviceChecker,
@@ -69,6 +77,8 @@ from .adapters import (
     TesseractOCR,
     TomlConfigAdapter,
     TomlSettingsRepository,
+    ReplayRecorderController,
+    VideoFileCapture,
     WeaponRecognitionAdapter,
     YouTubeClient,
 )

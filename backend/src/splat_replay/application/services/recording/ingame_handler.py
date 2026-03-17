@@ -8,7 +8,11 @@ from __future__ import annotations
 import time
 from dataclasses import replace
 
-from splat_replay.application.interfaces import EventBusPort, LoggerPort
+from splat_replay.application.interfaces import (
+    ClockPort,
+    EventBusPort,
+    LoggerPort,
+)
 from splat_replay.application.services.recording.commands import (
     RecordingCommand,
 )
@@ -31,6 +35,11 @@ EARLY_ABORT_WINDOW_SECONDS = (
 MAX_RECORDING_SECONDS = 600
 
 
+class _WallClock:
+    def now(self) -> float:
+        return time.time()
+
+
 class InGamePhaseHandler:
     """IN_GAME フェーズ（バトル中）の処理。
 
@@ -48,11 +57,13 @@ class InGamePhaseHandler:
         logger: LoggerPort,
         event_bus: EventBusPort,
         weapon_detection_service: WeaponDetectionService | None = None,
+        clock: ClockPort | None = None,
     ):
         self.analyzer = analyzer
         self.logger = logger
         self.event_bus = event_bus
         self.weapon_detection_service = weapon_detection_service
+        self._clock = clock or _WallClock()
 
     def cancel_background_tasks(self) -> None:
         """バックグラウンドのブキ判別タスクを中断する。"""
@@ -69,7 +80,7 @@ class InGamePhaseHandler:
             RecordingCommand: 実行すべきコマンド（副作用は UseCase で実行）
         """
         gm = ctx.metadata.game_mode
-        now = time.time()
+        now = self._clock.now()
 
         # バトル中断検出（開始60秒以内）
         if (

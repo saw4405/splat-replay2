@@ -152,6 +152,14 @@ class _SpyLogger:
         return None
 
 
+class _FixedClock:
+    def __init__(self, now: float) -> None:
+        self._now = now
+
+    def now(self) -> float:
+        return self._now
+
+
 class _DetectErrorRecognizer:
     def request_cancel(self) -> None:
         return None
@@ -746,3 +754,22 @@ async def test_finalize_timeout_marks_done_with_unknown(
         if isinstance(event, BattleWeaponsDetected) and event.is_final
     ]
     assert len(final_events) == 1
+
+
+@pytest.mark.asyncio
+async def test_detection_window_uses_injected_clock() -> None:
+    recognizer = _WindowClosedRecognizer()
+    service = WeaponDetectionService(
+        cast(WeaponRecognitionPort, recognizer),
+        cast(LoggerPort, _SpyLogger()),
+        cast(EventBusPort, _SpyEventBus()),
+        clock=_FixedClock(125.0),
+    )
+    context = RecordingContext(battle_started_at=100.0)
+    frame = _frame(1)
+
+    context = await service.process(frame=frame, context=context)
+    context = await _drive_process(service, context, frame, loops=8)
+
+    assert recognizer.detect_calls == 0
+    assert context.weapon_detection_done is True

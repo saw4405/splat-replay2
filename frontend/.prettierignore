@@ -1,0 +1,18 @@
+# Dependencies
+node_modules/
+
+# Build outputs
+dist/
+build/
+
+# Test outputs
+.pytest_cache/
+test-results/
+coverage/
+
+# Generated files
+src/generated/
+
+# Config files
+*.config.js
+*.config.ts

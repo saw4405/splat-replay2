@@ -1,5 +1,8 @@
 ﻿<script lang="ts">
+  import { createEventDispatcher } from 'svelte';
   import BaseDialog from '../../../common/components/BaseDialog.svelte';
+
+  const dispatch = createEventDispatcher();
 
   export let open = false;
   let dontShowAgain = false;
@@ -17,6 +20,8 @@
       }
     }
     open = false;
+    // 親コンポーネントに close イベントを通知
+    dispatch('close');
   }
 </script>
 

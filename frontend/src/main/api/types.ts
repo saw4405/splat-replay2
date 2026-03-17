@@ -7,9 +7,14 @@
 
 // 録画制御
 export type RecorderState = 'stopped' | 'recording' | 'paused';
+export type RecorderPreviewMode = 'live_capture' | 'video_file';
 
 export interface RecorderStateResponse {
   state: RecorderState;
+}
+
+export interface RecorderPreviewModeResponse {
+  mode: RecorderPreviewMode;
 }
 
 // 編集・アップロード

@@ -8,8 +8,6 @@
   export let visible = false;
   export let videoId: string;
   export let videoUrl: string;
-  // 外部参照用（現在は未使用だが、将来的にタイトル表示などで使用予定）
-  export const videoTitle: string = '';
 
   let subtitleData: SubtitleData | null = null;
   let blocks: SubtitleBlock[] = [];
