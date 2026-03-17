@@ -1,13 +1,10 @@
 # 改行コード設定
 * text=auto eol=lf
-
 # Windows バッチファイルは CRLF
 *.bat text eol=crlf
 *.cmd text eol=crlf
-
 # PowerShell スクリプトは CRLF
 *.ps1 text eol=crlf
-
 # バイナリファイル
 *.png binary
 *.jpg binary
@@ -20,3 +17,4 @@
 *.gz binary
 *.mp4 binary
 *.mov binary
+frontend/tests/fixtures/e2e/**/*.mkv filter=lfs diff=lfs merge=lfs -text
