@@ -3,6 +3,7 @@
   import { fetchEditUploadStatus, updateEditUploadProcessOptions } from '../../api/assets';
   import BaseDialog from '../../../common/components/BaseDialog.svelte';
   import type { EditUploadStatus, ProgressEvent } from '../../api/types';
+  import { Circle, Loader2, CheckCircle2, XCircle } from 'lucide-svelte';
 
   type ConnectionState = 'idle' | 'connecting' | 'open' | 'error';
   type TaskStatus = 'idle' | 'running' | 'succeeded' | 'failed';
@@ -35,6 +36,13 @@
     errorMessage: string | null;
     successMessage: string | null;
     lastUpdated: number;
+    startedAt: number | null;
+  }
+
+  type PhaseStatus = 'pending' | 'active' | 'completed' | 'failed';
+  interface Phase {
+    label: string;
+    status: PhaseStatus;
   }
 
   export let isOpen = false;
@@ -53,7 +61,6 @@
   let optionLoading = false;
   let optionSaving = false;
   let optionErrorMessage = '';
-  let optionHintMessage: string | null = null;
   let wasOpen = false;
   let statusRequestId = 0;
 
@@ -75,37 +82,45 @@
       { key: 'metadata', label: 'メタデータ編集' },
       { key: 'thumbnail', label: 'サムネイル編集' },
       { key: 'volume', label: '音量調整' },
-      { key: 'save', label: '保存' },
+      { key: 'save', label: '保存・整理' },
     ],
     auto_upload: [
-      { key: 'collect', label: '編集済み動画収集' },
+      { key: 'collect', label: 'ファイル情報収集' },
       { key: 'upload', label: '動画アップロード' },
       { key: 'caption', label: '字幕アップロード' },
       { key: 'thumb', label: 'サムネイルアップロード' },
       { key: 'playlist', label: 'プレイリスト追加' },
-      { key: 'delete', label: '編集済み動画削除' },
+      { key: 'delete', label: 'ファイル削除' },
     ],
   };
-  const stageKeyMappings: Record<string, Record<string, { key: string; label: string }>> = {
-    auto_edit: {
-      edit_group: { key: 'edit_group', label: 'グループ編集' },
-      concat: { key: 'concat', label: '動画結合' },
-      subtitle: { key: 'subtitle', label: '字幕編集' },
-      metadata: { key: 'metadata', label: 'メタデータ編集' },
-      thumbnail: { key: 'thumbnail', label: 'サムネイル編集' },
-      volume: { key: 'volume', label: '音量調整' },
-      save: { key: 'save', label: '保存' },
-    },
-    auto_upload: {
-      prepare: { key: 'collect', label: '編集済み動画収集' },
-      collect: { key: 'collect', label: '編集済み動画収集' },
-      upload: { key: 'upload', label: '動画アップロード' },
-      caption: { key: 'caption', label: '字幕アップロード' },
-      thumb: { key: 'thumb', label: 'サムネイルアップロード' },
-      playlist: { key: 'playlist', label: 'プレイリスト追加' },
-      delete: { key: 'delete', label: '編集済み動画削除' },
-    },
+
+  // defaultTaskSteps から stageKey → {key, label} のマッピングを自動生成
+  // エイリアス（バックエンドが別キーで送るケース）もここで定義
+  const stageKeyAliases: Record<string, Record<string, string>> = {
+    auto_upload: { prepare: 'collect' },
   };
+
+  const stageKeyMappings: Record<
+    string,
+    Record<string, { key: string; label: string }>
+  > = Object.fromEntries(
+    Object.entries(defaultTaskSteps).map(([taskId, steps]) => {
+      const mapping: Record<string, { key: string; label: string }> = {};
+      for (const step of steps) {
+        mapping[step.key] = step;
+      }
+      const aliases = stageKeyAliases[taskId];
+      if (aliases) {
+        for (const [alias, targetKey] of Object.entries(aliases)) {
+          const target = mapping[targetKey];
+          if (target) {
+            mapping[alias] = target;
+          }
+        }
+      }
+      return [taskId, mapping];
+    })
+  );
 
   const streamEventNames = ['progress_event', 'progress'];
 
@@ -119,18 +134,23 @@
 
   $: allFinished =
     taskList.length > 0 &&
+    taskOrder.every((id) => tasks[id] !== undefined) &&
     taskList.every((task) => task.status === 'succeeded' || task.status === 'failed');
 
   $: anyRunning = taskList.some((task) => task.status === 'running');
   $: anyFailure = taskList.some((task) => task.status === 'failed');
+
+  // フェーズステッパーの状態を導出
+  $: phases = computePhases(tasks);
+
+  // 経過時間の計測
+  let elapsedTimers: Record<string, number> = {};
+  let elapsedSeconds: Record<string, number> = {};
+
+  // 完了サマリー
+  $: totalItemsProcessed = taskList.reduce((sum, t) => sum + t.completed, 0);
   $: sleepAfterUploadEnabled = editUploadStatus?.sleepAfterUploadEffective ?? false;
-  $: sleepToggleDisabled =
-    optionLoading ||
-    optionSaving ||
-    !editUploadStatus ||
-    editUploadStatus.state !== 'running' ||
-    allFinished;
-  $: optionHintMessage = getOptionHintMessage();
+  $: sleepToggleDisabled = optionLoading || optionSaving || !editUploadStatus || allFinished;
 
   $: if (isOpen) {
     ensureStream();
@@ -152,6 +172,7 @@
 
   onDestroy(() => {
     disposeStream();
+    Object.keys(elapsedTimers).forEach(stopElapsedTimer);
   });
 
   function ensureStream(): void {
@@ -316,25 +337,6 @@
     }
   }
 
-  function getOptionHintMessage(): string | null {
-    if (optionSaving) {
-      return '反映中です...';
-    }
-    if (optionLoading) {
-      return '読込中です...';
-    }
-    if (!editUploadStatus) {
-      return null;
-    }
-    if (editUploadStatus.state === 'idle') {
-      return '処理開始後に変更できます。';
-    }
-    if (editUploadStatus.state !== 'running') {
-      return '処理完了後は変更できません。';
-    }
-    return null;
-  }
-
   function applyEvent(event: ProgressEvent): void {
     switch (event.kind) {
       case 'start':
@@ -389,8 +391,10 @@
       errorMessage: null,
       successMessage: event.message ?? null,
       lastUpdated: Date.now(),
+      startedAt: Date.now(),
     };
     tasks = { ...tasks, [taskId]: task };
+    startElapsedTimer(taskId);
     if (isOpen && !optionSaving && (!editUploadStatus || editUploadStatus.state !== 'running')) {
       void loadEditUploadStatus();
     }
@@ -427,7 +431,7 @@
       if (index < 0) {
         return;
       }
-      ensureItemExists(draft, index, event.message ?? event.item_label ?? null);
+      ensureItemExists(draft, index, null);
       setActiveItem(draft, index);
       const item = draft.items[index];
       const mapped = mapStageKey(taskId, event.item_key ?? '');
@@ -483,7 +487,7 @@
         setActiveStep(
           draft.items[targetIndex],
           mapped?.key ?? 'collect',
-          mapped?.label ?? '編集済み動画収集',
+          mapped?.label ?? 'ファイル情報収集',
           event.message ?? null
         );
         return;
@@ -528,6 +532,7 @@
 
   function handleFinish(event: ProgressEvent): void {
     const taskId = event.task_id;
+    stopElapsedTimer(taskId);
     updateTask(taskId, event.task_name ?? undefined, (draft) => {
       const success = event.success !== false;
       draft.status = success ? 'succeeded' : 'failed';
@@ -536,7 +541,8 @@
           ? Math.max(0, event.completed)
           : draft.total;
       if (success) {
-        draft.successMessage = event.message ?? 'すべての処理が完了しました。';
+        const defaultMsg = `${draft.title}が完了しました。`;
+        draft.successMessage = event.message ?? defaultMsg;
         draft.errorMessage = null;
         draft.items.forEach((item) => {
           if (item.status !== 'success') {
@@ -746,6 +752,7 @@
       errorMessage: null,
       successMessage: null,
       lastUpdated: Date.now(),
+      startedAt: null,
     };
     const draft = cloneTask(current);
     if ((!draft.title || draft.title === current.title) && fallbackTitle) {
@@ -765,41 +772,6 @@
     return Math.round(ratio * 100);
   }
 
-  function itemStatusLabel(status: ItemStatus): string {
-    switch (status) {
-      case 'active':
-        return '進行中';
-      case 'success':
-        return '完了';
-      case 'failure':
-        return '失敗';
-      default:
-        return '待機中';
-    }
-  }
-
-  function stepStatusLabel(status: StepStatus): string {
-    switch (status) {
-      case 'active':
-        return '進行中';
-      case 'success':
-        return '完了';
-      case 'failure':
-        return '失敗';
-      default:
-        return '待機中';
-    }
-  }
-
-  function toggleItem(taskId: string, index: number): void {
-    updateTask(taskId, undefined, (draft) => {
-      if (!draft.items[index]) {
-        return;
-      }
-      draft.items[index].expanded = !draft.items[index].expanded;
-    });
-  }
-
   function manualReconnect(): void {
     if (!isOpen) {
       return;
@@ -809,205 +781,286 @@
     openStream();
   }
 
+  $: closeDisabled = anyRunning;
+
   function handleClose(): void {
+    if (closeDisabled) {
+      return;
+    }
     isOpen = false;
+  }
+
+  function computePhases(taskMap: Record<string, TaskState>): Phase[] {
+    const edit = taskMap['auto_edit'];
+    const upload = taskMap['auto_upload'];
+
+    let editStatus: PhaseStatus = 'pending';
+    if (edit) {
+      if (edit.status === 'running') editStatus = 'active';
+      else if (edit.status === 'succeeded') editStatus = 'completed';
+      else if (edit.status === 'failed') editStatus = 'failed';
+    }
+
+    let uploadStatus: PhaseStatus = 'pending';
+    if (upload) {
+      if (upload.status === 'running') uploadStatus = 'active';
+      else if (upload.status === 'succeeded') uploadStatus = 'completed';
+      else if (upload.status === 'failed') uploadStatus = 'failed';
+    }
+
+    let doneStatus: PhaseStatus = 'pending';
+    if (edit && upload) {
+      const editDone = edit.status === 'succeeded' || edit.status === 'failed';
+      const uploadDone = upload.status === 'succeeded' || upload.status === 'failed';
+      if (editDone && uploadDone) {
+        const anyFail = edit.status === 'failed' || upload.status === 'failed';
+        doneStatus = anyFail ? 'failed' : 'completed';
+      }
+    }
+
+    return [
+      { label: '編集', status: editStatus },
+      { label: 'アップロード', status: uploadStatus },
+      { label: '完了', status: doneStatus },
+    ];
+  }
+
+  function startElapsedTimer(taskId: string): void {
+    if (elapsedTimers[taskId]) return;
+    elapsedSeconds = { ...elapsedSeconds, [taskId]: 0 };
+    const startTime = Date.now();
+    elapsedTimers[taskId] = window.setInterval(() => {
+      elapsedSeconds = {
+        ...elapsedSeconds,
+        [taskId]: Math.floor((Date.now() - startTime) / 1000),
+      };
+    }, 1000);
+  }
+
+  function stopElapsedTimer(taskId: string): void {
+    if (elapsedTimers[taskId]) {
+      clearInterval(elapsedTimers[taskId]);
+      delete elapsedTimers[taskId];
+    }
   }
 </script>
 
 <BaseDialog
   bind:open={isOpen}
-  title="進捗ダイアログ"
+  title="進捗"
   showHeader={true}
   showFooter={true}
   footerVariant="custom"
-  maxWidth="960px"
+  maxWidth="640px"
   maxHeight={dialogMaxHeight}
   minHeight={dialogMinHeight}
   on:close={handleClose}
 >
   <section class="dialog-body">
+    <!-- 接続バナー（エラー時のみ表示） -->
     {#if connectionState === 'connecting'}
       <div class="connection-banner connecting" role="status" aria-live="polite">
         <span class="dot dot-1"></span>
         <span class="dot dot-2"></span>
         <span class="dot dot-3"></span>
-        サーバーと接続中です…
+        接続中…
       </div>
     {:else if connectionState === 'error'}
       <div class="connection-banner error" role="alert">
-        進捗ストリームへの接続に失敗しました。
+        接続に失敗しました。
         {#if retryCountdown > 0}
-          {retryCountdown} 秒後に再接続を試行します。
+          {retryCountdown}秒後に再試行
         {/if}
-        <button type="button" class="retry-button" on:click={manualReconnect}> 再接続 </button>
+        <button type="button" class="retry-button" on:click={manualReconnect}>再接続</button>
       </div>
     {/if}
 
-    <section class="process-options-panel">
-      <div class="process-options-body">
-        <div class="process-options-meta">
-          <label
-            id="progress-sleep-after-upload-label"
-            class="process-options-label"
-            for="progress-sleep-after-upload"
-          >
-            アップロード終了後にスリープする
-          </label>
-
-          <div class="process-options-state">
-            {#if optionHintMessage}
-              <span class="process-options-hint">{optionHintMessage}</span>
-            {/if}
+    <!-- フェーズステッパー -->
+    {#if taskList.length > 0}
+      <nav class="phase-stepper" aria-label="処理フェーズ">
+        {#each phases as phase, i}
+          <div class="phase" data-status={phase.status}>
+            <span class="phase-dot">
+              {#if phase.status === 'completed'}
+                <CheckCircle2 size={14} />
+              {:else if phase.status === 'failed'}
+                <XCircle size={14} />
+              {:else if phase.status === 'active'}
+                <Loader2 size={14} class="icon-spin" />
+              {:else}
+                <span class="phase-number">{i + 1}</span>
+              {/if}
+            </span>
+            <span class="phase-label">{phase.label}</span>
           </div>
-        </div>
+          {#if i < phases.length - 1}
+            <div
+              class="phase-connector"
+              data-filled={phase.status === 'completed'}
+              data-active={phase.status === 'active'}
+            />
+          {/if}
+        {/each}
+      </nav>
+    {/if}
 
-        <label
-          class="toggle-switch"
-          class:disabled={sleepToggleDisabled}
-          for="progress-sleep-after-upload"
-        >
-          <input
-            id="progress-sleep-after-upload"
-            type="checkbox"
-            checked={sleepAfterUploadEnabled}
-            disabled={sleepToggleDisabled}
-            aria-labelledby="progress-sleep-after-upload-label"
-            aria-describedby="progress-sleep-after-upload-description"
-            on:change={handleSleepAfterUploadChange}
-          />
-          <span class="toggle-slider"></span>
-        </label>
-      </div>
-
-      <p id="progress-sleep-after-upload-description" class="assistive">
-        保存済み設定は変更せず、この処理の完了時だけスリープ有無を切り替えます。
-      </p>
-
-      {#if optionErrorMessage}
-        <p class="process-options-error" role="alert">{optionErrorMessage}</p>
-      {/if}
-    </section>
-
+    <!-- メインコンテンツ -->
     <div class="content-region">
       {#if taskList.length === 0}
         <div class="empty-state">
-          <p>まだ進捗データがありません。</p>
-          {#if connectionState === 'open'}
-            <p class="hint">自動編集または自動アップロードを開始すると表示されます。</p>
-          {/if}
+          <p>
+            {#if connectionState === 'open'}
+              処理の開始を待っています…
+            {:else if connectionState === 'connecting'}
+              接続中…
+            {:else if connectionState === 'error'}
+              接続できませんでした。再接続を待っています…
+            {:else}
+              進捗データがありません。
+            {/if}
+          </p>
         </div>
       {:else}
-        <div class="tasks-grid">
-          {#each taskList as task (task.id)}
-            <article class="task-card" data-status={task.status}>
+        <!-- 全完了サマリー -->
+        {#if allFinished}
+          <div
+            class="completion-summary"
+            class:has-failure={anyFailure}
+            role="status"
+            aria-live="polite"
+          >
+            {#if anyFailure}
+              <XCircle size={20} />
+              <span>一部の処理に失敗しました</span>
+            {:else}
+              <CheckCircle2 size={20} />
+              <span>{totalItemsProcessed}件の動画を処理しました</span>
+            {/if}
+          </div>
+        {:else}
+          <!-- 未完了タスクのみ表示 -->
+          {#each taskList.filter((t) => t.status !== 'succeeded' && t.status !== 'failed') as task (task.id)}
+            <section class="task-section" data-status={task.status}>
               <header class="task-header">
-                <div class="task-title-group">
-                  <h3>{task.title}</h3>
-                  <span class="task-subtitle">{task.completed}/{task.total}</span>
-                </div>
-                <div
-                  class="task-progress"
-                  role="progressbar"
-                  aria-valuemin="0"
-                  aria-valuemax="100"
-                  aria-valuenow={taskProgress(task)}
-                >
-                  <div class="task-progress-fill" style={`width: ${taskProgress(task)}%`} />
-                  <span class="task-progress-label">{taskProgress(task)}%</span>
-                </div>
+                <span class="task-title">{task.title}</span>
+                <span class="task-count">{task.completed}/{task.total}</span>
               </header>
+              <div
+                class="task-progress"
+                role="progressbar"
+                aria-label={task.title}
+                aria-valuemin="0"
+                aria-valuemax="100"
+                aria-valuenow={taskProgress(task)}
+              >
+                <div class="task-progress-fill" style={`width: ${taskProgress(task)}%`} />
+              </div>
 
               {#if task.status === 'failed' && task.errorMessage}
-                <div class="status-banner error" role="alert">
-                  {task.errorMessage}
-                </div>
-              {:else if task.status === 'succeeded' && task.successMessage}
-                <div class="status-banner success" role="status">
-                  {task.successMessage}
+                <div class="error-banner" role="alert">
+                  <XCircle size={14} />
+                  <span>{task.errorMessage}</span>
                 </div>
               {/if}
 
-              <div class="task-body">
-                {#if task.items.length === 0}
-                  <div class="empty-items">処理対象が見つかりませんでした。</div>
-                {:else}
+              {#if task.items.length > 0}
+                <ul class="item-list">
                   {#each task.items as item, index (item.title + index)}
-                    <section class="item" data-status={item.status}>
-                      <button
-                        type="button"
-                        class="item-header"
-                        aria-expanded={item.expanded}
-                        on:click={() => toggleItem(task.id, index)}
-                      >
-                        <span class="item-index">{index + 1}</span>
-                        <span class="item-title">{item.title}</span>
-                        <span class="item-chip" data-status={item.status}>
-                          {itemStatusLabel(item.status)}
-                        </span>
-                      </button>
-                      {#if item.expanded}
-                        <ul class="step-list">
-                          {#if item.steps.length === 0}
-                            <li class="step pending">
-                              <span class="step-marker"></span>
-                              <span class="step-label">進捗待機中</span>
+                    <li class="item-row" data-status={item.status}>
+                      <span class="item-icon">
+                        {#if item.status === 'active'}
+                          <Loader2 size={14} class="icon-spin" />
+                        {:else if item.status === 'success'}
+                          <CheckCircle2 size={14} />
+                        {:else if item.status === 'failure'}
+                          <XCircle size={14} />
+                        {:else}
+                          <Circle size={14} />
+                        {/if}
+                      </span>
+                      <span class="item-name">{item.title}</span>
+                    </li>
+                    {#if item.status === 'active' && item.steps.length > 1}
+                      <li class="item-steps-row">
+                        <ol class="step-indicators">
+                          {#each item.steps as step (step.key)}
+                            <li
+                              class="step-dot"
+                              data-status={step.status}
+                              title={step.label}
+                              aria-label="{step.label}: {step.status === 'active'
+                                ? '実行中'
+                                : step.status === 'success'
+                                  ? '完了'
+                                  : step.status === 'failure'
+                                    ? '失敗'
+                                    : '待機中'}"
+                            >
+                              {#if step.status === 'active'}
+                                <Loader2 size={10} class="icon-spin" />
+                              {:else if step.status === 'success'}
+                                <CheckCircle2 size={10} />
+                              {:else if step.status === 'failure'}
+                                <XCircle size={10} />
+                              {:else}
+                                <Circle size={10} />
+                              {/if}
+                              <span class="step-dot-label">{step.label}</span>
                             </li>
-                          {:else}
-                            {#each item.steps as step (step.key)}
-                              <li class={`step ${step.status}`}>
-                                <span class="step-marker"></span>
-                                <div class="step-content">
-                                  <span class="step-label">{step.label}</span>
-                                  <span class="step-chip" data-status={step.status}>
-                                    {stepStatusLabel(step.status)}
-                                  </span>
-                                  {#if step.message}
-                                    <span class="step-message">{step.message}</span>
-                                  {/if}
-                                </div>
-                              </li>
-                            {/each}
-                          {/if}
-                        </ul>
-                      {/if}
-                    </section>
+                          {/each}
+                        </ol>
+                      </li>
+                    {/if}
                   {/each}
-                {/if}
-              </div>
-            </article>
+                </ul>
+              {/if}
+            </section>
           {/each}
-        </div>
+        {/if}
       {/if}
     </div>
   </section>
 
   <footer slot="footer" class="dialog-footer">
-    <div class="footer-status">
-      {#if anyRunning}
-        <span class="footer-indicator running">処理中</span>
-      {:else if anyFailure}
-        <span class="footer-indicator failed">失敗あり</span>
-      {:else if allFinished}
-        <span class="footer-indicator done">完了</span>
+    <!-- スリープトグル -->
+    <div class="footer-option">
+      <label class="sleep-toggle" class:disabled={sleepToggleDisabled}>
+        <input
+          type="checkbox"
+          checked={sleepAfterUploadEnabled}
+          disabled={sleepToggleDisabled}
+          aria-label="完了後スリープ"
+          on:change={handleSleepAfterUploadChange}
+        />
+        <span class="toggle-slider"></span>
+        <span class="toggle-label">完了後スリープ</span>
+      </label>
+      {#if optionErrorMessage}
+        <span class="option-error" role="alert">{optionErrorMessage}</span>
       {/if}
     </div>
-    <button
-      type="button"
-      class="action-button primary"
-      on:click={handleClose}
-      disabled={!allFinished && anyRunning}
-    >
-      閉じる
-    </button>
+
+    <div class="footer-actions">
+      <button
+        type="button"
+        class="action-button primary"
+        on:click={handleClose}
+        disabled={closeDisabled}
+        title={closeDisabled ? '処理中は閉じることができません' : ''}
+      >
+        閉じる
+      </button>
+    </div>
   </footer>
 </BaseDialog>
 
 <style>
+  /* ====== レイアウト ====== */
   .dialog-body {
     display: flex;
     flex-direction: column;
-    gap: 1rem;
-    padding: 1rem 1.5rem;
+    gap: 0.75rem;
+    padding: 0.75rem 1.25rem;
     flex: 1 1 auto;
     min-height: 0;
     overflow: hidden;
@@ -1017,231 +1070,55 @@
     flex: 1 1 auto;
     min-height: 0;
     overflow-y: auto;
-    padding-right: 0.25rem;
-    display: flex;
-    flex-direction: column;
-    gap: 1rem;
-    scrollbar-gutter: stable both-edges;
-  }
-
-  .process-options-panel {
     display: flex;
     flex-direction: column;
     gap: 0.75rem;
-    padding: 1rem 1.25rem;
-    border-radius: 1rem;
-    background: linear-gradient(
-      135deg,
-      rgba(var(--theme-rgb-white), 0.07) 0%,
-      rgba(var(--theme-rgb-white), 0.03) 100%
-    );
-    border: 1px solid rgba(var(--theme-rgb-white), 0.08);
-    box-shadow:
-      0 0.5rem 1.5rem rgba(var(--theme-rgb-black), 0.18),
-      inset 0 1px 0 rgba(var(--theme-rgb-white), 0.08);
-    flex-shrink: 0;
+    scrollbar-gutter: stable;
   }
 
-  .assistive {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    padding: 0;
-    margin: -1px;
-    overflow: hidden;
-    clip: rect(0, 0, 0, 0);
-    white-space: nowrap;
-    border: 0;
-  }
-
-  .process-options-body {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 1rem;
-  }
-
-  .process-options-meta {
-    display: flex;
-    flex: 1 1 auto;
-    min-width: 0;
-    flex-direction: column;
-    gap: 0.4rem;
-  }
-
-  .process-options-label {
-    display: inline-flex;
-    align-items: center;
-    margin: 0;
-    color: rgba(var(--theme-rgb-white), 0.94);
-    font-size: 0.98rem;
-    font-weight: 600;
-    line-height: 1.35;
-  }
-
-  .process-options-state {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.5rem 0.9rem;
-    align-items: center;
-    color: rgba(var(--theme-rgb-white), 0.82);
-    font-size: 0.9rem;
-  }
-
-  .process-options-hint {
-    color: rgba(var(--theme-rgb-white), 0.66);
-  }
-
-  .process-options-error {
-    margin: 0;
-    color: var(--theme-status-danger-soft);
-    font-size: 0.88rem;
-  }
-
-  input[type='checkbox'] {
-    position: absolute;
-    opacity: 0;
-    width: 0;
-    height: 0;
-  }
-
-  .toggle-switch {
-    position: relative;
-    display: inline-block;
-    width: 3.5rem;
-    height: 2rem;
-    cursor: pointer;
-    flex-shrink: 0;
-  }
-
-  .toggle-switch.disabled {
-    cursor: not-allowed;
-    opacity: 0.6;
-  }
-
-  .toggle-slider {
-    position: absolute;
-    inset: 0;
-    background: linear-gradient(
-      135deg,
-      rgba(var(--theme-rgb-slate), 0.28) 0%,
-      rgba(var(--theme-rgb-slate-500), 0.28) 100%
-    );
-    border: 1px solid rgba(var(--theme-rgb-slate), 0.45);
-    border-radius: 2rem;
-    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-    box-shadow:
-      inset 0 0.125rem 0.25rem rgba(var(--theme-rgb-black), 0.25),
-      0 0.125rem 0.25rem rgba(var(--theme-rgb-black), 0.15);
-  }
-
-  .toggle-slider::before {
-    content: '';
-    position: absolute;
-    height: 1.5rem;
-    width: 1.5rem;
-    left: 0.25rem;
-    bottom: 0.25rem;
-    background: linear-gradient(
-      135deg,
-      rgba(var(--theme-rgb-white), 0.95) 0%,
-      rgba(var(--theme-rgb-light-slate), 0.9) 100%
-    );
-    border-radius: 50%;
-    transition: inherit;
-    box-shadow:
-      0 0.25rem 0.5rem rgba(var(--theme-rgb-black), 0.35),
-      0 0.125rem 0.25rem rgba(var(--theme-rgb-black), 0.25);
-  }
-
-  input[type='checkbox']:checked + .toggle-slider {
-    background: linear-gradient(
-      135deg,
-      rgba(var(--theme-rgb-accent), 0.92) 0%,
-      rgba(var(--theme-rgb-accent), 0.78) 100%
-    );
-    border-color: rgba(var(--theme-rgb-accent), 0.65);
-    box-shadow:
-      inset 0 0.125rem 0.35rem rgba(var(--theme-rgb-black), 0.15),
-      0 0.5rem 1rem rgba(var(--theme-rgb-accent), 0.28);
-  }
-
-  input[type='checkbox']:checked + .toggle-slider::before {
-    transform: translateX(1.5rem);
-    background: linear-gradient(
-      135deg,
-      rgba(var(--theme-rgb-white), 1) 0%,
-      rgba(var(--theme-rgb-light-green-bg), 0.96) 100%
-    );
-    box-shadow:
-      0 0.3rem 0.6rem rgba(var(--theme-rgb-black), 0.28),
-      0 0.125rem 0.5rem rgba(var(--theme-rgb-accent), 0.4);
-  }
-
-  input[type='checkbox']:focus + .toggle-slider {
-    outline: 0.125rem solid rgba(var(--theme-rgb-accent), 0.55);
-    outline-offset: 0.125rem;
-  }
-
-  .toggle-switch:not(.disabled):hover .toggle-slider {
-    border-color: rgba(var(--theme-rgb-accent), 0.5);
-    box-shadow:
-      inset 0 0.125rem 0.35rem rgba(var(--theme-rgb-black), 0.22),
-      0 0.25rem 0.75rem rgba(var(--theme-rgb-accent), 0.24);
-  }
-
-  .toggle-switch:not(.disabled) input[type='checkbox']:checked + .toggle-slider:hover {
-    background: linear-gradient(
-      135deg,
-      rgba(var(--theme-rgb-accent), 1) 0%,
-      rgba(var(--theme-rgb-accent), 0.86) 100%
-    );
-    box-shadow:
-      inset 0 0.125rem 0.35rem rgba(var(--theme-rgb-black), 0.18),
-      0 0.4rem 1.1rem rgba(var(--theme-rgb-accent), 0.4);
-  }
-
+  /* ====== 接続バナー ====== */
   .connection-banner {
     display: flex;
     align-items: center;
-    gap: 0.75rem;
-    padding: 0.75rem 1rem;
-    border-radius: 0.75rem;
-    font-size: 0.9rem;
+    gap: 0.5rem;
+    padding: 0.5rem 0.75rem;
+    border-radius: 0.5rem;
+    font-size: 0.82rem;
     flex-shrink: 0;
   }
 
   .connection-banner.connecting {
-    color: rgba(var(--theme-rgb-accent), 0.9);
-    background: rgba(var(--theme-rgb-accent), 0.1);
+    color: rgba(var(--theme-rgb-accent), 0.85);
+    background: rgba(var(--theme-rgb-accent), 0.08);
   }
 
   .connection-banner.error {
     color: rgba(var(--theme-rgb-danger-pale), 0.95);
-    background: rgba(var(--theme-rgb-danger-bright), 0.14);
-    border: 1px solid rgba(var(--theme-rgb-danger-soft), 0.25);
+    background: rgba(var(--theme-rgb-danger-bright), 0.1);
+    border: 1px solid rgba(var(--theme-rgb-danger-soft), 0.2);
   }
 
   .retry-button {
     margin-left: auto;
-    padding: 0.4rem 0.9rem;
-    border-radius: 0.6rem;
-    border: 1px solid rgba(var(--theme-rgb-white), 0.18);
-    color: rgba(var(--theme-rgb-white), 0.85);
+    padding: 0.3rem 0.7rem;
+    border-radius: 0.4rem;
+    border: 1px solid rgba(var(--theme-rgb-white), 0.15);
+    color: rgba(var(--theme-rgb-white), 0.8);
     background: transparent;
     cursor: pointer;
-    transition: all 0.2s ease;
+    font-size: 0.8rem;
+    transition: all 0.15s ease;
     flex-shrink: 0;
   }
 
   .retry-button:hover {
-    border-color: rgba(var(--theme-rgb-white), 0.4);
+    border-color: rgba(var(--theme-rgb-white), 0.35);
     color: var(--theme-color-white);
   }
 
   .dot {
-    width: 0.4rem;
-    height: 0.4rem;
+    width: 0.35rem;
+    height: 0.35rem;
     border-radius: 50%;
     background: rgba(var(--theme-rgb-accent), 0.4);
     animation: pulse 1.4s infinite ease-in-out;
@@ -1268,86 +1145,211 @@
     }
   }
 
+  /* ====== フェーズステッパー ====== */
+  .phase-stepper {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0;
+    padding: 0.5rem 1rem;
+    flex-shrink: 0;
+  }
+
+  .phase {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+  }
+
+  .phase-dot {
+    width: 1.5rem;
+    height: 1.5rem;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.7rem;
+    font-weight: 700;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .phase-number {
+    font-size: 0.7rem;
+    font-weight: 700;
+  }
+
+  .phase[data-status='pending'] .phase-dot {
+    background: rgba(var(--theme-rgb-white), 0.06);
+    color: rgba(var(--theme-rgb-white), 0.35);
+    border: 1.5px solid rgba(var(--theme-rgb-white), 0.1);
+  }
+
+  .phase[data-status='active'] .phase-dot {
+    background: rgba(var(--theme-rgb-accent), 0.18);
+    color: rgba(var(--theme-rgb-accent), 0.95);
+    border: 1.5px solid rgba(var(--theme-rgb-accent), 0.45);
+    box-shadow: 0 0 0.5rem rgba(var(--theme-rgb-accent), 0.25);
+    animation: phase-pulse 2s ease-in-out infinite;
+  }
+
+  .phase[data-status='completed'] .phase-dot {
+    background: rgba(var(--theme-rgb-success), 0.2);
+    color: rgba(var(--theme-rgb-success), 0.9);
+    border: 1.5px solid rgba(var(--theme-rgb-success), 0.4);
+  }
+
+  .phase[data-status='failed'] .phase-dot {
+    background: rgba(var(--theme-rgb-danger), 0.18);
+    color: rgba(var(--theme-rgb-danger), 0.9);
+    border: 1.5px solid rgba(var(--theme-rgb-danger), 0.4);
+  }
+
+  .phase-label {
+    font-size: 0.78rem;
+    font-weight: 500;
+    color: rgba(var(--theme-rgb-white), 0.45);
+    transition: color 0.2s ease;
+  }
+
+  .phase[data-status='active'] .phase-label {
+    color: rgba(var(--theme-rgb-accent), 0.9);
+  }
+
+  .phase[data-status='completed'] .phase-label {
+    color: rgba(var(--theme-rgb-success), 0.8);
+  }
+
+  .phase[data-status='failed'] .phase-label {
+    color: rgba(var(--theme-rgb-danger), 0.8);
+  }
+
+  .phase-connector {
+    flex: 1;
+    height: 1.5px;
+    margin: 0 0.6rem;
+    background: rgba(var(--theme-rgb-white), 0.08);
+    border-radius: 1px;
+    transition: background 0.3s ease;
+  }
+
+  .phase-connector[data-filled='true'] {
+    background: rgba(var(--theme-rgb-success), 0.4);
+  }
+
+  .phase-connector[data-active='true'] {
+    background: linear-gradient(
+      90deg,
+      rgba(var(--theme-rgb-accent), 0.45),
+      rgba(var(--theme-rgb-white), 0.08)
+    );
+  }
+
+  @keyframes phase-pulse {
+    0%,
+    100% {
+      box-shadow: 0 0 0.5rem rgba(var(--theme-rgb-accent), 0.25);
+    }
+    50% {
+      box-shadow: 0 0 1rem rgba(var(--theme-rgb-accent), 0.45);
+    }
+  }
+
+  /* ====== 空状態 ====== */
   .empty-state {
     display: grid;
     place-items: center;
     padding: 3rem 1rem;
-    border: 1px dashed rgba(var(--theme-rgb-white), 0.1);
-    border-radius: 1rem;
-    color: rgba(var(--theme-rgb-white), 0.6);
+    border: 1px dashed rgba(var(--theme-rgb-white), 0.08);
+    border-radius: 0.75rem;
+    color: rgba(var(--theme-rgb-white), 0.5);
     text-align: center;
-    gap: 0.5rem;
   }
 
-  .empty-state .hint {
+  /* ====== 完了サマリー ====== */
+  .completion-summary {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    padding: 0.65rem 0.85rem;
+    border-radius: 0.6rem;
+    background: rgba(var(--theme-rgb-success), 0.06);
+    border: 1px solid rgba(var(--theme-rgb-success), 0.15);
+    color: rgba(var(--theme-rgb-success), 0.85);
     font-size: 0.85rem;
-    color: rgba(var(--theme-rgb-white), 0.45);
+    font-weight: 500;
+    animation: summary-appear 0.3s ease-out;
+    flex-shrink: 0;
   }
 
-  .tasks-grid {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 1.25rem;
+  .completion-summary.has-failure {
+    background: rgba(var(--theme-rgb-danger-bright), 0.08);
+    border-color: rgba(var(--theme-rgb-danger-soft), 0.2);
+    color: rgba(var(--theme-rgb-danger-pale), 0.9);
   }
 
-  .task-card {
+  @keyframes summary-appear {
+    from {
+      opacity: 0;
+      transform: translateY(-0.25rem);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  /* ====== タスクセクション ====== */
+  .task-section {
     display: flex;
     flex-direction: column;
-    gap: 1rem;
-    padding: 1.25rem;
-    border-radius: 1rem;
+    gap: 0.5rem;
+    padding: 0.75rem 1rem;
+    border-radius: 0.75rem;
+    background: rgba(var(--theme-rgb-white), 0.03);
+    border: 1px solid rgba(var(--theme-rgb-white), 0.06);
+  }
+
+  .task-section[data-status='running'] {
+    border-color: rgba(var(--theme-rgb-accent), 0.1);
     background: linear-gradient(
-      155deg,
-      rgba(var(--theme-rgb-surface-progress), 0.9),
-      rgba(var(--theme-rgb-surface-progress-deep), 0.96)
+      160deg,
+      rgba(var(--theme-rgb-accent), 0.03) 0%,
+      rgba(var(--theme-rgb-white), 0.02) 100%
     );
-    border: 1px solid rgba(var(--theme-rgb-accent), 0.08);
-    box-shadow: 0 0.75rem 2.25rem rgba(var(--theme-rgb-black), 0.35);
   }
 
-  .task-card[data-status='succeeded'] {
-    border-color: rgba(var(--theme-rgb-accent), 0.35);
-  }
-
-  .task-card[data-status='failed'] {
-    border-color: rgba(var(--theme-rgb-danger-soft), 0.28);
-    box-shadow: 0 0.75rem 2.5rem rgba(var(--theme-rgb-danger-soft), 0.15);
+  .task-section[data-status='failed'] {
+    border-color: rgba(var(--theme-rgb-danger-soft), 0.2);
   }
 
   .task-header {
     display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 1rem;
+    align-items: baseline;
+    gap: 0.5rem;
   }
 
-  .task-title-group {
-    display: flex;
-    flex-direction: column;
-    gap: 0.25rem;
-  }
-
-  .task-title-group h3 {
-    margin: 0;
-    font-size: 1.05rem;
-    color: rgba(var(--theme-rgb-white), 0.92);
+  .task-title {
+    font-size: 0.82rem;
     font-weight: 600;
+    color: rgba(var(--theme-rgb-white), 0.88);
   }
 
-  .task-subtitle {
-    font-size: 0.85rem;
-    color: rgba(var(--theme-rgb-white), 0.45);
+  .task-count {
+    font-size: 0.75rem;
+    color: rgba(var(--theme-rgb-white), 0.4);
+    font-variant-numeric: tabular-nums;
+    margin-left: auto;
+    flex-shrink: 0;
+  }
+
+  .task-section[data-status='failed'] .task-header :global(svg) {
+    color: rgba(var(--theme-rgb-danger-soft), 0.7);
   }
 
   .task-progress {
-    position: relative;
-    flex-shrink: 0;
-    display: flex;
-    align-items: center;
-    width: 8rem;
-    height: 0.75rem;
-    border-radius: 0.75rem;
-    background: rgba(var(--theme-rgb-white), 0.08);
+    height: 0.3rem;
+    border-radius: 0.3rem;
+    background: rgba(var(--theme-rgb-white), 0.06);
     overflow: hidden;
   }
 
@@ -1355,325 +1357,307 @@
     height: 100%;
     border-radius: inherit;
     background: linear-gradient(90deg, var(--accent-color), var(--theme-accent-color-alt));
-    transition: width 0.3s ease;
+    transition: width 0.5s cubic-bezier(0.25, 0.8, 0.25, 1);
   }
 
-  .task-progress-label {
-    position: absolute;
-    inset: 0;
+  .task-section[data-status='running'] .task-progress-fill {
+    background: linear-gradient(
+      90deg,
+      var(--accent-color),
+      var(--theme-accent-color-alt),
+      var(--accent-color)
+    );
+    background-size: 200% 100%;
+    animation: shimmer 2s ease-in-out infinite;
+  }
+
+  .task-section[data-status='succeeded'] .task-progress-fill {
+    background: rgba(var(--theme-rgb-success), 0.5);
+  }
+
+  @keyframes shimmer {
+    0% {
+      background-position: 200% 0;
+    }
+    100% {
+      background-position: -200% 0;
+    }
+  }
+
+  /* ====== エラーバナー ====== */
+  .error-banner {
     display: flex;
     align-items: center;
-    justify-content: center;
-    font-size: 0.75rem;
-    color: rgba(var(--theme-rgb-white), 0.92);
-    font-weight: 600;
-    text-shadow: 0 0 6px rgba(var(--theme-rgb-black), 0.45);
-  }
-
-  .status-banner {
-    padding: 0.6rem 0.85rem;
-    border-radius: 0.8rem;
-    font-size: 0.85rem;
-  }
-
-  .status-banner.success {
-    background: rgba(var(--theme-rgb-accent), 0.1);
-    color: rgba(var(--theme-rgb-accent), 0.9);
-    border: 1px solid rgba(var(--theme-rgb-accent), 0.3);
-  }
-
-  .status-banner.error {
-    background: rgba(var(--theme-rgb-danger-bright), 0.12);
-    color: rgba(var(--theme-rgb-danger-pale), 0.95);
-    border: 1px solid rgba(var(--theme-rgb-danger-soft), 0.3);
-  }
-
-  .task-body {
-    display: flex;
-    flex-direction: column;
-    gap: 0.75rem;
-  }
-
-  .empty-items {
-    padding: 1rem;
-    border-radius: 0.75rem;
-    background: rgba(var(--theme-rgb-white), 0.04);
-    color: rgba(var(--theme-rgb-white), 0.55);
-    text-align: center;
-    font-size: 0.85rem;
-  }
-
-  .item {
-    border-radius: 0.9rem;
-    background: rgba(var(--theme-rgb-black), 0.3);
-    border: 1px solid rgba(var(--theme-rgb-white), 0.05);
-    overflow: hidden;
-  }
-
-  .item[data-status='active'] {
-    border-color: rgba(var(--theme-rgb-accent), 0.35);
-    box-shadow: inset 0 0 0 1px rgba(var(--theme-rgb-accent), 0.18);
-  }
-
-  .item[data-status='failure'] {
-    border-color: rgba(var(--theme-rgb-danger-soft), 0.28);
-    box-shadow: inset 0 0 0 1px rgba(var(--theme-rgb-danger-soft), 0.18);
-  }
-
-  .item-header {
-    width: 100%;
-    display: flex;
-    align-items: center;
-    gap: 0.75rem;
-    padding: 0.85rem 1rem;
-    background: none;
-    border: none;
-    color: inherit;
-    cursor: pointer;
-    text-align: left;
-    transition: background 0.2s ease;
-  }
-
-  .item-header:hover {
-    background: rgba(var(--theme-rgb-white), 0.05);
-  }
-
-  .item-index {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 1.5rem;
-    height: 1.5rem;
+    gap: 0.4rem;
+    padding: 0.4rem 0.6rem;
     border-radius: 0.4rem;
-    background: rgba(var(--theme-rgb-accent), 0.18);
-    color: rgba(var(--theme-rgb-accent), 0.9);
     font-size: 0.8rem;
-    font-weight: 600;
+    background: rgba(var(--theme-rgb-danger-bright), 0.1);
+    color: rgba(var(--theme-rgb-danger-pale), 0.9);
+    border: 1px solid rgba(var(--theme-rgb-danger-soft), 0.2);
   }
 
-  .item-title {
-    flex: 1;
-    font-size: 0.95rem;
-    font-weight: 500;
-    color: rgba(var(--theme-rgb-white), 0.9);
-  }
-
-  .item-chip {
-    padding: 0.35rem 0.7rem;
-    border-radius: 0.75rem;
-    font-size: 0.75rem;
-    font-weight: 600;
-    background: rgba(var(--theme-rgb-white), 0.06);
-    color: rgba(var(--theme-rgb-white), 0.7);
-  }
-
-  .item-chip[data-status='success'],
-  .item-chip[data-status='active'] {
-    background: rgba(var(--theme-rgb-accent), 0.18);
-    color: rgba(var(--theme-rgb-accent), 0.95);
-  }
-
-  .item-chip[data-status='failure'] {
-    background: rgba(var(--theme-rgb-danger-soft), 0.18);
-    color: rgba(var(--theme-rgb-danger-soft), 0.95);
-  }
-
-  .step-list {
+  /* ====== アイテムリスト ====== */
+  .item-list {
     list-style: none;
     margin: 0;
-    padding: 0.75rem 1rem 1rem;
+    padding: 0;
     display: flex;
     flex-direction: column;
-    gap: 0.65rem;
+    gap: 0.125rem;
   }
 
-  .step {
+  .item-row {
     display: flex;
-    gap: 0.8rem;
-    align-items: flex-start;
-  }
-
-  .step-marker {
-    flex-shrink: 0;
-    margin-top: 0.25rem;
-    width: 0.7rem;
-    height: 0.7rem;
-    border-radius: 50%;
-    background: rgba(var(--theme-rgb-white), 0.08);
-  }
-
-  .step.active .step-marker,
-  .step.success .step-marker {
-    background: rgba(var(--theme-rgb-accent), 0.8);
-  }
-
-  .step.active .step-marker {
-    box-shadow: 0 0 0.35rem rgba(var(--theme-rgb-accent), 0.7);
-  }
-
-  .step.failure .step-marker {
-    background: rgba(var(--theme-rgb-danger-soft), 0.85);
-    box-shadow: 0 0 0.35rem rgba(var(--theme-rgb-danger-soft), 0.5);
-  }
-
-  .step-content {
-    display: flex;
-    flex-direction: column;
-    gap: 0.3rem;
-    flex: 1;
-  }
-
-  .step-label {
-    font-size: 0.9rem;
-    color: rgba(var(--theme-rgb-white), 0.9);
-    font-weight: 500;
-  }
-
-  .step-chip {
-    display: inline-flex;
     align-items: center;
-    width: fit-content;
-    padding: 0.2rem 0.6rem;
-    border-radius: 0.6rem;
+    gap: 0.5rem;
+    padding: 0.3rem 0.4rem;
+    border-radius: 0.35rem;
+  }
+
+  .item-row[data-status='active'] {
+    background: rgba(var(--theme-rgb-accent), 0.05);
+  }
+
+  .item-icon {
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    color: rgba(var(--theme-rgb-white), 0.18);
+  }
+
+  .item-row[data-status='active'] .item-icon {
+    color: rgba(var(--theme-rgb-accent), 0.9);
+  }
+
+  .item-row[data-status='success'] .item-icon {
+    color: rgba(var(--theme-rgb-accent), 0.55);
+  }
+
+  .item-row[data-status='failure'] .item-icon {
+    color: rgba(var(--theme-rgb-danger-soft), 0.8);
+  }
+
+  .item-name {
+    flex: 1;
+    font-size: 0.82rem;
+    color: rgba(var(--theme-rgb-white), 0.8);
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .item-row[data-status='success'] .item-name {
+    color: rgba(var(--theme-rgb-white), 0.38);
+  }
+
+  /* ====== ステップインジケーター ====== */
+  .item-steps-row {
+    padding: 0.15rem 0.4rem 0.35rem 1.75rem;
+  }
+
+  .step-indicators {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.1rem 0.5rem;
+  }
+
+  .step-dot {
+    display: flex;
+    align-items: center;
+    gap: 0.2rem;
+    color: rgba(var(--theme-rgb-white), 0.18);
+  }
+
+  .step-dot[data-status='active'] {
+    color: rgba(var(--theme-rgb-accent), 0.9);
+  }
+
+  .step-dot[data-status='success'] {
+    color: rgba(var(--theme-rgb-accent), 0.5);
+  }
+
+  .step-dot[data-status='failure'] {
+    color: rgba(var(--theme-rgb-danger-soft), 0.8);
+  }
+
+  .step-dot-label {
     font-size: 0.7rem;
-    font-weight: 600;
-    background: rgba(var(--theme-rgb-white), 0.07);
-    color: rgba(var(--theme-rgb-white), 0.7);
+    line-height: 1;
   }
 
-  .step-chip[data-status='active'],
-  .step-chip[data-status='success'] {
-    background: rgba(var(--theme-rgb-accent), 0.18);
-    color: rgba(var(--theme-rgb-accent), 0.95);
+  :global(.icon-spin) {
+    animation: spin 1s linear infinite;
   }
 
-  .step-chip[data-status='failure'] {
-    background: rgba(var(--theme-rgb-danger-soft), 0.2);
-    color: rgba(var(--theme-rgb-danger-soft), 0.95);
+  @keyframes spin {
+    from {
+      transform: rotate(0deg);
+    }
+    to {
+      transform: rotate(360deg);
+    }
   }
 
-  .step-message {
-    font-size: 0.8rem;
-    color: rgba(var(--theme-rgb-white), 0.6);
-  }
-
+  /* ====== フッター ====== */
   .dialog-footer {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 1rem;
-    padding: 1rem 1.5rem 1.25rem;
+    gap: 0.75rem;
+    padding: 0.75rem 1.25rem;
   }
 
-  .footer-status {
+  .footer-option {
     display: flex;
     align-items: center;
     gap: 0.5rem;
-    font-size: 0.85rem;
-    color: rgba(var(--theme-rgb-white), 0.6);
+    min-width: 0;
   }
 
-  .footer-indicator {
-    padding: 0.25rem 0.65rem;
-    border-radius: 0.65rem;
-    font-weight: 600;
+  .sleep-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+
+  .sleep-toggle.disabled {
+    cursor: not-allowed;
+    opacity: 0.5;
+  }
+
+  .sleep-toggle input[type='checkbox'] {
+    position: absolute;
+    opacity: 0;
+    width: 0;
+    height: 0;
+  }
+
+  .sleep-toggle .toggle-slider {
+    position: relative;
+    display: inline-block;
+    width: 2.4rem;
+    height: 1.3rem;
+    background: rgba(var(--theme-rgb-white), 0.12);
+    border: 1px solid rgba(var(--theme-rgb-white), 0.15);
+    border-radius: 1rem;
+    transition: all 0.25s ease;
+    flex-shrink: 0;
+  }
+
+  .sleep-toggle .toggle-slider::before {
+    content: '';
+    position: absolute;
+    width: 0.9rem;
+    height: 0.9rem;
+    left: 0.2rem;
+    top: 50%;
+    transform: translateY(-50%);
+    background: rgba(var(--theme-rgb-white), 0.85);
+    border-radius: 50%;
+    transition: all 0.25s ease;
+  }
+
+  .sleep-toggle input:checked + .toggle-slider {
+    background: rgba(var(--theme-rgb-accent), 0.7);
+    border-color: rgba(var(--theme-rgb-accent), 0.5);
+  }
+
+  .sleep-toggle input:checked + .toggle-slider::before {
+    left: calc(100% - 1.1rem);
+    background: rgba(var(--theme-rgb-white), 0.95);
+  }
+
+  .sleep-toggle input:focus-visible + .toggle-slider {
+    outline: 2px solid rgba(var(--theme-rgb-accent), 0.5);
+    outline-offset: 2px;
+  }
+
+  .toggle-label {
+    font-size: 0.78rem;
+    color: rgba(var(--theme-rgb-white), 0.55);
+    white-space: nowrap;
+  }
+
+  .option-error {
     font-size: 0.75rem;
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
+    color: var(--theme-status-danger-soft);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
-  .footer-indicator.running {
-    background: rgba(var(--theme-rgb-accent), 0.18);
-    color: rgba(var(--theme-rgb-accent), 0.95);
-  }
-
-  .footer-indicator.failed {
-    background: rgba(var(--theme-rgb-danger-soft), 0.18);
-    color: rgba(var(--theme-rgb-danger-soft), 0.95);
-  }
-
-  .footer-indicator.done {
-    background: rgba(var(--theme-rgb-green-soft), 0.18);
-    color: rgba(var(--theme-rgb-green-soft), 0.95);
+  .footer-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    flex-shrink: 0;
   }
 
   .action-button {
-    position: relative;
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    padding: 0.75rem 1.6rem;
-    border-radius: 0.75rem;
-    font-size: 0.9rem;
+    padding: 0.55rem 1.2rem;
+    border-radius: 0.5rem;
+    font-size: 0.82rem;
     font-weight: 600;
-    border: 1px solid rgba(var(--theme-rgb-accent), 0.35);
-    color: rgba(var(--theme-rgb-accent), 0.92);
-    background: linear-gradient(
-      135deg,
-      rgba(var(--theme-rgb-accent), 0.15),
-      rgba(var(--theme-rgb-accent), 0.05)
-    );
+    border: 1px solid rgba(var(--theme-rgb-accent), 0.3);
+    color: rgba(var(--theme-rgb-accent), 0.9);
+    background: rgba(var(--theme-rgb-accent), 0.08);
     cursor: pointer;
-    transition: all 0.2s ease;
+    transition: all 0.15s ease;
   }
 
   .action-button:hover:not(:disabled) {
-    border-color: rgba(var(--theme-rgb-accent), 0.6);
+    border-color: rgba(var(--theme-rgb-accent), 0.55);
     color: var(--theme-accent-ink);
     background: linear-gradient(135deg, var(--accent-color), var(--theme-accent-color-alt));
-    box-shadow:
-      0 0.35rem 1.25rem rgba(var(--theme-rgb-accent), 0.35),
-      inset 0 1px 0 rgba(var(--theme-rgb-white), 0.15);
+    box-shadow: 0 0.25rem 0.75rem rgba(var(--theme-rgb-accent), 0.3);
   }
 
   .action-button:disabled {
-    opacity: 0.45;
+    opacity: 0.4;
     cursor: not-allowed;
   }
 
-  @media (max-width: 960px) {
-    .tasks-grid {
-      grid-template-columns: repeat(1, minmax(0, 1fr));
-    }
-  }
-
-  @media (max-width: 640px) {
+  /* ====== レスポンシブ ====== */
+  @media (max-width: 480px) {
     .dialog-body {
-      padding: 1rem;
-    }
-
-    .process-options-body {
-      gap: 0.75rem;
-    }
-
-    .content-region {
-      padding-right: 0;
-    }
-
-    .task-progress {
-      width: 6.5rem;
-    }
-
-    .item-header {
-      flex-wrap: wrap;
-    }
-
-    .item-chip {
-      margin-left: auto;
-      margin-top: 0.35rem;
+      padding: 0.5rem 0.75rem;
     }
 
     .dialog-footer {
       flex-direction: column;
-      align-items: stretch;
+      gap: 0.5rem;
     }
 
-    .action-button {
+    .footer-option {
       width: 100%;
     }
 
-    .footer-status {
-      justify-content: center;
+    .footer-actions {
+      width: 100%;
+      justify-content: flex-end;
+    }
+
+    .phase-stepper {
+      padding: 0.25rem 0.5rem;
+    }
+
+    .phase-dot {
+      width: 1.25rem;
+      height: 1.25rem;
+    }
+
+    .phase-label {
+      font-size: 0.7rem;
     }
   }
 </style>
