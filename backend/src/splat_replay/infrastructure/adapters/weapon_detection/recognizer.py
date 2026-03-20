@@ -123,6 +123,7 @@ class WeaponRecognitionAdapter(WeaponRecognitionPort):
         processed_slots = 0
         fallback_used = False
         display_weapon_region_ratio: float | None = None
+        matched_slot_team_edge_ratio: float | None = None
         outline_iou_by_slot = {slot: 0.0 for slot in constants.SLOT_ORDER}
         if color_visible:
             model_masks = self._get_outline_model_masks()
@@ -203,6 +204,22 @@ class WeaponRecognitionAdapter(WeaponRecognitionPort):
                 display_weapon_region_ratio
                 >= constants.WEAPON_DISPLAY_MIN_WEAPON_REGION_RATIO
             )
+        team_edge_ratio_passed = True
+        if (
+            outline_matched_slots
+            >= constants.WEAPON_DISPLAY_OUTLINE_MIN_MATCHED_SLOTS
+        ):
+            matched_slot_team_edge_ratio = (
+                self._calc_outline_matched_slot_team_edge_ratio(
+                    slot_images=slot_images,
+                    iou_by_slot=outline_iou_by_slot,
+                )
+            )
+        if matched_slot_team_edge_ratio is not None:
+            team_edge_ratio_passed = (
+                matched_slot_team_edge_ratio
+                <= constants.WEAPON_DISPLAY_MAX_MATCHED_SLOT_TEAM_EDGE_RATIO
+            )
         is_visible = (
             color_visible
             and (
@@ -210,6 +227,7 @@ class WeaponRecognitionAdapter(WeaponRecognitionPort):
                 >= constants.WEAPON_DISPLAY_OUTLINE_MIN_MATCHED_SLOTS
             )
             and weapon_region_ratio_passed
+            and team_edge_ratio_passed
         )
         self._logger.debug(
             "ブキ表示判定",
@@ -233,6 +251,20 @@ class WeaponRecognitionAdapter(WeaponRecognitionPort):
             display_weapon_region_ratio_passed=(
                 weapon_region_ratio_passed
                 if display_weapon_region_ratio is not None
+                else None
+            ),
+            matched_slot_team_edge_ratio=(
+                round(matched_slot_team_edge_ratio, 6)
+                if matched_slot_team_edge_ratio is not None
+                else None
+            ),
+            matched_slot_team_edge_ratio_threshold=round(
+                constants.WEAPON_DISPLAY_MAX_MATCHED_SLOT_TEAM_EDGE_RATIO,
+                6,
+            ),
+            matched_slot_team_edge_ratio_passed=(
+                team_edge_ratio_passed
+                if matched_slot_team_edge_ratio is not None
                 else None
             ),
             fast_shift=constants.OUTLINE_ALIGN_FAST_MAX_SHIFT,
@@ -351,6 +383,23 @@ class WeaponRecognitionAdapter(WeaponRecognitionPort):
             for slot in constants.SLOT_ORDER
             if iou_by_slot[slot] >= constants.WEAPON_DISPLAY_OUTLINE_MIN_IOU
         )
+
+    def _calc_outline_matched_slot_team_edge_ratio(
+        self,
+        *,
+        slot_images: dict[str, np.ndarray],
+        iou_by_slot: dict[str, float],
+    ) -> float | None:
+        matched_slots = self._extract_outline_matched_slots(iou_by_slot)
+        if not matched_slots:
+            return None
+        team_edge_ratios = [
+            self._compute_slot_signal_metrics(
+                slot_image=slot_images[slot]
+            ).team_edge_ratio
+            for slot in matched_slots
+        ]
+        return float(np.mean(team_edge_ratios))
 
     @staticmethod
     def _calc_iou(mask_a: np.ndarray, mask_b: np.ndarray) -> float:

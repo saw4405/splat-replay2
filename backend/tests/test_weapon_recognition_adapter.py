@@ -1096,6 +1096,8 @@ async def test_detect_weapon_display_true(
         "no_weapon_icons_screen_4.png",
         "no_weapon_icons_screen_5.png",
         "no_weapon_icons_screen_6.png",
+        "no_weapon_icons_screen_7.png",
+        "no_weapon_icons_screen_8.png",
     ],
 )
 async def test_detect_weapon_display_false(
@@ -1350,6 +1352,65 @@ async def test_detect_weapon_display_runs_precise_fallback_when_fast_needs_extra
     assert fields["processed_slots"] == 4
     assert fields["display_weapon_region_ratio_passed"] is False
     assert slot_orders == [None, constants.ENEMY_SLOTS]
+
+
+@pytest.mark.asyncio
+async def test_detect_weapon_display_false_when_matched_slot_team_edge_ratio_is_high(
+    recognizer: WeaponRecognitionAdapter,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    frame = _load_image(VISIBLE_FIXTURE_DIR / "weapon_icons_visible_01.png")
+    metrics = TeamColorScreenMetrics(
+        allies_max_distance=0.0,
+        enemies_max_distance=0.0,
+        teams_min_distance=999.0,
+    )
+    spy_logger = _SpyLogger()
+    recognizer._logger = spy_logger
+    monkeypatch.setattr(
+        "splat_replay.infrastructure.adapters.weapon_detection.recognizer.detect_weapon_display_screen",
+        lambda _: (True, metrics),
+    )
+    monkeypatch.setattr(recognizer, "_get_outline_model_masks", lambda: {})
+    iou_by_slot = {slot: 0.0 for slot in constants.SLOT_ORDER}
+    for slot in constants.ALLY_SLOTS:
+        iou_by_slot[slot] = constants.WEAPON_DISPLAY_OUTLINE_MIN_IOU
+    monkeypatch.setattr(
+        recognizer,
+        "_count_outline_matched_slots",
+        lambda *,
+        slot_images,
+        model_masks,
+        cancel_generation=None,
+        max_shift=None,
+        slot_order=None: (  # noqa: E501
+            4,
+            iou_by_slot,
+            4,
+            0.20,
+        ),
+    )
+
+    def _compute_slot_signal_metrics(
+        *, slot_image: np.ndarray
+    ) -> _SlotSignalMetrics:
+        _ = slot_image
+        return _SlotSignalMetrics(
+            edge_ratio=0.1,
+            team_edge_ratio=0.16,
+        )
+
+    monkeypatch.setattr(
+        recognizer,
+        "_compute_slot_signal_metrics",
+        _compute_slot_signal_metrics,
+    )
+
+    assert await recognizer.detect_weapon_display(frame) is False
+    assert spy_logger.debug_calls
+    _, fields = spy_logger.debug_calls[-1]
+    assert fields["matched_slot_team_edge_ratio_passed"] is False
+    assert fields["matched_slot_team_edge_ratio"] == pytest.approx(0.16)
 
 
 @pytest.mark.asyncio

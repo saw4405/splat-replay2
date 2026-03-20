@@ -39,6 +39,9 @@ WEAPON_DISPLAY_OUTLINE_MIN_MATCHED_SLOTS: Final[int] = 4
 # 輪郭一致スロットで推定した「ブキ本体領域」の平均比率が低すぎる場合は
 # ブキ表示が薄い/欠落しているとみなし、表示あり判定を抑制する。
 WEAPON_DISPLAY_MIN_WEAPON_REGION_RATIO: Final[float] = 0.08
+# 輪郭一致スロットのチームカラー領域内エッジ密度が高すぎる場合は、
+# チームカラーが塗り切れていない段階の偽陽性とみなし、表示あり判定を抑制する。
+WEAPON_DISPLAY_MAX_MATCHED_SLOT_TEAM_EDGE_RATIO: Final[float] = 0.15
 SCORE_TIE_EPSILON: Final[float] = 1e-12
 
 # 候補の最終選択は score と template_threshold の単一スコアで一貫して行う。
