@@ -318,6 +318,8 @@ matcher_groups:
     - weapon_template_175
     - weapon_template_176
     - weapon_template_177
+    - weapon_template_178
+    - weapon_template_179
 
 # 単一手法検出器（シンプルな検出用）
 simple_matchers:
@@ -2391,4 +2393,20 @@ simple_matchers:
     mask_path: "assets/matching/weapon/Rブラスターエリートデコ_mask.png"
     threshold: 0.79
     description: "ブキ照合テンプレート（variant）"
+
+  weapon_template_178:
+    name: "Rブラスターエリート"
+    type: "template"
+    template_path: "assets/matching/weapon/Rブラスターエリート.png"
+    mask_path: "assets/matching/weapon/Rブラスターエリート_mask.png"
+    threshold: 0.82
+    description: "ブキ照合テンプレート"
+
+  weapon_template_179:
+    name: "ホットブラスター艶"
+    type: "template"
+    template_path: "assets/matching/weapon/ホットブラスター艶.png"
+    mask_path: "assets/matching/weapon/ホットブラスター艶_mask.png"
+    threshold: 0.82
+    description: "ブキ照合テンプレート"
 
