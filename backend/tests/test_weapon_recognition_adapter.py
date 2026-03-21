@@ -7,15 +7,16 @@ from pathlib import Path
 import cv2
 import numpy as np
 import pytest
+
 from splat_replay.domain.config import ImageMatchingSettings
 from splat_replay.infrastructure.adapters.weapon_detection import constants
 from splat_replay.infrastructure.adapters.weapon_detection.constants import (
     UNKNOWN_WEAPON_LABEL,
 )
 from splat_replay.infrastructure.adapters.weapon_detection.recognizer import (
+    WeaponRecognitionAdapter,
     _RankedCandidate,
     _SlotSignalMetrics,
-    WeaponRecognitionAdapter,
 )
 from splat_replay.infrastructure.adapters.weapon_detection.team_color import (
     TeamColorScreenMetrics,
@@ -1098,6 +1099,8 @@ async def test_detect_weapon_display_true(
         "no_weapon_icons_screen_6.png",
         "no_weapon_icons_screen_7.png",
         "no_weapon_icons_screen_8.png",
+        "no_weapon_icons_screen_9.png",
+        "no_weapon_icons_screen_10.png",
     ],
 )
 async def test_detect_weapon_display_false(
@@ -1134,7 +1137,8 @@ async def test_detect_weapon_display_false_when_outline_matched_slots_is_three(
         model_masks,
         cancel_generation=None,
         max_shift=None,
-        slot_order=None: (  # noqa: E501
+        slot_order=None,
+        stop_at_threshold=True: (  # noqa: E501
             3,
             iou_by_slot,
             8,
@@ -1171,7 +1175,8 @@ async def test_detect_weapon_display_true_when_outline_matched_slots_is_four(
         model_masks,
         cancel_generation=None,
         max_shift=None,
-        slot_order=None: (  # noqa: E501
+        slot_order=None,
+        stop_at_threshold=True: (  # noqa: E501
             4,
             iou_by_slot,
             4,
@@ -1212,11 +1217,13 @@ async def test_detect_weapon_display_uses_fast_path_without_fallback_when_fast_p
         cancel_generation: int | None = None,
         max_shift: int | None = None,
         slot_order: tuple[str, ...] | None = None,
+        stop_at_threshold: bool = True,
     ) -> tuple[int, dict[str, float], int]:
         _ = slot_images
         _ = model_masks
         _ = cancel_generation
         _ = slot_order
+        _ = stop_at_threshold
         shifts.append(max_shift)
         return (4, iou_by_slot, 4)
 
@@ -1227,7 +1234,10 @@ async def test_detect_weapon_display_uses_fast_path_without_fallback_when_fast_p
     )
 
     assert await recognizer.detect_weapon_display(frame) is True
-    assert shifts == [constants.OUTLINE_ALIGN_FAST_MAX_SHIFT]
+    assert shifts == [
+        constants.OUTLINE_ALIGN_FAST_MAX_SHIFT,
+        constants.OUTLINE_ALIGN_FAST_MAX_SHIFT,
+    ]
     assert spy_logger.debug_calls
     _, fields = spy_logger.debug_calls[-1]
     assert fields["fallback_used"] is False
@@ -1270,11 +1280,13 @@ async def test_detect_weapon_display_runs_precise_fallback_when_fast_pass_fails(
         cancel_generation: int | None = None,
         max_shift: int | None = None,
         slot_order: tuple[str, ...] | None = None,
+        stop_at_threshold: bool = True,
     ) -> tuple[int, dict[str, float], int]:
         _ = slot_images
         _ = model_masks
         _ = cancel_generation
         _ = slot_order
+        _ = stop_at_threshold
         shifts.append(max_shift)
         if max_shift == constants.OUTLINE_ALIGN_FAST_MAX_SHIFT:
             return (3, fast_iou, 8)
@@ -1289,6 +1301,7 @@ async def test_detect_weapon_display_runs_precise_fallback_when_fast_pass_fails(
     assert await recognizer.detect_weapon_display(frame) is True
     assert shifts == [
         constants.OUTLINE_ALIGN_FAST_MAX_SHIFT,
+        constants.OUTLINE_ALIGN_MAX_SHIFT,
         constants.OUTLINE_ALIGN_MAX_SHIFT,
     ]
     assert spy_logger.debug_calls
@@ -1330,10 +1343,12 @@ async def test_detect_weapon_display_runs_precise_fallback_when_fast_needs_extra
         cancel_generation: int | None = None,
         max_shift: int | None = None,
         slot_order: tuple[str, ...] | None = None,
+        stop_at_threshold: bool = True,
     ) -> tuple[int, dict[str, float], int, float]:
         _ = slot_images
         _ = model_masks
         _ = cancel_generation
+        _ = stop_at_threshold
         slot_orders.append(slot_order)
         if max_shift == constants.OUTLINE_ALIGN_FAST_MAX_SHIFT:
             return (4, fast_iou, 8, 0.081)
@@ -1351,7 +1366,7 @@ async def test_detect_weapon_display_runs_precise_fallback_when_fast_needs_extra
     assert fields["fallback_used"] is True
     assert fields["processed_slots"] == 4
     assert fields["display_weapon_region_ratio_passed"] is False
-    assert slot_orders == [None, constants.ENEMY_SLOTS]
+    assert slot_orders == [None, constants.ENEMY_SLOTS, None]
 
 
 @pytest.mark.asyncio
@@ -1383,7 +1398,8 @@ async def test_detect_weapon_display_false_when_matched_slot_team_edge_ratio_is_
         model_masks,
         cancel_generation=None,
         max_shift=None,
-        slot_order=None: (  # noqa: E501
+        slot_order=None,
+        stop_at_threshold=True: (  # noqa: E501
             4,
             iou_by_slot,
             4,

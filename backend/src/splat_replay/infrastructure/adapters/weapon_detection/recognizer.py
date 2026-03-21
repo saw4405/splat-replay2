@@ -119,6 +119,8 @@ class WeaponRecognitionAdapter(WeaponRecognitionPort):
         self._ensure_not_cancelled(cancel_generation)
         slot_images = crop_slot_images(frame)
         color_visible, metrics = detect_weapon_display_screen(slot_images)
+        model_masks: dict[str, np.ndarray] | None = None
+        aggregate_max_shift: int | None = None
         outline_matched_slots = 0
         processed_slots = 0
         fallback_used = False
@@ -155,6 +157,7 @@ class WeaponRecognitionAdapter(WeaponRecognitionPort):
                 outline_iou_by_slot = fast_iou_by_slot
                 processed_slots = fast_processed_slots
                 display_weapon_region_ratio = fast_weapon_region_ratio
+                aggregate_max_shift = constants.OUTLINE_ALIGN_FAST_MAX_SHIFT
             else:
                 fallback_used = True
                 precise_result: (
@@ -196,7 +199,31 @@ class WeaponRecognitionAdapter(WeaponRecognitionPort):
                     processed_slots,
                     display_weapon_region_ratio,
                 ) = self._unpack_outline_count_result(precise_result)
+                aggregate_max_shift = constants.OUTLINE_ALIGN_MAX_SHIFT
         self._ensure_not_cancelled(cancel_generation)
+
+        # 閾値成立後は全一致枠で再集計し、片側だけの薄い誤一致を抑制する。
+        if (
+            color_visible
+            and model_masks is not None
+            and aggregate_max_shift is not None
+            and outline_matched_slots
+            >= constants.WEAPON_DISPLAY_OUTLINE_MIN_MATCHED_SLOTS
+        ):
+            (
+                outline_matched_slots,
+                outline_iou_by_slot,
+                _aggregate_processed_slots,
+                display_weapon_region_ratio,
+            ) = self._unpack_outline_count_result(
+                self._count_outline_matched_slots(
+                    slot_images=slot_images,
+                    model_masks=model_masks,
+                    cancel_generation=cancel_generation,
+                    max_shift=aggregate_max_shift,
+                    stop_at_threshold=False,
+                )
+            )
 
         weapon_region_ratio_passed = True
         if display_weapon_region_ratio is not None:
@@ -315,6 +342,7 @@ class WeaponRecognitionAdapter(WeaponRecognitionPort):
         cancel_generation: int | None = None,
         max_shift: int | None = None,
         slot_order: tuple[str, ...] | None = None,
+        stop_at_threshold: bool = True,
     ) -> tuple[int, dict[str, float], int, float | None]:
         if cancel_generation is None:
             cancel_generation = self._capture_cancel_generation()
@@ -357,7 +385,8 @@ class WeaponRecognitionAdapter(WeaponRecognitionPort):
                         weapon_region_ratio
                     )
                 if (
-                    matched_slots
+                    stop_at_threshold
+                    and matched_slots
                     >= constants.WEAPON_DISPLAY_OUTLINE_MIN_MATCHED_SLOTS
                 ):
                     break
