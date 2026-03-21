@@ -320,6 +320,8 @@ matcher_groups:
     - weapon_template_177
     - weapon_template_178
     - weapon_template_179
+    - weapon_template_180
+    - weapon_template_181
 
 # 単一手法検出器（シンプルな検出用）
 simple_matchers:
@@ -2407,6 +2409,22 @@ simple_matchers:
     type: "template"
     template_path: "assets/matching/weapon/ホットブラスター艶.png"
     mask_path: "assets/matching/weapon/ホットブラスター艶_mask.png"
+    threshold: 0.82
+    description: "ブキ照合テンプレート"
+
+  weapon_template_180:
+    name: "キャンピングシェルター"
+    type: "template"
+    template_path: "assets/matching/weapon/キャンピングシェルター.png"
+    mask_path: "assets/matching/weapon/キャンピングシェルター_mask.png"
+    threshold: 0.82
+    description: "ブキ照合テンプレート"
+
+  weapon_template_181:
+    name: "スパイガジェットソレーラ"
+    type: "template"
+    template_path: "assets/matching/weapon/スパイガジェットソレーラ.png"
+    mask_path: "assets/matching/weapon/スパイガジェットソレーラ_mask.png"
     threshold: 0.82
     description: "ブキ照合テンプレート"
 
