@@ -8,6 +8,7 @@ from structlog.stdlib import BoundLogger
 from typing import TYPE_CHECKING
 
 from splat_replay.application.use_cases import AutoUseCase, UploadUseCase
+from splat_replay.infrastructure.config import load_settings_from_toml
 from splat_replay.infrastructure.di import configure_container, resolve
 from splat_replay.infrastructure.filesystem import PROJECT_ROOT
 from splat_replay.interface.cli.main import CliDependencies, build_app
@@ -58,10 +59,12 @@ class _LazyResources:
             SplatReplayWebViewApp,
         )
 
+        settings = load_settings_from_toml()
         return SplatReplayWebViewApp(
             project_root=PROJECT_ROOT,
             logger=self.logger(),
             backend_app_module="splat_replay.bootstrap.web_app:app",
+            render_mode=settings.webview.render_mode,
         )
 
     def start_dev_server(self) -> None:

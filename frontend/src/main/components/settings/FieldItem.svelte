@@ -156,6 +156,7 @@
         labelId={field.label ? labelElementId : undefined}
         descriptionId={field.description ? descriptionId : undefined}
         options={field.choices ?? []}
+        optionLabels={field.choice_labels ?? {}}
         value={typeof field.value === 'string' ? field.value : ''}
         placeholder="選択してください"
         on:change={(event) => commitSelectValue(event.detail)}
@@ -221,15 +222,14 @@
     border-radius: 0.875rem;
     background: linear-gradient(
       135deg,
-      rgba(var(--theme-rgb-white), 0.05) 0%,
-      rgba(var(--theme-rgb-white), 0.02) 100%
+      rgba(var(--theme-rgb-surface-card), 0.72) 0%,
+      rgba(var(--theme-rgb-surface-card-dark), 0.62) 100%
     );
-    border: 1px solid rgba(var(--theme-rgb-white), 0.08);
+    border: 1px solid rgba(var(--theme-rgb-white), 0.1);
     box-shadow:
-      0 0.5rem 1.5rem rgba(var(--theme-rgb-black), 0.18),
+      0 0.35rem 1rem rgba(var(--theme-rgb-black), 0.16),
       inset 0 1px 0 rgba(var(--theme-rgb-white), 0.08);
     transition:
-      transform 0.25s ease,
       border-color 0.25s ease,
       box-shadow 0.25s ease;
     width: 100%;
@@ -237,10 +237,9 @@
   }
 
   .field-item:hover {
-    transform: translateY(-0.125rem);
-    border-color: rgba(var(--theme-rgb-accent), 0.25);
+    border-color: rgba(var(--theme-rgb-accent), 0.2);
     box-shadow:
-      0 0.75rem 2rem rgba(var(--theme-rgb-accent), 0.16),
+      0 0.45rem 1.2rem rgba(var(--theme-rgb-accent), 0.1),
       inset 0 1px 0 rgba(var(--theme-rgb-white), 0.12);
   }
 
@@ -267,17 +266,17 @@
     width: 100%;
     background: linear-gradient(
       135deg,
-      rgba(var(--theme-rgb-surface-muted), 0.65) 0%,
-      rgba(var(--theme-rgb-surface-chip), 0.45) 100%
+      rgba(var(--theme-rgb-surface-muted), 0.78) 0%,
+      rgba(var(--theme-rgb-surface-chip), 0.62) 100%
     );
-    border: 1px solid rgba(var(--theme-rgb-white), 0.14);
+    border: 1px solid rgba(var(--theme-rgb-white), 0.16);
     border-radius: 0.625rem;
     padding: 0.75rem 1rem;
     color: rgba(var(--theme-rgb-light-slate), 0.95);
     font-size: 0.95rem;
     box-shadow:
-      inset 0 1px 2px rgba(var(--theme-rgb-black), 0.4),
-      0 1px 2px rgba(var(--theme-rgb-black), 0.2);
+      inset 0 1px 2px rgba(var(--theme-rgb-black), 0.32),
+      0 1px 2px rgba(var(--theme-rgb-black), 0.16);
     transition:
       border-color 0.2s ease,
       box-shadow 0.2s ease,
@@ -292,12 +291,12 @@
     border-color: rgba(var(--theme-rgb-accent), 0.55);
     background: linear-gradient(
       135deg,
-      rgba(var(--theme-rgb-accent), 0.14) 0%,
-      rgba(var(--theme-rgb-accent), 0.06) 100%
+      rgba(var(--theme-rgb-accent), 0.12) 0%,
+      rgba(var(--theme-rgb-accent), 0.05) 100%
     );
     box-shadow:
-      0 0 0 0.1875rem rgba(var(--theme-rgb-accent), 0.18),
-      0 0.35rem 0.9rem rgba(var(--theme-rgb-accent), 0.22);
+      0 0 0 0.1875rem rgba(var(--theme-rgb-accent), 0.14),
+      0 0.25rem 0.7rem rgba(var(--theme-rgb-accent), 0.16);
   }
 
   input::placeholder,
@@ -364,7 +363,7 @@
     border-color: rgba(var(--theme-rgb-accent), 0.65);
     box-shadow:
       inset 0 0.125rem 0.35rem rgba(var(--theme-rgb-black), 0.15),
-      0 0.5rem 1rem rgba(var(--theme-rgb-accent), 0.28);
+      0 0.3rem 0.7rem rgba(var(--theme-rgb-accent), 0.2);
   }
 
   input[type='checkbox']:checked + .toggle-slider::before {
@@ -376,7 +375,7 @@
     );
     box-shadow:
       0 0.3rem 0.6rem rgba(var(--theme-rgb-black), 0.28),
-      0 0.125rem 0.5rem rgba(var(--theme-rgb-accent), 0.4);
+      0 0.125rem 0.35rem rgba(var(--theme-rgb-accent), 0.24);
   }
 
   input[type='checkbox']:focus + .toggle-slider {
@@ -388,7 +387,7 @@
     border-color: rgba(var(--theme-rgb-accent), 0.5);
     box-shadow:
       inset 0 0.125rem 0.35rem rgba(var(--theme-rgb-black), 0.22),
-      0 0.25rem 0.75rem rgba(var(--theme-rgb-accent), 0.24);
+      0 0.2rem 0.55rem rgba(var(--theme-rgb-accent), 0.18);
   }
 
   input[type='checkbox']:checked + .toggle-slider:hover {
@@ -399,7 +398,7 @@
     );
     box-shadow:
       inset 0 0.125rem 0.35rem rgba(var(--theme-rgb-black), 0.18),
-      0 0.4rem 1.1rem rgba(var(--theme-rgb-accent), 0.4);
+      0 0.28rem 0.8rem rgba(var(--theme-rgb-accent), 0.26);
   }
 
   textarea {
@@ -424,11 +423,11 @@
     margin: 0;
     background: linear-gradient(
       135deg,
-      rgba(var(--theme-rgb-white), 0.05) 0%,
-      rgba(var(--theme-rgb-white), 0.015) 100%
+      rgba(var(--theme-rgb-surface-card), 0.76) 0%,
+      rgba(var(--theme-rgb-surface-card-dark), 0.68) 100%
     );
     box-shadow:
-      0 0.5rem 1.5rem rgba(var(--theme-rgb-black), 0.18),
+      0 0.35rem 1rem rgba(var(--theme-rgb-black), 0.16),
       inset 0 1px 0 rgba(var(--theme-rgb-white), 0.08);
     display: flex;
     flex-direction: column;

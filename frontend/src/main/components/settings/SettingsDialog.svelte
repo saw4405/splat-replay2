@@ -3,6 +3,7 @@
 <script lang="ts">
   import { onDestroy } from 'svelte';
   import BaseDialog from '../../../common/components/BaseDialog.svelte';
+  import { resolveRenderModeFromSections, setRenderMode } from '../../renderMode';
   import FieldItem from './FieldItem.svelte';
   import type { FieldValue, SettingField, SettingsResponse, SettingsSection } from './types';
 
@@ -213,12 +214,11 @@
         }
         throw new Error(detail);
       }
-      successMessage = '設定を保存しました。';
-      // 3秒後に成功メッセージを自動でクリア
-      successMessageTimer = setTimeout(() => {
-        successMessage = '';
-        successMessageTimer = null;
-      }, 3000);
+      const nextRenderMode = resolveRenderModeFromSections(sections);
+      if (nextRenderMode !== null) {
+        setRenderMode(nextRenderMode);
+      }
+      open = false;
     } catch (error: unknown) {
       errorMessage = error instanceof Error ? error.message : '設定の保存に失敗しました。';
     } finally {
@@ -228,9 +228,6 @@
 
   async function handlePrimaryClick(): Promise<void> {
     await saveSettings();
-    if (!errorMessage) {
-      open = false;
-    }
   }
 
   function handleSecondaryClick(): void {
@@ -327,12 +324,12 @@
     border: none;
     background: linear-gradient(
       135deg,
-      rgba(var(--theme-rgb-white), 0.06) 0%,
-      rgba(var(--theme-rgb-white), 0.03) 100%
+      rgba(var(--theme-rgb-surface-card), 0.78) 0%,
+      rgba(var(--theme-rgb-surface-card-dark), 0.74) 100%
     );
-    backdrop-filter: blur(8px);
-    -webkit-backdrop-filter: blur(8px);
-    border: 1px solid rgba(var(--theme-rgb-white), 0.08);
+    backdrop-filter: blur(5px) saturate(130%);
+    -webkit-backdrop-filter: blur(5px) saturate(130%);
+    border: 1px solid rgba(var(--theme-rgb-white), 0.1);
     color: rgba(var(--theme-rgb-white), 0.8);
     border-radius: 0.625rem;
     padding: 0.85rem 1.2rem;
@@ -340,54 +337,36 @@
     font-size: 0.95rem;
     font-weight: 500;
     cursor: pointer;
-    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-    position: relative;
-    overflow: hidden;
+    transition:
+      border-color 0.22s ease,
+      color 0.22s ease,
+      background 0.22s ease,
+      box-shadow 0.22s ease;
     flex: 0 0 auto;
     width: 100%;
-  }
-
-  .tabs button::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: -100%;
-    width: 100%;
-    height: 100%;
-    background: linear-gradient(
-      90deg,
-      transparent 0%,
-      rgba(var(--theme-rgb-white), 0.1) 50%,
-      transparent 100%
-    );
-    transition: left 0.6s ease;
-  }
-
-  .tabs button:hover::before {
-    left: 100%;
   }
 
   .tabs button:hover {
     background: linear-gradient(
       135deg,
-      rgba(var(--theme-rgb-accent), 0.15) 0%,
-      rgba(var(--theme-rgb-accent), 0.08) 100%
+      rgba(var(--theme-rgb-accent), 0.12) 0%,
+      rgba(var(--theme-rgb-accent), 0.06) 100%
     );
-    border-color: rgba(var(--theme-rgb-accent), 0.3);
+    border-color: rgba(var(--theme-rgb-accent), 0.24);
     color: var(--accent-color);
-    transform: translateX(0.25rem);
+    box-shadow: 0 0.3rem 0.9rem rgba(var(--theme-rgb-accent), 0.12);
   }
 
   .tabs button.selected {
     background: linear-gradient(
       135deg,
-      rgba(var(--theme-rgb-accent), 0.25) 0%,
-      rgba(var(--theme-rgb-accent), 0.15) 100%
+      rgba(var(--theme-rgb-accent), 0.21) 0%,
+      rgba(var(--theme-rgb-accent), 0.13) 100%
     );
-    border-color: rgba(var(--theme-rgb-accent), 0.4);
+    border-color: rgba(var(--theme-rgb-accent), 0.32);
     color: var(--accent-color);
     box-shadow:
-      0 0.25rem 0.75rem rgba(var(--theme-rgb-accent), 0.2),
+      0 0.22rem 0.65rem rgba(var(--theme-rgb-accent), 0.14),
       inset 0 1px 0 rgba(var(--theme-rgb-white), 0.1);
     font-weight: 600;
   }
@@ -395,17 +374,17 @@
   .fields {
     background: linear-gradient(
       135deg,
-      rgba(var(--theme-rgb-white), 0.06) 0%,
-      rgba(var(--theme-rgb-white), 0.03) 100%
+      rgba(var(--theme-rgb-surface-card), 0.94) 0%,
+      rgba(var(--theme-rgb-surface-card-dark), 0.9) 100%
     );
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
-    border: 1px solid rgba(var(--theme-rgb-white), 0.1);
+    backdrop-filter: blur(8px) saturate(135%);
+    -webkit-backdrop-filter: blur(8px) saturate(135%);
+    border: 1px solid rgba(var(--theme-rgb-white), 0.12);
     border-radius: 1rem;
     padding: 2rem;
     box-shadow:
-      0 0.5rem 1.5rem rgba(var(--theme-rgb-black), 0.2),
-      0 0.125rem 0.5rem rgba(var(--theme-rgb-black), 0.1),
+      0 0.45rem 1.2rem rgba(var(--theme-rgb-black), 0.18),
+      0 0.1rem 0.35rem rgba(var(--theme-rgb-black), 0.1),
       inset 0 1px 0 rgba(var(--theme-rgb-white), 0.1);
     display: flex;
     flex-direction: column;
@@ -463,12 +442,12 @@
 
   .status.error {
     color: var(--theme-status-danger-soft);
-    text-shadow: 0 0 0.5rem rgba(var(--theme-rgb-danger-soft-alt), 0.3);
+    text-shadow: 0 0 0.3rem rgba(var(--theme-rgb-danger-soft-alt), 0.18);
   }
 
   .status.success {
     color: var(--theme-status-success-soft);
-    text-shadow: 0 0 0.5rem rgba(var(--theme-rgb-success-soft-alt), 0.3);
+    text-shadow: 0 0 0.3rem rgba(var(--theme-rgb-success-soft-alt), 0.16);
   }
 
   @media (max-width: 56.25rem) {

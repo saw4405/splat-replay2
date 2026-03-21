@@ -409,7 +409,7 @@
 
   .step-card.completed {
     border-color: var(--accent-color);
-    box-shadow: 0 0 15px rgba(var(--theme-rgb-accent), 0.1);
+    box-shadow: 0 0 8px rgba(var(--theme-rgb-accent), 0.06);
     background: rgba(var(--theme-rgb-accent), 0.05);
   }
 
@@ -430,7 +430,6 @@
     flex-direction: column;
     gap: 1.5rem;
     width: 100%;
-    animation: fadeIn 0.3s ease-out;
     overflow: hidden;
   }
 
@@ -477,7 +476,7 @@
     background: var(--accent-color);
     border-color: var(--accent-color);
     color: var(--theme-color-charcoal);
-    box-shadow: 0 0 10px var(--accent-glow);
+    box-shadow: 0 0 4px var(--accent-glow);
   }
 
   .step-card:hover .checkbox-indicator:not(.checked) {
@@ -558,7 +557,7 @@
     border-radius: 999px;
     background: linear-gradient(135deg, var(--accent-color) 0%, var(--accent-color-strong) 100%);
     color: var(--theme-color-white);
-    box-shadow: 0 0 8px var(--accent-glow);
+    box-shadow: 0 0 4px var(--accent-glow);
   }
 
   .step-note {
@@ -586,7 +585,6 @@
   .link-button:hover {
     background: rgba(var(--theme-rgb-white), 0.1);
     border-color: rgba(var(--theme-rgb-white), 0.3);
-    transform: translateY(-1px);
   }
 
   .path-box {

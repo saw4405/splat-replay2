@@ -17,6 +17,7 @@ from splat_replay.domain.config.speech_transcriber import (
 from splat_replay.domain.config.upload import UploadSettings
 from splat_replay.domain.config.video_edit import VideoEditSettings
 from splat_replay.domain.config.video_storage import VideoStorageSettings
+from splat_replay.domain.config.webview import WebViewSettings
 
 __all__ = [
     "SECTION_CLASSES",
@@ -33,4 +34,5 @@ __all__ = [
     "UploadSettings",
     "VideoEditSettings",
     "VideoStorageSettings",
+    "WebViewSettings",
 ]

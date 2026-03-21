@@ -611,16 +611,13 @@
     padding: 1.25rem;
     width: 100%;
     box-sizing: border-box;
-    transition:
-      transform 0.18s ease,
-      box-shadow 0.25s ease;
+    transition: box-shadow 0.25s ease;
   }
 
   .video-item:hover {
-    transform: translateY(-2px);
     box-shadow:
-      0 18px 40px rgba(var(--theme-rgb-black), 0.35),
-      0 0 24px rgba(var(--theme-rgb-accent), 0.18);
+      0 10px 22px rgba(var(--theme-rgb-black), 0.24),
+      0 0 12px rgba(var(--theme-rgb-accent), 0.12);
   }
 
   .delete-button {
@@ -646,17 +643,12 @@
 
   .delete-button:hover {
     color: var(--theme-color-white);
-    transform: scale(1.08);
-    box-shadow: 0 10px 18px rgba(var(--theme-rgb-danger), 0.35);
+    box-shadow: 0 6px 12px rgba(var(--theme-rgb-danger), 0.24);
     background: linear-gradient(
       145deg,
       rgba(var(--theme-rgb-danger), 0.92) 0%,
       rgba(var(--theme-rgb-red-dark), 0.85) 100%
     );
-  }
-
-  .delete-button:active {
-    transform: scale(1.05);
   }
 
   .delete-button:disabled {
@@ -676,13 +668,6 @@
     border: 2px solid rgba(var(--theme-rgb-white), 0.3);
     border-top-color: var(--theme-color-white);
     border-radius: 50%;
-    animation: spin 0.6s linear infinite;
-  }
-
-  @keyframes spin {
-    to {
-      transform: rotate(360deg);
-    }
   }
 
   .video-content {
@@ -771,12 +756,7 @@
   .overlay-button:hover {
     background: rgba(var(--theme-rgb-accent), 0.9);
     border-color: var(--accent-color);
-    transform: scale(1.15);
-    box-shadow: 0 4px 16px rgba(var(--theme-rgb-accent), 0.4);
-  }
-
-  .overlay-button:active {
-    transform: scale(1.05);
+    box-shadow: 0 4px 12px rgba(var(--theme-rgb-accent), 0.22);
   }
 
   .video-metadata {

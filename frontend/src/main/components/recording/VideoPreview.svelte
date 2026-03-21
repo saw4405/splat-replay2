@@ -7,6 +7,7 @@
     type SpeechRecognizedPayload,
   } from '../../domainEvents';
   import { getRecorderPreviewMode } from '../../api/recording';
+  import { getPreviewFramePollIntervalMs, renderMode } from '../../renderMode';
 
   let eventSource: EventSource | null = null;
   let videoEl: HTMLVideoElement | null = null;
@@ -25,6 +26,7 @@
   let previewImageObjectUrl: string | null = null;
   let previewFramePollTimer: number | null = null;
   let previewFrameFetchInFlight = false;
+  let previewFramePollIntervalMs = getPreviewFramePollIntervalMs('cpu');
 
   // Speech recognition preview state
   type SpeechState = 'idle' | 'listening' | 'recognized';
@@ -41,7 +43,6 @@
 
   const CAMERA_START_MAX_ATTEMPTS = 3;
   const CAMERA_START_RETRY_DELAY_MS = 500;
-  const PREVIEW_FRAME_POLL_INTERVAL_MS = 250;
 
   function sleep(ms: number): Promise<void> {
     return new Promise((resolve) => {
@@ -118,7 +119,7 @@
     void refreshPreviewFrame();
     previewFramePollTimer = window.setInterval(() => {
       void refreshPreviewFrame();
-    }, PREVIEW_FRAME_POLL_INTERVAL_MS);
+    }, previewFramePollIntervalMs);
   }
 
   function isSpeechDisplayAvailable(): boolean {
@@ -459,6 +460,14 @@
     ? 'プレビュー映像を非表示にする'
     : 'プレビュー映像を表示する';
   $: toggleVisible = previewVisible ? isHovered || previewToggleFocused : true;
+  $: nextPreviewFramePollIntervalMs = getPreviewFramePollIntervalMs($renderMode);
+  $: if (previewFramePollIntervalMs !== nextPreviewFramePollIntervalMs) {
+    previewFramePollIntervalMs = nextPreviewFramePollIntervalMs;
+    if (isVideoFileInput && previewVisible) {
+      stopPreviewFramePolling();
+      startPreviewFramePolling();
+    }
+  }
 
   $: if (previewVisible && !isVideoFileInput) {
     if (!mediaStream) {
@@ -719,12 +728,15 @@
     gap: 1rem;
     padding: 0.5rem;
     background: rgba(var(--theme-rgb-black), 0.3);
-    backdrop-filter: blur(8px);
-    -webkit-backdrop-filter: blur(8px);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
     border-radius: 12px;
     border: 1px solid rgba(var(--theme-rgb-white), 0.05);
     z-index: 10;
-    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    transition:
+      opacity 0.25s ease,
+      background 0.25s ease,
+      border-color 0.25s ease;
   }
 
   .video-preview.preview-hidden .status-control-bar {
@@ -743,16 +755,6 @@
     display: flex;
     align-items: center;
     gap: 8px;
-  }
-
-  @keyframes pulse {
-    0%,
-    100% {
-      opacity: 1;
-    }
-    50% {
-      opacity: 0.5;
-    }
   }
 
   .status-label {
@@ -805,7 +807,6 @@
 
   .control-btn.start:hover {
     background: rgba(var(--theme-rgb-red-preview), 1);
-    transform: scale(1.05);
   }
 
   .control-btn.pause {
@@ -814,7 +815,6 @@
 
   .control-btn.pause:hover {
     background: rgba(var(--theme-rgb-amber-preview), 1);
-    transform: scale(1.05);
   }
 
   .control-btn.resume {
@@ -823,7 +823,6 @@
 
   .control-btn.resume:hover {
     background: rgba(var(--theme-rgb-green-preview), 1);
-    transform: scale(1.05);
   }
 
   .control-btn.stop {
@@ -832,7 +831,6 @@
 
   .control-btn.stop:hover {
     background: rgba(var(--theme-rgb-gray), 1);
-    transform: scale(1.05);
   }
 
   .preview-canvas {
@@ -909,13 +907,13 @@
   }
 
   .preview-toggle--visible:hover {
-    transform: translate(-50%, -50%) scale(1.05);
+    transform: translate(-50%, -50%);
   }
 
   .preview-toggle:focus-visible {
     outline: 3px solid rgba(var(--theme-rgb-white), 0.6);
     outline-offset: 4px;
-    transform: translate(-50%, -50%) scale(1.02);
+    transform: translate(-50%, -50%);
   }
 
   /* Speech recognition preview styles */
@@ -928,23 +926,11 @@
     box-sizing: border-box;
     padding: 0.75rem 1.25rem;
     background: rgba(var(--theme-rgb-black), 0.75);
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
     border-radius: 12px;
     border: 1px solid rgba(var(--theme-rgb-white), 0.1);
     z-index: 15;
-    animation: speech-fade-in 0.3s ease-out;
-  }
-
-  @keyframes speech-fade-in {
-    from {
-      opacity: 0;
-      transform: translateX(-50%) translateY(10px);
-    }
-    to {
-      opacity: 1;
-      transform: translateX(-50%) translateY(0);
-    }
   }
 
   .speech-preview--listening {
@@ -964,17 +950,7 @@
 
   .speech-preview :global(.speech-mic-icon) {
     color: var(--theme-status-info-strong);
-    animation: mic-pulse 1.5s ease-in-out infinite;
-  }
-
-  @keyframes mic-pulse {
-    0%,
-    100% {
-      opacity: 1;
-    }
-    50% {
-      opacity: 0.5;
-    }
+    opacity: 0.9;
   }
 
   .speech-listening-text {
@@ -994,32 +970,7 @@
     height: 4px;
     background: var(--theme-status-info-strong);
     border-radius: 50%;
-    animation: dot-bounce 1.4s ease-in-out infinite both;
-  }
-
-  .speech-listening-dots .dot:nth-child(1) {
-    animation-delay: 0s;
-  }
-
-  .speech-listening-dots .dot:nth-child(2) {
-    animation-delay: 0.2s;
-  }
-
-  .speech-listening-dots .dot:nth-child(3) {
-    animation-delay: 0.4s;
-  }
-
-  @keyframes dot-bounce {
-    0%,
-    80%,
-    100% {
-      transform: scale(0.8);
-      opacity: 0.5;
-    }
-    40% {
-      transform: scale(1.2);
-      opacity: 1;
-    }
+    opacity: 0.75;
   }
 
   .speech-text {

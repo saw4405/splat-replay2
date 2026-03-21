@@ -36,8 +36,8 @@
     background: rgba(var(--theme-rgb-black), 0.2);
     border: 1px solid rgba(var(--theme-rgb-white), 0.08);
     border-radius: 12px;
-    backdrop-filter: blur(10px);
-    -webkit-backdrop-filter: blur(10px);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
   }
 
   .step-number {
@@ -66,22 +66,11 @@
 
   .step-dot.completed {
     background: var(--accent-color);
-    box-shadow: 0 0 8px var(--accent-glow);
+    box-shadow: 0 0 4px var(--accent-glow);
   }
 
   .step-dot.current {
     background: var(--accent-color);
-    box-shadow: 0 0 12px var(--accent-glow);
-    animation: pulse 2s ease-in-out infinite;
-  }
-
-  @keyframes pulse {
-    0%,
-    100% {
-      opacity: 1;
-    }
-    50% {
-      opacity: 0.6;
-    }
+    box-shadow: 0 0 6px var(--accent-glow);
   }
 </style>

@@ -3,13 +3,19 @@
   import { SetupApp } from './setup';
   import { setupState, fetchInstallationStatus } from './setup/stores/state';
   import MainApp from './main/MainApp.svelte';
+  import { initializeRenderMode, setRenderMode } from './main/renderMode';
 
   let isCheckingInstallation = true;
 
   onMount(async () => {
+    setRenderMode('cpu');
+    const renderModePromise = initializeRenderMode();
+
     // インストール状態をチェック
     await fetchInstallationStatus();
     isCheckingInstallation = false;
+
+    await renderModePromise;
   });
 
   $: showSetup = !isCheckingInstallation && (!$setupState || !$setupState.is_completed);
@@ -44,13 +50,9 @@
     border: 4px solid rgba(var(--theme-rgb-white), 0.1);
     border-top-color: var(--accent-color);
     border-radius: 50%;
-    animation: spin 1s linear infinite;
-  }
-
-  @keyframes spin {
-    to {
-      transform: rotate(360deg);
-    }
+    box-shadow:
+      0 0 0 1px rgba(var(--theme-rgb-white), 0.06) inset,
+      0 0 16px rgba(var(--theme-rgb-accent), 0.12);
   }
 
   .loading-screen p {

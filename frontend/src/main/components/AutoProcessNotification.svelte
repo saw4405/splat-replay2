@@ -2,6 +2,7 @@
   import { onMount, onDestroy } from 'svelte';
   import { Clock } from 'lucide-svelte';
   import type { AutoProcessPendingPayload, AutoSleepPendingPayload } from '../domainEvents';
+  import { UI_COUNTDOWN_TICK_INTERVAL_MS } from '../renderMode';
 
   type CountdownPayload = AutoProcessPendingPayload | AutoSleepPendingPayload;
 
@@ -57,7 +58,7 @@
         clearInterval(intervalId);
         void handleStart();
       }
-    }, 50);
+    }, UI_COUNTDOWN_TICK_INTERVAL_MS);
   });
 
   onDestroy(() => {
@@ -94,11 +95,11 @@
     left: 24px;
     width: 380px;
     background: rgba(var(--theme-rgb-space), 0.95);
-    backdrop-filter: blur(16px);
-    -webkit-backdrop-filter: blur(16px);
+    backdrop-filter: blur(10px) saturate(135%);
+    -webkit-backdrop-filter: blur(10px) saturate(135%);
     border: 1px solid rgba(var(--theme-rgb-white), 0.1);
     border-radius: 12px;
-    box-shadow: 0 8px 32px rgba(var(--theme-rgb-black), 0.5);
+    box-shadow: 0 6px 20px rgba(var(--theme-rgb-black), 0.36);
     z-index: 9999;
     overflow: hidden;
     animation: slide-in 0.4s cubic-bezier(0.16, 1, 0.3, 1);
@@ -169,11 +170,11 @@
     height: 100%;
     background: var(--accent-color);
     transition: width 0.1s linear;
-    box-shadow: 0 0 8px rgba(var(--theme-rgb-accent), 0.5);
+    box-shadow: 0 0 4px rgba(var(--theme-rgb-accent), 0.25);
   }
 
   :global(.icon-pulse) {
-    animation: pulse 2s infinite;
+    opacity: 0.9;
   }
 
   @keyframes slide-in {
@@ -184,18 +185,6 @@
     to {
       opacity: 1;
       transform: translateY(0) scale(1);
-    }
-  }
-
-  @keyframes pulse {
-    0% {
-      opacity: 0.6;
-    }
-    50% {
-      opacity: 1;
-    }
-    100% {
-      opacity: 0.6;
     }
   }
 </style>

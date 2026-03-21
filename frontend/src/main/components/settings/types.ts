@@ -11,6 +11,7 @@ export type SettingField = {
   user_editable?: boolean;
   value?: FieldValue | null;
   choices?: string[] | null;
+  choice_labels?: Record<string, string> | null;
   children?: SettingField[];
 };
 

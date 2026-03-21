@@ -13,6 +13,7 @@
     type DomainEvent,
     type EditUploadCompletedPayload,
   } from '../../domainEvents';
+  import { getProcessStatusPollIntervalMs, renderMode } from '../../renderMode';
 
   // 展開状態: "closed" | "half" | "full"
   type DrawerState = 'closed' | 'half' | 'full';
@@ -38,10 +39,18 @@
   let pendingDataReload = false;
   let drawerElement: HTMLDivElement | null = null;
   let modalCloseTimer: number | null = null; // モーダル閉じるタイマー
+  let processStatusPollIntervalMs = getProcessStatusPollIntervalMs('cpu');
 
   $: recordedCount = recordedVideos.length;
   $: editedCount = editedVideos.length;
   $: isProcessing = processStatus?.state === 'running';
+  $: nextProcessStatusPollIntervalMs = getProcessStatusPollIntervalMs($renderMode);
+  $: if (processStatusPollIntervalMs !== nextProcessStatusPollIntervalMs) {
+    processStatusPollIntervalMs = nextProcessStatusPollIntervalMs;
+    if (statusPollingInterval !== null) {
+      startStatusPolling();
+    }
+  }
 
   onMount(() => {
     // 初回データ取得
@@ -280,7 +289,7 @@
       clearInterval(statusPollingInterval);
     }
 
-    // 2秒ごとに状態をチェック
+    // render_mode に応じた間隔で状態をチェック
     statusPollingInterval = window.setInterval(async () => {
       try {
         const status = await fetchEditUploadStatus();
@@ -308,7 +317,7 @@
       } catch (error) {
         console.error('状態取得エラー:', error);
       }
-    }, 2000);
+    }, processStatusPollIntervalMs);
   }
 
   /**
@@ -544,12 +553,12 @@
       rgba(var(--theme-rgb-surface-overlay), 0.95) 50%,
       rgba(var(--theme-rgb-space-2), 0.92) 100%
     );
-    backdrop-filter: blur(20px) saturate(180%);
-    -webkit-backdrop-filter: blur(20px) saturate(180%);
+    backdrop-filter: blur(12px) saturate(145%);
+    -webkit-backdrop-filter: blur(12px) saturate(145%);
     border-top: 1px solid rgba(var(--theme-rgb-accent), 0.2);
     box-shadow:
-      0 -8px 32px rgba(var(--theme-rgb-black), 0.4),
-      0 -2px 8px rgba(var(--theme-rgb-accent), 0.1),
+      0 -6px 22px rgba(var(--theme-rgb-black), 0.3),
+      0 -2px 6px rgba(var(--theme-rgb-accent), 0.08),
       inset 0 1px 0 rgba(var(--theme-rgb-white), 0.05);
     z-index: 100;
     transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
@@ -558,16 +567,16 @@
   .bottom-drawer.half {
     height: 50vh;
     box-shadow:
-      0 -12px 48px rgba(var(--theme-rgb-black), 0.5),
-      0 -4px 16px rgba(var(--theme-rgb-accent), 0.15),
+      0 -8px 28px rgba(var(--theme-rgb-black), 0.34),
+      0 -3px 10px rgba(var(--theme-rgb-accent), 0.1),
       inset 0 1px 0 rgba(var(--theme-rgb-white), 0.05);
   }
 
   .bottom-drawer.full {
     height: 100vh;
     box-shadow:
-      0 -12px 48px rgba(var(--theme-rgb-black), 0.5),
-      0 -4px 16px rgba(var(--theme-rgb-accent), 0.2),
+      0 -8px 28px rgba(var(--theme-rgb-black), 0.34),
+      0 -3px 10px rgba(var(--theme-rgb-accent), 0.12),
       inset 0 1px 0 rgba(var(--theme-rgb-white), 0.05);
   }
 
@@ -667,28 +676,11 @@
     border: 1px solid rgba(var(--theme-rgb-white), 0.1);
     border-radius: 12px;
     font-size: 0.95rem;
-    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    transition:
+      border-color 0.2s ease,
+      background 0.2s ease,
+      box-shadow 0.2s ease;
     overflow: hidden;
-  }
-
-  .badge::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: -100%;
-    width: 100%;
-    height: 100%;
-    background: linear-gradient(
-      90deg,
-      transparent 0%,
-      rgba(var(--theme-rgb-white), 0.1) 50%,
-      transparent 100%
-    );
-    transition: left 0.6s ease;
-  }
-
-  .badge:hover::before {
-    left: 100%;
   }
 
   .badge-glow {
@@ -701,7 +693,7 @@
       rgba(var(--theme-rgb-accent), 0.3) 0%,
       rgba(var(--theme-rgb-accent), 0.1) 100%
     );
-    filter: blur(8px);
+    filter: blur(5px);
     transition: opacity 0.3s ease;
     z-index: -1;
   }
@@ -711,7 +703,6 @@
   }
 
   .badge:hover {
-    transform: translateY(-2px);
     border-color: rgba(var(--theme-rgb-accent), 0.3);
     background: linear-gradient(
       135deg,
@@ -748,21 +739,7 @@
     font-weight: 700;
     font-size: 1.25rem;
     line-height: 1;
-    text-shadow: 0 0 10px rgba(var(--theme-rgb-accent), 0.5);
-  }
-
-  .badge.has-data .badge-count {
-    animation: pulse-glow 2s ease-in-out infinite;
-  }
-
-  @keyframes pulse-glow {
-    0%,
-    100% {
-      text-shadow: 0 0 10px rgba(var(--theme-rgb-accent), 0.5);
-    }
-    50% {
-      text-shadow: 0 0 20px rgba(var(--theme-rgb-accent), 0.8);
-    }
+    text-shadow: 0 0 6px rgba(var(--theme-rgb-accent), 0.3);
   }
 
   .process-button {
@@ -775,7 +752,10 @@
     font-size: 1rem;
     font-weight: 600;
     cursor: pointer;
-    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    transition:
+      border-color 0.2s ease,
+      box-shadow 0.2s ease,
+      color 0.2s ease;
     overflow: hidden;
   }
 
@@ -806,11 +786,10 @@
   }
 
   .process-button.ready:hover {
-    transform: translateY(-2px);
     border-color: rgba(var(--theme-rgb-accent), 0.5);
     box-shadow:
-      0 4px 20px rgba(var(--theme-rgb-accent), 0.3),
-      0 0 40px rgba(var(--theme-rgb-accent), 0.2),
+      0 4px 14px rgba(var(--theme-rgb-accent), 0.18),
+      0 0 16px rgba(var(--theme-rgb-accent), 0.1),
       inset 0 1px 0 rgba(var(--theme-rgb-white), 0.1);
   }
 
@@ -820,10 +799,6 @@
 
   .process-button.ready:hover .button-content {
     color: var(--theme-color-black);
-  }
-
-  .process-button.ready:active {
-    transform: translateY(0);
   }
 
   .process-button:disabled {
@@ -839,25 +814,6 @@
 
   .process-button.processing .button-background {
     opacity: 0.2;
-    animation: processing-pulse 1.5s ease-in-out infinite;
-  }
-
-  @keyframes processing-pulse {
-    0%,
-    100% {
-      opacity: 0.2;
-    }
-    50% {
-      opacity: 0.4;
-    }
-  }
-
-  .play-icon {
-    transition: transform 0.3s ease;
-  }
-
-  .process-button.ready:hover .play-icon {
-    transform: scale(1.1);
   }
 
   .spinner {
@@ -867,13 +823,6 @@
     border: 2px solid rgba(var(--theme-rgb-black), 0.3);
     border-top-color: var(--theme-color-black);
     border-radius: 50%;
-    animation: spin 0.6s linear infinite;
-  }
-
-  @keyframes spin {
-    to {
-      transform: rotate(360deg);
-    }
   }
 
   .drawer-content {

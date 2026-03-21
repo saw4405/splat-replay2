@@ -153,7 +153,6 @@
       0 0 60px rgba(var(--theme-rgb-accent), 0.2),
       0 2px 4px rgba(var(--theme-rgb-black), 0.5);
     letter-spacing: 0.05em;
-    animation: pulse-glow 3s ease-in-out infinite;
   }
 
   .preview-container {
@@ -167,47 +166,21 @@
     justify-content: center;
   }
 
-  @keyframes pulse-glow {
-    0%,
-    100% {
-      text-shadow:
-        0 0 10px rgba(var(--theme-rgb-accent), 0.8),
-        0 0 20px rgba(var(--theme-rgb-accent), 0.6),
-        0 0 30px rgba(var(--theme-rgb-accent), 0.4),
-        0 0 40px rgba(var(--theme-rgb-accent), 0.3),
-        0 0 60px rgba(var(--theme-rgb-accent), 0.2),
-        0 2px 4px rgba(var(--theme-rgb-black), 0.5);
-    }
-    50% {
-      text-shadow:
-        0 0 15px rgba(var(--theme-rgb-accent), 1),
-        0 0 30px rgba(var(--theme-rgb-accent), 0.8),
-        0 0 45px rgba(var(--theme-rgb-accent), 0.6),
-        0 0 60px rgba(var(--theme-rgb-accent), 0.4),
-        0 0 90px rgba(var(--theme-rgb-accent), 0.3),
-        0 2px 4px rgba(var(--theme-rgb-black), 0.5);
-    }
-  }
-
   .icon-button {
     height: 2.75rem;
     width: 2.75rem;
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  }
-
-  .icon-button:hover {
-    transform: translateY(-2px);
+    transition:
+      color 0.2s ease,
+      border-color 0.2s ease,
+      background 0.2s ease,
+      box-shadow 0.2s ease;
   }
 
   .icon-button:focus-visible {
     outline: none;
-  }
-
-  .icon-button:active {
-    transform: translateY(0);
   }
 
   .settings-button {
@@ -215,26 +188,27 @@
     border: 1px solid rgba(var(--theme-rgb-white), 0.08);
     background: linear-gradient(
       135deg,
-      rgba(var(--theme-rgb-white), 0.05) 0%,
-      rgba(var(--theme-rgb-white), 0.01) 100%
+      rgba(var(--theme-rgb-surface-card), 0.4) 0%,
+      rgba(var(--theme-rgb-surface-card-dark), 0.26) 100%
     );
-    box-shadow: 0 6px 18px rgba(var(--theme-rgb-black), 0.18);
-    backdrop-filter: blur(10px);
-    -webkit-backdrop-filter: blur(10px);
+    box-shadow: 0 5px 14px rgba(var(--theme-rgb-black), 0.16);
+    backdrop-filter: blur(6px) saturate(130%);
+    -webkit-backdrop-filter: blur(6px) saturate(130%);
   }
 
   .settings-button:hover {
     border-color: rgba(var(--theme-rgb-white), 0.14);
     background: linear-gradient(
       135deg,
-      rgba(var(--theme-rgb-white), 0.08) 0%,
-      rgba(var(--theme-rgb-white), 0.02) 100%
+      rgba(var(--theme-rgb-white), 0.1) 0%,
+      rgba(var(--theme-rgb-white), 0.04) 100%
     );
-    box-shadow: 0 10px 24px rgba(var(--theme-rgb-black), 0.22);
+    box-shadow:
+      0 8px 18px rgba(var(--theme-rgb-black), 0.2),
+      0 0 8px rgba(var(--theme-rgb-accent), 0.12);
   }
 
   .settings-button:active {
-    transform: translateY(0);
-    box-shadow: 0 4px 12px rgba(var(--theme-rgb-black), 0.2);
+    box-shadow: 0 4px 10px rgba(var(--theme-rgb-black), 0.18);
   }
 </style>

@@ -1121,28 +1121,7 @@
     height: 0.35rem;
     border-radius: 50%;
     background: rgba(var(--theme-rgb-accent), 0.4);
-    animation: pulse 1.4s infinite ease-in-out;
-  }
-
-  .dot-2 {
-    animation-delay: 0.2s;
-  }
-
-  .dot-3 {
-    animation-delay: 0.4s;
-  }
-
-  @keyframes pulse {
-    0%,
-    80%,
-    100% {
-      opacity: 0.3;
-      transform: scale(0.9);
-    }
-    40% {
-      opacity: 1;
-      transform: scale(1);
-    }
+    opacity: 0.75;
   }
 
   /* ====== フェーズステッパー ====== */
@@ -1188,8 +1167,7 @@
     background: rgba(var(--theme-rgb-accent), 0.18);
     color: rgba(var(--theme-rgb-accent), 0.95);
     border: 1.5px solid rgba(var(--theme-rgb-accent), 0.45);
-    box-shadow: 0 0 0.5rem rgba(var(--theme-rgb-accent), 0.25);
-    animation: phase-pulse 2s ease-in-out infinite;
+    box-shadow: 0 0 0.35rem rgba(var(--theme-rgb-accent), 0.18);
   }
 
   .phase[data-status='completed'] .phase-dot {
@@ -1244,16 +1222,6 @@
     );
   }
 
-  @keyframes phase-pulse {
-    0%,
-    100% {
-      box-shadow: 0 0 0.5rem rgba(var(--theme-rgb-accent), 0.25);
-    }
-    50% {
-      box-shadow: 0 0 1rem rgba(var(--theme-rgb-accent), 0.45);
-    }
-  }
-
   /* ====== 空状態 ====== */
   .empty-state {
     display: grid;
@@ -1277,7 +1245,6 @@
     color: rgba(var(--theme-rgb-success), 0.85);
     font-size: 0.85rem;
     font-weight: 500;
-    animation: summary-appear 0.3s ease-out;
     flex-shrink: 0;
   }
 
@@ -1285,17 +1252,6 @@
     background: rgba(var(--theme-rgb-danger-bright), 0.08);
     border-color: rgba(var(--theme-rgb-danger-soft), 0.2);
     color: rgba(var(--theme-rgb-danger-pale), 0.9);
-  }
-
-  @keyframes summary-appear {
-    from {
-      opacity: 0;
-      transform: translateY(-0.25rem);
-    }
-    to {
-      opacity: 1;
-      transform: translateY(0);
-    }
   }
 
   /* ====== タスクセクション ====== */
@@ -1368,20 +1324,11 @@
       var(--accent-color)
     );
     background-size: 200% 100%;
-    animation: shimmer 2s ease-in-out infinite;
+    background-position: 50% 0;
   }
 
   .task-section[data-status='succeeded'] .task-progress-fill {
     background: rgba(var(--theme-rgb-success), 0.5);
-  }
-
-  @keyframes shimmer {
-    0% {
-      background-position: 200% 0;
-    }
-    100% {
-      background-position: -200% 0;
-    }
   }
 
   /* ====== エラーバナー ====== */
@@ -1491,16 +1438,7 @@
   }
 
   :global(.icon-spin) {
-    animation: spin 1s linear infinite;
-  }
-
-  @keyframes spin {
-    from {
-      transform: rotate(0deg);
-    }
-    to {
-      transform: rotate(360deg);
-    }
+    opacity: 0.85;
   }
 
   /* ====== フッター ====== */

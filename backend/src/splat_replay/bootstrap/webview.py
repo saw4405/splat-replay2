@@ -6,6 +6,7 @@ import multiprocessing
 import sys
 import traceback
 
+from splat_replay.infrastructure.config import load_settings_from_toml
 from splat_replay.infrastructure.filesystem import PROJECT_ROOT
 from splat_replay.infrastructure.logging import get_logger
 from splat_replay.interface.gui.webview_app import SplatReplayWebViewApp
@@ -25,10 +26,12 @@ def main() -> None:
         if sys.platform == "win32":
             multiprocessing.freeze_support()
 
+        settings = load_settings_from_toml()
         app_instance = SplatReplayWebViewApp(
             project_root=PROJECT_ROOT,
             logger=logger,
             backend_app_module="splat_replay.bootstrap.web_app:app",
+            render_mode=settings.webview.render_mode,
         )
         app_instance.run()
 

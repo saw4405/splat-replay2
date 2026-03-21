@@ -9,6 +9,7 @@
   import { buildMetadataOptionMap, getMetadataOptions } from '../../api/metadata';
   import { getRecorderPreviewMode } from '../../api/recording';
   import { notifyRecordingReady } from '../../notification';
+  import { getDeviceStatusPollIntervalMs, renderMode } from '../../renderMode';
 
   type PreviewState = 'checking' | 'connected' | 'disconnected' | 'error';
 
@@ -22,7 +23,6 @@
     error?: string;
   };
 
-  const DEVICE_POLL_INTERVAL_MS = 1000;
   const NOTIFICATION_DURATION_MS = 5000;
 
   let isRecording = false;
@@ -37,6 +37,7 @@
   let isRefreshingDeviceStatus = false; // 多重実行防止フラグ
   let isCameraPermissionDialogOpen = false;
   let isVideoFileInput = false;
+  let deviceStatusPollIntervalMs = getDeviceStatusPollIntervalMs('cpu');
   type MetadataValue = string | number | string[] | null | undefined;
   type MetadataFieldKey =
     | 'game_mode'
@@ -143,6 +144,22 @@
   let notificationIdCounter = 0;
   let lastMetadata: Partial<Record<MetadataFieldKey, string>> = {};
   let pendingMetadataSessionReset = false;
+
+  $: nextDeviceStatusPollIntervalMs = getDeviceStatusPollIntervalMs($renderMode);
+  $: if (deviceStatusPollIntervalMs !== nextDeviceStatusPollIntervalMs) {
+    deviceStatusPollIntervalMs = nextDeviceStatusPollIntervalMs;
+    restartDeviceStatusPolling();
+  }
+
+  function restartDeviceStatusPolling(): void {
+    if (deviceStatusTimer !== null) {
+      window.clearInterval(deviceStatusTimer);
+      deviceStatusTimer = null;
+    }
+    deviceStatusTimer = window.setInterval(() => {
+      void refreshDeviceStatus();
+    }, deviceStatusPollIntervalMs);
+  }
 
   async function loadMetadataOptions(): Promise<void> {
     try {
@@ -736,9 +753,7 @@
     void loadMetadataOptions();
     void refreshPreviewMode();
     void refreshDeviceStatus();
-    deviceStatusTimer = window.setInterval(() => {
-      void refreshDeviceStatus();
-    }, DEVICE_POLL_INTERVAL_MS);
+    restartDeviceStatusPolling();
 
     // ドメインイベントを購読
     const domainEventSource = subscribeDomainEvents((event: DomainEvent) => {
@@ -872,18 +887,20 @@
     backdrop-filter: var(--glass-blur);
     -webkit-backdrop-filter: var(--glass-blur);
     box-shadow:
-      0 10px 24px rgba(var(--theme-rgb-black), 0.3),
+      0 7px 18px rgba(var(--theme-rgb-black), 0.24),
       inset 0 1px 0 rgba(var(--theme-rgb-white), 0.12);
     display: inline-flex;
     align-items: center;
     justify-content: center;
     padding: 0;
     box-sizing: border-box;
-    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    transition:
+      border-color 0.2s ease,
+      background 0.2s ease,
+      box-shadow 0.2s ease;
   }
 
   .metadata-toggle-btn:hover {
-    transform: translateY(-2px) scale(1.05);
     border-color: rgba(var(--theme-rgb-accent), 0.45);
     background: linear-gradient(
       135deg,
@@ -891,8 +908,8 @@
       rgba(var(--theme-rgb-white), 0.04) 100%
     );
     box-shadow:
-      0 16px 32px rgba(var(--theme-rgb-black), 0.35),
-      0 0 22px rgba(var(--theme-rgb-accent), 0.25);
+      0 10px 22px rgba(var(--theme-rgb-black), 0.28),
+      0 0 12px rgba(var(--theme-rgb-accent), 0.14);
   }
 
   .metadata-toggle-btn:focus-visible {
@@ -900,14 +917,13 @@
     border-color: rgba(var(--theme-rgb-accent), 0.55);
     box-shadow:
       0 0 0 3px rgba(var(--theme-rgb-ring-strong), 0.9),
-      0 0 0 6px rgba(var(--theme-rgb-accent), 0.35),
-      0 18px 38px rgba(var(--theme-rgb-accent), 0.35);
+      0 0 0 6px rgba(var(--theme-rgb-accent), 0.28),
+      0 12px 24px rgba(var(--theme-rgb-accent), 0.2);
   }
 
   .metadata-toggle-btn:active {
-    transform: scale(0.95);
     box-shadow:
-      0 8px 18px rgba(var(--theme-rgb-black), 0.3),
+      0 5px 12px rgba(var(--theme-rgb-black), 0.24),
       inset 0 1px 0 rgba(var(--theme-rgb-white), 0.18);
   }
 
@@ -925,8 +941,8 @@
       rgba(var(--theme-rgb-accent), 1) 0%,
       rgba(var(--theme-rgb-accent-bright), 0.98) 100%
     );
-    backdrop-filter: blur(10px) saturate(160%);
-    -webkit-backdrop-filter: blur(10px) saturate(160%);
+    backdrop-filter: blur(8px) saturate(145%);
+    -webkit-backdrop-filter: blur(8px) saturate(145%);
     border: 1px solid rgba(var(--theme-rgb-accent), 0.8);
     border-radius: 999px;
     padding: 0.55rem 1rem;
@@ -938,20 +954,8 @@
     overflow: hidden;
     text-overflow: ellipsis;
     box-shadow:
-      0 12px 26px rgba(var(--theme-rgb-accent), 0.5),
-      0 0 25px rgba(var(--theme-rgb-accent), 0.4),
+      0 8px 18px rgba(var(--theme-rgb-accent), 0.3),
+      0 0 12px rgba(var(--theme-rgb-accent), 0.18),
       inset 0 1px 0 rgba(var(--theme-rgb-white), 0.3);
-    animation: slideIn 0.3s ease-out;
-  }
-
-  @keyframes slideIn {
-    from {
-      opacity: 0;
-      transform: translateX(10px);
-    }
-    to {
-      opacity: 1;
-      transform: translateX(0);
-    }
   }
 </style>

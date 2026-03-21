@@ -3,6 +3,7 @@
 
   export let id: string;
   export let options: string[] = [];
+  export let optionLabels: Record<string, string> = {};
   export let value = '';
   export let disabled = false;
   export let labelId: string | undefined;
@@ -16,6 +17,10 @@
   let buttonElement: HTMLButtonElement | null = null;
   let listboxElement: HTMLUListElement | null = null;
   let containerElement: HTMLDivElement | null = null;
+
+  function labelFor(option: string): string {
+    return optionLabels[option] ?? option;
+  }
 
   function setHighlightedIndexByValue(selected: string): void {
     const index = options.findIndex((option) => option === selected);
@@ -133,7 +138,8 @@
     document.removeEventListener('mousedown', handleOutsideClick);
   });
 
-  $: displayValue = value && options.includes(value) ? value : (placeholder ?? options[0] ?? '');
+  $: displayValue =
+    value && options.includes(value) ? labelFor(value) : (placeholder ?? options[0] ?? '');
 </script>
 
 <div class="select-container" bind:this={containerElement}>
@@ -176,7 +182,7 @@
           on:mousedown|preventDefault={() => selectOption(option)}
           on:mouseenter={() => setHighlightedIndex(index)}
         >
-          <span>{option}</span>
+          <span>{labelFor(option)}</span>
           {#if option === value}
             <span class="checkmark" aria-hidden="true">✓</span>
           {/if}
@@ -200,24 +206,23 @@
     gap: 0.75rem;
     background: linear-gradient(
       135deg,
-      rgba(var(--theme-rgb-surface-muted), 0.65) 0%,
-      rgba(var(--theme-rgb-surface-chip), 0.45) 100%
+      rgba(var(--theme-rgb-surface-muted), 0.78) 0%,
+      rgba(var(--theme-rgb-surface-chip), 0.62) 100%
     );
-    border: 1px solid rgba(var(--theme-rgb-white), 0.14);
+    border: 1px solid rgba(var(--theme-rgb-white), 0.16);
     border-radius: 0.625rem;
     padding: 0.75rem 1rem;
     color: rgba(var(--theme-rgb-light-slate), 0.95);
     font-size: 0.95rem;
     font-weight: 500;
     box-shadow:
-      inset 0 1px 2px rgba(var(--theme-rgb-black), 0.4),
-      0 1px 2px rgba(var(--theme-rgb-black), 0.2);
+      inset 0 1px 2px rgba(var(--theme-rgb-black), 0.32),
+      0 1px 2px rgba(var(--theme-rgb-black), 0.16);
     cursor: pointer;
     transition:
       border-color 0.25s ease,
       box-shadow 0.25s ease,
-      background 0.25s ease,
-      transform 0.25s ease;
+      background 0.25s ease;
   }
 
   .select-trigger:disabled {
@@ -230,13 +235,12 @@
     border-color: rgba(var(--theme-rgb-accent), 0.55);
     background: linear-gradient(
       135deg,
-      rgba(var(--theme-rgb-accent), 0.14) 0%,
-      rgba(var(--theme-rgb-accent), 0.06) 100%
+      rgba(var(--theme-rgb-accent), 0.12) 0%,
+      rgba(var(--theme-rgb-accent), 0.05) 100%
     );
     box-shadow:
-      0 0 0 0.1875rem rgba(var(--theme-rgb-accent), 0.18),
-      0 0.35rem 0.9rem rgba(var(--theme-rgb-accent), 0.22);
-    transform: translateY(-0.125rem);
+      0 0 0 0.1875rem rgba(var(--theme-rgb-accent), 0.14),
+      0 0.25rem 0.7rem rgba(var(--theme-rgb-accent), 0.16);
     outline: none;
   }
 
@@ -270,16 +274,16 @@
     list-style: none;
     background: linear-gradient(
       135deg,
-      rgba(var(--theme-rgb-surface-dropdown), 0.95) 0%,
-      rgba(var(--theme-rgb-surface-card-dark), 0.92) 100%
+      rgba(var(--theme-rgb-surface-dropdown), 0.97) 0%,
+      rgba(var(--theme-rgb-surface-card-dark), 0.95) 100%
     );
     border: 1px solid rgba(var(--theme-rgb-white), 0.12);
     border-radius: 0.75rem;
     box-shadow:
-      0 1.25rem 3rem rgba(var(--theme-rgb-black), 0.45),
+      0 0.85rem 2rem rgba(var(--theme-rgb-black), 0.34),
       0 0 0 1px rgba(var(--theme-rgb-white), 0.08);
-    backdrop-filter: blur(18px) saturate(180%);
-    -webkit-backdrop-filter: blur(18px) saturate(180%);
+    backdrop-filter: blur(10px) saturate(140%);
+    -webkit-backdrop-filter: blur(10px) saturate(140%);
     max-height: 14rem;
     overflow-y: auto;
     outline: none;
@@ -304,14 +308,13 @@
   .select-dropdown li.highlighted {
     background: linear-gradient(
       135deg,
-      rgba(var(--theme-rgb-accent), 0.24) 0%,
-      rgba(var(--theme-rgb-accent), 0.12) 100%
+      rgba(var(--theme-rgb-accent), 0.2) 0%,
+      rgba(var(--theme-rgb-accent), 0.1) 100%
     );
     color: var(--theme-accent-ink-strong);
     box-shadow:
       inset 0 1px 0 rgba(var(--theme-rgb-white), 0.2),
-      0 6px 16px rgba(var(--theme-rgb-accent), 0.18);
-    transform: translateX(0.1rem);
+      0 4px 12px rgba(var(--theme-rgb-accent), 0.12);
   }
 
   .select-dropdown li.selected {

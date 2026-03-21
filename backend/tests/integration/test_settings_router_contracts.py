@@ -30,6 +30,33 @@ class TestSettingsEndpoints:
         assert "sections" in data
         assert isinstance(data["sections"], (list, dict))
 
+    def test_get_settings_includes_webview_render_mode(
+        self, client: TestClient
+    ) -> None:
+        """GET /api/settings - webview.render_mode が取得できる。"""
+        response = client.get("/api/settings")
+        assert response.status_code == status.HTTP_200_OK
+
+        sections = response.json()["sections"]
+        assert isinstance(sections, list)
+
+        webview_section = next(
+            section for section in sections if section["id"] == "webview"
+        )
+        render_mode = next(
+            field
+            for field in webview_section["fields"]
+            if field["id"] == "render_mode"
+        )
+
+        assert render_mode["type"] == "select"
+        assert render_mode["choices"] == ["cpu", "gpu"]
+        assert render_mode["choice_labels"] == {
+            "cpu": "CPU",
+            "gpu": "GPU",
+        }
+        assert render_mode["value"] in {"cpu", "gpu"}
+
     def test_update_settings_valid(self, client: TestClient) -> None:
         """PUT /api/settings - 設定更新（正常系）。"""
         # 最小限の有効なリクエスト
@@ -124,6 +151,37 @@ class TestSettingsEndpoints:
         response = client.put("/api/settings", json=request_data)
 
         assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
+
+    def test_update_settings_roundtrip_webview_render_mode(
+        self, client: TestClient
+    ) -> None:
+        """PUT /api/settings - webview.render_mode を更新して再取得できる。"""
+        response = client.put(
+            "/api/settings",
+            json={
+                "sections": [
+                    {"id": "webview", "values": {"render_mode": "gpu"}}
+                ]
+            },
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+
+        after = client.get("/api/settings")
+        assert after.status_code == status.HTTP_200_OK
+        sections = after.json()["sections"]
+        assert isinstance(sections, list)
+
+        webview_section = next(
+            section for section in sections if section["id"] == "webview"
+        )
+        render_mode = next(
+            field
+            for field in webview_section["fields"]
+            if field["id"] == "render_mode"
+        )
+
+        assert render_mode["value"] == "gpu"
 
 
 class TestDeviceStatusEndpoints:

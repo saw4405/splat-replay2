@@ -66,6 +66,7 @@ describe('Settings フロー Integration', () => {
   beforeEach(() => {
     fetchMock = vi.fn();
     global.fetch = fetchMock;
+    delete document.documentElement.dataset.renderMode;
 
     // デフォルトの設定取得レスポンス
     fetchMock.mockResolvedValue(
@@ -77,6 +78,7 @@ describe('Settings フロー Integration', () => {
     cleanup();
     vi.clearAllTimers();
     vi.restoreAllMocks();
+    delete document.documentElement.dataset.renderMode;
   });
 
   describe('初期化と設定読み込み', () => {
@@ -242,13 +244,13 @@ describe('Settings フロー Integration', () => {
       });
     });
 
-    it('保存成功時に成功メッセージが表示される', async () => {
+    it('保存成功時にダイアログが閉じる', async () => {
       fetchMock.mockResolvedValueOnce(
         new Response(JSON.stringify(mockSettingsResponse), { status: 200 })
       );
       fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({}), { status: 200 }));
 
-      render(SettingsDialog, { props: { open: true } });
+      const { component } = render(SettingsDialog, { props: { open: true } });
 
       await waitFor(() => {
         expect(screen.queryByText('デバッグモード')).toBeInTheDocument();
@@ -258,8 +260,79 @@ describe('Settings フロー Integration', () => {
       await fireEvent.click(saveButton);
 
       await waitFor(() => {
-        expect(screen.queryByText(/保存しました/)).toBeInTheDocument();
+        expect(component.open).toBe(false);
       });
+    });
+
+    it('GPU を選んで保存すると raw 値 gpu を送信してダイアログを閉じる', async () => {
+      const webviewSettingsResponse: SettingsResponse = {
+        sections: [
+          {
+            id: 'webview',
+            label: '表示',
+            fields: [
+              {
+                id: 'render_mode',
+                label: '描画モード',
+                description:
+                  'CPU: プレビュー表示はややカクつきますが、OBSの録画は安定しやすい設定です。 ' +
+                  'GPU: プレビュー表示は滑らかですが、GPU負荷が高くなり、OBSの録画結果に影響する場合があります。 ' +
+                  'プレビュー更新頻度の変更は保存後すぐに反映されます。 ' +
+                  '描画モードの切り替えは再起動後に反映されます。',
+                type: 'select',
+                recommended: false,
+                value: 'cpu',
+                choices: ['cpu', 'gpu'],
+                choice_labels: { cpu: 'CPU', gpu: 'GPU' },
+                user_editable: true,
+              },
+            ],
+          },
+        ],
+      };
+
+      fetchMock.mockResolvedValueOnce(
+        new Response(JSON.stringify(webviewSettingsResponse), { status: 200 })
+      );
+      fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({}), { status: 200 }));
+
+      const { component } = render(SettingsDialog, { props: { open: true } });
+
+      await waitFor(() => {
+        expect(screen.queryByText('描画モード')).toBeInTheDocument();
+      });
+
+      await fireEvent.click(screen.getByRole('combobox'));
+
+      await waitFor(() => {
+        expect(screen.getByRole('option', { name: 'GPU' })).toBeInTheDocument();
+      });
+
+      await fireEvent.mouseDown(screen.getByRole('option', { name: 'GPU' }));
+      await fireEvent.click(screen.getByRole('button', { name: '保存' }));
+
+      await waitFor(() => {
+        expect(fetchMock).toHaveBeenCalledWith(
+          '/api/settings',
+          expect.objectContaining({
+            method: 'PUT',
+            body: JSON.stringify({
+              sections: [
+                {
+                  id: 'webview',
+                  values: { render_mode: 'gpu' },
+                },
+              ],
+            }),
+          })
+        );
+      });
+
+      await waitFor(() => {
+        expect(component.open).toBe(false);
+      });
+
+      expect(document.documentElement.dataset.renderMode).toBe('gpu');
     });
 
     it('保存失敗時にエラーメッセージが表示される', async () => {

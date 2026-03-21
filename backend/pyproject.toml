@@ -113,6 +113,7 @@ ignore_imports = [
     "splat_replay.domain.config.upload -> pydantic",
     "splat_replay.domain.config.video_edit -> pydantic",
     "splat_replay.domain.config.video_storage -> pydantic",
+    "splat_replay.domain.config.webview -> pydantic",
 ]
 
 [[tool.importlinter.contracts]]

@@ -99,6 +99,7 @@ class SettingFieldData(TypedDict):
     user_editable: NotRequired[bool]
     value: NotRequired[Any]
     choices: NotRequired[List[str]]
+    choice_labels: NotRequired[dict[str, str]]
     children: NotRequired[List["SettingFieldData"]]
 
 

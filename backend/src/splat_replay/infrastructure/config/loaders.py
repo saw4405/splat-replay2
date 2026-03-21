@@ -93,6 +93,7 @@ def convert_to_serializable_dict(settings: AppSettings) -> Dict[str, object]:
     )
     toml_data["storage"] = _convert_for_toml(settings.storage.dict())
     toml_data["video_edit"] = _convert_for_toml(settings.video_edit.dict())
+    toml_data["webview"] = _convert_for_toml(settings.webview.dict())
     toml_data["upload"] = _convert_for_toml(settings.upload.dict())
 
     return toml_data

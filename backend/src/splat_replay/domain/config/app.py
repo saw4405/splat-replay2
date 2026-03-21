@@ -12,6 +12,7 @@ from splat_replay.domain.config.speech_transcriber import (
 from splat_replay.domain.config.upload import UploadSettings
 from splat_replay.domain.config.video_edit import VideoEditSettings
 from splat_replay.domain.config.video_storage import VideoStorageSettings
+from splat_replay.domain.config.webview import WebViewSettings
 
 SECTION_CLASSES = {
     "behavior": BehaviorSettings,
@@ -21,6 +22,7 @@ SECTION_CLASSES = {
     "speech_transcriber": SpeechTranscriberSettings,
     "storage": VideoStorageSettings,
     "video_edit": VideoEditSettings,
+    "webview": WebViewSettings,
     "upload": UploadSettings,
 }
 
@@ -35,4 +37,5 @@ class AppSettings(BaseModel):
     speech_transcriber: SpeechTranscriberSettings = SpeechTranscriberSettings()
     storage: VideoStorageSettings = VideoStorageSettings()
     video_edit: VideoEditSettings = VideoEditSettings()
+    webview: WebViewSettings = WebViewSettings()
     upload: UploadSettings = UploadSettings()

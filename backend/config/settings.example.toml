@@ -6,6 +6,9 @@ record_battle_history = true
 [capture_device]
 name = "Capture Device"
 
+[webview]
+render_mode = "gpu"
+
 [obs]
 websocket_host = "localhost"
 websocket_port = 4455

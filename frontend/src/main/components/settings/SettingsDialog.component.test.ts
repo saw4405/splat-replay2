@@ -23,12 +23,14 @@ describe('SettingsDialog.svelte', () => {
     // fetch のモックを設定
     fetchMock = vi.fn();
     global.fetch = fetchMock;
+    delete document.documentElement.dataset.renderMode;
   });
 
   afterEach(() => {
     cleanup();
     vi.clearAllTimers();
     vi.restoreAllMocks();
+    delete document.documentElement.dataset.renderMode;
   });
 
   // ========================================
@@ -132,6 +134,48 @@ describe('SettingsDialog.svelte', () => {
     await waitFor(() => {
       expect(screen.getByTestId('settings-section-general')).toBeInTheDocument();
     });
+  });
+
+  it('choice_labels がある select は表示ラベルを使う', async () => {
+    const mockSections = [
+      {
+        id: 'webview',
+        label: '表示',
+        fields: [
+          {
+            id: 'render_mode',
+            label: '描画モード',
+            description:
+              'CPU: プレビュー表示はややカクつきますが、OBSの録画は安定しやすい設定です。 ' +
+              'GPU: プレビュー表示は滑らかですが、GPU負荷が高くなり、OBSの録画結果に影響する場合があります。 ' +
+              'プレビュー更新頻度の変更は保存後すぐに反映されます。 ' +
+              '描画モードの切り替えは再起動後に反映されます。',
+            type: 'select',
+            recommended: false,
+            value: 'cpu',
+            choices: ['cpu', 'gpu'],
+            choice_labels: { cpu: 'CPU', gpu: 'GPU' },
+            user_editable: true,
+          },
+        ],
+      },
+    ];
+
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ sections: mockSections }),
+    });
+
+    render(SettingsDialog, { props: { open: true } });
+
+    await waitFor(() => {
+      expect(screen.getByText('描画モード')).toBeInTheDocument();
+    });
+
+    expect(screen.getByRole('combobox')).toHaveTextContent('CPU');
+    expect(
+      screen.getByText(/プレビュー更新頻度の変更は保存後すぐに反映されます/)
+    ).toBeInTheDocument();
   });
 
   // ========================================
@@ -404,19 +448,17 @@ describe('SettingsDialog.svelte', () => {
       json: async () => ({ sections: mockSections }),
     });
 
-    // 設定保存のモック（遅延）
+    // 設定保存のモック（明示的に解放するまで保留）
+    let resolveSave:
+      | ((value: { ok: boolean; json: () => Promise<{ status: string }> }) => void)
+      | null = null;
     fetchMock.mockReturnValueOnce(
       new Promise((resolve) => {
-        setTimeout(() => {
-          resolve({
-            ok: true,
-            json: async () => ({ status: 'ok' }),
-          });
-        }, 100);
+        resolveSave = resolve;
       })
     );
 
-    render(SettingsDialog, { props: { open: true } });
+    const { component } = render(SettingsDialog, { props: { open: true } });
 
     await waitFor(() => {
       expect(screen.getByTestId('settings-section-general')).toBeInTheDocument();
@@ -429,22 +471,37 @@ describe('SettingsDialog.svelte', () => {
     await waitFor(() => {
       expect(screen.getByRole('button', { name: '保存中...' })).toBeInTheDocument();
     });
+
+    resolveSave?.({
+      ok: true,
+      json: async () => ({ status: 'ok' }),
+    });
+
+    await waitFor(() => {
+      expect(component.open).toBe(false);
+    });
   });
 
-  it('保存成功時は成功メッセージが表示される', async () => {
+  it('描画モード保存成功時はダイアログを閉じて dataset を即時更新する', async () => {
     const user = userEvent.setup();
     const mockSections: SettingsSection[] = [
       {
-        id: 'general',
-        label: '一般設定',
+        id: 'webview',
+        label: '表示',
         fields: [
           {
-            id: 'field1',
-            label: 'フィールド1',
-            description: '説明1',
-            type: 'string',
+            id: 'render_mode',
+            label: '描画モード',
+            description:
+              'CPU: プレビュー表示はややカクつきますが、OBSの録画は安定しやすい設定です。 ' +
+              'GPU: プレビュー表示は滑らかですが、GPU負荷が高くなり、OBSの録画結果に影響する場合があります。 ' +
+              'プレビュー更新頻度の変更は保存後すぐに反映されます。 ' +
+              '描画モードの切り替えは再起動後に反映されます。',
+            type: 'select',
             recommended: false,
-            value: 'test',
+            value: 'cpu',
+            choices: ['cpu', 'gpu'],
+            choice_labels: { cpu: 'CPU', gpu: 'GPU' },
             user_editable: true,
           },
         ],
@@ -466,16 +523,23 @@ describe('SettingsDialog.svelte', () => {
     const { component } = render(SettingsDialog, { props: { open: true } });
 
     await waitFor(() => {
-      expect(screen.getByTestId('settings-section-general')).toBeInTheDocument();
+      expect(screen.getByText('描画モード')).toBeInTheDocument();
     });
+
+    await user.click(screen.getByRole('combobox'));
+    await waitFor(() => {
+      expect(screen.getByRole('option', { name: 'GPU' })).toBeInTheDocument();
+    });
+    await user.click(screen.getByRole('option', { name: 'GPU' }));
 
     const saveButton = screen.getByRole('button', { name: '保存' });
     await user.click(saveButton);
 
-    // 保存成功時にダイアログが閉じることを確認
     await waitFor(() => {
       expect(component.open).toBe(false);
     });
+
+    expect(document.documentElement.dataset.renderMode).toBe('gpu');
   });
 
   // ========================================

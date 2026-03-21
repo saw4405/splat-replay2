@@ -211,6 +211,12 @@ class TomlSettingsRepository(SettingsRepositoryPort):
 
             if choices:
                 field_data["choices"] = list(choices)
+            choice_labels = model_field.field_info.extra.get("choice_labels")
+            if isinstance(choice_labels, Mapping):
+                field_data["choice_labels"] = {
+                    str(key): str(value)
+                    for key, value in choice_labels.items()
+                }
 
             field_data["value"] = serialized_value
             fields.append(field_data)
