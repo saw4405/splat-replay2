@@ -584,6 +584,87 @@ async def test_predict_slot_tries_variant_fallback_when_labeling_rerank_not_appl
     assert variant_called is True
 
 
+@pytest.mark.asyncio
+async def test_predict_slot_uses_labeling_variant_rerank_for_jet_dual_pair(
+    recognizer: WeaponRecognitionAdapter,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    ranked_base = [
+        _ranked_candidate(
+            weapon="デュアルスイーパーカスタム",
+            score=0.777837,
+            threshold=0.820,
+        ),
+        _ranked_candidate(
+            weapon="ジェットスイーパーカスタム",
+            score=0.727470,
+            threshold=0.820,
+        ),
+    ]
+    ranked_with_labeling_variant = [
+        _ranked_candidate(
+            weapon="ジェットスイーパーカスタム",
+            score=0.910000,
+            threshold=0.820,
+        ),
+        _ranked_candidate(
+            weapon="デュアルスイーパーカスタム",
+            score=0.777837,
+            threshold=0.820,
+        ),
+    ]
+
+    async def _stub_rank_weapon_candidates(
+        query_padded_gray: np.ndarray,
+        *,
+        cancel_generation: int,
+    ) -> list[_RankedCandidate]:
+        _ = query_padded_gray
+        _ = cancel_generation
+        return ranked_base
+
+    async def _stub_rerank_top_candidates_with_labeling_variants(
+        *,
+        ranked: list[_RankedCandidate],
+        query_padded_gray: np.ndarray,
+        cancel_generation: int,
+    ) -> tuple[list[_RankedCandidate], bool]:
+        _ = ranked
+        _ = query_padded_gray
+        _ = cancel_generation
+        return ranked_with_labeling_variant, True
+
+    monkeypatch.setattr(
+        recognizer,
+        "_rank_weapon_candidates",
+        _stub_rank_weapon_candidates,
+    )
+    monkeypatch.setattr(
+        recognizer,
+        "_rerank_top_candidates_with_labeling_variants",
+        _stub_rerank_top_candidates_with_labeling_variants,
+    )
+    monkeypatch.setattr(
+        recognizer,
+        "_labeling_variant_sources_by_weapon",
+        {"ジェットスイーパーカスタム": ()},
+    )
+    monkeypatch.setattr(
+        recognizer,
+        "_variant_template_sources_by_weapon",
+        {},
+    )
+
+    slot_result, _debug_candidates = await recognizer._predict_slot(
+        slot=constants.ALLY_SLOTS[0],
+        query_padded_gray=np.zeros((16, 16), dtype=np.uint8),
+        cancel_generation=recognizer._capture_cancel_generation(),
+    )
+
+    assert slot_result.predicted_weapon == "ジェットスイーパーカスタム"
+    assert slot_result.top_candidates[0].weapon == "ジェットスイーパーカスタム"
+
+
 def test_resolve_pair_variant_rerank_target_returns_configured_pair(
     recognizer: WeaponRecognitionAdapter,
     monkeypatch: pytest.MonkeyPatch,

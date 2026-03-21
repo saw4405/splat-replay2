@@ -1465,7 +1465,7 @@ simple_matchers:
     type: "template"
     template_path: "assets/matching/weapon/ボールドマーカーネオ.png"
     mask_path: "assets/matching/weapon/ボールドマーカーネオ_mask.png"
-    threshold: 0.82
+    threshold: 0.81
     description: "ブキ照合テンプレート"
 
   weapon_template_061:
@@ -2153,7 +2153,7 @@ simple_matchers:
     type: "template"
     template_path: "assets/matching/weapon/24式張替傘・乙.png"
     mask_path: "assets/matching/weapon/24式張替傘・乙_mask.png"
-    threshold: 0.82
+    threshold: 0.71
     description: "ブキ照合テンプレート"
 
   weapon_template_147:
@@ -2427,4 +2427,3 @@ simple_matchers:
     mask_path: "assets/matching/weapon/スパイガジェットソレーラ_mask.png"
     threshold: 0.82
     description: "ブキ照合テンプレート"
-

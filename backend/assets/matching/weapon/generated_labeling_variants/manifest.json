@@ -1,0 +1,61 @@
+{
+  "version": 1,
+  "items": [
+    {
+      "weapon": "ジェットスイーパーカスタム",
+      "template_path": "assets/matching/weapon/generated_labeling_variants/ジェットスイーパーカスタム_labeling_variant_001.png",
+      "mask_path": "assets/matching/weapon/ジェットスイーパーカスタム_mask.png",
+      "source_image_path": "C:\\Users\\shogo\\Desktop\\SplatReplay\\outputs\\predict_weapons\\ブキ\\ジェットスイーパーカスタム_dup1.png",
+      "self_score": null
+    },
+    {
+      "weapon": "ジェットスイーパーカスタム",
+      "template_path": "assets/matching/weapon/generated_labeling_variants/ジェットスイーパーカスタム_labeling_variant_002.png",
+      "mask_path": "assets/matching/weapon/ジェットスイーパーカスタム_mask.png",
+      "source_image_path": "C:\\Users\\shogo\\Desktop\\SplatReplay\\outputs\\predict_weapons\\ブキ\\ジェットスイーパーカスタム_dup2.png",
+      "self_score": null
+    },
+    {
+      "weapon": "ジェットスイーパーカスタム",
+      "template_path": "assets/matching/weapon/generated_labeling_variants/ジェットスイーパーカスタム_labeling_variant_003.png",
+      "mask_path": "assets/matching/weapon/ジェットスイーパーカスタム_mask.png",
+      "source_image_path": "C:\\Users\\shogo\\Desktop\\SplatReplay\\outputs\\predict_weapons\\ブキ\\ジェットスイーパーカスタム_dup3.png",
+      "self_score": null
+    },
+    {
+      "weapon": "ジェットスイーパーカスタム",
+      "template_path": "assets/matching/weapon/generated_labeling_variants/ジェットスイーパーカスタム_labeling_variant_004.png",
+      "mask_path": "assets/matching/weapon/ジェットスイーパーカスタム_mask.png",
+      "source_image_path": "C:\\Users\\shogo\\Desktop\\SplatReplay\\outputs\\predict_weapons\\ブキ\\ジェットスイーパーカスタム_score_0.9369.png",
+      "self_score": 0.9369
+    },
+    {
+      "weapon": "デュアルスイーパーカスタム",
+      "template_path": "assets/matching/weapon/generated_labeling_variants/デュアルスイーパーカスタム_labeling_variant_001.png",
+      "mask_path": "assets/matching/weapon/デュアルスイーパーカスタム_mask.png",
+      "source_image_path": "C:\\Users\\shogo\\Desktop\\SplatReplay\\outputs\\predict_weapons\\ブキ\\デュアルスイーパーカスタム_dup1.png",
+      "self_score": null
+    },
+    {
+      "weapon": "デュアルスイーパーカスタム",
+      "template_path": "assets/matching/weapon/generated_labeling_variants/デュアルスイーパーカスタム_labeling_variant_002.png",
+      "mask_path": "assets/matching/weapon/デュアルスイーパーカスタム_mask.png",
+      "source_image_path": "C:\\Users\\shogo\\Desktop\\SplatReplay\\outputs\\predict_weapons\\ブキ\\デュアルスイーパーカスタム_score_0.7342.png",
+      "self_score": 0.7342
+    },
+    {
+      "weapon": "デュアルスイーパーカスタム",
+      "template_path": "assets/matching/weapon/generated_labeling_variants/デュアルスイーパーカスタム_labeling_variant_003.png",
+      "mask_path": "assets/matching/weapon/デュアルスイーパーカスタム_mask.png",
+      "source_image_path": "C:\\Users\\shogo\\Desktop\\SplatReplay\\outputs\\predict_weapons\\ブキ\\デュアルスイーパーカスタム_score_0.8721.png",
+      "self_score": 0.8721
+    },
+    {
+      "weapon": "デュアルスイーパーカスタム",
+      "template_path": "assets/matching/weapon/generated_labeling_variants/デュアルスイーパーカスタム_labeling_variant_004.png",
+      "mask_path": "assets/matching/weapon/デュアルスイーパーカスタム_mask.png",
+      "source_image_path": "C:\\Users\\shogo\\Desktop\\SplatReplay\\outputs\\predict_weapons\\ブキ\\デュアルスイーパーカスタム_score_0.9398.png",
+      "self_score": 0.9398
+    }
+  ]
+}
