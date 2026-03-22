@@ -61,6 +61,7 @@ CANDIDATE_CONFIDENCE_RESCUE_MAX_THRESHOLD: Final[float] = 0.95
 PAIR_VARIANT_RERANK_RULES: Final[tuple[tuple[tuple[str, str], float], ...]] = (
     (("4Kスコープ", "リッター4K"), 0.03),
     (("スプラスコープ", "スプラチャージャー"), 0.07),
+    (("ジェットスイーパーカスタム", "デュアルスイーパーカスタム"), 0.06),
 )
 # pair rerank 後も confidence では逆転しない family だけ、
 # variant 追加で大きく改善した側を限定的に rescue する。

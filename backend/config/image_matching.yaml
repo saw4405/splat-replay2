@@ -322,6 +322,12 @@ matcher_groups:
     - weapon_template_179
     - weapon_template_180
     - weapon_template_181
+    - weapon_template_182
+    - weapon_template_183
+    - weapon_template_184
+    - weapon_template_185
+    - weapon_template_186
+    - weapon_template_187
 
 # 単一手法検出器（シンプルな検出用）
 simple_matchers:
@@ -1025,7 +1031,7 @@ simple_matchers:
     type: "template"
     template_path: "assets/matching/weapon/N-ZAP89.png"
     mask_path: "assets/matching/weapon/N-ZAP89_mask.png"
-    threshold: 0.82
+    threshold: 0.803
     description: "ブキ照合テンプレート"
 
   weapon_template_006:
@@ -1521,7 +1527,7 @@ simple_matchers:
     type: "template"
     template_path: "assets/matching/weapon/スクイックリンα.png"
     mask_path: "assets/matching/weapon/スクイックリンα_mask.png"
-    threshold: 0.73
+    threshold: 0.717
     description: "ブキ照合テンプレート"
 
   weapon_template_068:
@@ -2385,7 +2391,7 @@ simple_matchers:
     type: "template"
     template_path: "assets/matching/weapon/N-ZAP89_variant_001.png"
     mask_path: "assets/matching/weapon/N-ZAP89_mask.png"
-    threshold: 0.82
+    threshold: 0.803
     description: "ブキ照合テンプレート（variant）"
 
   weapon_template_177:
@@ -2425,5 +2431,53 @@ simple_matchers:
     type: "template"
     template_path: "assets/matching/weapon/スパイガジェットソレーラ.png"
     mask_path: "assets/matching/weapon/スパイガジェットソレーラ_mask.png"
+    threshold: 0.82
+    description: "ブキ照合テンプレート"
+
+  weapon_template_182:
+    name: "オーダーシェルターレプリカ"
+    type: "template"
+    template_path: "assets/matching/weapon/オーダーシェルターレプリカ.png"
+    mask_path: "assets/matching/weapon/オーダーシェルターレプリカ_mask.png"
+    threshold: 0.82
+    description: "ブキ照合テンプレート"
+
+  weapon_template_183:
+    name: "カーボンローラーANGL"
+    type: "template"
+    template_path: "assets/matching/weapon/カーボンローラーANGL.png"
+    mask_path: "assets/matching/weapon/カーボンローラーANGL_mask.png"
+    threshold: 0.82
+    description: "ブキ照合テンプレート"
+
+  weapon_template_184:
+    name: "スクイックリンβ"
+    type: "template"
+    template_path: "assets/matching/weapon/スクイックリンβ.png"
+    mask_path: "assets/matching/weapon/スクイックリンβ_mask.png"
+    threshold: 0.82
+    description: "ブキ照合テンプレート"
+
+  weapon_template_185:
+    name: "ドライブワイパーRUST"
+    type: "template"
+    template_path: "assets/matching/weapon/ドライブワイパーRUST.png"
+    mask_path: "assets/matching/weapon/ドライブワイパーRUST_mask.png"
+    threshold: 0.82
+    description: "ブキ照合テンプレート"
+
+  weapon_template_186:
+    name: "R-PEN5B"
+    type: "template"
+    template_path: "assets/matching/weapon/R-PEN5B.png"
+    mask_path: "assets/matching/weapon/R-PEN5B_mask.png"
+    threshold: 0.82
+    description: "ブキ照合テンプレート"
+
+  weapon_template_187:
+    name: "ガエンFF"
+    type: "template"
+    template_path: "assets/matching/weapon/ガエンFF.png"
+    mask_path: "assets/matching/weapon/ガエンFF_mask.png"
     threshold: 0.82
     description: "ブキ照合テンプレート"

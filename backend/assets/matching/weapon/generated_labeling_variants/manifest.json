@@ -2,6 +2,62 @@
   "version": 1,
   "items": [
     {
+      "weapon": "ガエンFFカスタム",
+      "template_path": "assets/matching/weapon/generated_labeling_variants/ガエンFFカスタム_labeling_variant_001.png",
+      "mask_path": "assets/matching/weapon/ガエンFFカスタム_mask.png",
+      "source_image_path": "C:\\Users\\shogo\\Desktop\\SplatReplay\\outputs\\predict_weapons\\ブキ\\ガエンFFカスタム_score_0.5514.png",
+      "self_score": 0.5514
+    },
+    {
+      "weapon": "ガエンFFカスタム",
+      "template_path": "assets/matching/weapon/generated_labeling_variants/ガエンFFカスタム_labeling_variant_002.png",
+      "mask_path": "assets/matching/weapon/ガエンFFカスタム_mask.png",
+      "source_image_path": "C:\\Users\\shogo\\Desktop\\SplatReplay\\outputs\\predict_weapons\\ブキ\\ガエンFFカスタム_score_0.6758.png",
+      "self_score": 0.6758
+    },
+    {
+      "weapon": "ガエンFFカスタム",
+      "template_path": "assets/matching/weapon/generated_labeling_variants/ガエンFFカスタム_labeling_variant_003.png",
+      "mask_path": "assets/matching/weapon/ガエンFFカスタム_mask.png",
+      "source_image_path": "C:\\Users\\shogo\\Desktop\\SplatReplay\\outputs\\predict_weapons\\ブキ\\ガエンFFカスタム_score_0.7010.png",
+      "self_score": 0.701
+    },
+    {
+      "weapon": "H3リールガンSNAK",
+      "template_path": "assets/matching/weapon/generated_labeling_variants/H3リールガンSNAK_labeling_variant_001.png",
+      "mask_path": "assets/matching/weapon/H3リールガンSNAK_mask.png",
+      "source_image_path": "C:\\Users\\shogo\\Desktop\\SplatReplay\\outputs\\predict_weapons\\ブキ\\H3リールガンSNAK_dup1.png",
+      "self_score": null
+    },
+    {
+      "weapon": "H3リールガンSNAK",
+      "template_path": "assets/matching/weapon/generated_labeling_variants/H3リールガンSNAK_labeling_variant_002.png",
+      "mask_path": "assets/matching/weapon/H3リールガンSNAK_mask.png",
+      "source_image_path": "C:\\Users\\shogo\\Desktop\\SplatReplay\\outputs\\predict_weapons\\ブキ\\H3リールガンSNAK_dup2.png",
+      "self_score": null
+    },
+    {
+      "weapon": "H3リールガンSNAK",
+      "template_path": "assets/matching/weapon/generated_labeling_variants/H3リールガンSNAK_labeling_variant_003.png",
+      "mask_path": "assets/matching/weapon/H3リールガンSNAK_mask.png",
+      "source_image_path": "C:\\Users\\shogo\\Desktop\\SplatReplay\\outputs\\predict_weapons\\ブキ\\H3リールガンSNAK_score_0.7539.png",
+      "self_score": 0.7539
+    },
+    {
+      "weapon": "R-PEN5B",
+      "template_path": "assets/matching/weapon/generated_labeling_variants/R-PEN5B_labeling_variant_001.png",
+      "mask_path": "assets/matching/weapon/R-PEN5B_mask.png",
+      "source_image_path": "C:\\Users\\shogo\\Desktop\\SplatReplay\\outputs\\predict_weapons\\ブキ\\R-PEN5B_dup1.png",
+      "self_score": null
+    },
+    {
+      "weapon": "R-PEN5B",
+      "template_path": "assets/matching/weapon/generated_labeling_variants/R-PEN5B_labeling_variant_002.png",
+      "mask_path": "assets/matching/weapon/R-PEN5B_mask.png",
+      "source_image_path": "C:\\Users\\shogo\\Desktop\\SplatReplay\\outputs\\predict_weapons\\ブキ\\R-PEN5B_dup2.png",
+      "self_score": null
+    },
+    {
       "weapon": "ジェットスイーパーカスタム",
       "template_path": "assets/matching/weapon/generated_labeling_variants/ジェットスイーパーカスタム_labeling_variant_001.png",
       "mask_path": "assets/matching/weapon/ジェットスイーパーカスタム_mask.png",
@@ -28,34 +84,6 @@
       "mask_path": "assets/matching/weapon/ジェットスイーパーカスタム_mask.png",
       "source_image_path": "C:\\Users\\shogo\\Desktop\\SplatReplay\\outputs\\predict_weapons\\ブキ\\ジェットスイーパーカスタム_score_0.9369.png",
       "self_score": 0.9369
-    },
-    {
-      "weapon": "デュアルスイーパーカスタム",
-      "template_path": "assets/matching/weapon/generated_labeling_variants/デュアルスイーパーカスタム_labeling_variant_001.png",
-      "mask_path": "assets/matching/weapon/デュアルスイーパーカスタム_mask.png",
-      "source_image_path": "C:\\Users\\shogo\\Desktop\\SplatReplay\\outputs\\predict_weapons\\ブキ\\デュアルスイーパーカスタム_dup1.png",
-      "self_score": null
-    },
-    {
-      "weapon": "デュアルスイーパーカスタム",
-      "template_path": "assets/matching/weapon/generated_labeling_variants/デュアルスイーパーカスタム_labeling_variant_002.png",
-      "mask_path": "assets/matching/weapon/デュアルスイーパーカスタム_mask.png",
-      "source_image_path": "C:\\Users\\shogo\\Desktop\\SplatReplay\\outputs\\predict_weapons\\ブキ\\デュアルスイーパーカスタム_score_0.7342.png",
-      "self_score": 0.7342
-    },
-    {
-      "weapon": "デュアルスイーパーカスタム",
-      "template_path": "assets/matching/weapon/generated_labeling_variants/デュアルスイーパーカスタム_labeling_variant_003.png",
-      "mask_path": "assets/matching/weapon/デュアルスイーパーカスタム_mask.png",
-      "source_image_path": "C:\\Users\\shogo\\Desktop\\SplatReplay\\outputs\\predict_weapons\\ブキ\\デュアルスイーパーカスタム_score_0.8721.png",
-      "self_score": 0.8721
-    },
-    {
-      "weapon": "デュアルスイーパーカスタム",
-      "template_path": "assets/matching/weapon/generated_labeling_variants/デュアルスイーパーカスタム_labeling_variant_004.png",
-      "mask_path": "assets/matching/weapon/デュアルスイーパーカスタム_mask.png",
-      "source_image_path": "C:\\Users\\shogo\\Desktop\\SplatReplay\\outputs\\predict_weapons\\ブキ\\デュアルスイーパーカスタム_score_0.9398.png",
-      "self_score": 0.9398
     }
   ]
 }
