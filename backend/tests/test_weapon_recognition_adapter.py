@@ -1182,6 +1182,7 @@ async def test_detect_weapon_display_true(
         "no_weapon_icons_screen_8.png",
         "no_weapon_icons_screen_9.png",
         "no_weapon_icons_screen_10.png",
+        "no_weapon_icons_screen_11.png",
     ],
 )
 async def test_detect_weapon_display_false(
@@ -1508,6 +1509,66 @@ async def test_detect_weapon_display_false_when_matched_slot_team_edge_ratio_is_
     _, fields = spy_logger.debug_calls[-1]
     assert fields["matched_slot_team_edge_ratio_passed"] is False
     assert fields["matched_slot_team_edge_ratio"] == pytest.approx(0.16)
+
+
+@pytest.mark.asyncio
+async def test_detect_weapon_display_false_when_weapon_region_gray_std_is_low(
+    recognizer: WeaponRecognitionAdapter,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    frame = _load_image(VISIBLE_FIXTURE_DIR / "weapon_icons_visible_01.png")
+    metrics = TeamColorScreenMetrics(
+        allies_max_distance=0.0,
+        enemies_max_distance=0.0,
+        teams_min_distance=999.0,
+    )
+    spy_logger = _SpyLogger()
+    recognizer._logger = spy_logger
+    monkeypatch.setattr(
+        "splat_replay.infrastructure.adapters.weapon_detection.recognizer.detect_weapon_display_screen",
+        lambda _: (True, metrics),
+    )
+    monkeypatch.setattr(recognizer, "_get_outline_model_masks", lambda: {})
+    iou_by_slot = {slot: 0.0 for slot in constants.SLOT_ORDER}
+    for slot in constants.ALLY_SLOTS:
+        iou_by_slot[slot] = constants.WEAPON_DISPLAY_OUTLINE_MIN_IOU
+    monkeypatch.setattr(
+        recognizer,
+        "_count_outline_matched_slots",
+        lambda *,
+        slot_images,
+        model_masks,
+        cancel_generation=None,
+        max_shift=None,
+        slot_order=None,
+        stop_at_threshold=True: (  # noqa: E501
+            4,
+            iou_by_slot,
+            4,
+            0.20,
+        ),
+    )
+    monkeypatch.setattr(
+        recognizer,
+        "_calc_outline_matched_slot_team_edge_ratio",
+        lambda *, slot_images, iou_by_slot: 0.10,
+    )
+    monkeypatch.setattr(
+        recognizer,
+        "_calc_outline_matched_slot_weapon_region_gray_std",
+        lambda *, slot_images, iou_by_slot, model_masks, max_shift: (
+            constants.WEAPON_DISPLAY_MIN_MATCHED_SLOT_WEAPON_REGION_GRAY_STD
+            - 0.01
+        ),
+    )
+
+    assert await recognizer.detect_weapon_display(frame) is False
+    assert spy_logger.debug_calls
+    _, fields = spy_logger.debug_calls[-1]
+    assert fields["matched_slot_weapon_region_gray_std_passed"] is False
+    assert fields["matched_slot_weapon_region_gray_std"] == pytest.approx(
+        constants.WEAPON_DISPLAY_MIN_MATCHED_SLOT_WEAPON_REGION_GRAY_STD - 0.01
+    )
 
 
 @pytest.mark.asyncio

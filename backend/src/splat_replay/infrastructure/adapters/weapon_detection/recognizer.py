@@ -126,6 +126,7 @@ class WeaponRecognitionAdapter(WeaponRecognitionPort):
         fallback_used = False
         display_weapon_region_ratio: float | None = None
         matched_slot_team_edge_ratio: float | None = None
+        matched_slot_weapon_region_gray_std: float | None = None
         outline_iou_by_slot = {slot: 0.0 for slot in constants.SLOT_ORDER}
         if color_visible:
             model_masks = self._get_outline_model_masks()
@@ -247,6 +248,26 @@ class WeaponRecognitionAdapter(WeaponRecognitionPort):
                 matched_slot_team_edge_ratio
                 <= constants.WEAPON_DISPLAY_MAX_MATCHED_SLOT_TEAM_EDGE_RATIO
             )
+        weapon_region_gray_std_passed = True
+        if (
+            outline_matched_slots
+            >= constants.WEAPON_DISPLAY_OUTLINE_MIN_MATCHED_SLOTS
+            and model_masks is not None
+            and aggregate_max_shift is not None
+        ):
+            matched_slot_weapon_region_gray_std = (
+                self._calc_outline_matched_slot_weapon_region_gray_std(
+                    slot_images=slot_images,
+                    iou_by_slot=outline_iou_by_slot,
+                    model_masks=model_masks,
+                    max_shift=aggregate_max_shift,
+                )
+            )
+        if matched_slot_weapon_region_gray_std is not None:
+            weapon_region_gray_std_passed = (
+                matched_slot_weapon_region_gray_std
+                >= constants.WEAPON_DISPLAY_MIN_MATCHED_SLOT_WEAPON_REGION_GRAY_STD
+            )
         is_visible = (
             color_visible
             and (
@@ -255,6 +276,7 @@ class WeaponRecognitionAdapter(WeaponRecognitionPort):
             )
             and weapon_region_ratio_passed
             and team_edge_ratio_passed
+            and weapon_region_gray_std_passed
         )
         self._logger.debug(
             "ブキ表示判定",
@@ -292,6 +314,20 @@ class WeaponRecognitionAdapter(WeaponRecognitionPort):
             matched_slot_team_edge_ratio_passed=(
                 team_edge_ratio_passed
                 if matched_slot_team_edge_ratio is not None
+                else None
+            ),
+            matched_slot_weapon_region_gray_std=(
+                round(matched_slot_weapon_region_gray_std, 6)
+                if matched_slot_weapon_region_gray_std is not None
+                else None
+            ),
+            matched_slot_weapon_region_gray_std_threshold=round(
+                constants.WEAPON_DISPLAY_MIN_MATCHED_SLOT_WEAPON_REGION_GRAY_STD,
+                6,
+            ),
+            matched_slot_weapon_region_gray_std_passed=(
+                weapon_region_gray_std_passed
+                if matched_slot_weapon_region_gray_std is not None
                 else None
             ),
             fast_shift=constants.OUTLINE_ALIGN_FAST_MAX_SHIFT,
@@ -429,6 +465,43 @@ class WeaponRecognitionAdapter(WeaponRecognitionPort):
             for slot in matched_slots
         ]
         return float(np.mean(team_edge_ratios))
+
+    def _calc_outline_matched_slot_weapon_region_gray_std(
+        self,
+        *,
+        slot_images: dict[str, np.ndarray],
+        iou_by_slot: dict[str, float],
+        model_masks: dict[str, np.ndarray],
+        max_shift: int,
+    ) -> float | None:
+        if not model_masks:
+            return None
+        matched_slots = self._extract_outline_matched_slots(iou_by_slot)
+        if not matched_slots:
+            return None
+
+        gray_stds: list[float] = []
+        for slot in matched_slots:
+            detected_mask = detect_slot_team_region(slot_images[slot])
+            if int(detected_mask.sum()) <= 0:
+                continue
+            _, aligned_model_mask = outline_models.infer_species_and_mask(
+                detected_mask=detected_mask,
+                model_masks=model_masks,
+                max_shift=max_shift,
+            )
+            weapon_region_mask = np.logical_and(
+                aligned_model_mask > 0,
+                detected_mask == 0,
+            )
+            if int(weapon_region_mask.sum()) <= 0:
+                continue
+            gray = cv2.cvtColor(slot_images[slot], cv2.COLOR_BGR2GRAY)
+            gray_stds.append(float(np.std(gray[weapon_region_mask])))
+
+        if not gray_stds:
+            return None
+        return float(np.mean(gray_stds))
 
     @staticmethod
     def _calc_iou(mask_a: np.ndarray, mask_b: np.ndarray) -> float:
