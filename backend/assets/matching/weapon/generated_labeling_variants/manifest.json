@@ -84,6 +84,55 @@
       "mask_path": "assets/matching/weapon/ジェットスイーパーカスタム_mask.png",
       "source_image_path": "C:\\Users\\shogo\\Desktop\\SplatReplay\\outputs\\predict_weapons\\ブキ\\ジェットスイーパーカスタム_score_0.9369.png",
       "self_score": 0.9369
+    },
+    {
+      "weapon": "ジェットスイーパー",
+      "template_path": "assets/matching/weapon/generated_labeling_variants/ジェットスイーパー_labeling_variant_001.png",
+      "mask_path": "assets/matching/weapon/ジェットスイーパー_mask.png",
+      "source_image_path": "C:\\Users\\shogo\\Desktop\\SplatReplay\\outputs\\predict_weapons\\ブキ\\ジェットスイーパー_dup1.png",
+      "self_score": null
+    },
+    {
+      "weapon": "ジェットスイーパー",
+      "template_path": "assets/matching/weapon/generated_labeling_variants/ジェットスイーパー_labeling_variant_002.png",
+      "mask_path": "assets/matching/weapon/ジェットスイーパー_mask.png",
+      "source_image_path": "C:\\Users\\shogo\\Desktop\\SplatReplay\\outputs\\predict_weapons\\ブキ\\ジェットスイーパー_dup3.png",
+      "self_score": null
+    },
+    {
+      "weapon": "ジェットスイーパー",
+      "template_path": "assets/matching/weapon/generated_labeling_variants/ジェットスイーパー_labeling_variant_003.png",
+      "mask_path": "assets/matching/weapon/ジェットスイーパー_mask.png",
+      "source_image_path": "C:\\Users\\shogo\\Desktop\\SplatReplay\\outputs\\predict_weapons\\ブキ\\ジェットスイーパー_score_0.7186.png",
+      "self_score": 0.7186
+    },
+    {
+      "weapon": "ジェットスイーパー",
+      "template_path": "assets/matching/weapon/generated_labeling_variants/ジェットスイーパー_labeling_variant_004.png",
+      "mask_path": "assets/matching/weapon/ジェットスイーパー_mask.png",
+      "source_image_path": "C:\\Users\\shogo\\Desktop\\SplatReplay\\outputs\\predict_weapons\\ブキ\\ジェットスイーパー_score_0.9336.png",
+      "self_score": 0.9336
+    },
+    {
+      "weapon": "カーボンローラー",
+      "template_path": "assets/matching/weapon/generated_labeling_variants/カーボンローラー_labeling_variant_001.png",
+      "mask_path": "assets/matching/weapon/カーボンローラー_mask.png",
+      "source_image_path": "C:\\Users\\shogo\\Desktop\\SplatReplay\\outputs\\predict_weapons\\ブキ\\カーボンローラー_dup1.png",
+      "self_score": null
+    },
+    {
+      "weapon": "カーボンローラー",
+      "template_path": "assets/matching/weapon/generated_labeling_variants/カーボンローラー_labeling_variant_002.png",
+      "mask_path": "assets/matching/weapon/カーボンローラー_mask.png",
+      "source_image_path": "C:\\Users\\shogo\\Desktop\\SplatReplay\\outputs\\predict_weapons\\ブキ\\カーボンローラー_dup2.png",
+      "self_score": null
+    },
+    {
+      "weapon": "カーボンローラー",
+      "template_path": "assets/matching/weapon/generated_labeling_variants/カーボンローラー_labeling_variant_003.png",
+      "mask_path": "assets/matching/weapon/カーボンローラー_mask.png",
+      "source_image_path": "C:\\Users\\shogo\\Desktop\\SplatReplay\\outputs\\predict_weapons\\ブキ\\カーボンローラー_score_0.9301.png",
+      "self_score": 0.9301
     }
   ]
 }

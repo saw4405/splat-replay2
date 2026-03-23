@@ -328,6 +328,8 @@ matcher_groups:
     - weapon_template_185
     - weapon_template_186
     - weapon_template_187
+    - weapon_template_188
+    - weapon_template_189
 
 # 単一手法検出器（シンプルな検出用）
 simple_matchers:
@@ -2481,3 +2483,19 @@ simple_matchers:
     mask_path: "assets/matching/weapon/ガエンFF_mask.png"
     threshold: 0.82
     description: "ブキ照合テンプレート"
+
+  weapon_template_188:
+    name: "ジェットスイーパー"
+    type: "template"
+    template_path: "assets/matching/weapon/ジェットスイーパー_appearance_001.png"
+    mask_path: "assets/matching/weapon/ジェットスイーパー_mask.png"
+    threshold: 0.82
+    description: "ブキ照合テンプレート（代替外観）"
+
+  weapon_template_189:
+    name: "ジェットスイーパー"
+    type: "template"
+    template_path: "assets/matching/weapon/ジェットスイーパー_appearance_002.png"
+    mask_path: "assets/matching/weapon/ジェットスイーパー_mask.png"
+    threshold: 0.82
+    description: "ブキ照合テンプレート（代替外観）"
