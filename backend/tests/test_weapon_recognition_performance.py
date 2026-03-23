@@ -92,14 +92,17 @@ async def test_weapon_recognition_performance(
     frames = [_load_image(path) for path in visible_paths]
 
     # ウォームアップ（初回ロードやキャッシュの影響を除外）
-    await recognizer.recognize_weapons(frames[0], save_unmatched_report=False)
+    await recognizer.recognize_weapons(
+        frames[0],
+        save_predict_weapons_output=False,
+    )
 
     # パフォーマンス測定（レポート出力なし）
     times_ms_no_report: list[float] = []
     for frame in frames:
         started = time.perf_counter()
         _ = await recognizer.recognize_weapons(
-            frame, save_unmatched_report=False
+            frame, save_predict_weapons_output=False
         )
         elapsed_ms = (time.perf_counter() - started) * 1000.0
         times_ms_no_report.append(elapsed_ms)
@@ -109,7 +112,7 @@ async def test_weapon_recognition_performance(
     for frame in frames:
         started = time.perf_counter()
         _ = await recognizer.recognize_weapons(
-            frame, save_unmatched_report=True
+            frame, save_predict_weapons_output=True
         )
         elapsed_ms = (time.perf_counter() - started) * 1000.0
         times_ms_with_report.append(elapsed_ms)
@@ -139,20 +142,20 @@ async def test_weapon_recognition_performance(
     # コンソールに結果を出力
     print("\n【ブキ判別パフォーマンス測定結果】")
     print(f"サンプル数: {len(frames)}")
-    print("\n■ レポート出力なし (save_unmatched_report=False):")
+    print("\n■ predict_weapons 出力なし (save_predict_weapons_output=False):")
     print(f"  平均: {summary_no_report['mean_ms']:.3f}ms")
     print(f"  中央値: {summary_no_report['median_ms']:.3f}ms")
     print(f"  最小: {summary_no_report['min_ms']:.3f}ms")
     print(f"  最大: {summary_no_report['max_ms']:.3f}ms")
     print(f"  標準偏差: {summary_no_report['stdev_ms']:.3f}ms")
-    print("\n■ レポート出力あり (save_unmatched_report=True):")
+    print("\n■ predict_weapons 出力あり (save_predict_weapons_output=True):")
     print(f"  平均: {summary_with_report['mean_ms']:.3f}ms")
     print(f"  中央値: {summary_with_report['median_ms']:.3f}ms")
     print(f"  最小: {summary_with_report['min_ms']:.3f}ms")
     print(f"  最大: {summary_with_report['max_ms']:.3f}ms")
     print(f"  標準偏差: {summary_with_report['stdev_ms']:.3f}ms")
     print(
-        f"\nレポート出力のオーバーヘッド: "
+        f"\npredict_weapons 出力のオーバーヘッド: "
         f"{summary_with_report['mean_ms'] - summary_no_report['mean_ms']:.3f}ms"
     )
 

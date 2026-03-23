@@ -362,6 +362,36 @@ def test_battle_history_service_creates_complete_record(
     assert record["missing_fields"] == []
 
 
+def test_battle_history_service_writes_to_separate_history_output(
+    tmp_path: Path,
+) -> None:
+    logger = _DummyLogger()
+    settings = VideoStorageSettings(base_dir=tmp_path / "videos")
+    history_file = tmp_path / "outputs" / "history" / "battle_history.json"
+    repository = FileBattleHistoryRepository(
+        settings,
+        cast(BoundLogger, logger),
+        history_file=history_file,
+    )
+    service = BattleHistoryService(
+        repository=repository,
+        config=_DummyConfig(record_battle_history=True),
+        logger=logger,
+        base_dir=settings.base_dir,
+    )
+    video_path = settings.recorded_dir / "battle_outputs.mp4"
+    video_path.parent.mkdir(parents=True, exist_ok=True)
+    video_path.touch()
+
+    service.sync_recording(video_path, _build_metadata())
+
+    assert history_file.exists()
+    assert not settings.battle_history_file.exists()
+    payload = _read_history_file(history_file)
+    records = cast(list[dict[str, Any]], payload["records"])
+    assert records[0]["source_video_id"] == "recorded/battle_outputs.mp4"
+
+
 def test_battle_history_service_marks_partial_record(
     tmp_path: Path,
 ) -> None:

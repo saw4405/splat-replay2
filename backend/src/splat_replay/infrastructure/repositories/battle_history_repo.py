@@ -24,8 +24,9 @@ class FileBattleHistoryRepository(BattleHistoryRepositoryPort):
         self,
         settings: VideoStorageSettings,
         logger: BoundLogger,
+        history_file: Path | None = None,
     ) -> None:
-        self._history_file = settings.battle_history_file
+        self._history_file = history_file or settings.battle_history_file
         self._logger = logger
 
     def find_by_source_video_id(

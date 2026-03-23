@@ -12,7 +12,7 @@ from splat_replay.application.interfaces import (
 )
 from splat_replay.infrastructure.adapters.weapon_detection import (
     constants,
-    unmatched_report,
+    predict_weapons_output,
 )
 from splat_replay.infrastructure.adapters.weapon_detection.query_builder import (
     QuerySlotData,
@@ -22,11 +22,10 @@ from splat_replay.infrastructure.adapters.weapon_detection.query_builder import 
 class _SummaryRow(TypedDict):
     slot: str
     saved_slot: str
-    saved_weapon_only: str
-    saved_mask: str
 
 
 class _SummaryJson(TypedDict):
+    input_image: str
     rows: list[_SummaryRow]
 
 
@@ -67,7 +66,7 @@ def _load_summary(output_dir: str) -> _SummaryJson:
 
 
 @pytest.mark.parametrize(
-    ("slot_result", "debug_candidates", "expected_weapon", "expected_score"),
+    ("slot_result", "debug_candidates", "expected_weapon"),
     [
         (
             WeaponSlotResult(
@@ -89,19 +88,18 @@ def _load_summary(output_dir: str) -> _SummaryJson:
                 detected_score=0.88,
             ),
             (
-                unmatched_report.SlotDebugCandidate(
+                predict_weapons_output.SlotDebugCandidate(
                     weapon="候補A",
                     score=0.95,
                     threshold=0.90,
                 ),
-                unmatched_report.SlotDebugCandidate(
+                predict_weapons_output.SlotDebugCandidate(
                     weapon="候補B",
                     score=0.88,
                     threshold=0.70,
                 ),
             ),
             "候補B",
-            "0.8800",
         ),
         (
             WeaponSlotResult(
@@ -117,47 +115,102 @@ def _load_summary(output_dir: str) -> _SummaryJson:
                 ),
             ),
             (
-                unmatched_report.SlotDebugCandidate(
+                predict_weapons_output.SlotDebugCandidate(
                     weapon="候補A",
                     score=0.95,
                     threshold=0.90,
                 ),
             ),
             "候補A",
-            "0.9500",
         ),
     ],
 )
-def test_save_unmatched_slots_uses_expected_weapon_and_score_for_file_name(
+def test_save_predict_weapons_output_uses_expected_slot_and_weapon_for_file_name(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     slot_result: WeaponSlotResult,
-    debug_candidates: tuple[unmatched_report.SlotDebugCandidate, ...],
+    debug_candidates: tuple[predict_weapons_output.SlotDebugCandidate, ...],
     expected_weapon: str,
-    expected_score: str,
 ) -> None:
-    monkeypatch.setattr(constants, "UNMATCHED_OUTPUT_DIR", tmp_path)
+    output_root = tmp_path / "predict_weapons"
+    output_root.mkdir()
+    monkeypatch.setattr(constants, "PREDICT_WEAPONS_OUTPUT_DIR", output_root)
     slot_results = _build_default_slot_results()
     slot_results["ally_1"] = slot_result
     slot_debug_candidates_by_slot = {slot: () for slot in constants.SLOT_ORDER}
     slot_debug_candidates_by_slot["ally_1"] = debug_candidates
 
-    output_dir = unmatched_report.save_unmatched_slots(
+    output_dir = predict_weapons_output.save_predict_weapons_output(
         frame=np.zeros((8, 8, 3), dtype=np.uint8),
         query_data_by_slot=_build_query_data_by_slot(),
         slot_results=slot_results,
         slot_debug_candidates_by_slot=slot_debug_candidates_by_slot,
-        trace_id="test",
+        battle_dir_name="20260322_123456",
     )
 
+    assert output_dir is not None
     summary = _load_summary(output_dir)
     row = next(item for item in summary["rows"] if item["slot"] == "ally_1")
     saved_slot_name = Path(row["saved_slot"]).name
-    saved_weapon_only_name = Path(row["saved_weapon_only"]).name
-    saved_mask_name = Path(row["saved_mask"]).name
 
-    assert f"{expected_weapon}_score_{expected_score}" in saved_slot_name
-    assert (
-        f"{expected_weapon}_score_{expected_score}" in saved_weapon_only_name
+    assert saved_slot_name == f"味方1_{expected_weapon}.png"
+    assert "saved_weapon_only" not in row
+    assert "saved_mask" not in row
+
+
+def test_save_predict_weapons_output_skips_output_when_predict_weapons_dir_missing(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        constants,
+        "PREDICT_WEAPONS_OUTPUT_DIR",
+        tmp_path / "predict_weapons",
     )
-    assert f"{expected_weapon}_score_{expected_score}" in saved_mask_name
+
+    output_dir = predict_weapons_output.save_predict_weapons_output(
+        frame=np.zeros((8, 8, 3), dtype=np.uint8),
+        query_data_by_slot=_build_query_data_by_slot(),
+        slot_results=_build_default_slot_results(),
+        slot_debug_candidates_by_slot={
+            slot: () for slot in constants.SLOT_ORDER
+        },
+        battle_dir_name="20260322_123456",
+    )
+
+    assert output_dir is None
+    assert not (tmp_path / "predict_weapons").exists()
+
+
+def test_save_predict_weapons_output_saves_only_slot_images_under_battle_dir(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    output_root = tmp_path / "predict_weapons"
+    output_root.mkdir()
+    monkeypatch.setattr(constants, "PREDICT_WEAPONS_OUTPUT_DIR", output_root)
+
+    output_dir = predict_weapons_output.save_predict_weapons_output(
+        frame=np.zeros((8, 8, 3), dtype=np.uint8),
+        query_data_by_slot=_build_query_data_by_slot(),
+        slot_results=_build_default_slot_results(),
+        slot_debug_candidates_by_slot={
+            slot: () for slot in constants.SLOT_ORDER
+        },
+        battle_dir_name="20260322_123456",
+    )
+
+    assert output_dir is not None
+    output_path = Path(output_dir)
+    assert output_path == output_root / "20260322_123456"
+    assert (output_path / "summary.json").exists()
+    assert (output_path / "input_frame.png").exists()
+    assert list(output_path.glob("*_weapon_only.png")) == []
+    assert list(output_path.glob("*_mask.png")) == []
+
+    summary = _load_summary(output_dir)
+    assert Path(summary["input_image"]).exists()
+    assert Path(summary["input_image"]) == output_path / "input_frame.png"
+    assert len(summary["rows"]) == 8
+    for row in summary["rows"]:
+        assert Path(row["saved_slot"]).exists()

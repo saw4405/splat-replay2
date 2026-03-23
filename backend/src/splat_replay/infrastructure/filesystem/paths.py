@@ -61,6 +61,7 @@ ASSETS_DIR = RUNTIME_ROOT / "assets"
 
 # ユーザーデータ（実行時に生成・変更されるファイル）
 CONFIG_DIR = RUNTIME_ROOT / "config"
+OUTPUTS_DIR = RUNTIME_ROOT / "outputs"
 VIDEOS_DIR = RUNTIME_ROOT / "videos"  # 録画/編集済動画のベースディレクトリ
 
 # よく利用する設定ファイル/認証ファイル

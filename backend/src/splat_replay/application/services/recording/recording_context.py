@@ -45,7 +45,6 @@ class RecordingContext:
     weapon_detection_attempts: int = 0
     weapon_best_scores: tuple[float, ...] | None = None
     weapon_slot_results: tuple[WeaponSlotResult, ...] | None = None
-    weapon_last_visible_frame: Optional[Frame] = None
 
     def phase(self, sm_state: RecordState) -> SessionPhase:
         """現在のフェーズを返す。

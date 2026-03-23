@@ -27,7 +27,7 @@ from . import (
     constants,
     labeling_variant_bank,
     outline_models,
-    unmatched_report,
+    predict_weapons_output,
 )
 from .query_builder import (
     QuerySlotData,
@@ -533,9 +533,10 @@ class WeaponRecognitionAdapter(WeaponRecognitionPort):
     async def recognize_weapons(
         self,
         frame: Frame,
-        save_unmatched_report: bool = True,
+        save_predict_weapons_output: bool = True,
         target_slots: set[str] | None = None,
         previous_results: dict[str, WeaponSlotResult] | None = None,
+        battle_dir_name: str | None = None,
     ) -> WeaponRecognitionResult:
         cancel_generation = self._capture_cancel_generation()
         self._ensure_not_cancelled(cancel_generation)
@@ -549,9 +550,13 @@ class WeaponRecognitionAdapter(WeaponRecognitionPort):
         query_padded_gray_by_slot = build_padded_gray_by_slot(
             slot_images=slot_images,
         )
-        # レポート出力時は全8スロット分のquery_dataを用意
+        should_save_output = (
+            save_predict_weapons_output
+            and predict_weapons_output.should_save_predict_weapons_output()
+        )
+        # predict_weapons 出力時は全8スロット分の query_data を用意する。
         query_data_by_slot: dict[str, QuerySlotData] | None = None
-        if save_unmatched_report:
+        if should_save_output:
             model_masks = outline_models.ensure_outline_models(
                 assets_dir=self._matching_assets_dir,
                 logger=self._logger,
@@ -564,7 +569,7 @@ class WeaponRecognitionAdapter(WeaponRecognitionPort):
 
         slot_results: dict[str, WeaponSlotResult] = {}
         slot_debug_candidates_by_slot: dict[
-            str, tuple[unmatched_report.SlotDebugCandidate, ...]
+            str, tuple[predict_weapons_output.SlotDebugCandidate, ...]
         ] = {}
         for slot in constants.SLOT_ORDER:
             self._ensure_not_cancelled(cancel_generation)
@@ -573,11 +578,10 @@ class WeaponRecognitionAdapter(WeaponRecognitionPort):
                 # 既存結果があれば使用、なければUNKNOWN
                 if previous_results is not None and slot in previous_results:
                     slot_results[slot] = previous_results[slot]
-                    # 既存結果のデバッグ情報を設定（レポート出力用）
-                    if save_unmatched_report:
-                        # 既存結果のtop_candidatesから直接threshold取得
+                    # 既存結果のデバッグ情報を設定（predict_weapons 出力用）。
+                    if should_save_output:
                         slot_debug_candidates_by_slot[slot] = tuple(
-                            unmatched_report.SlotDebugCandidate(
+                            predict_weapons_output.SlotDebugCandidate(
                                 weapon=cand.weapon,
                                 score=cand.score,
                                 threshold=cand.threshold,
@@ -592,7 +596,7 @@ class WeaponRecognitionAdapter(WeaponRecognitionPort):
                         top_candidates=(),
                         detected_score=None,
                     )
-                    if save_unmatched_report:
+                    if should_save_output:
                         slot_debug_candidates_by_slot[slot] = ()
                 continue
             # target_slotsに含まれるスロットのみ再判別
@@ -606,7 +610,7 @@ class WeaponRecognitionAdapter(WeaponRecognitionPort):
                 slot_signal_metrics=slot_signal_metrics,
             )
             slot_results[slot] = slot_result
-            if save_unmatched_report:
+            if should_save_output:
                 slot_debug_candidates_by_slot[slot] = slot_debug_candidates
 
         allies = _to_four_tuple(
@@ -621,21 +625,23 @@ class WeaponRecognitionAdapter(WeaponRecognitionPort):
                 for slot in constants.ENEMY_SLOTS
             ]
         )
-        unmatched_output_dir: str | None = None
-        if save_unmatched_report:
+        predict_weapons_output_dir: str | None = None
+        if should_save_output:
             self._ensure_not_cancelled(cancel_generation)
             assert query_data_by_slot is not None
-            unmatched_output_dir = unmatched_report.save_unmatched_slots(
+            predict_weapons_output_dir = predict_weapons_output.save_predict_weapons_output(
                 frame=frame,
                 query_data_by_slot=query_data_by_slot,
                 slot_results=slot_results,
                 slot_debug_candidates_by_slot=slot_debug_candidates_by_slot,
+                battle_dir_name=battle_dir_name,
                 target_slots=target_slots,
             )
-            self._logger.info(
-                "ブキ判別レポートを保存",
-                output_dir=unmatched_output_dir,
-            )
+            if predict_weapons_output_dir is not None:
+                self._logger.info(
+                    "predict_weapons 出力を保存",
+                    output_dir=predict_weapons_output_dir,
+                )
 
         return WeaponRecognitionResult(
             allies=allies,
@@ -643,7 +649,7 @@ class WeaponRecognitionAdapter(WeaponRecognitionPort):
             slot_results=tuple(
                 slot_results[slot] for slot in constants.SLOT_ORDER
             ),
-            unmatched_output_dir=unmatched_output_dir,
+            predict_weapons_output_dir=predict_weapons_output_dir,
         )
 
     async def _predict_slot(
@@ -655,7 +661,7 @@ class WeaponRecognitionAdapter(WeaponRecognitionPort):
         slot_signal_metrics: _SlotSignalMetrics | None = None,
     ) -> tuple[
         WeaponSlotResult,
-        tuple[unmatched_report.SlotDebugCandidate, ...],
+        tuple[predict_weapons_output.SlotDebugCandidate, ...],
     ]:
         low_signal_forced_unknown = self._is_low_signal_slot(
             slot_signal_metrics=slot_signal_metrics
@@ -822,7 +828,7 @@ class WeaponRecognitionAdapter(WeaponRecognitionPort):
             item for item in ranked if item.score >= item.template_threshold
         ]
         debug_candidates = tuple(
-            unmatched_report.SlotDebugCandidate(
+            predict_weapons_output.SlotDebugCandidate(
                 weapon=item.weapon,
                 score=item.score,
                 threshold=item.template_threshold,

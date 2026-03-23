@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import asyncio
 import time
+from collections import deque
 from dataclasses import dataclass, replace
-from typing import Literal
+from datetime import datetime
+from typing import Any, Callable, Coroutine, Literal, TypeVar
 
 from splat_replay.application.interfaces import (
     ClockPort,
@@ -29,6 +31,10 @@ from splat_replay.domain.models import Frame, RecordingMetadata
 DETECTION_WINDOW_SECONDS = 20.0
 DETECTION_RECOGNITION_TIMEOUT_SECONDS = 90.0
 FINALIZE_RECOGNITION_TIMEOUT_SECONDS = 120.0
+DISPLAY_CHECK_INTERVAL_SECONDS = 0.25
+VISIBLE_CANDIDATE_BUFFER_SIZE = 5
+SAMPLED_FRAME_BUFFER_SIZE = 3
+SAMPLED_FRAME_INTERVAL_SECONDS = 0.25
 UNKNOWN_WEAPON_LABEL = "不明"
 SLOT_COUNT = 8
 SLOT_NAMES = (
@@ -44,6 +50,7 @@ SLOT_NAMES = (
 
 
 _WeaponTaskKind = Literal["display_ng", "recognized", "finalized", "error"]
+_T = TypeVar("_T")
 
 
 class _WallClock:
@@ -66,7 +73,15 @@ class _WeaponTaskResult:
     error: str | None = None
     error_event: str | None = None
     visible_frame: Frame | None = None
-    skipped_report_no_visible_frame: bool = False
+    display_check_completed: bool = False
+    display_visible: bool = False
+    skipped_predict_weapons_output_no_visible_frame: bool = False
+
+
+@dataclass(frozen=True)
+class _QueuedFrame:
+    frame: Frame
+    elapsed_seconds: float
 
 
 def _to_four_tuple(items: list[str]) -> tuple[str, str, str, str]:
@@ -100,20 +115,30 @@ class WeaponDetectionService:
         self._inflight_task: asyncio.Task[_WeaponTaskResult] | None = None
         self._pending_frame: Frame | None = None
         self._pending_elapsed_seconds = 0.0
+        self._sampled_frames: deque[_QueuedFrame] = deque(
+            maxlen=SAMPLED_FRAME_BUFFER_SIZE
+        )
+        self._visible_candidates: deque[Frame] = deque(
+            maxlen=VISIBLE_CANDIDATE_BUFFER_SIZE
+        )
+        self._last_detection_started_at: float | None = None
+        self._last_sampled_at: float | None = None
+        self._display_check_count = 0
+        self._visible_hit_count = 0
         self._window_closed = False
         self._finalize_started = False
-        self._unmatched_report_attempted = False
+        self._predict_weapons_output_attempted = False
 
     def request_cancel(self) -> None:
         """実行中のブキ判別タスクを中断する（待機せず即時復帰）。"""
         self._request_recognizer_cancel()
         self._generation += 1
         self._cancel_inflight_task()
-        self._pending_frame = None
-        self._pending_elapsed_seconds = 0.0
+        self._reset_frame_buffers()
+        self._reset_detection_statistics()
         self._window_closed = False
         self._finalize_started = False
-        self._unmatched_report_attempted = False
+        self._predict_weapons_output_attempted = False
 
     async def process(
         self,
@@ -131,29 +156,36 @@ class WeaponDetectionService:
         if context.weapon_detection_done:
             return context
 
-        elapsed = max(0.0, self._clock.now() - context.battle_started_at)
+        now = self._clock.now()
+        elapsed = max(0.0, now - context.battle_started_at)
         if elapsed > self._detection_window_seconds:
             self._window_closed = True
         elif not self._window_closed:
             self._pending_frame = frame.copy()
             self._pending_elapsed_seconds = elapsed
+            if self._inflight_task is not None:
+                self._sample_frame_if_needed(
+                    frame=frame,
+                    elapsed_seconds=elapsed,
+                    now=now,
+                )
 
-        if self._inflight_task is None and self._pending_frame is not None:
-            pending_frame = self._pending_frame
-            pending_elapsed = self._pending_elapsed_seconds
-            self._pending_frame = None
-            self._pending_elapsed_seconds = 0.0
-            self._start_detection_task(
-                frame=pending_frame,
-                context=context,
-                elapsed_seconds=pending_elapsed,
-            )
+        if self._inflight_task is None:
+            if self._can_start_detection(now=now):
+                next_frame = self._pop_next_detection_frame()
+                if next_frame is not None:
+                    self._start_detection_task(
+                        frame=next_frame.frame,
+                        context=context,
+                        elapsed_seconds=next_frame.elapsed_seconds,
+                        now=now,
+                    )
 
         if (
             self._window_closed
             and not self._finalize_started
             and self._inflight_task is None
-            and self._pending_frame is None
+            and not self._has_pending_detection_frames()
             and not context.weapon_detection_done
         ):
             self._start_finalize_task(
@@ -170,11 +202,11 @@ class WeaponDetectionService:
             self._request_recognizer_cancel()
         self._generation += 1
         self._cancel_inflight_task()
-        self._pending_frame = None
-        self._pending_elapsed_seconds = 0.0
+        self._reset_frame_buffers()
+        self._reset_detection_statistics()
         self._window_closed = False
         self._finalize_started = False
-        self._unmatched_report_attempted = False
+        self._predict_weapons_output_attempted = False
         self._active_battle_started_at = battle_started_at
 
     def _request_recognizer_cancel(self) -> None:
@@ -188,6 +220,75 @@ class WeaponDetectionService:
         if inflight.done():
             return
         inflight.cancel()
+
+    async def _run_recognizer_call(
+        self,
+        factory: Callable[[], Coroutine[Any, Any, _T]],
+    ) -> _T:
+        """CPU負荷の高い recognizer 呼び出しをワーカースレッドへ逃がす。"""
+
+        def _run_in_worker_thread() -> _T:
+            return asyncio.run(factory())
+
+        return await asyncio.to_thread(_run_in_worker_thread)
+
+    def _reset_frame_buffers(self) -> None:
+        self._pending_frame = None
+        self._pending_elapsed_seconds = 0.0
+        self._sampled_frames.clear()
+        self._visible_candidates.clear()
+        self._last_detection_started_at = None
+        self._last_sampled_at = None
+
+    def _reset_detection_statistics(self) -> None:
+        self._display_check_count = 0
+        self._visible_hit_count = 0
+
+    def _sample_frame_if_needed(
+        self,
+        *,
+        frame: Frame,
+        elapsed_seconds: float,
+        now: float,
+    ) -> None:
+        if (
+            self._last_sampled_at is not None
+            and now - self._last_sampled_at < SAMPLED_FRAME_INTERVAL_SECONDS
+        ):
+            return
+        self._sampled_frames.append(
+            _QueuedFrame(frame=frame.copy(), elapsed_seconds=elapsed_seconds)
+        )
+        self._last_sampled_at = now
+
+    def _pop_next_detection_frame(self) -> _QueuedFrame | None:
+        if self._sampled_frames:
+            return self._sampled_frames.popleft()
+        if self._pending_frame is None:
+            return None
+        queued = _QueuedFrame(
+            frame=self._pending_frame,
+            elapsed_seconds=self._pending_elapsed_seconds,
+        )
+        self._pending_frame = None
+        self._pending_elapsed_seconds = 0.0
+        return queued
+
+    def _can_start_detection(self, *, now: float) -> bool:
+        if self._window_closed:
+            return True
+        if self._last_detection_started_at is None:
+            return True
+        return (
+            now - self._last_detection_started_at
+            >= DISPLAY_CHECK_INTERVAL_SECONDS
+        )
+
+    def _has_pending_detection_frames(self) -> bool:
+        return self._pending_frame is not None or bool(self._sampled_frames)
+
+    def _remember_visible_candidate(self, frame: Frame) -> None:
+        self._visible_candidates.append(frame.copy())
 
     async def _drain_completed_task(
         self,
@@ -219,19 +320,22 @@ class WeaponDetectionService:
             return context
         if result.battle_started_at != context.battle_started_at:
             return context
+        if result.display_check_completed:
+            self._display_check_count += 1
+        if result.display_visible:
+            self._visible_hit_count += 1
 
         if result.error_event is not None and result.error is not None:
             self._logger.warning(result.error_event, error=result.error)
-        if result.skipped_report_no_visible_frame:
+        if result.skipped_predict_weapons_output_no_visible_frame:
             self._logger.info(
-                "ブキ表示未検出のため未一致レポート出力をスキップ",
+                "ブキ表示未検出のため predict_weapons 出力をスキップ",
                 elapsed_seconds=result.elapsed_seconds,
+                display_check_count=self._display_check_count,
+                visible_hit_count=self._visible_hit_count,
             )
         if result.visible_frame is not None:
-            context = replace(
-                context,
-                weapon_last_visible_frame=result.visible_frame.copy(),
-            )
+            self._remember_visible_candidate(result.visible_frame)
 
         if result.kind == "display_ng":
             return context
@@ -255,7 +359,9 @@ class WeaponDetectionService:
         frame: Frame,
         context: RecordingContext,
         elapsed_seconds: float,
+        now: float,
     ) -> None:
+        self._last_detection_started_at = now
         self._inflight_task = asyncio.create_task(
             self._run_detection_task(
                 frame=frame,
@@ -292,7 +398,9 @@ class WeaponDetectionService:
         elapsed_seconds: float,
     ) -> _WeaponTaskResult:
         try:
-            is_visible = await self._recognizer.detect_weapon_display(frame)
+            is_visible = await self._run_recognizer_call(
+                lambda: self._recognizer.detect_weapon_display(frame)
+            )
         except Exception as exc:
             return _WeaponTaskResult(
                 kind="error",
@@ -308,6 +416,7 @@ class WeaponDetectionService:
                 generation=generation,
                 battle_started_at=battle_started_at,
                 elapsed_seconds=elapsed_seconds,
+                display_check_completed=True,
             )
 
         current_labels = _normalize_weapon_labels(context.metadata)
@@ -318,11 +427,13 @@ class WeaponDetectionService:
 
         try:
             recognition_result = await asyncio.wait_for(
-                self._recognizer.recognize_weapons(
-                    frame,
-                    save_unmatched_report=False,
-                    target_slots=target_slots,
-                    previous_results=previous_results,
+                self._run_recognizer_call(
+                    lambda: self._recognizer.recognize_weapons(
+                        frame,
+                        save_predict_weapons_output=False,
+                        target_slots=target_slots,
+                        previous_results=previous_results,
+                    )
                 ),
                 timeout=DETECTION_RECOGNITION_TIMEOUT_SECONDS,
             )
@@ -338,6 +449,8 @@ class WeaponDetectionService:
                 ),
                 error_event="ブキ判別がタイムアウトしました",
                 visible_frame=frame.copy(),
+                display_check_completed=True,
+                display_visible=True,
             )
         except Exception as exc:
             return _WeaponTaskResult(
@@ -348,34 +461,39 @@ class WeaponDetectionService:
                 error=str(exc),
                 error_event="ブキ判別に失敗しました",
                 visible_frame=frame.copy(),
+                display_check_completed=True,
+                display_visible=True,
             )
 
-        # 判別完了かつレポート未出力の場合、レポート出力用に再度呼び出す
+        # 判別完了かつ predict_weapons 未出力の場合、出力専用に再度呼び出す。
         if (
             _is_result_complete(recognition_result)
-            and not self._unmatched_report_attempted
+            and not self._predict_weapons_output_attempted
         ):
-            self._unmatched_report_attempted = True
-            # 判別結果からprevious_resultsを構築
+            self._predict_weapons_output_attempted = True
+            battle_dir_name = _build_battle_dir_name(context)
             result_by_slot = {
                 slot_result.slot: slot_result
                 for slot_result in recognition_result.slot_results
             }
             try:
                 report_result = await asyncio.wait_for(
-                    self._recognizer.recognize_weapons(
-                        frame,
-                        save_unmatched_report=True,
-                        target_slots=set(),  # 再判別なし
-                        previous_results=result_by_slot,
+                    self._run_recognizer_call(
+                        lambda: self._recognizer.recognize_weapons(
+                            frame,
+                            save_predict_weapons_output=True,
+                            target_slots=set(),  # 再判別なし
+                            previous_results=result_by_slot,
+                            battle_dir_name=battle_dir_name,
+                        )
                     ),
                     timeout=FINALIZE_RECOGNITION_TIMEOUT_SECONDS,
                 )
-                # レポート出力の結果は無視（既に判別完了しているため）
+                # 出力専用呼び出しの結果は無視する。判別自体は既に完了済み。
                 _ = report_result
             except asyncio.TimeoutError:
                 self._logger.warning(
-                    "ブキ判別レポートの保存がタイムアウトしました",
+                    "predict_weapons 出力の保存がタイムアウトしました",
                     error=(
                         "ブキ判別タイムアウト"
                         f" timeout_seconds={FINALIZE_RECOGNITION_TIMEOUT_SECONDS}"
@@ -383,7 +501,7 @@ class WeaponDetectionService:
                 )
             except Exception as exc:
                 self._logger.warning(
-                    "ブキ判別レポートの保存に失敗しました",
+                    "predict_weapons 出力の保存に失敗しました",
                     error=str(exc),
                 )
 
@@ -397,6 +515,8 @@ class WeaponDetectionService:
             error_event=None,
             error=None,
             visible_frame=frame.copy(),
+            display_check_completed=True,
+            display_visible=True,
         )
 
     async def _run_finalize_task(
@@ -410,49 +530,64 @@ class WeaponDetectionService:
         labels = _normalize_weapon_labels(context.metadata)
         best_scores = _normalize_best_scores(context.weapon_best_scores)
         finalize_warning: tuple[str, str] | None = None
-        skipped_report_no_visible_frame = False
+        skipped_predict_weapons_output_no_visible_frame = False
 
-        if context.weapon_last_visible_frame is not None:
-            target_slots = _get_unknown_slot_names(labels)
-            save_unmatched_report = not self._unmatched_report_attempted
-            if save_unmatched_report:
-                self._unmatched_report_attempted = True
-
-            # 既存の判定結果を収集（レポート出力用）
+        candidate_frames = list(reversed(self._visible_candidates))
+        if candidate_frames:
+            save_predict_weapons_output = (
+                not self._predict_weapons_output_attempted
+            )
+            battle_dir_name = _build_battle_dir_name(context)
+            if save_predict_weapons_output:
+                self._predict_weapons_output_attempted = True
             previous_results = _build_previous_results(context)
 
-            try:
-                final_result = await asyncio.wait_for(
-                    self._recognizer.recognize_weapons(
-                        context.weapon_last_visible_frame,
-                        save_unmatched_report=save_unmatched_report,
-                        target_slots=target_slots if target_slots else None,
-                        previous_results=previous_results,
-                    ),
-                    timeout=FINALIZE_RECOGNITION_TIMEOUT_SECONDS,
-                )
-                for slot_result in final_result.slot_results:
-                    index = SLOT_NAMES.index(slot_result.slot)
-                    best_scores[index] = max(
-                        best_scores[index], slot_result.best_score
+            for candidate_frame in candidate_frames:
+                target_slots = _get_unknown_slot_names(labels)
+                if not target_slots:
+                    break
+                try:
+                    final_result = await asyncio.wait_for(
+                        self._run_recognizer_call(
+                            lambda: self._recognizer.recognize_weapons(
+                                candidate_frame,
+                                save_predict_weapons_output=save_predict_weapons_output,
+                                target_slots=target_slots,
+                                previous_results=previous_results,
+                                battle_dir_name=(
+                                    battle_dir_name
+                                    if save_predict_weapons_output
+                                    else None
+                                ),
+                            )
+                        ),
+                        timeout=FINALIZE_RECOGNITION_TIMEOUT_SECONDS,
                     )
-                    if not slot_result.is_unmatched:
-                        labels[index] = slot_result.predicted_weapon
-            except asyncio.TimeoutError:
-                finalize_warning = (
-                    "最終ブキ判別レポートの保存がタイムアウトしました",
-                    (
-                        "最終ブキ判別タイムアウト"
-                        f" timeout_seconds={FINALIZE_RECOGNITION_TIMEOUT_SECONDS}"
-                    ),
-                )
-            except Exception as exc:
-                finalize_warning = (
-                    "最終ブキ判別レポートの保存に失敗しました",
-                    str(exc),
-                )
+                    for slot_result in final_result.slot_results:
+                        index = SLOT_NAMES.index(slot_result.slot)
+                        best_scores[index] = max(
+                            best_scores[index], slot_result.best_score
+                        )
+                        previous_results[slot_result.slot] = slot_result
+                        if not slot_result.is_unmatched:
+                            labels[index] = slot_result.predicted_weapon
+                except asyncio.TimeoutError:
+                    finalize_warning = (
+                        "最終 predict_weapons 出力の保存がタイムアウトしました",
+                        (
+                            "最終ブキ判別タイムアウト"
+                            f" timeout_seconds={FINALIZE_RECOGNITION_TIMEOUT_SECONDS}"
+                        ),
+                    )
+                except Exception as exc:
+                    finalize_warning = (
+                        "最終 predict_weapons 出力の保存に失敗しました",
+                        str(exc),
+                    )
+                finally:
+                    save_predict_weapons_output = False
         elif _has_unknown_slots(labels):
-            skipped_report_no_visible_frame = True
+            skipped_predict_weapons_output_no_visible_frame = True
 
         for index in range(SLOT_COUNT):
             if labels[index]:
@@ -476,7 +611,9 @@ class WeaponDetectionService:
             attempts=context.weapon_detection_attempts,
             error_event=warning_event,
             error=warning_error,
-            skipped_report_no_visible_frame=skipped_report_no_visible_frame,
+            skipped_predict_weapons_output_no_visible_frame=(
+                skipped_predict_weapons_output_no_visible_frame
+            ),
         )
 
     def _apply_recognition_result(
@@ -520,7 +657,6 @@ class WeaponDetectionService:
             enemies=enemies,
         )
         done = not _has_unknown_slots(current_labels)
-        visible_frame = result.visible_frame
 
         # weapon_slot_resultsをタプルに変換（SLOT_NAMESの順序で）
         updated_slot_results = tuple(
@@ -546,9 +682,6 @@ class WeaponDetectionService:
             weapon_best_scores=tuple(next_best_scores),
             weapon_slot_results=updated_slot_results,
             weapon_detection_done=done,
-            weapon_last_visible_frame=(
-                visible_frame.copy() if visible_frame is not None else None
-            ),
         )
 
         if done:
@@ -561,7 +694,8 @@ class WeaponDetectionService:
                 is_final=done,
             )
         if done:
-            self._pending_frame = None
+            self._reset_frame_buffers()
+            self._reset_detection_statistics()
             self._window_closed = True
             self._finalize_started = True
         return updated_context
@@ -587,9 +721,9 @@ class WeaponDetectionService:
             metadata=updated_metadata,
             weapon_best_scores=tuple(best_scores),
             weapon_detection_done=True,
-            weapon_last_visible_frame=None,
         )
-        self._pending_frame = None
+        self._reset_frame_buffers()
+        self._reset_detection_statistics()
         self._window_closed = True
         self._finalize_started = True
         self._publish_updates(
@@ -727,3 +861,13 @@ def _build_previous_results(
                 top_candidates=(),
             )
     return results
+
+
+def _build_battle_dir_name(context: RecordingContext) -> str | None:
+    if context.metadata.started_at is not None:
+        return context.metadata.started_at.strftime("%Y%m%d_%H%M%S")
+    if context.battle_started_at > 0.0:
+        return datetime.fromtimestamp(context.battle_started_at).strftime(
+            "%Y%m%d_%H%M%S"
+        )
+    return None

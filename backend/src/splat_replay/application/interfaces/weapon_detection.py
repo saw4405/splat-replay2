@@ -49,7 +49,7 @@ class WeaponRecognitionResult:
     allies: tuple[str, str, str, str]
     enemies: tuple[str, str, str, str]
     slot_results: tuple[WeaponSlotResult, ...]
-    unmatched_output_dir: str | None = None
+    predict_weapons_output_dir: str | None = None
 
 
 class WeaponRecognitionPort(Protocol):
@@ -66,16 +66,18 @@ class WeaponRecognitionPort(Protocol):
     async def recognize_weapons(
         self,
         frame: Frame,
-        save_unmatched_report: bool = True,
+        save_predict_weapons_output: bool = True,
         target_slots: set[str] | None = None,
         previous_results: dict[str, WeaponSlotResult] | None = None,
+        battle_dir_name: str | None = None,
     ) -> WeaponRecognitionResult:
         """味方4+敵4のブキを判別する（ブキ表示画面入力を前提とする）。
 
         Args:
             frame: 入力フレーム
-            save_unmatched_report: 未一致レポートを保存するか
+            save_predict_weapons_output: predict_weapons 出力を保存するか
             target_slots: 判別対象のスロットのセット。Noneの場合は全スロット。
             previous_results: 既存の判定結果。target_slotsに含まれないスロットはこの結果を使用。
+            battle_dir_name: predict_weapons 保存時のバトルフォルダ名。
         """
         ...

@@ -95,12 +95,15 @@ class _DummyWeaponRecognizer:
     async def recognize_weapons(
         self,
         frame: np.ndarray,
-        save_unmatched_report: bool = True,
+        save_predict_weapons_output: bool = True,
         target_slots: set[str] | None = None,
         previous_results: dict[str, WeaponSlotResult] | None = None,
+        battle_dir_name: str | None = None,
     ) -> WeaponRecognitionResult:
+        _ = save_predict_weapons_output
         _ = target_slots
         _ = previous_results
+        _ = battle_dir_name
         raise RuntimeError("not used")
 
 

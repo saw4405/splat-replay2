@@ -1452,7 +1452,7 @@ async def test_detect_weapon_display_runs_precise_fallback_when_fast_needs_extra
 
 
 @pytest.mark.asyncio
-async def test_detect_weapon_display_false_when_matched_slot_team_edge_ratio_is_high(
+async def test_detect_weapon_display_true_when_matched_slot_team_edge_ratio_is_016(
     recognizer: WeaponRecognitionAdapter,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -1503,12 +1503,82 @@ async def test_detect_weapon_display_false_when_matched_slot_team_edge_ratio_is_
         "_compute_slot_signal_metrics",
         _compute_slot_signal_metrics,
     )
+    monkeypatch.setattr(
+        recognizer,
+        "_calc_outline_matched_slot_weapon_region_gray_std",
+        lambda *, slot_images, iou_by_slot, model_masks, max_shift: 60.0,
+    )
+
+    assert await recognizer.detect_weapon_display(frame) is True
+    assert spy_logger.debug_calls
+    _, fields = spy_logger.debug_calls[-1]
+    assert fields["matched_slot_team_edge_ratio_passed"] is True
+    assert fields["matched_slot_team_edge_ratio"] == pytest.approx(0.16)
+
+
+@pytest.mark.asyncio
+async def test_detect_weapon_display_false_when_matched_slot_team_edge_ratio_is_high(
+    recognizer: WeaponRecognitionAdapter,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    frame = _load_image(VISIBLE_FIXTURE_DIR / "weapon_icons_visible_01.png")
+    metrics = TeamColorScreenMetrics(
+        allies_max_distance=0.0,
+        enemies_max_distance=0.0,
+        teams_min_distance=999.0,
+    )
+    spy_logger = _SpyLogger()
+    recognizer._logger = spy_logger
+    monkeypatch.setattr(
+        "splat_replay.infrastructure.adapters.weapon_detection.recognizer.detect_weapon_display_screen",
+        lambda _: (True, metrics),
+    )
+    monkeypatch.setattr(recognizer, "_get_outline_model_masks", lambda: {})
+    iou_by_slot = {slot: 0.0 for slot in constants.SLOT_ORDER}
+    for slot in constants.ALLY_SLOTS:
+        iou_by_slot[slot] = constants.WEAPON_DISPLAY_OUTLINE_MIN_IOU
+    monkeypatch.setattr(
+        recognizer,
+        "_count_outline_matched_slots",
+        lambda *,
+        slot_images,
+        model_masks,
+        cancel_generation=None,
+        max_shift=None,
+        slot_order=None,
+        stop_at_threshold=True: (  # noqa: E501
+            4,
+            iou_by_slot,
+            4,
+            0.20,
+        ),
+    )
+
+    def _compute_slot_signal_metrics(
+        *, slot_image: np.ndarray
+    ) -> _SlotSignalMetrics:
+        _ = slot_image
+        return _SlotSignalMetrics(
+            edge_ratio=0.1,
+            team_edge_ratio=(
+                constants.WEAPON_DISPLAY_MAX_MATCHED_SLOT_TEAM_EDGE_RATIO
+                + 0.01
+            ),
+        )
+
+    monkeypatch.setattr(
+        recognizer,
+        "_compute_slot_signal_metrics",
+        _compute_slot_signal_metrics,
+    )
 
     assert await recognizer.detect_weapon_display(frame) is False
     assert spy_logger.debug_calls
     _, fields = spy_logger.debug_calls[-1]
     assert fields["matched_slot_team_edge_ratio_passed"] is False
-    assert fields["matched_slot_team_edge_ratio"] == pytest.approx(0.16)
+    assert fields["matched_slot_team_edge_ratio"] == pytest.approx(
+        constants.WEAPON_DISPLAY_MAX_MATCHED_SLOT_TEAM_EDGE_RATIO + 0.01
+    )
 
 
 @pytest.mark.asyncio
@@ -1683,7 +1753,7 @@ async def test_recognize_weapons_stops_calculation_after_cancel_request(
     task = asyncio.create_task(
         recognizer.recognize_weapons(
             frame,
-            save_unmatched_report=False,
+            save_predict_weapons_output=False,
         )
     )
     await asyncio.wait_for(score_started.wait(), timeout=1.0)
@@ -1705,7 +1775,7 @@ async def test_recognize_weapons_detects_all_slots(
     frame = _load_image(VISIBLE_FIXTURE_DIR / f"{sample_id}.png")
     result = await recognizer.recognize_weapons(
         frame,
-        save_unmatched_report=False,
+        save_predict_weapons_output=False,
     )
 
     assert len(result.allies) == 4
@@ -1734,7 +1804,7 @@ async def test_recognize_weapons_uses_template_threshold_from_config() -> None:
     frame = _load_image(VISIBLE_FIXTURE_DIR / "weapon_icons_visible_01.png")
     result = await strict_recognizer.recognize_weapons(
         frame,
-        save_unmatched_report=False,
+        save_predict_weapons_output=False,
     )
 
     assert list(result.allies) == [UNKNOWN_WEAPON_LABEL] * 4
@@ -1759,7 +1829,7 @@ async def test_recognize_weapons_accepts_non_display_frame_with_strict_threshold
     frame = _load_image(FIXTURE_DIR / "no_weapon_icons_screen.png")
     result = await strict_recognizer.recognize_weapons(
         frame,
-        save_unmatched_report=False,
+        save_predict_weapons_output=False,
     )
 
     assert list(result.allies) == [UNKNOWN_WEAPON_LABEL] * 4
@@ -1777,7 +1847,7 @@ async def test_recognize_weapons_skips_report_queries_when_report_disabled(
         *, assets_dir: Path, logger: object
     ) -> dict[str, np.ndarray]:
         raise AssertionError(
-            "save_unmatched_report=False では outline モデル読み込みは不要です"
+            "save_predict_weapons_output=False では outline モデル読み込みは不要です"
         )
 
     def _unexpected_build_query_slot_data(
@@ -1786,7 +1856,7 @@ async def test_recognize_weapons_skips_report_queries_when_report_disabled(
         model_masks: dict[str, np.ndarray],
     ) -> dict[str, object]:
         raise AssertionError(
-            "save_unmatched_report=False では QuerySlotData 生成は不要です"
+            "save_predict_weapons_output=False では QuerySlotData 生成は不要です"
         )
 
     monkeypatch.setattr(
@@ -1800,11 +1870,11 @@ async def test_recognize_weapons_skips_report_queries_when_report_disabled(
 
     result = await recognizer.recognize_weapons(
         frame,
-        save_unmatched_report=False,
+        save_predict_weapons_output=False,
     )
 
     assert len(result.slot_results) == 8
-    assert result.unmatched_output_dir is None
+    assert result.predict_weapons_output_dir is None
 
 
 @pytest.mark.asyncio
@@ -1812,7 +1882,9 @@ async def test_recognize_weapons_outputs_unmatched_report(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(constants, "UNMATCHED_OUTPUT_DIR", tmp_path)
+    output_root = tmp_path / "predict_weapons"
+    output_root.mkdir()
+    monkeypatch.setattr(constants, "PREDICT_WEAPONS_OUTPUT_DIR", output_root)
     settings = ImageMatchingSettings.load_from_yaml(MATCHING_CONFIG_PATH)
     template_keys = settings.matcher_groups.get(
         constants.WEAPON_TEMPLATE_MATCHER_GROUP, []
@@ -1825,13 +1897,20 @@ async def test_recognize_weapons_outputs_unmatched_report(
         settings=settings, logger=_TestLogger()
     )
     frame = _load_image(VISIBLE_FIXTURE_DIR / "weapon_icons_visible_16.png")
-    result = await recognizer.recognize_weapons(frame)
+    result = await recognizer.recognize_weapons(
+        frame,
+        battle_dir_name="20260322_123456",
+    )
 
     assert list(result.allies) == [UNKNOWN_WEAPON_LABEL] * 4
     assert list(result.enemies) == [UNKNOWN_WEAPON_LABEL] * 4
-    assert result.unmatched_output_dir is not None
+    assert result.predict_weapons_output_dir is not None
+    assert (
+        Path(result.predict_weapons_output_dir)
+        == output_root / "20260322_123456"
+    )
 
-    summary_path = Path(result.unmatched_output_dir) / "summary.json"
+    summary_path = Path(result.predict_weapons_output_dir) / "summary.json"
     assert summary_path.exists()
     summary = json.loads(summary_path.read_text(encoding="utf-8"))
     assert summary["unmatched_count"] == 8
@@ -1846,17 +1925,80 @@ async def test_recognize_weapons_outputs_unmatched_report(
         assert "top2" not in row
         assert "top3" not in row
         assert Path(row["saved_slot"]).exists()
-        assert Path(row["saved_weapon_only"]).exists()
-        assert Path(row["saved_mask"]).exists()
+        assert "saved_weapon_only" not in row
+        assert "saved_mask" not in row
         assert "saved_template" not in row
         assert "saved_template_mask" not in row
         top1_weapon = row["top_candidates"][0]["weapon"]
         expected_weapon = constants.INVALID_FILENAME_CHARS_PATTERN.sub(
             "_", top1_weapon
         )
-        assert expected_weapon in Path(row["saved_slot"]).name
-        assert expected_weapon in Path(row["saved_weapon_only"]).name
-        assert expected_weapon in Path(row["saved_mask"]).name
+        slot_prefix = "味方" if row["slot"].startswith("ally_") else "敵"
+        slot_number = row["slot"].split("_")[1]
+        assert Path(row["saved_slot"]).name == (
+            f"{slot_prefix}{slot_number}_{expected_weapon}.png"
+        )
+
+    assert (
+        Path(result.predict_weapons_output_dir) / "input_frame.png"
+    ).exists()
+    assert (
+        Path(summary["input_image"])
+        == Path(result.predict_weapons_output_dir) / "input_frame.png"
+    )
+    assert (
+        list(Path(result.predict_weapons_output_dir).glob("*_weapon_only.png"))
+        == []
+    )
+    assert (
+        list(Path(result.predict_weapons_output_dir).glob("*_mask.png")) == []
+    )
+
+
+@pytest.mark.asyncio
+async def test_recognize_weapons_skips_report_queries_when_output_root_missing(
+    recognizer: WeaponRecognitionAdapter,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    frame = _load_image(VISIBLE_FIXTURE_DIR / "weapon_icons_visible_01.png")
+    monkeypatch.setattr(
+        constants,
+        "PREDICT_WEAPONS_OUTPUT_DIR",
+        tmp_path / "predict_weapons",
+    )
+
+    def _unexpected_ensure_outline_models(
+        *, assets_dir: Path, logger: object
+    ) -> dict[str, np.ndarray]:
+        raise AssertionError(
+            "出力ルート不在時は outline モデル読み込みは不要です"
+        )
+
+    def _unexpected_build_query_slot_data(
+        *,
+        slot_images: dict[str, np.ndarray],
+        model_masks: dict[str, np.ndarray],
+    ) -> dict[str, object]:
+        raise AssertionError("出力ルート不在時は QuerySlotData 生成は不要です")
+
+    monkeypatch.setattr(
+        "splat_replay.infrastructure.adapters.weapon_detection.recognizer.outline_models.ensure_outline_models",
+        _unexpected_ensure_outline_models,
+    )
+    monkeypatch.setattr(
+        "splat_replay.infrastructure.adapters.weapon_detection.recognizer.build_query_slot_data",
+        _unexpected_build_query_slot_data,
+    )
+
+    result = await recognizer.recognize_weapons(
+        frame,
+        save_predict_weapons_output=True,
+        battle_dir_name="20260322_123456",
+    )
+
+    assert len(result.slot_results) == 8
+    assert result.predict_weapons_output_dir is None
 
 
 @pytest.mark.asyncio
@@ -1864,8 +2006,10 @@ async def test_recognize_weapons_partial_report_counts_only_target_slots(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """レポート出力時は、target_slotsに関わらず全8スロット分を出力する。"""
-    monkeypatch.setattr(constants, "UNMATCHED_OUTPUT_DIR", tmp_path)
+    """predict_weapons 出力時は、target_slotsに関わらず全8スロット分を出力する。"""
+    output_root = tmp_path / "predict_weapons"
+    output_root.mkdir()
+    monkeypatch.setattr(constants, "PREDICT_WEAPONS_OUTPUT_DIR", output_root)
     settings = ImageMatchingSettings.load_from_yaml(MATCHING_CONFIG_PATH)
     template_keys = settings.matcher_groups.get(
         constants.WEAPON_TEMPLATE_MATCHER_GROUP, []
@@ -1880,16 +2024,17 @@ async def test_recognize_weapons_partial_report_counts_only_target_slots(
     frame = _load_image(VISIBLE_FIXTURE_DIR / "weapon_icons_visible_16.png")
     result = await recognizer.recognize_weapons(
         frame,
-        save_unmatched_report=True,
+        save_predict_weapons_output=True,
         target_slots={"ally_1"},
+        battle_dir_name="20260322_123456",
     )
 
-    assert result.unmatched_output_dir is not None
-    summary_path = Path(result.unmatched_output_dir) / "summary.json"
+    assert result.predict_weapons_output_dir is not None
+    summary_path = Path(result.predict_weapons_output_dir) / "summary.json"
     assert summary_path.exists()
     summary = json.loads(summary_path.read_text(encoding="utf-8"))
 
-    # レポートは全8スロット分を出力
+    # predict_weapons 出力は全8スロット分を出力
     assert summary["unmatched_count"] == 8
     assert len(summary["rows"]) == 8
     # target_slotsに含まれるally_1のみ判別され、他は未判別
