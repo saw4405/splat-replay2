@@ -14,10 +14,15 @@ Phase 4 Refactoring: Handler が返す Command を実行し、Context を単一�
 from __future__ import annotations
 
 import asyncio
+from datetime import datetime
 from dataclasses import replace
 from typing import Literal, Mapping
 
-from splat_replay.application.interfaces import CapturePort, LoggerPort
+from splat_replay.application.interfaces import (
+    CapturePort,
+    LoggerPort,
+    ReplayBootstrapResolverPort,
+)
 from splat_replay.application.metadata import (
     BATTLE_METADATA_FIELDS,
     SALMON_METADATA_FIELDS,
@@ -49,6 +54,7 @@ from splat_replay.application.services.recording.metadata_merger import (
 )
 from splat_replay.domain.models import (
     Frame,
+    GameMode,
     RecordingMetadata,
 )
 from splat_replay.domain.services import RecordState
@@ -76,6 +82,7 @@ class AutoRecordingUseCase:
         capture_producer: FrameCaptureProducer,
         publisher_worker: PublisherWorker,
         logger: LoggerPort,
+        replay_bootstrap_resolver: ReplayBootstrapResolverPort | None = None,
     ):
         self._session = session_service
         self._frame_processor = frame_processor
@@ -94,6 +101,7 @@ class AutoRecordingUseCase:
         self._context_revision = 0
         self._last_record_state: RecordState | None = None
         self._merger = MetadataMerger()
+        self._replay_bootstrap_resolver = replay_bootstrap_resolver
 
     # ================================================================
     # UseCase 実行
@@ -185,6 +193,7 @@ class AutoRecordingUseCase:
 
         await self._session.setup()
         self._capture.setup()
+        await self._apply_replay_bootstrap()
 
         # Start background workers
         self._publisher.start()
@@ -499,6 +508,48 @@ class AutoRecordingUseCase:
     def force_stop(self) -> None:
         """メインループを強制停止する。"""
         self._stop_event.set()
+
+    async def _apply_replay_bootstrap(self) -> None:
+        if self._replay_bootstrap_resolver is None:
+            return
+
+        bootstrap = self._replay_bootstrap_resolver.resolve()
+        if bootstrap is None:
+            return
+        if bootstrap.phase not in {"matching", "in_game"}:
+            self.logger.warning(
+                "未対応の replay bootstrap phase を無視します",
+                phase=bootstrap.phase,
+            )
+            return
+
+        game_mode = bootstrap.game_mode or self._context.metadata.game_mode
+        metadata = RecordingMetadata(
+            game_mode=self._resolve_bootstrap_game_mode(game_mode),
+            started_at=datetime.now(),
+        )
+        context = RecordingContext(metadata=metadata)
+
+        async with self._context_lock:
+            self._context = context
+            self._context_revision += 1
+
+        self._session.update_context(context)
+        if bootstrap.phase == "in_game":
+            await self._session.start()
+            async with self._context_lock:
+                self._context = self._session.context
+                self._context_revision += 1
+
+        self.logger.info(
+            "replay bootstrap を適用しました",
+            phase=bootstrap.phase,
+            game_mode=metadata.game_mode.name,
+        )
+
+    @staticmethod
+    def _resolve_bootstrap_game_mode(game_mode: GameMode | None) -> GameMode:
+        return game_mode or GameMode.BATTLE
 
     @staticmethod
     def _is_reset_context(context: RecordingContext) -> bool:

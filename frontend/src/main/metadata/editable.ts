@@ -1,4 +1,9 @@
-import type { MetadataUpdate, RecordedVideo } from '../api/types.ts';
+import type {
+  MetadataOptionItem,
+  MetadataOptions,
+  MetadataUpdate,
+  RecordedVideo,
+} from '../api/types.ts';
 import { formatMetadataDateTime, normaliseWeaponSlots, type WeaponSlots } from './shared.ts';
 
 export { normaliseWeaponSlots, type WeaponSlots } from './shared.ts';
@@ -81,6 +86,37 @@ export function toEditableMetadata(video: RecordedVideo): EditableMetadata {
     silverMedals: video.silverMedals ?? 0,
     allies: normaliseWeaponSlots(video.allies),
     enemies: normaliseWeaponSlots(video.enemies),
+  };
+}
+
+type EditableMetadataOptionGroups = Pick<
+  MetadataOptions,
+  'gameModes' | 'matches' | 'rules' | 'stages' | 'judgements'
+>;
+
+function normaliseSelectValue(value: string, options: MetadataOptionItem[]): string {
+  if (!value) {
+    return '';
+  }
+
+  if (options.some((option) => option.key === value)) {
+    return value;
+  }
+
+  return options.find((option) => option.label === value)?.key ?? value;
+}
+
+export function normaliseEditableMetadataSelectFields(
+  metadata: EditableMetadata,
+  options: EditableMetadataOptionGroups
+): EditableMetadata {
+  return {
+    ...metadata,
+    gameMode: normaliseSelectValue(metadata.gameMode, options.gameModes),
+    match: normaliseSelectValue(metadata.match, options.matches),
+    rule: normaliseSelectValue(metadata.rule, options.rules),
+    stage: normaliseSelectValue(metadata.stage, options.stages),
+    judgement: normaliseSelectValue(metadata.judgement, options.judgements),
   };
 }
 

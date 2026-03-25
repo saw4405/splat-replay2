@@ -879,7 +879,9 @@ async def test_pending_frame_keeps_latest_after_sampled_frame() -> None:
     context = await service.process(frame=frame_3, context=context)
 
     recognizer.release_first.set()
-    for _ in range(40):
+    # DISPLAY_CHECK_INTERVAL_SECONDS=0.25 が2回（frame_2, frame_3）必要なため
+    # 合計 0.5 秒以上のループ時間を確保する（100回×0.01秒=1.0秒）
+    for _ in range(100):
         await asyncio.sleep(0.01)
         context = await service.process(frame=frame_3, context=context)
         if len(recognizer.recognize_markers) >= 3:

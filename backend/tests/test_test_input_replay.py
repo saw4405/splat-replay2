@@ -28,6 +28,7 @@ from splat_replay.infrastructure.config import (
 from splat_replay.infrastructure.filesystem import paths
 from splat_replay.infrastructure.test_input import (
     normalize_input_path,
+    resolve_configured_test_video,
     resolve_replay_input_file_path,
     resolve_video_input_path,
 )
@@ -71,9 +72,17 @@ def _write_replay_input(
     *,
     replay_input_path: Path,
     video_path: str,
+    scenario_json: str | None = None,
 ) -> None:
+    scenario_block = (
+        f',\n  "scenario": {scenario_json}\n' if scenario_json else "\n"
+    )
     replay_input_path.write_text(
-        (f'{{\n  "video_path": "{video_path.replace("\\", "\\\\")}"\n}}\n'),
+        (
+            f'{{\n  "video_path": "{video_path.replace("\\", "\\\\")}"'
+            f"{scenario_block}"
+            "}\n"
+        ),
         encoding="utf-8",
     )
 
@@ -182,6 +191,38 @@ def test_adaptive_capture_device_checker_uses_replay_input_path(
     )
 
     assert checker.is_connected() is True
+
+
+def test_resolve_configured_test_video_reads_replay_bootstrap(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    settings_path = tmp_path / "settings.toml"
+    video_path = tmp_path / "sample.mp4"
+    _write_dummy_video(video_path)
+    monkeypatch.setattr(paths, "SETTINGS_FILE", settings_path)
+    _write_replay_input(
+        replay_input_path=resolve_replay_input_file_path(),
+        video_path=str(video_path),
+        scenario_json=(
+            "{\n"
+            '    "expected_recorded_count": 0,\n'
+            '    "replay_bootstrap": {\n'
+            '      "phase": "matching",\n'
+            '      "game_mode": "battle"\n'
+            "    }\n"
+            "  }"
+        ),
+    )
+
+    resolved = resolve_configured_test_video()
+
+    assert resolved is not None
+    assert resolved.selected_path == video_path.resolve()
+    assert resolved.replay_bootstrap is not None
+    assert resolved.replay_bootstrap.phase == "matching"
+    assert resolved.replay_bootstrap.game_mode is not None
+    assert resolved.replay_bootstrap.game_mode.name == "BATTLE"
 
 
 def test_settings_repository_does_not_expose_e2e_replay_input(

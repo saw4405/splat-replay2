@@ -7,6 +7,7 @@
   import {
     cloneEditableMetadata,
     createEmptyEditableMetadata,
+    normaliseEditableMetadataSelectFields,
     type EditableMetadata,
   } from '../../metadata/editable';
 
@@ -23,12 +24,33 @@
   let judgementOptions: MetadataOptionItem[] = [];
 
   let previousVisible = false;
+  let hasNormalisedSelectFieldsForSession = false;
 
   $: if (visible && !previousVisible && metadata) {
     editedMetadata = cloneEditableMetadata(metadata);
+    hasNormalisedSelectFieldsForSession = false;
     previousVisible = true;
   } else if (!visible) {
     previousVisible = false;
+    hasNormalisedSelectFieldsForSession = false;
+  }
+
+  $: if (
+    visible &&
+    !hasNormalisedSelectFieldsForSession &&
+    (matchOptions.length > 0 ||
+      ruleOptions.length > 0 ||
+      stageOptions.length > 0 ||
+      judgementOptions.length > 0)
+  ) {
+    editedMetadata = normaliseEditableMetadataSelectFields(editedMetadata, {
+      gameModes: [],
+      matches: matchOptions,
+      rules: ruleOptions,
+      stages: stageOptions,
+      judgements: judgementOptions,
+    });
+    hasNormalisedSelectFieldsForSession = true;
   }
 
   async function loadMetadataOptions(): Promise<void> {

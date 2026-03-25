@@ -7,7 +7,11 @@ import os
 import re
 from dataclasses import dataclass
 from pathlib import Path
+from typing import cast
 
+from splat_replay.application.dto import ReplayBootstrapDTO
+from splat_replay.application.interfaces import ReplayBootstrapResolverPort
+from splat_replay.domain.models import GameMode
 from splat_replay.infrastructure.filesystem import paths
 
 WINDOWS_PATH_RE = re.compile(r"^(?P<drive>[a-zA-Z]):[\\/](?P<rest>.*)$")
@@ -21,6 +25,17 @@ class ResolvedTestVideo:
 
     configured_path: Path
     selected_path: Path
+    replay_bootstrap: ReplayBootstrapDTO | None = None
+
+
+class ConfiguredReplayBootstrapResolver(ReplayBootstrapResolverPort):
+    """現在の replay input から bootstrap を解決する。"""
+
+    def resolve(self) -> ReplayBootstrapDTO | None:
+        resolved = resolve_configured_test_video()
+        if resolved is None:
+            return None
+        return resolved.replay_bootstrap
 
 
 def resolve_replay_input_file_path() -> Path:
@@ -81,6 +96,39 @@ def resolve_video_input_path(raw_path: str | Path) -> Path:
     return selected.resolve()
 
 
+def _parse_game_mode(raw_value: object) -> GameMode | None:
+    if not isinstance(raw_value, str):
+        return None
+
+    normalized = raw_value.strip().upper()
+    if not normalized:
+        return None
+
+    try:
+        return GameMode[normalized]
+    except KeyError:
+        return None
+
+
+def _parse_replay_bootstrap(raw_value: object) -> ReplayBootstrapDTO | None:
+    if not isinstance(raw_value, dict):
+        return None
+
+    raw_dict = cast(dict[str, object], raw_value)
+    phase = raw_dict.get("phase")
+    if not isinstance(phase, str):
+        return None
+
+    normalized_phase = phase.strip().lower()
+    if not normalized_phase:
+        return None
+
+    return ReplayBootstrapDTO(
+        phase=normalized_phase,
+        game_mode=_parse_game_mode(raw_dict.get("game_mode")),
+    )
+
+
 def resolve_configured_test_video() -> ResolvedTestVideo | None:
     """現在の E2E replay input からテスト用動画を解決する。"""
     input_file = resolve_replay_input_file_path()
@@ -94,7 +142,14 @@ def resolve_configured_test_video() -> ResolvedTestVideo | None:
 
     normalized_path = normalize_input_path(configured_path).resolve()
     selected_path = resolve_video_input_path(configured_path)
+    scenario = payload.get("scenario")
+    replay_bootstrap = None
+    if isinstance(scenario, dict):
+        replay_bootstrap = _parse_replay_bootstrap(
+            scenario.get("replay_bootstrap")
+        )
     return ResolvedTestVideo(
         configured_path=normalized_path,
         selected_path=selected_path,
+        replay_bootstrap=replay_bootstrap,
     )

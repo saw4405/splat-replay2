@@ -41,9 +41,9 @@ WEAPON_DISPLAY_OUTLINE_MIN_MATCHED_SLOTS: Final[int] = 4
 WEAPON_DISPLAY_MIN_WEAPON_REGION_RATIO: Final[float] = 0.08
 # 輪郭一致スロットのチームカラー領域内エッジ密度が高すぎる場合は、
 # チームカラーが塗り切れていない段階の偽陽性とみなし、表示あり判定を抑制する。
-# 既存 visible fixture の最大値が 0.148357 と閾値近傍まで出るため、
-# 実映像の圧縮揺れを吸収できるよう少しだけ余裕を持たせる。
-WEAPON_DISPLAY_MAX_MATCHED_SLOT_TEAM_EDGE_RATIO: Final[float] = 0.17
+# 実測値: visible 最大=0.1484, 非表示 最小=0.1591（gap≒0.011）
+# 0.155 は両側に約 0.007 のマージンを確保できる中間値。
+WEAPON_DISPLAY_MAX_MATCHED_SLOT_TEAM_EDGE_RATIO: Final[float] = 0.155
 # 輪郭一致スロットのブキ本体領域が低コントラストすぎる場合は、
 # ブキ表示が薄い/欠落しているとみなし、表示あり判定を抑制する。
 WEAPON_DISPLAY_MIN_MATCHED_SLOT_WEAPON_REGION_GRAY_STD: Final[float] = 40.0

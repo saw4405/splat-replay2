@@ -9,6 +9,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from typing import TYPE_CHECKING, Literal
 
 import cv2
@@ -98,6 +99,22 @@ def create_recording_router(server: WebAPIServer) -> APIRouter:
         except Exception as e:
             error_handler.handle_error(
                 e, context="自動録画有効化", log_level="warning"
+            )
+
+    @router.post("/disable-auto", response_model=StandardResponse)
+    async def disable_auto_recording() -> StandardResponse:
+        """自動録画モードを停止する。"""
+        try:
+            use_case = server.auto_recording_use_case_factory()
+            use_case.force_stop()
+            for _ in range(100):
+                if use_case.status() != "running":
+                    break
+                await asyncio.sleep(0.1)
+            return StandardResponse(success=True, state=use_case.status())
+        except Exception as e:
+            error_handler.handle_error(
+                e, context="自動録画停止", log_level="warning"
             )
 
     @router.post("/start", response_model=StandardResponse)

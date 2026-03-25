@@ -139,9 +139,9 @@
         value={metadata.gameMode}
         on:change={(event) => handleSelectChange('gameMode', event)}
       >
-        <option value="">{placeholderLabels.gameMode}</option>
+        <option value="" selected={metadata.gameMode === ''}>{placeholderLabels.gameMode}</option>
         {#each gameModeOptions as mode}
-          <option value={mode.key}>{mode.label}</option>
+          <option value={mode.key} selected={mode.key === metadata.gameMode}>{mode.label}</option>
         {/each}
       </select>
     </div>
@@ -180,9 +180,9 @@
       value={metadata.match}
       on:change={(event) => handleSelectChange('match', event)}
     >
-      <option value="">{placeholderLabels.match}</option>
+      <option value="" selected={metadata.match === ''}>{placeholderLabels.match}</option>
       {#each matchOptions as match}
-        <option value={match.key}>{match.label}</option>
+        <option value={match.key} selected={match.key === metadata.match}>{match.label}</option>
       {/each}
     </select>
   </div>
@@ -194,9 +194,9 @@
       value={metadata.rule}
       on:change={(event) => handleSelectChange('rule', event)}
     >
-      <option value="">{placeholderLabels.rule}</option>
+      <option value="" selected={metadata.rule === ''}>{placeholderLabels.rule}</option>
       {#each ruleOptions as rule}
-        <option value={rule.key}>{rule.label}</option>
+        <option value={rule.key} selected={rule.key === metadata.rule}>{rule.label}</option>
       {/each}
     </select>
   </div>
@@ -208,9 +208,9 @@
       value={metadata.stage}
       on:change={(event) => handleSelectChange('stage', event)}
     >
-      <option value="">{placeholderLabels.stage}</option>
+      <option value="" selected={metadata.stage === ''}>{placeholderLabels.stage}</option>
       {#each stageOptions as stage}
-        <option value={stage.key}>{stage.label}</option>
+        <option value={stage.key} selected={stage.key === metadata.stage}>{stage.label}</option>
       {/each}
     </select>
   </div>
@@ -233,9 +233,11 @@
       value={metadata.judgement}
       on:change={(event) => handleSelectChange('judgement', event)}
     >
-      <option value="">{placeholderLabels.judgement}</option>
+      <option value="" selected={metadata.judgement === ''}>{placeholderLabels.judgement}</option>
       {#each judgementOptions as judgement}
-        <option value={judgement.key}>{judgement.label}</option>
+        <option value={judgement.key} selected={judgement.key === metadata.judgement}>
+          {judgement.label}
+        </option>
       {/each}
     </select>
   </div>

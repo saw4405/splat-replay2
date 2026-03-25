@@ -46,6 +46,14 @@ export type ReplayAsset = {
   sidecarPath: string | null;
 };
 
+export type ReplayScenario = {
+  expected_recorded_count?: number | null;
+  replay_bootstrap?: {
+    phase?: string | null;
+    game_mode?: string | null;
+  } | null;
+};
+
 export type SidecarMetadata = {
   game_mode?: string | null;
   rate?: string | null;
@@ -60,6 +68,7 @@ export type SidecarMetadata = {
   silver_medals?: number | null;
   allies?: string[] | null;
   enemies?: string[] | null;
+  scenario?: ReplayScenario | null;
 };
 
 function escapeTomlString(value: string): string {
@@ -201,14 +210,37 @@ function buildInstallationStateToml(): string {
   ].join('\n');
 }
 
-function buildReplayInputJson(videoPath: string): string {
+function buildReplayInputJson(videoPath: string, scenario?: ReplayScenario | null): string {
   return JSON.stringify(
     {
       video_path: videoPath,
+      ...(scenario ? { scenario } : {}),
     },
     null,
     2
   );
+}
+
+function clearReplayInputFile(replayInputFile: string): void {
+  try {
+    rmSync(replayInputFile, { force: true, maxRetries: 20, retryDelay: 100 });
+  } catch {
+    writeFileSync(replayInputFile, buildReplayInputJson(''), 'utf-8');
+  }
+}
+
+function clearDirectoryContents(directory: string): void {
+  mkdirSync(directory, { recursive: true });
+  for (const entry of readdirSync(directory, { withFileTypes: true })) {
+    const targetPath = join(directory, entry.name);
+    try {
+      rmSync(targetPath, { recursive: true, force: true, maxRetries: 20, retryDelay: 100 });
+    } catch {
+      if (entry.isDirectory()) {
+        clearDirectoryContents(targetPath);
+      }
+    }
+  }
 }
 
 function resolveE2EMode(): E2EMode {
@@ -267,26 +299,42 @@ export function bootstrapE2EEnvironment(force = false): E2EEnvironment {
     );
     writeFileSync(installationStateFile, buildInstallationStateToml(), 'utf-8');
 
-    rmSync(environment.replayInputFile, { force: true, maxRetries: 20, retryDelay: 100 });
+    clearReplayInputFile(environment.replayInputFile);
     process.env[BOOTSTRAP_FLAG] = '1';
   }
   return environment;
 }
 
-export function configureReplayAsset(environment: E2EEnvironment, asset: ReplayAsset): void {
-  writeFileSync(environment.replayInputFile, buildReplayInputJson(asset.videoPath), 'utf-8');
+export function configureReplayAsset(
+  environment: E2EEnvironment,
+  asset: ReplayAsset,
+  scenarioOverride?: ReplayScenario | null
+): void {
+  const baseScenario = loadSidecarMetadata(asset)?.scenario ?? null;
+  const scenario = scenarioOverride
+    ? {
+        ...(baseScenario ?? {}),
+        ...scenarioOverride,
+        replay_bootstrap:
+          scenarioOverride.replay_bootstrap ?? baseScenario?.replay_bootstrap ?? null,
+      }
+    : baseScenario;
+  writeFileSync(
+    environment.replayInputFile,
+    buildReplayInputJson(asset.videoPath, scenario),
+    'utf-8'
+  );
 }
 
 export function resetE2EState(environment: E2EEnvironment): void {
-  rmSync(environment.storageDir, { recursive: true, force: true });
-  mkdirSync(environment.storageDir, { recursive: true });
+  clearDirectoryContents(environment.storageDir);
   writeFileSync(environment.settingsFile, buildSettingsToml(environment.storageDir), 'utf-8');
 
   // installation_state.tomlファイルを作成（YouTube権限ダイアログを承認済みに設定）
   const installationStateFile = join(dirname(environment.settingsFile), 'installation_state.toml');
   writeFileSync(installationStateFile, buildInstallationStateToml(), 'utf-8');
 
-  rmSync(environment.replayInputFile, { force: true, maxRetries: 20, retryDelay: 100 });
+  clearReplayInputFile(environment.replayInputFile);
 }
 
 export function loadSidecarMetadata(asset: ReplayAsset): SidecarMetadata | null {

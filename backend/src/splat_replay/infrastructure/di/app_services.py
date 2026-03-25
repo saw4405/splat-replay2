@@ -17,6 +17,7 @@ from splat_replay.application.interfaces import (
     EventPublisher,
     FramePublisher,
     LoggerPort,
+    ReplayBootstrapResolverPort,
     RecorderWithTranscriptionPort,
     VideoAssetRepositoryPort,
     WeaponRecognitionPort,
@@ -116,6 +117,9 @@ def register_app_services(container: Container) -> None:
         auto_recorder = container.resolve(AutoRecorder)
         capture = container.resolve(CapturePort)
         logger = container.resolve(LoggerPort)
+        replay_bootstrap_resolver = container.resolve(
+            ReplayBootstrapResolverPort
+        )
 
         return AutoRecordingUseCase(
             session_service=auto_recorder.session_service,
@@ -126,6 +130,7 @@ def register_app_services(container: Container) -> None:
             capture_producer=auto_recorder.capture_producer,
             publisher_worker=auto_recorder.publisher_worker,
             logger=logger,
+            replay_bootstrap_resolver=replay_bootstrap_resolver,
         )
 
     container.register(

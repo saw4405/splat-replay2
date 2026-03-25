@@ -19,6 +19,8 @@ __all__ = [
     # Metadata DTO
     "SubtitleDTO",
     "RecordingMetadataPatchDTO",
+    # Replay DTO
+    "ReplayBootstrapDTO",
     # Subtitle DTO
     "SubtitleBlockDTO",
     "SubtitleDataDTO",
@@ -26,4 +28,5 @@ __all__ = [
 
 from .assets import EditedVideoDTO, EditUploadStatusDTO, RecordedVideoDTO
 from .metadata import RecordingMetadataPatchDTO, SubtitleDTO
+from .replay import ReplayBootstrapDTO
 from .subtitle import SubtitleBlockDTO, SubtitleDataDTO

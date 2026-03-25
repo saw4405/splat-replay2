@@ -1,3 +1,7 @@
+import { randomUUID } from 'node:crypto';
+import { copyFileSync, linkSync, mkdirSync } from 'node:fs';
+import { extname, join } from 'node:path';
+
 import { expect, type Locator, type Page } from '@playwright/test';
 
 import {
@@ -7,6 +11,7 @@ import {
   resetE2EState,
   type E2EEnvironment,
   type ReplayAsset,
+  type ReplayScenario,
 } from './e2eEnv';
 
 type RecordedVideoItemValues = {
@@ -24,6 +29,8 @@ type RecordedVideoItemValues = {
   allies: string[];
   enemies: string[];
 };
+
+type SidecarMetadataFields = Omit<NonNullable<ReturnType<typeof loadSidecarMetadata>>, 'scenario'>;
 
 type RawMetadataOptionItem = {
   key: string;
@@ -48,6 +55,26 @@ type MetadataOptionMaps = {
 
 let metadataOptionMapsPromise: Promise<MetadataOptionMaps> | null = null;
 const LONG_RECORDING_TIMEOUT_MS = process.env.SPLAT_REPLAY_E2E_MODE === 'full' ? 780_000 : 420_000;
+
+function materializeReplayAsset(environment: E2EEnvironment, asset: ReplayAsset): ReplayAsset {
+  const preparedReplayDir = join(environment.rootDir, 'prepared-replays');
+  const preparedVideoPath = join(
+    preparedReplayDir,
+    `${asset.id}-${randomUUID()}${extname(asset.videoPath)}`
+  );
+
+  mkdirSync(preparedReplayDir, { recursive: true });
+  try {
+    linkSync(asset.videoPath, preparedVideoPath);
+  } catch {
+    copyFileSync(asset.videoPath, preparedVideoPath);
+  }
+
+  return {
+    ...asset,
+    videoPath: preparedVideoPath,
+  };
+}
 
 export async function gotoMain(page: Page): Promise<void> {
   await page.goto('/');
@@ -98,7 +125,129 @@ export async function verifyPersistedBehaviorSettings(page: Page): Promise<void>
   ).toBeChecked();
 }
 
+type AutoRecordingEnableResponse = {
+  state?: string | null;
+};
+
+async function requestAutoRecordingEnable(page: Page): Promise<AutoRecordingEnableResponse> {
+  const response = await page.request.post('/api/recorder/enable-auto');
+  expect(response.ok()).toBeTruthy();
+  return (await response.json()) as AutoRecordingEnableResponse;
+}
+
 export async function waitForRecordingLifecycle(page: Page): Promise<void> {
+  await waitForVideoPreviewReady(page);
+  const statusLabel = page.getByTestId('video-preview-status');
+  const deadline = Date.now() + 120_000;
+  let lastStatus = 'unknown';
+
+  while (Date.now() < deadline) {
+    try {
+      await expect(statusLabel).toHaveText('Recording', {
+        timeout: 5_000,
+      });
+      return;
+    } catch {
+      lastStatus = (await statusLabel.textContent().catch(() => null))?.trim() ?? 'unknown';
+    }
+
+    await requestAutoRecordingEnable(page);
+    await page.waitForTimeout(1_000);
+  }
+
+  throw new Error(`録画開始を待機中にタイムアウトしました。最後の表示状態: ${lastStatus}`);
+}
+
+export async function ensureAutoRecordingEnabled(page: Page): Promise<void> {
+  await disableAutoRecording(page);
+
+  const deadline = Date.now() + 30_000;
+  let lastState = 'unknown';
+
+  while (Date.now() < deadline) {
+    const body = await requestAutoRecordingEnable(page);
+    lastState = body.state ?? 'unknown';
+    if (lastState === 'running') {
+      return;
+    }
+    await page.waitForTimeout(500);
+  }
+
+  throw new Error(`自動録画を有効化できませんでした。最後の state: ${lastState}`);
+}
+
+async function recorderState(page: Page): Promise<string> {
+  const response = await page.request.get('/api/recorder/state');
+  expect(response.ok()).toBeTruthy();
+  const body = (await response.json()) as { state: string };
+  return body.state;
+}
+
+async function disableAutoRecording(page: Page): Promise<void> {
+  const deadline = Date.now() + 30_000;
+  let lastState = 'unknown';
+
+  while (Date.now() < deadline) {
+    const response = await page.request.post('/api/recorder/disable-auto');
+    expect(response.ok()).toBeTruthy();
+    const body = (await response.json()) as { state?: string | null };
+    lastState = body.state ?? 'unknown';
+    if (lastState === 'stopped') {
+      return;
+    }
+    await page.waitForTimeout(500);
+  }
+
+  throw new Error(`自動録画を停止できませんでした。最後の state: ${lastState}`);
+}
+
+export async function waitForRecordingStopped(page: Page): Promise<void> {
+  await expect(page.getByTestId('video-preview-status')).toHaveText('Stopped', {
+    timeout: LONG_RECORDING_TIMEOUT_MS,
+  });
+}
+
+export async function waitForRecordedVideoReady(page: Page, expectedCount: number): Promise<void> {
+  await waitForVideoPreviewReady(page);
+  await waitForRecordedVideoCount(page, expectedCount);
+  await expect
+    .poll(() => recorderState(page), { timeout: LONG_RECORDING_TIMEOUT_MS })
+    .toBe('STOPPED');
+}
+
+export async function stopRecordingForTeardown(page: Page): Promise<void> {
+  try {
+    if ((await recorderState(page)) !== 'STOPPED') {
+      const stopResponse = await page.request.post('/api/recorder/stop');
+      expect(stopResponse.ok()).toBeTruthy();
+    }
+  } catch (error) {
+    console.warn('stopRecordingForTeardown: 停止要求を送れませんでした', error);
+  }
+
+  const deadline = Date.now() + 10_000;
+  while (Date.now() < deadline) {
+    try {
+      if ((await recorderState(page)) === 'STOPPED') {
+        await page.waitForTimeout(3_000);
+        return;
+      }
+    } catch {
+      // backend 切り替え中の一時失敗は cleanup では許容する
+    }
+    await page.waitForTimeout(500);
+  }
+
+  try {
+    await disableAutoRecording(page);
+  } catch (error) {
+    console.warn('stopRecordingForTeardown: 自動録画停止要求を送れませんでした', error);
+  }
+
+  await page.waitForTimeout(1_000);
+}
+
+export async function waitForVideoPreviewReady(page: Page): Promise<void> {
   await expect
     .poll(
       async () =>
@@ -109,14 +258,25 @@ export async function waitForRecordingLifecycle(page: Page): Promise<void> {
       }
     )
     .toBeGreaterThan(0);
-  await expect(page.getByTestId('video-preview-status')).toHaveText('Recording', {
-    timeout: 120_000,
-  });
+}
+
+export async function ensureLiveMetadataVisible(page: Page): Promise<void> {
+  const killInput = page.getByLabel('キル数');
+  if (await killInput.isVisible().catch(() => false)) {
+    return;
+  }
+
+  await page.getByTestId('metadata-toggle-button').click();
+  await expect(killInput).toBeVisible({ timeout: 10_000 });
 }
 
 export async function openRecordedVideos(page: Page): Promise<void> {
+  const recordedVideoList = page.getByTestId('recorded-video-list');
+  if (await recordedVideoList.isVisible().catch(() => false)) {
+    return;
+  }
   await page.getByTestId('bottom-drawer-toggle').click();
-  await expect(page.getByTestId('recorded-video-list')).toBeVisible();
+  await expect(recordedVideoList).toBeVisible();
 }
 
 export async function firstRecordedVideo(page: Page): Promise<Locator> {
@@ -251,17 +411,50 @@ export function replayAssets(environment: E2EEnvironment): ReplayAsset[] {
   return environment.replayAssets;
 }
 
+export function expectedRecordedVideoCount(asset: ReplayAsset): number {
+  return loadSidecarMetadata(asset)?.scenario?.expected_recorded_count ?? 1;
+}
+
+export function recordableReplayAssets(environment: E2EEnvironment): ReplayAsset[] {
+  return environment.replayAssets.filter((asset) => expectedRecordedVideoCount(asset) > 0);
+}
+
 export function resetReplayTestState(environment: E2EEnvironment): void {
   resetE2EState(environment);
 }
 
 export function prepareReplayAsset(environment: E2EEnvironment, asset: ReplayAsset): void {
   resetE2EState(environment);
-  configureReplayAsset(environment, asset);
+  configureReplayAsset(environment, materializeReplayAsset(environment, asset));
+}
+
+export function prepareReplayAssetWithScenario(
+  environment: E2EEnvironment,
+  asset: ReplayAsset,
+  scenarioOverride: ReplayScenario
+): void {
+  resetE2EState(environment);
+  configureReplayAsset(environment, materializeReplayAsset(environment, asset), scenarioOverride);
+}
+
+export function switchReplayAsset(environment: E2EEnvironment, asset: ReplayAsset): void {
+  configureReplayAsset(environment, materializeReplayAsset(environment, asset));
 }
 
 export function expectedSidecarMetadata(asset: ReplayAsset) {
-  return loadSidecarMetadata(asset);
+  const sidecar = loadSidecarMetadata(asset);
+  if (!sidecar) {
+    return null;
+  }
+
+  const { scenario: _scenario, ...metadata } = sidecar;
+  const hasExpectedMetadata = Object.values(metadata).some(
+    (value) => value !== null && typeof value !== 'undefined'
+  );
+  if (!hasExpectedMetadata) {
+    return null;
+  }
+  return metadata as SidecarMetadataFields;
 }
 
 export async function readRecordedVideoItemValues(item: Locator): Promise<RecordedVideoItemValues> {

@@ -16,6 +16,7 @@ from typing import (
 from splat_replay.domain.models import Frame
 
 if TYPE_CHECKING:
+    from splat_replay.application.dto import ReplayBootstrapDTO
     from splat_replay.application.interfaces.data import (
         CaptureDeviceSettingsView,
         OBSSettingsView,
@@ -153,4 +154,12 @@ class RecorderWithTranscriptionPort(Protocol):
         self, listener: Callable[[RecorderStatus], Awaitable[None]]
     ) -> None:
         """Remove status change listener."""
+        ...
+
+
+class ReplayBootstrapResolverPort(Protocol):
+    """E2E リプレイ入力に応じた bootstrap を返すポート。"""
+
+    def resolve(self) -> ReplayBootstrapDTO | None:
+        """録画コンテキストへ適用する bootstrap を返す。"""
         ...

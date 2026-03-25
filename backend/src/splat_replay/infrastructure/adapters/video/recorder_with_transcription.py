@@ -76,9 +76,25 @@ class RecorderWithTranscription(RecorderWithTranscriptionPort):
         return video_path, srt_path
 
     async def cancel(self) -> None:
-        await self.recorder.stop()
+        video_path = await self.recorder.stop()
         if self.transcriber is not None:
             self.transcriber.stop()
+        if video_path is None:
+            self.logger.warning(
+                "録画中止時に削除対象ファイルを取得できませんでした"
+            )
+            return
+        deleted = self.asset_repo.delete_recording(video_path)
+        if deleted:
+            self.logger.info(
+                "録画中止で生成されたファイルを削除しました",
+                video_path=str(video_path),
+            )
+            return
+        self.logger.warning(
+            "録画中止で生成されたファイルの削除が完了しませんでした",
+            video_path=str(video_path),
+        )
 
     async def pause(self) -> None:
         await self.recorder.pause()

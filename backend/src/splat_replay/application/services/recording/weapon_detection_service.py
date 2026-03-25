@@ -327,13 +327,6 @@ class WeaponDetectionService:
 
         if result.error_event is not None and result.error is not None:
             self._logger.warning(result.error_event, error=result.error)
-        if result.skipped_predict_weapons_output_no_visible_frame:
-            self._logger.info(
-                "ブキ表示未検出のため predict_weapons 出力をスキップ",
-                elapsed_seconds=result.elapsed_seconds,
-                display_check_count=self._display_check_count,
-                visible_hit_count=self._visible_hit_count,
-            )
         if result.visible_frame is not None:
             self._remember_visible_candidate(result.visible_frame)
 
@@ -347,10 +340,24 @@ class WeaponDetectionService:
                 result=result,
             )
         if result.kind == "finalized":
-            return self._apply_finalized_result(
+            # _apply_finalized_result が _reset_detection_statistics() を呼ぶため、
+            # スキップログ用のカウントを事前に保存する。
+            display_check_count = self._display_check_count
+            visible_hit_count = self._visible_hit_count
+            context = self._apply_finalized_result(
                 context=context,
                 result=result,
             )
+            # finalize 処理の後にスキップログを出すことで、
+            # 「ブキ検知結果を更新しました」より後に記録されるようにする。
+            if result.skipped_predict_weapons_output_no_visible_frame:
+                self._logger.info(
+                    "ブキ表示未検出のため predict_weapons 出力をスキップ",
+                    elapsed_seconds=result.elapsed_seconds,
+                    display_check_count=display_check_count,
+                    visible_hit_count=visible_hit_count,
+                )
+            return context
         return context
 
     def _start_detection_task(

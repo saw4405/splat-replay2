@@ -9,24 +9,70 @@
  * 分類: workflow (E2E)
  */
 
+import { copyFileSync, existsSync, linkSync, mkdirSync } from 'node:fs';
+import { basename, extname, join } from 'node:path';
+
 import { expect, test } from '@playwright/test';
 
 import {
+  ensureAutoRecordingEnabled,
   environment,
+  expectedRecordedVideoCount,
   gotoMain,
   openRecordedVideos,
   prepareReplayAsset,
   replayAssets,
+  recordableReplayAssets,
+  switchReplayAsset,
   waitForRecordedVideoCount,
-  waitForRecordingLifecycle,
+  waitForRecordedVideoReady,
 } from './support/appHelpers';
+import type { ReplayAsset } from './support/e2eEnv';
 
 test.setTimeout(process.env.SPLAT_REPLAY_E2E_MODE === 'full' ? 1_800_000 : 900_000);
 
 const e2eEnvironment = environment();
+let duplicateAsset: ReplayAsset | null = null;
+
+function ensureDistinctReplayAsset(asset: ReplayAsset): ReplayAsset {
+  if (duplicateAsset) {
+    return duplicateAsset;
+  }
+
+  const duplicateDir = join(e2eEnvironment.rootDir, 'multi-video-assets');
+  const duplicateVideoPath = join(duplicateDir, `${asset.id}-duplicate${extname(asset.videoPath)}`);
+
+  mkdirSync(duplicateDir, { recursive: true });
+  if (!existsSync(duplicateVideoPath)) {
+    try {
+      linkSync(asset.videoPath, duplicateVideoPath);
+    } catch {
+      copyFileSync(asset.videoPath, duplicateVideoPath);
+    }
+  }
+
+  duplicateAsset = {
+    id: `${asset.id}-duplicate`,
+    name: basename(duplicateVideoPath),
+    videoPath: duplicateVideoPath,
+    sidecarPath: asset.sidecarPath,
+  };
+  return duplicateAsset;
+}
+
+function multiVideoAssets() {
+  const assets = recordableReplayAssets(e2eEnvironment);
+  if (assets.length === 0) {
+    return [];
+  }
+  if (assets.length === 1) {
+    return [assets[0], ensureDistinctReplayAsset(assets[0])];
+  }
+  return [assets[0], assets[1]];
+}
 
 test('複数ビデオ管理 - 2本の録画完了と一覧表示', async ({ page }) => {
-  const assets = replayAssets(e2eEnvironment);
+  const assets = multiVideoAssets();
 
   if (assets.length < 2) {
     test.skip();
@@ -36,21 +82,20 @@ test('複数ビデオ管理 - 2本の録画完了と一覧表示', async ({ page
   // 1本目の録画
   prepareReplayAsset(e2eEnvironment, assets[0]);
   await gotoMain(page);
-  await waitForRecordingLifecycle(page);
-  await waitForRecordedVideoCount(page, 1);
+  await ensureAutoRecordingEnabled(page);
+  await waitForRecordedVideoReady(page, 1);
 
   console.log('1本目の録画が完了しました');
 
   // 2本目の録画
-  prepareReplayAsset(e2eEnvironment, assets[1]);
+  switchReplayAsset(e2eEnvironment, assets[1]);
   await gotoMain(page);
-  await waitForRecordingLifecycle(page);
-  await waitForRecordedVideoCount(page, 2);
+  await ensureAutoRecordingEnabled(page);
+  await waitForRecordedVideoReady(page, 2);
 
   console.log('2本目の録画が完了しました');
 
   // 録画済みリストを開く
-  await gotoMain(page);
   await openRecordedVideos(page);
 
   // 録画数が2と表示されることを確認
@@ -65,7 +110,7 @@ test('複数ビデオ管理 - 2本の録画完了と一覧表示', async ({ page
 });
 
 test('複数ビデオ管理 - 個別削除', async ({ page }) => {
-  const assets = replayAssets(e2eEnvironment);
+  const assets = multiVideoAssets();
 
   if (assets.length < 2) {
     test.skip();
@@ -75,21 +120,20 @@ test('複数ビデオ管理 - 個別削除', async ({ page }) => {
   // 2本の録画を作成
   prepareReplayAsset(e2eEnvironment, assets[0]);
   await gotoMain(page);
-  await waitForRecordingLifecycle(page);
-  await waitForRecordedVideoCount(page, 1);
+  await ensureAutoRecordingEnabled(page);
+  await waitForRecordedVideoReady(page, 1);
 
-  prepareReplayAsset(e2eEnvironment, assets[1]);
+  switchReplayAsset(e2eEnvironment, assets[1]);
   await gotoMain(page);
-  await waitForRecordingLifecycle(page);
-  await waitForRecordedVideoCount(page, 2);
+  await ensureAutoRecordingEnabled(page);
+  await waitForRecordedVideoReady(page, 2);
 
   // 録画済みリストを開く
-  await gotoMain(page);
   await openRecordedVideos(page);
 
   // 最初のビデオの削除ボタンをクリック
   const firstVideo = page.getByTestId('recorded-video-item').first();
-  const deleteButton = firstVideo.getByTestId('recorded-video-delete-button');
+  const deleteButton = firstVideo.locator('button[title="動画を削除"]');
   await expect(deleteButton).toBeVisible({ timeout: 30_000 });
   await deleteButton.click();
 
@@ -97,7 +141,9 @@ test('複数ビデオ管理 - 個別削除', async ({ page }) => {
   await expect(page.getByRole('dialog', { name: '確認' })).toBeVisible({ timeout: 10_000 });
 
   // 削除を確定
-  const confirmButton = page.getByRole('button', { name: '削除' });
+  const confirmButton = page
+    .getByRole('dialog', { name: '確認' })
+    .getByRole('button', { name: '削除' });
   await confirmButton.click();
 
   // ダイアログが閉じるのを待つ
@@ -117,7 +163,7 @@ test('複数ビデオ管理 - 個別削除', async ({ page }) => {
 });
 
 test('複数ビデオ管理 - 削除キャンセル', async ({ page }) => {
-  const assets = replayAssets(e2eEnvironment);
+  const assets = multiVideoAssets();
 
   if (assets.length < 2) {
     test.skip();
@@ -127,21 +173,20 @@ test('複数ビデオ管理 - 削除キャンセル', async ({ page }) => {
   // 2本の録画を作成
   prepareReplayAsset(e2eEnvironment, assets[0]);
   await gotoMain(page);
-  await waitForRecordingLifecycle(page);
-  await waitForRecordedVideoCount(page, 1);
+  await ensureAutoRecordingEnabled(page);
+  await waitForRecordedVideoReady(page, 1);
 
-  prepareReplayAsset(e2eEnvironment, assets[1]);
+  switchReplayAsset(e2eEnvironment, assets[1]);
   await gotoMain(page);
-  await waitForRecordingLifecycle(page);
-  await waitForRecordedVideoCount(page, 2);
+  await ensureAutoRecordingEnabled(page);
+  await waitForRecordedVideoReady(page, 2);
 
   // 録画済みリストを開く
-  await gotoMain(page);
   await openRecordedVideos(page);
 
   // 最初のビデオの削除ボタンをクリック
   const firstVideo = page.getByTestId('recorded-video-item').first();
-  const deleteButton = firstVideo.getByTestId('recorded-video-delete-button');
+  const deleteButton = firstVideo.locator('button[title="動画を削除"]');
   await deleteButton.click();
 
   // 確認ダイアログが表示される
@@ -165,8 +210,8 @@ test('複数ビデオ管理 - 削除キャンセル', async ({ page }) => {
   console.log('削除キャンセルワークフローが成功しました');
 });
 
-test('複数ビデオ管理 - ビデオごとに異なるメタデータ', async ({ page }) => {
-  const assets = replayAssets(e2eEnvironment);
+test('複数ビデオ管理 - ビデオごとに独立したメタデータ状態', async ({ page }) => {
+  const assets = multiVideoAssets();
 
   if (assets.length < 2) {
     test.skip();
@@ -176,48 +221,68 @@ test('複数ビデオ管理 - ビデオごとに異なるメタデータ', async
   // 2本の録画を作成
   prepareReplayAsset(e2eEnvironment, assets[0]);
   await gotoMain(page);
-  await waitForRecordingLifecycle(page);
-  await waitForRecordedVideoCount(page, 1);
+  await ensureAutoRecordingEnabled(page);
+  await waitForRecordedVideoReady(page, 1);
 
-  prepareReplayAsset(e2eEnvironment, assets[1]);
+  switchReplayAsset(e2eEnvironment, assets[1]);
   await gotoMain(page);
-  await waitForRecordingLifecycle(page);
-  await waitForRecordedVideoCount(page, 2);
+  await ensureAutoRecordingEnabled(page);
+  await waitForRecordedVideoReady(page, 2);
 
   // 録画済みリストを開く
-  await gotoMain(page);
   await openRecordedVideos(page);
 
-  // 2つのビデオアイテムを取得
   const videoItems = page.getByTestId('recorded-video-item');
   await expect(videoItems).toHaveCount(2);
 
-  // 1本目のメタデータを取得
   const firstVideo = videoItems.first();
-  const firstKill = await firstVideo.getByTestId('recorded-video-kill').textContent();
-  const firstStage = await firstVideo.getByTestId('recorded-video-stage').textContent();
-
-  console.log('1本目:', { kill: firstKill, stage: firstStage });
-
-  // 2本目のメタデータを取得
   const secondVideo = videoItems.nth(1);
-  const secondKill = await secondVideo.getByTestId('recorded-video-kill').textContent();
-  const secondStage = await secondVideo.getByTestId('recorded-video-stage').textContent();
+  const firstKillBefore = (
+    await firstVideo.getByTestId('recorded-video-kill').textContent()
+  )?.trim();
+  const secondKillBefore = (
+    await secondVideo.getByTestId('recorded-video-kill').textContent()
+  )?.trim();
 
-  console.log('2本目:', { kill: secondKill, stage: secondStage });
+  expect(firstKillBefore).toBeTruthy();
+  expect(secondKillBefore).toBeTruthy();
 
-  // 各ビデオが独立したメタデータを持つことを確認
-  // （少なくとも表示されていることを確認）
-  expect(firstKill).toBeTruthy();
-  expect(firstStage).toBeTruthy();
-  expect(secondKill).toBeTruthy();
-  expect(secondStage).toBeTruthy();
+  await secondVideo.getByTestId('recorded-video-metadata-button').click();
+  await expect(page.getByRole('dialog', { name: 'メタデータ編集' })).toBeVisible({
+    timeout: 10_000,
+  });
 
-  console.log('ビデオごとの独立したメタデータ表示ワークフローが成功しました');
+  const newKillValue = String(Number.parseInt(secondKillBefore ?? '0', 10) + 7);
+  await page.getByLabel('キル数').fill(newKillValue);
+  await page.getByRole('button', { name: '保存' }).click();
+  await expect(page.getByRole('dialog', { name: 'メタデータ編集' })).toBeHidden({
+    timeout: 10_000,
+  });
+
+  await page.waitForTimeout(1000);
+
+  const firstKillAfter = (
+    await page
+      .getByTestId('recorded-video-item')
+      .first()
+      .getByTestId('recorded-video-kill')
+      .textContent()
+  )?.trim();
+  const secondKillAfter = (
+    await page
+      .getByTestId('recorded-video-item')
+      .nth(1)
+      .getByTestId('recorded-video-kill')
+      .textContent()
+  )?.trim();
+
+  expect(firstKillAfter).toBe(firstKillBefore);
+  expect(secondKillAfter).toBe(newKillValue);
+  expect(secondKillAfter).not.toBe(secondKillBefore);
 });
 
 test('複数ビデオ管理 - 2本目のみ編集', async ({ page }) => {
-  const assets = replayAssets(e2eEnvironment);
+  const assets = multiVideoAssets();
 
   if (assets.length < 2) {
     test.skip();
@@ -227,16 +292,15 @@ test('複数ビデオ管理 - 2本目のみ編集', async ({ page }) => {
   // 2本の録画を作成
   prepareReplayAsset(e2eEnvironment, assets[0]);
   await gotoMain(page);
-  await waitForRecordingLifecycle(page);
-  await waitForRecordedVideoCount(page, 1);
+  await ensureAutoRecordingEnabled(page);
+  await waitForRecordedVideoReady(page, 1);
 
-  prepareReplayAsset(e2eEnvironment, assets[1]);
+  switchReplayAsset(e2eEnvironment, assets[1]);
   await gotoMain(page);
-  await waitForRecordingLifecycle(page);
-  await waitForRecordedVideoCount(page, 2);
+  await ensureAutoRecordingEnabled(page);
+  await waitForRecordedVideoReady(page, 2);
 
   // 録画済みリストを開く
-  await gotoMain(page);
   await openRecordedVideos(page);
 
   // 1本目の初期値を記録
@@ -247,7 +311,7 @@ test('複数ビデオ管理 - 2本目のみ編集', async ({ page }) => {
   const secondVideo = page.getByTestId('recorded-video-item').nth(1);
   const secondVideoKillBefore = await secondVideo.getByTestId('recorded-video-kill').textContent();
 
-  const editButton = secondVideo.getByTestId('recorded-video-edit-button');
+  const editButton = secondVideo.getByTestId('recorded-video-metadata-button');
   await editButton.click();
 
   // メタデータ編集ダイアログが開くのを待つ
@@ -314,7 +378,9 @@ test('複数ビデオ管理 - 空リスト時の表示', async ({ page }) => {
 });
 
 test('複数ビデオ管理 - 全削除後の確認', async ({ page }) => {
-  const assets = replayAssets(e2eEnvironment);
+  const assets = replayAssets(e2eEnvironment).filter(
+    (asset) => expectedRecordedVideoCount(asset) > 0
+  );
 
   if (assets.length < 1) {
     test.skip();
@@ -324,11 +390,10 @@ test('複数ビデオ管理 - 全削除後の確認', async ({ page }) => {
   // 1本の録画を作成
   prepareReplayAsset(e2eEnvironment, assets[0]);
   await gotoMain(page);
-  await waitForRecordingLifecycle(page);
-  await waitForRecordedVideoCount(page, 1);
+  await ensureAutoRecordingEnabled(page);
+  await waitForRecordedVideoReady(page, 1);
 
   // 録画済みリストを開く
-  await gotoMain(page);
   await openRecordedVideos(page);
 
   // 録画数が1と表示されることを確認
@@ -337,12 +402,14 @@ test('複数ビデオ管理 - 全削除後の確認', async ({ page }) => {
 
   // ビデオを削除
   const firstVideo = page.getByTestId('recorded-video-item').first();
-  const deleteButton = firstVideo.getByTestId('recorded-video-delete-button');
+  const deleteButton = firstVideo.locator('button[title="動画を削除"]');
   await deleteButton.click();
 
   // 確認ダイアログで削除を確定
   await expect(page.getByRole('dialog', { name: '確認' })).toBeVisible({ timeout: 10_000 });
-  const confirmButton = page.getByRole('button', { name: '削除' });
+  const confirmButton = page
+    .getByRole('dialog', { name: '確認' })
+    .getByRole('button', { name: '削除' });
   await confirmButton.click();
 
   await expect(page.getByRole('dialog', { name: '確認' })).toBeHidden({ timeout: 10_000 });

@@ -24,6 +24,7 @@ from splat_replay.application.interfaces import (
     ImageSelector,
     MicrophoneEnumeratorPort,
     PowerPort,
+    ReplayBootstrapResolverPort,
     RecorderWithTranscriptionPort,
     SettingsRepositoryPort,
     SpeechTranscriberPort,
@@ -83,6 +84,9 @@ from splat_replay.infrastructure.runtime import AppRuntime
 from splat_replay.infrastructure.adapters.system.capture_clock import (
     CaptureClock,
 )
+from splat_replay.infrastructure.test_input import (
+    ConfiguredReplayBootstrapResolver,
+)
 from structlog.stdlib import BoundLogger
 
 
@@ -97,6 +101,11 @@ def register_adapters(container: punq.Container) -> None:
     container.register(
         ClockPort,
         factory=lambda: CaptureClock(container.resolve(CapturePort)),
+        scope=punq.Scope.singleton,
+    )
+    container.register(
+        ReplayBootstrapResolverPort,
+        ConfiguredReplayBootstrapResolver,
         scope=punq.Scope.singleton,
     )
     container.register(

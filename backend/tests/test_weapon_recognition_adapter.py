@@ -1452,7 +1452,7 @@ async def test_detect_weapon_display_runs_precise_fallback_when_fast_needs_extra
 
 
 @pytest.mark.asyncio
-async def test_detect_weapon_display_true_when_matched_slot_team_edge_ratio_is_016(
+async def test_detect_weapon_display_true_when_matched_slot_team_edge_ratio_is_014(
     recognizer: WeaponRecognitionAdapter,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -1495,7 +1495,7 @@ async def test_detect_weapon_display_true_when_matched_slot_team_edge_ratio_is_0
         _ = slot_image
         return _SlotSignalMetrics(
             edge_ratio=0.1,
-            team_edge_ratio=0.16,
+            team_edge_ratio=0.14,
         )
 
     monkeypatch.setattr(
@@ -1513,7 +1513,7 @@ async def test_detect_weapon_display_true_when_matched_slot_team_edge_ratio_is_0
     assert spy_logger.debug_calls
     _, fields = spy_logger.debug_calls[-1]
     assert fields["matched_slot_team_edge_ratio_passed"] is True
-    assert fields["matched_slot_team_edge_ratio"] == pytest.approx(0.16)
+    assert fields["matched_slot_team_edge_ratio"] == pytest.approx(0.14)
 
 
 @pytest.mark.asyncio

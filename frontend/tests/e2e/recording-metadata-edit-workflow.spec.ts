@@ -12,16 +12,25 @@
 import { expect, test } from '@playwright/test';
 
 import {
+  ensureAutoRecordingEnabled,
+  ensureLiveMetadataVisible,
   environment,
   gotoMain,
-  prepareReplayAsset,
+  prepareReplayAssetWithScenario,
   replayAssets,
+  stopRecordingForTeardown,
   waitForRecordingLifecycle,
 } from './support/appHelpers';
 
 test.setTimeout(process.env.SPLAT_REPLAY_E2E_MODE === 'full' ? 1_200_000 : 600_000);
 
 const e2eEnvironment = environment();
+const autoRecordingBootstrapScenario = {
+  replay_bootstrap: {
+    phase: 'in_game',
+    game_mode: 'BATTLE',
+  },
+};
 
 // 録画中メタデータ編集のテストは、最初のreplay assetのみで実行
 // （全assetで実行すると非常に時間がかかるため）
@@ -33,13 +42,12 @@ test('録画中メタデータ編集ワークフロー', async ({ page }) => {
     return;
   }
 
-  prepareReplayAsset(e2eEnvironment, firstAsset);
+  prepareReplayAssetWithScenario(e2eEnvironment, firstAsset, autoRecordingBootstrapScenario);
 
   await gotoMain(page);
+  await ensureAutoRecordingEnabled(page);
   await waitForRecordingLifecycle(page);
-
-  // メタデータオーバーレイが表示されるまで待機
-  await expect(page.getByText('バトルメタデータ')).toBeVisible({ timeout: 30_000 });
+  await ensureLiveMetadataVisible(page);
 
   // 初期状態の確認: キル数が表示されている（自動認識の結果）
   const killInput = page.getByLabel('キル数');
@@ -76,12 +84,13 @@ test('録画中メタデータ編集ワークフロー', async ({ page }) => {
   await expect(page.getByText('メタデータを保存しました')).toBeVisible({ timeout: 10_000 });
 
   // ダイアログを閉じる
-  await page.getByRole('button', { name: 'OK' }).click();
+  await page.getByRole('dialog', { name: '完了' }).getByRole('button', { name: '閉じる' }).click();
 
   // 編集した値が保持されていることを確認
   await expect(killInput).toHaveValue(newKillValue);
   await expect(deathInput).toHaveValue(newDeathValue);
   await expect(specialInput).toHaveValue(newSpecialValue);
+  await stopRecordingForTeardown(page);
 
   console.log('録画中メタデータ編集ワークフローが成功しました');
 });
@@ -92,16 +101,15 @@ test('録画中メタデータ編集 - 現在時刻設定', async ({ page }) => 
     return;
   }
 
-  prepareReplayAsset(e2eEnvironment, firstAsset);
+  prepareReplayAssetWithScenario(e2eEnvironment, firstAsset, autoRecordingBootstrapScenario);
 
   await gotoMain(page);
+  await ensureAutoRecordingEnabled(page);
   await waitForRecordingLifecycle(page);
+  await ensureLiveMetadataVisible(page);
 
-  // メタデータオーバーレイが表示されるまで待機
-  await expect(page.getByText('バトルメタデータ')).toBeVisible({ timeout: 30_000 });
-
-  // 開始日時フィールドを確認
-  const startedAtInput = page.getByLabel('開始日時');
+  // 開始時間フィールドを確認
+  const startedAtInput = page.getByLabel('開始時間');
   await expect(startedAtInput).toBeVisible();
 
   // 現在時刻を設定ボタンをクリック
@@ -120,6 +128,8 @@ test('録画中メタデータ編集 - 現在時刻設定', async ({ page }) => 
 
   // 成功メッセージ確認
   await expect(page.getByText('メタデータを保存しました')).toBeVisible({ timeout: 10_000 });
+  await page.getByRole('dialog', { name: '完了' }).getByRole('button', { name: '閉じる' }).click();
+  await stopRecordingForTeardown(page);
 
   console.log('現在時刻設定ワークフローが成功しました');
 });
@@ -130,13 +140,12 @@ test('録画中メタデータ編集 - リセット機能', async ({ page }) => 
     return;
   }
 
-  prepareReplayAsset(e2eEnvironment, firstAsset);
+  prepareReplayAssetWithScenario(e2eEnvironment, firstAsset, autoRecordingBootstrapScenario);
 
   await gotoMain(page);
+  await ensureAutoRecordingEnabled(page);
   await waitForRecordingLifecycle(page);
-
-  // メタデータオーバーレイが表示されるまで待機
-  await expect(page.getByText('バトルメタデータ')).toBeVisible({ timeout: 30_000 });
+  await ensureLiveMetadataVisible(page);
 
   // キル数を変更
   const killInput = page.getByLabel('キル数');
@@ -158,6 +167,7 @@ test('録画中メタデータ編集 - リセット機能', async ({ page }) => 
 
   // 値が変更されたことを確認（25から変わっている）
   expect(resetValue).not.toBe('25');
+  await stopRecordingForTeardown(page);
 
   console.log('リセット機能ワークフローが成功しました');
 });
@@ -168,13 +178,12 @@ test('録画中メタデータ編集 - 選択フィールドの変更', async ({
     return;
   }
 
-  prepareReplayAsset(e2eEnvironment, firstAsset);
+  prepareReplayAssetWithScenario(e2eEnvironment, firstAsset, autoRecordingBootstrapScenario);
 
   await gotoMain(page);
+  await ensureAutoRecordingEnabled(page);
   await waitForRecordingLifecycle(page);
-
-  // メタデータオーバーレイが表示されるまで待機
-  await expect(page.getByText('バトルメタデータ')).toBeVisible({ timeout: 30_000 });
+  await ensureLiveMetadataVisible(page);
 
   // ステージのselectフィールドを変更
   const stageSelect = page.getByLabel('ステージ');
@@ -196,27 +205,26 @@ test('録画中メタデータ編集 - 選択フィールドの変更', async ({
     }
   }
 
-  if (newStageValue) {
-    await stageSelect.selectOption(newStageValue);
-    await expect(stageSelect).toHaveValue(newStageValue);
-    console.log('新しいステージ:', newStageValue);
+  expect(newStageValue).not.toBeNull();
+  await stageSelect.selectOption(newStageValue!);
+  await expect(stageSelect).toHaveValue(newStageValue!);
+  console.log('新しいステージ:', newStageValue);
 
-    // 保存
-    const saveButton = page.getByRole('button', { name: '保存' });
-    await saveButton.click();
+  // 保存
+  const saveButton = page.getByRole('button', { name: '保存' });
+  await saveButton.click();
 
-    // 成功メッセージ確認
-    await expect(page.getByText('メタデータを保存しました')).toBeVisible({
-      timeout: 10_000,
-    });
+  // 成功メッセージ確認
+  await expect(page.getByText('メタデータを保存しました')).toBeVisible({
+    timeout: 10_000,
+  });
+  await page.getByRole('dialog', { name: '完了' }).getByRole('button', { name: '閉じる' }).click();
 
-    // 値が保持されていることを確認
-    await expect(stageSelect).toHaveValue(newStageValue);
+  // 値が保持されていることを確認
+  await expect(stageSelect).toHaveValue(newStageValue!);
+  await stopRecordingForTeardown(page);
 
-    console.log('選択フィールド変更ワークフローが成功しました');
-  } else {
-    console.log('変更可能なステージオプションが見つかりませんでした（スキップ）');
-  }
+  console.log('選択フィールド変更ワークフローが成功しました');
 });
 
 test('録画中メタデータ編集 - 保存前キャンセル', async ({ page }) => {
@@ -225,13 +233,12 @@ test('録画中メタデータ編集 - 保存前キャンセル', async ({ page 
     return;
   }
 
-  prepareReplayAsset(e2eEnvironment, firstAsset);
+  prepareReplayAssetWithScenario(e2eEnvironment, firstAsset, autoRecordingBootstrapScenario);
 
   await gotoMain(page);
+  await ensureAutoRecordingEnabled(page);
   await waitForRecordingLifecycle(page);
-
-  // メタデータオーバーレイが表示されるまで待機
-  await expect(page.getByText('バトルメタデータ')).toBeVisible({ timeout: 30_000 });
+  await ensureLiveMetadataVisible(page);
 
   // キル数を変更
   const killInput = page.getByLabel('キル数');
@@ -243,7 +250,7 @@ test('録画中メタデータ編集 - 保存前キャンセル', async ({ page 
   await page.reload();
 
   // 再度メタデータオーバーレイが表示されるのを待つ
-  await expect(page.getByText('バトルメタデータ')).toBeVisible({ timeout: 30_000 });
+  await ensureLiveMetadataVisible(page);
 
   // キル数が保存されていないことを確認（初期値または自動認識値に戻る）
   const reloadedValue = await page.getByLabel('キル数').inputValue();
@@ -251,6 +258,7 @@ test('録画中メタデータ編集 - 保存前キャンセル', async ({ page 
 
   // 未保存の値(30)ではないことを確認
   expect(reloadedValue).not.toBe('30');
+  await stopRecordingForTeardown(page);
 
   console.log('保存前キャンセルワークフローが成功しました');
 });
