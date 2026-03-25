@@ -8,6 +8,7 @@ from typing import Mapping, Optional, Set, cast
 
 import numpy as np
 import pytest
+
 import splat_replay.application.services.recording.weapon_detection_service as weapon_detection_service_module
 from splat_replay.application.interfaces import (
     EventBusPort,

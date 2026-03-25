@@ -1,6 +1,6 @@
 ﻿<script lang="ts">
   import { onMount, onDestroy } from 'svelte';
-  import { Circle, Pause, Square, Play, Eye, EyeOff, Mic } from 'lucide-svelte';
+  import { Circle, Pause, Square, Play, Mic } from 'lucide-svelte';
   import {
     subscribeDomainEvents,
     type DomainEvent,
@@ -16,11 +16,7 @@
   let selectedDeviceId: string | null = null;
   let recorderState: string = 'STOPPED'; // STOPPED, RECORDING, PAUSED
   let isHovered = false;
-  let previewVisible: boolean = true;
-  let previewToggleLabel: string = 'プレビュー映像を非表示にする';
   let cameraStartInFlight: boolean = false;
-  let previewToggleFocused: boolean = false;
-  let toggleVisible: boolean = true;
   let isVideoFileInput = false;
   let previewImageUrl: string | null = null;
   let previewImageObjectUrl: string | null = null;
@@ -52,10 +48,6 @@
 
   function isAbortError(error: unknown): error is DOMException {
     return error instanceof DOMException && error.name === 'AbortError';
-  }
-
-  function togglePreviewVisibility(): void {
-    previewVisible = !previewVisible;
   }
 
   function clearPreviewImage(): void {
@@ -112,7 +104,7 @@
   }
 
   function startPreviewFramePolling(): void {
-    if (previewFramePollTimer || !previewVisible || !isVideoFileInput) {
+    if (previewFramePollTimer || !isVideoFileInput) {
       return;
     }
 
@@ -456,20 +448,16 @@
     stopPreviewFramePolling(true);
   });
 
-  $: previewToggleLabel = previewVisible
-    ? 'プレビュー映像を非表示にする'
-    : 'プレビュー映像を表示する';
-  $: toggleVisible = previewVisible ? isHovered || previewToggleFocused : true;
   $: nextPreviewFramePollIntervalMs = getPreviewFramePollIntervalMs($renderMode);
   $: if (previewFramePollIntervalMs !== nextPreviewFramePollIntervalMs) {
     previewFramePollIntervalMs = nextPreviewFramePollIntervalMs;
-    if (isVideoFileInput && previewVisible) {
+    if (isVideoFileInput) {
       stopPreviewFramePolling();
       startPreviewFramePolling();
     }
   }
 
-  $: if (previewVisible && !isVideoFileInput) {
+  $: if (!isVideoFileInput) {
     if (!mediaStream) {
       if (selectedDeviceId) {
         void ensureCameraStream(selectedDeviceId);
@@ -489,7 +477,7 @@
     }
   }
 
-  $: if (previewVisible && isVideoFileInput) {
+  $: if (isVideoFileInput) {
     startPreviewFramePolling();
   } else {
     stopPreviewFramePolling(!isVideoFileInput);
@@ -581,18 +569,10 @@
       console.error('Error stopping recording:', error);
     }
   }
-
-  function handlePreviewToggleMouseLeave(event: MouseEvent): void {
-    const target = event.currentTarget;
-    if (target instanceof HTMLButtonElement) {
-      target.blur();
-    }
-  }
 </script>
 
 <div
   class="video-preview"
-  class:preview-hidden={!previewVisible}
   style={`--preview-border-color: ${recorderVisuals.borderColor};`}
   role="button"
   aria-label="ビデオプレビューと録画コントロール"
@@ -635,28 +615,9 @@
     </div>
   </div>
 
-  <button
-    type="button"
-    class="preview-toggle"
-    class:preview-toggle--visible={toggleVisible}
-    on:click={togglePreviewVisibility}
-    on:focus={() => (previewToggleFocused = true)}
-    on:blur={() => (previewToggleFocused = false)}
-    on:mouseleave={handlePreviewToggleMouseLeave}
-    aria-pressed={previewVisible}
-    aria-label={previewToggleLabel}
-    title={previewToggleLabel}
-  >
-    {#if previewVisible}
-      <EyeOff size={200} strokeWidth={1.8} />
-    {:else}
-      <Eye size={200} strokeWidth={1.8} />
-    {/if}
-  </button>
-
-  {#if previewVisible && !isVideoFileInput}
+  {#if !isVideoFileInput}
     <video bind:this={videoEl} class="preview-canvas" playsinline muted></video>
-  {:else if previewVisible}
+  {:else}
     <div class="video-file-preview-surface">
       {#if previewImageUrl}
         <img
@@ -672,7 +633,7 @@
   {/if}
 
   <!-- Speech recognition preview overlay -->
-  {#if previewVisible && speechState !== 'idle'}
+  {#if speechState !== 'idle'}
     <div
       class="speech-preview"
       class:speech-preview--listening={speechState === 'listening'}
@@ -713,12 +674,6 @@
     transition: border-color 0.3s ease;
   }
 
-  .video-preview.preview-hidden {
-    background: rgba(var(--theme-rgb-surface-preview), 0.6);
-    border: 2px dashed rgba(var(--theme-rgb-slate), 0.6);
-    box-shadow: none;
-  }
-
   .status-control-bar {
     position: absolute;
     top: 0.5rem;
@@ -737,14 +692,6 @@
       opacity 0.25s ease,
       background 0.25s ease,
       border-color 0.25s ease;
-  }
-
-  .video-preview.preview-hidden .status-control-bar {
-    background: rgba(var(--theme-rgb-surface-preview), 0.7);
-    backdrop-filter: none;
-    -webkit-backdrop-filter: none;
-    border: 1px solid rgba(var(--theme-rgb-slate), 0.4);
-    box-shadow: none;
   }
 
   .status-control-bar.hovered {
@@ -876,44 +823,6 @@
         rgba(var(--theme-rgb-surface-preview), 0.78) 0%,
         rgba(var(--theme-rgb-black), 0.6) 100%
       );
-  }
-
-  .preview-toggle {
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 14rem;
-    height: 14rem;
-    border-radius: 999px;
-    border: none;
-    background: transparent;
-    color: var(--theme-color-white);
-    cursor: pointer;
-    opacity: 0;
-    pointer-events: none;
-    transition:
-      opacity 0.2s ease,
-      transform 0.2s ease;
-    z-index: 12;
-  }
-
-  .preview-toggle--visible {
-    opacity: 1;
-    pointer-events: auto;
-  }
-
-  .preview-toggle--visible:hover {
-    transform: translate(-50%, -50%);
-  }
-
-  .preview-toggle:focus-visible {
-    outline: 3px solid rgba(var(--theme-rgb-white), 0.6);
-    outline-offset: 4px;
-    transform: translate(-50%, -50%);
   }
 
   /* Speech recognition preview styles */
