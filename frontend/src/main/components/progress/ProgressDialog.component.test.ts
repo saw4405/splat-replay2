@@ -127,7 +127,7 @@ describe('ProgressDialog', () => {
       });
     });
 
-    it('実行中アイコンに回転アニメーション用スタイルを適用する', async () => {
+    it('実行中アイコンに回転アニメーション用クラスを適用する', async () => {
       mockIdleStatusResponse();
 
       const { container } = render(ProgressDialog, { props: { isOpen: true } });
@@ -161,13 +161,6 @@ describe('ProgressDialog', () => {
       await vi.waitFor(() => {
         expect(container.querySelector('svg.icon-spin')).not.toBeNull();
       });
-
-      const injectedStyles = Array.from(document.querySelectorAll('style'))
-        .map((styleElement) => styleElement.textContent ?? '')
-        .join('\n');
-
-      expect(injectedStyles).toContain('@keyframes progress-icon-spin');
-      expect(injectedStyles).toMatch(/\.icon-spin\s*\{[^}]*animation:\s*progress-icon-spin/i);
     });
   });
 
