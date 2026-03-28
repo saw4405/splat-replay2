@@ -82,15 +82,17 @@ def create_app(server: WebAPIServer, enable_lifespan: bool = True) -> FastAPI:
 
     # 静的ファイル配信 (フロントエンド)
     frontend_dist = server.project_root / "frontend" / "dist"
-    frontend_exists = frontend_dist.exists()
+    frontend_exists = frontend_dist.is_dir()
+    frontend_assets_dir = frontend_dist / "assets"
 
     if frontend_exists:
         # 静的ファイルをマウント (APIルート以外)
-        app.mount(
-            "/assets",
-            StaticFiles(directory=str(frontend_dist / "assets")),
-            name="assets",
-        )
+        if frontend_assets_dir.is_dir():
+            app.mount(
+                "/assets",
+                StaticFiles(directory=str(frontend_assets_dir)),
+                name="assets",
+            )
 
     # ヘルスチェックエンドポイント (常に有効)
     @app.get("/api/health")
