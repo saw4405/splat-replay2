@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/svelte';
+import { cleanup, render, screen } from '@testing-library/svelte';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import ProgressDialog from './ProgressDialog.svelte';
 
@@ -39,8 +39,29 @@ describe('ProgressDialog', () => {
   });
 
   afterEach(() => {
+    cleanup();
+    vi.clearAllTimers();
     vi.restoreAllMocks();
   });
+
+  function mockIdleStatusResponse(): void {
+    fetchMock.mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          state: 'idle',
+          sleepAfterUploadEnabled: false,
+          sleepAfterUploadEffective: false,
+        }),
+        { status: 200 }
+      )
+    );
+  }
+
+  function registeredEventHandler(name: string): ((event: MessageEvent) => void) | undefined {
+    return mockEventSource.addEventListener.mock.calls.find(
+      ([eventName]) => eventName === name
+    )?.[1];
+  }
 
   describe('ダイアログ表示', () => {
     it('isOpenがtrueの場合、ダイアログが表示される', async () => {
@@ -80,16 +101,7 @@ describe('ProgressDialog', () => {
 
   describe('SSE接続', () => {
     it('ダイアログを開くとEventSourceが作成される', async () => {
-      fetchMock.mockResolvedValue(
-        new Response(
-          JSON.stringify({
-            state: 'idle',
-            sleepAfterUploadEnabled: false,
-            sleepAfterUploadEffective: false,
-          }),
-          { status: 200 }
-        )
-      );
+      mockIdleStatusResponse();
 
       render(ProgressDialog, { props: { isOpen: true } });
 
@@ -99,16 +111,7 @@ describe('ProgressDialog', () => {
     });
 
     it('progress_eventとprogressイベントにリスナーが登録される', async () => {
-      fetchMock.mockResolvedValue(
-        new Response(
-          JSON.stringify({
-            state: 'idle',
-            sleepAfterUploadEnabled: false,
-            sleepAfterUploadEffective: false,
-          }),
-          { status: 200 }
-        )
-      );
+      mockIdleStatusResponse();
 
       render(ProgressDialog, { props: { isOpen: true } });
 
@@ -123,20 +126,54 @@ describe('ProgressDialog', () => {
         );
       });
     });
+
+    it('実行中アイコンに回転アニメーション用スタイルを適用する', async () => {
+      mockIdleStatusResponse();
+
+      const { container } = render(ProgressDialog, { props: { isOpen: true } });
+
+      await vi.waitFor(() => {
+        expect(registeredEventHandler('progress_event')).toEqual(expect.any(Function));
+      });
+
+      registeredEventHandler('progress_event')?.(
+        new MessageEvent('progress_event', {
+          data: JSON.stringify({
+            task_id: 'auto_edit',
+            kind: 'start',
+            task_name: '自動編集',
+            total: 1,
+            completed: 0,
+            stage_key: null,
+            stage_label: null,
+            stage_index: null,
+            stage_count: null,
+            success: null,
+            message: null,
+            items: ['テスト動画'],
+            item_index: null,
+            item_key: null,
+            item_label: null,
+          }),
+        })
+      );
+
+      await vi.waitFor(() => {
+        expect(container.querySelector('svg.icon-spin')).not.toBeNull();
+      });
+
+      const injectedStyles = Array.from(document.querySelectorAll('style'))
+        .map((styleElement) => styleElement.textContent ?? '')
+        .join('\n');
+
+      expect(injectedStyles).toContain('@keyframes progress-icon-spin');
+      expect(injectedStyles).toMatch(/\.icon-spin\s*\{[^}]*animation:\s*progress-icon-spin/i);
+    });
   });
 
   describe('編集アップロード状態の取得', () => {
     it('ダイアログを開くと編集アップロード状態がfetchされる', async () => {
-      fetchMock.mockResolvedValue(
-        new Response(
-          JSON.stringify({
-            state: 'idle',
-            sleepAfterUploadEnabled: false,
-            sleepAfterUploadEffective: false,
-          }),
-          { status: 200 }
-        )
-      );
+      mockIdleStatusResponse();
 
       render(ProgressDialog, { props: { isOpen: true } });
 

@@ -105,6 +105,24 @@ body::before {
   text-align: center;
 }
 
+@keyframes app-spinner-rotate {
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.loading-spinner,
+.spinner,
+.spinner-small {
+  animation: app-spinner-rotate 0.8s linear infinite;
+  transform-origin: center;
+  will-change: transform;
+}
+
 button {
   border-radius: var(--glass-radius);
   border: 1px solid rgba(var(--theme-rgb-white), 0.08);
