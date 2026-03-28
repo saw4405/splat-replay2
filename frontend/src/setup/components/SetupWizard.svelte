@@ -476,7 +476,14 @@
     border: 4px solid rgba(var(--theme-rgb-white), 0.1);
     border-top-color: var(--accent-color);
     border-radius: 50%;
+    animation: spin 1s linear infinite;
     box-shadow: 0 0 12px rgba(var(--theme-rgb-accent), 0.12);
+  }
+
+  @keyframes spin {
+    to {
+      transform: rotate(360deg);
+    }
   }
 
   .loading-text,

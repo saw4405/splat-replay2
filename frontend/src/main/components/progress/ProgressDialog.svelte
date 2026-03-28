@@ -1437,8 +1437,18 @@
     line-height: 1;
   }
 
+  @keyframes progress-icon-spin {
+    from {
+      transform: rotate(0deg);
+    }
+
+    to {
+      transform: rotate(360deg);
+    }
+  }
+
   :global(.icon-spin) {
-    opacity: 0.85;
+    animation: progress-icon-spin 1s linear infinite;
   }
 
   /* ====== フッター ====== */

@@ -823,6 +823,13 @@
     border: 2px solid rgba(var(--theme-rgb-black), 0.3);
     border-top-color: var(--theme-color-black);
     border-radius: 50%;
+    animation: spin 0.6s linear infinite;
+  }
+
+  @keyframes spin {
+    to {
+      transform: rotate(360deg);
+    }
   }
 
   .drawer-content {
