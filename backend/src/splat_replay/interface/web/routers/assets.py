@@ -137,6 +137,7 @@ def create_assets_router(server: WebAPIServer) -> APIRouter:
             if auto:
                 await server.auto_process_service.start_auto_process()
             else:
+                server.auto_process_service.on_new_execution()
                 await server.start_edit_upload_uc.execute()
             status_dto = await server.get_edit_upload_status_uc.execute()
             return JSONResponse(
@@ -185,6 +186,11 @@ def create_assets_router(server: WebAPIServer) -> APIRouter:
                 status_code=status.HTTP_409_CONFLICT,
                 detail=str(exc),
             ) from exc
+
+        if not request.sleep_after_upload:
+            server.auto_process_service.cancel_pending_sleep()
+        else:
+            server.auto_process_service.reactivate_sleep()
 
         dto = await server.get_edit_upload_status_uc.execute()
         return _to_edit_upload_status(dto)

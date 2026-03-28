@@ -113,9 +113,9 @@ class StartEditUploadUseCase:
 
     def update_sleep_after_upload(self, enabled: bool) -> None:
         """今回の処理に限ったスリープ設定を更新する。"""
-        if not self.is_running():
+        if self._state == "idle":
             raise RuntimeError(
-                "編集中またはアップロード中の処理がないため変更できません"
+                "編集・アップロードが実行されていないため変更できません"
             )
 
         self._sleep_after_upload_effective = enabled

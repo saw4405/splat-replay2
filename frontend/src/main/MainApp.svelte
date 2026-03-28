@@ -33,6 +33,8 @@
         autoProcessPayload = null;
       } else if (event.type === 'domain.process.sleep.started') {
         autoSleepPayload = null;
+      } else if (event.type === 'domain.process.sleep.cancelled') {
+        autoSleepPayload = null;
       } else if (event.type === 'domain.process.started') {
         // 自動処理が実際に開始された
         autoProcessPayload = null;

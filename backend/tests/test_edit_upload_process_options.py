@@ -144,6 +144,14 @@ class _PatchStartEditUploadUseCaseStub:
         self.updated_values.append(enabled)
 
 
+class _NoopAutoProcessServiceStub:
+    def cancel_pending_sleep(self) -> None:
+        pass
+
+    def reactivate_sleep(self) -> None:
+        pass
+
+
 class _PatchGetEditUploadStatusUseCaseStub:
     def __init__(
         self, start_edit_upload_uc: _PatchStartEditUploadUseCaseStub
@@ -380,6 +388,7 @@ def test_update_edit_upload_process_options_returns_200_with_updated_status() ->
                 SimpleNamespace(
                     start_edit_upload_uc=start_edit_upload_uc,
                     get_edit_upload_status_uc=get_edit_upload_status_uc,
+                    auto_process_service=_NoopAutoProcessServiceStub(),
                 ),
             )
         )
@@ -415,5 +424,5 @@ def test_update_edit_upload_process_options_returns_409_when_not_running(
 
     assert response.status_code == 409
     assert response.json()["detail"] == (
-        "編集中またはアップロード中の処理がないため変更できません"
+        "編集・アップロードが実行されていないため変更できません"
     )

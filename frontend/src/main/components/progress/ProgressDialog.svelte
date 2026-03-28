@@ -150,7 +150,7 @@
   // 完了サマリー
   $: totalItemsProcessed = taskList.reduce((sum, t) => sum + t.completed, 0);
   $: sleepAfterUploadEnabled = editUploadStatus?.sleepAfterUploadEffective ?? false;
-  $: sleepToggleDisabled = optionLoading || optionSaving || !editUploadStatus || allFinished;
+  $: sleepToggleDisabled = optionLoading || optionSaving || !editUploadStatus;
 
   $: if (isOpen) {
     ensureStream();
@@ -395,7 +395,12 @@
     };
     tasks = { ...tasks, [taskId]: task };
     startElapsedTimer(taskId);
-    if (isOpen && !optionSaving && (!editUploadStatus || editUploadStatus.state !== 'running')) {
+    if (
+      isOpen &&
+      !optionSaving &&
+      !optionLoading &&
+      (!editUploadStatus || editUploadStatus.state !== 'running')
+    ) {
       void loadEditUploadStatus();
     }
   }

@@ -25,6 +25,7 @@ from .battle_events import (
 from .process_events import (
     AutoProcessPending,
     AutoProcessStarted,
+    AutoSleepCancelled,
     AutoSleepPending,
     AutoSleepStarted,
     EditUploadCompleted,
@@ -72,6 +73,7 @@ __all__ = [
     "AutoProcessStarted",
     "AutoSleepPending",
     "AutoSleepStarted",
+    "AutoSleepCancelled",
     # Speech events
     "SpeechRecognizerListening",
     "SpeechRecognized",

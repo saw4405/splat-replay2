@@ -54,3 +54,10 @@ class AutoSleepStarted(DomainEvent):
     """自動スリープが実際に開始されたことを通知するイベント。"""
 
     EVENT_TYPE = "domain.process.sleep.started"
+
+
+@dataclass(frozen=True, kw_only=True)
+class AutoSleepCancelled(DomainEvent):
+    """自動スリープがキャンセルされたことを通知するイベント。"""
+
+    EVENT_TYPE = "domain.process.sleep.cancelled"

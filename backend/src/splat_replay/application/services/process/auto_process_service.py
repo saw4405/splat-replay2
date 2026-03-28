@@ -21,6 +21,7 @@ from splat_replay.application.use_cases.assets.start_edit_upload import (
 from splat_replay.domain.events import (
     AutoProcessPending,
     AutoProcessStarted,
+    AutoSleepCancelled,
     AutoSleepPending,
     AutoSleepStarted,
     EditUploadCompleted,
@@ -59,6 +60,8 @@ class AutoProcessService:
         self._is_auto_processing = False
         self._auto_sleep_allowed = False
         self._pending_sleep_after_upload: bool | None = None
+        # ユーザーがトグルで明示的にスリープをキャンセルしたかどうか
+        self._sleep_cancelled_by_user = False
 
         # イベント購読
         # Note: EventBusPortの実装によってはsubscribeメソッドのシグネチャが異なる可能性があるが、
@@ -150,6 +153,9 @@ class AutoProcessService:
             raise RuntimeError("自動処理が既に実行中です")
 
         self._auto_sleep_allowed = False
+        self._sleep_cancelled_by_user = (
+            False  # 新規プロセスではキャンセル状態をリセット
+        )
         self._is_auto_processing = True
 
         try:
@@ -163,6 +169,10 @@ class AutoProcessService:
 
         self.logger.info("自動編集・アップロードを開始します。")
         self.event_bus.publish_domain_event(AutoProcessStarted())
+
+    def on_new_execution(self) -> None:
+        """新規プロセス開始時にユーザーキャンセルフラグをリセットする。"""
+        self._sleep_cancelled_by_user = False
 
     async def handle_edit_upload_completed(self, event_obj: object) -> None:
         """編集・アップロード完了時の処理。"""
@@ -188,10 +198,15 @@ class AutoProcessService:
             self._is_auto_processing = False
 
         if trigger == "manual":
-            self._auto_sleep_allowed = sleep_after_upload
-            self._pending_sleep_after_upload = (
-                sleep_after_upload if sleep_after_upload else None
-            )
+            if self._sleep_cancelled_by_user:
+                # ユーザーがトグルでスリープをキャンセルしたため許可しない
+                self._auto_sleep_allowed = False
+                self._pending_sleep_after_upload = None
+            else:
+                self._auto_sleep_allowed = sleep_after_upload
+                self._pending_sleep_after_upload = (
+                    sleep_after_upload if sleep_after_upload else None
+                )
             return
 
         if not success:
@@ -199,12 +214,13 @@ class AutoProcessService:
                 "自動編集・アップロードが失敗しました。スリープ設定が有効なら通知します。"
             )
 
-        if not sleep_after_upload:
+        if self._sleep_cancelled_by_user or not sleep_after_upload:
             self._auto_sleep_allowed = False
             self._pending_sleep_after_upload = None
-            self.logger.info(
-                "自動スリープしない設定のため、スリープ通知をスキップします。"
-            )
+            if not self._sleep_cancelled_by_user:
+                self.logger.info(
+                    "自動スリープしない設定のため、スリープ通知をスキップします。"
+                )
             return
 
         self._auto_sleep_allowed = True
@@ -222,12 +238,48 @@ class AutoProcessService:
 
     def handle_auto_sleep_pending(self, event_obj: object) -> None:
         """自動スリープの開始待ちを受け取ったときの処理。"""
+        if self._sleep_cancelled_by_user:
+            # ユーザーがトグルでスリープをキャンセルしたため許可しない
+            self._auto_sleep_allowed = False
+            self._pending_sleep_after_upload = None
+            return
         self._auto_sleep_allowed = True
         ev = cast(Any, event_obj)
         if hasattr(ev, "payload") and isinstance(ev.payload, dict):
             sleep_after_upload = ev.payload.get("sleep_after_upload")
             if isinstance(sleep_after_upload, bool):
                 self._pending_sleep_after_upload = sleep_after_upload
+
+    def cancel_pending_sleep(self) -> None:
+        """ユーザー操作によるスリープキャンセル。自動スリープの予約を破棄する。"""
+        self._auto_sleep_allowed = False
+        self._pending_sleep_after_upload = None
+        self._sleep_cancelled_by_user = True
+        self.event_bus.publish_domain_event(AutoSleepCancelled())
+        self.logger.info("自動スリープをキャンセルしました")
+
+    def reactivate_sleep(self) -> None:
+        """ユーザー操作によるスリープ再有効化。"""
+        self._sleep_cancelled_by_user = False
+        # プロセス完了後に再有効化した場合は通知を再送する
+        uc_state = self.start_edit_upload_uc.get_state()
+        effective = (
+            self.start_edit_upload_uc.get_sleep_after_upload_effective()
+        )
+        if uc_state in ("succeeded", "failed") and effective:
+            self._auto_sleep_allowed = True
+            self._pending_sleep_after_upload = effective
+            self.event_bus.publish_domain_event(
+                AutoSleepPending(
+                    timeout_seconds=15.0,
+                    message=(
+                        "編集・アップロードが完了しました。15秒後に自動スリープします。"
+                        "続けて作業する場合はキャンセルしてください。"
+                    ),
+                    sleep_after_upload=effective,
+                )
+            )
+            self.logger.info("自動スリープを再有効化しました")
 
     async def start_auto_sleep(self) -> None:
         """自動スリープを開始する。"""

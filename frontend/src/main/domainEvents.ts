@@ -30,6 +30,7 @@ export type DomainEventType =
   | 'domain.process.started'
   | 'domain.process.sleep.pending'
   | 'domain.process.sleep.started'
+  | 'domain.process.sleep.cancelled'
   | 'domain.speech.listening'
   | 'domain.speech.recognized';
 
