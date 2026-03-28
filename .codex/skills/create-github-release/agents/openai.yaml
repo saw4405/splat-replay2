@@ -1,0 +1,4 @@
+interface:
+  display_name: "GitHub Release"
+  short_description: "GitHub Release の下書き作成、zip 添付、承認実行を支援"
+  default_prompt: "Use $create-github-release to prepare and create a draft GitHub release for this repository."
