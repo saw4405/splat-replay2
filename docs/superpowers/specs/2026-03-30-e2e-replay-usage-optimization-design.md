@@ -23,6 +23,7 @@
 - 録画済み asset が存在すれば成立する E2E は filesystem seed で前提を作り、動画再生を不要にする
 - E2E の責務境界を整理し、同じ失敗パターンや同じ UI 価値を重複検証しているケースを削減する
 - Playwright の test isolation を損なわずに、失敗切り分けしやすい構成へ寄せる
+- `docs/e2e_replay_test.md` の実行方法・責務境界・spec 構成を実装と一致させる
 
 ## 非目的
 
@@ -296,6 +297,7 @@ recorded asset seed helper は、fixture から E2E temp storage へコピーま
   - 削除
 - `docs/e2e_replay_test.md`
   - replay 前提と seed 前提の責務を更新
+  - 分割後 spec 名、実行入口、動画を使うケースと使わないケースの説明を更新
 - `Taskfile.yml`
   - spec 分割に伴う補助 task が必要なら更新
 
