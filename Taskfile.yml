@@ -235,11 +235,23 @@ tasks:
       - task: import-lint
       - task: test
 
+  fix:
+    desc: Auto-fix format and lint issues (backend + frontend)
+    cmds:
+      - task: lint:fix
+      - task: format
+
   lint:
     desc: Lint all code (backend + frontend)
     cmds:
       - task: lint:backend
       - task: lint:frontend
+
+  lint:fix:
+    desc: Lint all code with auto-fix (backend + frontend)
+    cmds:
+      - task: lint:backend:fix
+      - task: lint:frontend:fix
 
   lint:backend:
     desc: Lint backend code

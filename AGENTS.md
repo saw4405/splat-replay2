@@ -52,6 +52,7 @@
 
 ### 一括チェック
 
+- `task.exe fix`（lint 自動修正 / format）
 - `task.exe format`（backend + frontend）
 - `task.exe lint`（backend + frontend）
 - `task.exe type-check`（backend + frontend）
@@ -69,7 +70,7 @@
 
 ## ワークフロー（推奨）
 
-- 日常開発: `task.exe format` → `task.exe lint` → `task.exe type-check`
+- 日常開発: `task.exe fix` → `task.exe verify`
 - 振る舞い変更時: `task.exe test` を実行し、失敗を残したまま完了しない。
 - PR 前: `task.exe verify` を実行して全チェックを通す。
 
