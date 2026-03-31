@@ -13,6 +13,11 @@ import {
   type ReplayAsset,
   type ReplayScenario,
 } from './e2eEnv';
+import {
+  seedRecordedVideos,
+  type RecordedSeedSource,
+  type SeededRecordedVideo,
+} from './recordedSeed';
 
 type RecordedVideoItemValues = {
   game_mode: string;
@@ -439,6 +444,22 @@ export function prepareReplayAssetWithScenario(
 
 export function switchReplayAsset(environment: E2EEnvironment, asset: ReplayAsset): void {
   configureReplayAsset(environment, materializeReplayAsset(environment, asset));
+}
+
+export function prepareRecordedSeedAssets(
+  environment: E2EEnvironment,
+  sources: RecordedSeedSource[]
+): SeededRecordedVideo[] {
+  resetE2EState(environment);
+  return seedRecordedVideos(environment, sources);
+}
+
+export function prepareRecordedSeedAsset(
+  environment: E2EEnvironment,
+  source: RecordedSeedSource
+): SeededRecordedVideo {
+  const [seeded] = prepareRecordedSeedAssets(environment, [source]);
+  return seeded;
 }
 
 export function expectedSidecarMetadata(asset: ReplayAsset) {

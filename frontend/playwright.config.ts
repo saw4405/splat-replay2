@@ -33,10 +33,11 @@ export default defineConfig({
       env: {
         ...process.env,
         SPLAT_REPLAY_SETTINGS_FILE: e2eEnvironment.settingsFile,
+        SPLAT_REPLAY_E2E_NOOP_UPLOAD: '1',
       },
       timeout: 180_000,
       url: 'http://127.0.0.1:8000/api/settings',
-      reuseExistingServer: !process.env.CI,
+      reuseExistingServer: false,
     },
     {
       command: 'npm run dev -- --host 127.0.0.1',

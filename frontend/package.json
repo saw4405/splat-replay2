@@ -6,6 +6,7 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
+    "pretest:e2e": "node ./scripts/ensure-e2e-assets.js",
     "test": "node --max-old-space-size=4096 ./node_modules/vitest/vitest.mjs run",
     "test:coverage": "node --max-old-space-size=4096 ./node_modules/vitest/vitest.mjs run --coverage",
     "test:logic": "node --max-old-space-size=4096 ./node_modules/vitest/vitest.mjs run --exclude '**/components/**' --include 'src/**/*.test.ts'",

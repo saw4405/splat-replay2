@@ -3,6 +3,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import RecordedDataList from './RecordedDataList.svelte';
 import type { RecordedVideo } from '../../api/types';
 import { clearMetadataOptionsCache } from '../../api/metadata';
+import type { RawRecordedVideo } from '../../api/mappers';
 
 describe('RecordedDataList', () => {
   const mockVideos: RecordedVideo[] = [
@@ -64,7 +65,49 @@ describe('RecordedDataList', () => {
     },
   ];
 
+  const metadataOptionsResponse = {
+    game_modes: [],
+    matches: [],
+    rules: [
+      { key: 'nawabari', label: 'ナワバリバトル' },
+      { key: 'area', label: 'ガチエリア' },
+    ],
+    stages: [],
+    judgements: [],
+  };
+
   let fetchMock: ReturnType<typeof vi.fn>;
+
+  function toRawRecordedVideo(video: RecordedVideo): RawRecordedVideo {
+    return {
+      id: video.id,
+      path: video.path,
+      filename: video.filename,
+      started_at: video.startedAt,
+      game_mode: video.gameMode,
+      match: video.match,
+      rule: video.rule,
+      stage: video.stage,
+      rate: video.rate,
+      judgement: video.judgement,
+      kill: video.kill,
+      death: video.death,
+      special: video.special,
+      gold_medals: video.goldMedals,
+      silver_medals: video.silverMedals,
+      allies: video.allies,
+      enemies: video.enemies,
+      hazard: video.hazard,
+      golden_egg: video.goldenEgg,
+      power_egg: video.powerEgg,
+      rescue: video.rescue,
+      rescued: video.rescued,
+      has_subtitle: video.hasSubtitles,
+      has_thumbnail: video.hasThumbnail,
+      duration_seconds: video.durationSeconds,
+      size_bytes: video.sizeBytes,
+    };
+  }
 
   beforeEach(() => {
     // メタデータオプションのキャッシュをクリア
@@ -180,6 +223,159 @@ describe('RecordedDataList', () => {
       // 確認メッセージを確認
       expect(screen.getByText(/test_video_1\.mp4/)).toBeInTheDocument();
       expect(screen.getByText(/削除してもよろしいですか/)).toBeInTheDocument();
+    });
+  });
+  describe('保存・削除の振る舞い', () => {
+    it('録画済みメタデータは保存失敗後に修正して再保存できる', async () => {
+      const editableVideo: RecordedVideo = {
+        ...mockVideos[0],
+        id: mockVideos[0].path,
+      };
+      let metadataSaveAttempt = 0;
+      fetchMock.mockImplementation(async (input: string | URL | Request, init?: RequestInit) => {
+        const url = input.toString();
+
+        if (url.includes('/api/metadata/options')) {
+          return new Response(JSON.stringify(metadataOptionsResponse), {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          });
+        }
+
+        if (url.includes('/api/assets/recorded/') && url.includes('/metadata')) {
+          metadataSaveAttempt += 1;
+
+          if (metadataSaveAttempt === 1) {
+            return new Response(
+              JSON.stringify({
+                error: 'Validation Error',
+                detail: 'Kill count must be non-negative',
+              }),
+              {
+                status: 400,
+                headers: { 'Content-Type': 'application/json' },
+              }
+            );
+          }
+
+          expect(init?.method).toBe('PATCH');
+          return new Response(
+            JSON.stringify(
+              toRawRecordedVideo({
+                ...editableVideo,
+                kill: 10,
+              })
+            ),
+            {
+              status: 200,
+              headers: { 'Content-Type': 'application/json' },
+            }
+          );
+        }
+
+        throw new Error(`Unexpected fetch: ${url}`);
+      });
+
+      render(RecordedDataList, {
+        props: { videos: [structuredClone(editableVideo)] },
+      });
+
+      await fireEvent.click(screen.getByTestId('recorded-video-metadata-button'));
+      await waitFor(() => {
+        expect(screen.getByRole('dialog', { name: 'メタデータ編集' })).toBeInTheDocument();
+      });
+
+      const killInput = screen.getByLabelText('キル数') as HTMLInputElement;
+      await fireEvent.input(killInput, { target: { value: '-5' } });
+      await fireEvent.click(screen.getByRole('button', { name: '保存' }));
+
+      await waitFor(() => {
+        expect(screen.getByRole('dialog', { name: 'エラー' })).toHaveTextContent(
+          'Kill count must be non-negative'
+        );
+      });
+
+      await fireEvent.click(
+        screen.getByRole('dialog', { name: 'エラー' }).querySelector('button')!
+      );
+
+      await fireEvent.click(screen.getByTestId('recorded-video-metadata-button'));
+      await waitFor(() => {
+        expect(screen.getByRole('dialog', { name: 'メタデータ編集' })).toBeInTheDocument();
+      });
+      await fireEvent.input(screen.getByLabelText('キル数'), { target: { value: '10' } });
+      await fireEvent.click(screen.getByRole('button', { name: '保存' }));
+
+      await waitFor(() => {
+        expect(screen.queryByRole('dialog', { name: 'メタデータ編集' })).not.toBeInTheDocument();
+      });
+      await waitFor(() => {
+        expect(screen.getByTestId('recorded-video-kill')).toHaveTextContent('10');
+      });
+      expect(metadataSaveAttempt).toBe(2);
+    });
+
+    it('削除成功時は refresh を通知する', async () => {
+      const refreshHandler = vi.fn();
+      fetchMock.mockImplementation(async (input: string | URL | Request, init?: RequestInit) => {
+        const url = input.toString();
+        if (url.includes('/api/assets/recorded/') && init?.method === 'DELETE') {
+          return new Response(null, { status: 204 });
+        }
+
+        throw new Error(`Unexpected fetch: ${url}`);
+      });
+
+      const { component } = render(RecordedDataList, {
+        props: { videos: [structuredClone(mockVideos[0])] },
+      });
+      component.$on('refresh', refreshHandler);
+
+      await fireEvent.click(screen.getByRole('button', { name: '動画を削除' }));
+      await waitFor(() => {
+        expect(screen.getByRole('dialog', { name: '確認' })).toBeInTheDocument();
+      });
+
+      await fireEvent.click(screen.getByRole('button', { name: '削除' }));
+
+      await waitFor(() => {
+        expect(refreshHandler).toHaveBeenCalledTimes(1);
+      });
+    });
+
+    it('削除失敗時はエラーを表示し refresh しない', async () => {
+      const refreshHandler = vi.fn();
+      fetchMock.mockImplementation(async (input: string | URL | Request, init?: RequestInit) => {
+        const url = input.toString();
+        if (url.includes('/api/assets/recorded/') && init?.method === 'DELETE') {
+          return new Response('Failed to delete recorded video', {
+            status: 500,
+            headers: { 'Content-Type': 'text/plain' },
+          });
+        }
+
+        throw new Error(`Unexpected fetch: ${url}`);
+      });
+
+      const { component } = render(RecordedDataList, {
+        props: { videos: [structuredClone(mockVideos[0])] },
+      });
+      component.$on('refresh', refreshHandler);
+
+      await fireEvent.click(screen.getByRole('button', { name: '動画を削除' }));
+      await waitFor(() => {
+        expect(screen.getByRole('dialog', { name: '確認' })).toBeInTheDocument();
+      });
+
+      await fireEvent.click(screen.getByRole('button', { name: '削除' }));
+
+      await waitFor(() => {
+        expect(screen.getByRole('dialog', { name: 'エラー' })).toHaveTextContent(
+          'Failed to delete recorded video'
+        );
+      });
+      expect(refreshHandler).not.toHaveBeenCalled();
+      expect(screen.getByTestId('recorded-video-item')).toBeInTheDocument();
     });
   });
 });

@@ -18,6 +18,7 @@ from splat_replay.application.interfaces import (
     CapturePort,
     ClockPort,
     DomainEventPublisher,
+    EnvironmentPort,
     EventBusPort,
     EventPublisher,
     FramePublisher,
@@ -78,6 +79,7 @@ from splat_replay.infrastructure import (
     WeaponRecognitionAdapter,
     YouTubeClient,
 )
+from splat_replay.infrastructure.adapters.upload import NoOpUploadPort
 from splat_replay.infrastructure.config import load_settings_from_toml
 from splat_replay.infrastructure.filesystem import paths
 from splat_replay.infrastructure.runtime import AppRuntime
@@ -88,6 +90,10 @@ from splat_replay.infrastructure.test_input import (
     ConfiguredReplayBootstrapResolver,
 )
 from structlog.stdlib import BoundLogger
+
+
+def _is_e2e_noop_upload_enabled(environment: EnvironmentPort) -> bool:
+    return environment.get("SPLAT_REPLAY_E2E_NOOP_UPLOAD", "0") == "1"
 
 
 def register_adapters(container: punq.Container) -> None:
@@ -128,13 +134,17 @@ def register_adapters(container: punq.Container) -> None:
     container.register(PowerPort, SystemPower)
     container.register(OCRPort, TesseractOCR)
     container.register(BattleMedalRecognizerPort, BattleMedalRecognizerAdapter)
-    container.register(UploadPort, YouTubeClient)
+    environment = container.resolve(EnvironmentPort)
+    if _is_e2e_noop_upload_enabled(environment):
+        container.register(UploadPort, NoOpUploadPort)
+    else:
+        container.register(UploadPort, YouTubeClient)
     container.register(AuthenticatedClientPort, YouTubeClient)
     container.register(SystemCommandPort, SystemCommandAdapter)
 
     # SetupStateRepository の登録
     def _setup_state_repo_factory() -> SetupStateRepository:
-        state_file = paths.CONFIG_DIR / "installation_state.toml"
+        state_file = paths.SETTINGS_FILE.parent / "installation_state.toml"
         return SetupStateFileAdapter(state_file)
 
     container.register(SetupStateRepository, factory=_setup_state_repo_factory)

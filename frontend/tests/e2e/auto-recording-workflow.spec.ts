@@ -10,6 +10,7 @@ import {
   gotoMain,
   openRecordedVideos,
   prepareReplayAsset,
+  recordableReplayAssets,
   replayAssets,
   waitForRecordedVideoCount,
   waitForRecordingLifecycle,
@@ -22,6 +23,42 @@ const e2eEnvironment = environment();
 const earlyAbortAsset = replayAssets(e2eEnvironment).find(
   (asset) => expectedRecordedVideoCount(asset) === 0
 );
+
+async function stopAutoRecordingForNextSpec(): Promise<void> {
+  const deadline = Date.now() + 10_000;
+
+  while (Date.now() < deadline) {
+    try {
+      const stateResponse = await fetch('http://127.0.0.1:8000/api/recorder/state');
+      if (stateResponse.ok) {
+        const body = (await stateResponse.json()) as { state?: string | null };
+        if (body.state === 'STOPPED') {
+          return;
+        }
+      }
+    } catch {
+      return;
+    }
+
+    try {
+      await fetch('http://127.0.0.1:8000/api/recorder/stop', { method: 'POST' });
+    } catch {
+      return;
+    }
+
+    try {
+      await fetch('http://127.0.0.1:8000/api/recorder/disable-auto', { method: 'POST' });
+    } catch {
+      return;
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, 500));
+  }
+}
+
+test.afterAll(async () => {
+  await stopAutoRecordingForNextSpec();
+});
 
 test('auto-recording early abort resets metadata and does not save recording', async ({ page }) => {
   if (!earlyAbortAsset) {
@@ -51,21 +88,15 @@ test('auto-recording early abort resets metadata and does not save recording', a
   await expect(page.getByTestId('recorded-video-item')).toHaveCount(0);
 });
 
-for (const replayAsset of replayAssets(e2eEnvironment)) {
+for (const replayAsset of recordableReplayAssets(e2eEnvironment)) {
   test(`auto-recording-workflow [${replayAsset.name}]`, async ({ page }) => {
     prepareReplayAsset(e2eEnvironment, replayAsset);
     const expectedRecordedCount = expectedRecordedVideoCount(replayAsset);
 
     await gotoMain(page);
     await ensureAutoRecordingEnabled(page);
-    if (expectedRecordedCount === 0) {
-      await waitForVideoPreviewReady(page);
-      await expect(page.getByTestId('video-preview-status')).toHaveText('Stopped', {
-        timeout: 300_000,
-      });
-    } else {
-      await waitForRecordingLifecycle(page);
-    }
+    await waitForRecordingLifecycle(page);
+    await waitForVideoPreviewReady(page);
     await waitForRecordedVideoCount(page, expectedRecordedCount);
     await gotoMain(page);
     await openRecordedVideos(page);
@@ -73,11 +104,6 @@ for (const replayAsset of replayAssets(e2eEnvironment)) {
     await expect(page.getByTestId('recorded-count')).toHaveText(String(expectedRecordedCount), {
       timeout: 300_000,
     });
-
-    if (expectedRecordedCount === 0) {
-      await expect(page.getByTestId('recorded-video-item')).toHaveCount(0);
-      return;
-    }
 
     const recordedVideo = await firstRecordedVideo(page);
     const expectedMetadata = expectedSidecarMetadata(replayAsset);

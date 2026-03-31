@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import threading
 from pathlib import Path
 
 import cv2
@@ -12,12 +13,13 @@ from splat_replay.infrastructure.test_input import resolve_video_input_path
 
 
 class VideoFileCapture(CapturePort):
-    """動画ファイルからフレームを順次供給する。"""
+    """動画ファイルからフレームを取得する。"""
 
     def __init__(self, source_path: Path, logger: BoundLogger) -> None:
         self._source_path = source_path
         self._logger = logger
         self._selected_path = resolve_video_input_path(source_path)
+        self._lock = threading.RLock()
         self._capture: cv2.VideoCapture | None = None
         self._exhausted = False
         self._current_time_seconds: float | None = None
@@ -29,43 +31,46 @@ class VideoFileCapture(CapturePort):
         return self._selected_path
 
     def setup(self) -> None:
-        self.teardown()
-        self._selected_path = resolve_video_input_path(self._source_path)
-        capture = cv2.VideoCapture(str(self._selected_path))
-        if not capture.isOpened():
-            capture.release()
-            raise RuntimeError(
-                f"動画ファイルを開けませんでした: {self._selected_path}"
+        with self._lock:
+            self.teardown()
+            self._selected_path = resolve_video_input_path(self._source_path)
+            capture = cv2.VideoCapture(str(self._selected_path))
+            if not capture.isOpened():
+                capture.release()
+                raise RuntimeError(
+                    f"動画ファイルを開けませんでした: {self._selected_path}"
+                )
+            self._capture = capture
+            self._exhausted = False
+            self._fps = max(0.0, float(capture.get(cv2.CAP_PROP_FPS) or 0.0))
+            self._current_time_seconds = 0.0
+            self._logger.info(
+                "動画ファイル入力を開始しました",
+                video_path=str(self._selected_path),
+                frame_stride=self._frame_stride,
             )
-        self._capture = capture
-        self._exhausted = False
-        self._fps = max(0.0, float(capture.get(cv2.CAP_PROP_FPS) or 0.0))
-        self._current_time_seconds = 0.0
-        self._logger.info(
-            "動画ファイル入力を開始しました",
-            video_path=str(self._selected_path),
-            frame_stride=self._frame_stride,
-        )
 
     def capture(self) -> Frame | None:
-        if self._capture is None or self._exhausted:
-            return None
+        with self._lock:
+            if self._capture is None or self._exhausted:
+                return None
 
-        success, frame = self._capture.read()
-        if not success or frame is None:
-            self._exhausted = True
-            self._logger.info(
-                "動画ファイル入力が EOF に到達しました",
-                video_path=str(self._selected_path),
-            )
-            return None
+            success, frame = self._capture.read()
+            if not success or frame is None:
+                self._exhausted = True
+                self._logger.info(
+                    "動画ファイル入力が EOF に到達しました",
+                    video_path=str(self._selected_path),
+                )
+                return None
 
-        self._current_time_seconds = self._resolve_current_time_seconds()
-        self._skip_frames()
-        return as_frame(frame)
+            self._current_time_seconds = self._resolve_current_time_seconds()
+            self._skip_frames()
+            return as_frame(frame)
 
     def current_time_seconds(self) -> float | None:
-        return self._current_time_seconds
+        with self._lock:
+            return self._current_time_seconds
 
     def _resolve_current_time_seconds(self) -> float:
         if self._capture is None:
@@ -85,12 +90,13 @@ class VideoFileCapture(CapturePort):
         return self._current_time_seconds or 0.0
 
     def teardown(self) -> None:
-        if self._capture is not None:
-            self._capture.release()
-            self._capture = None
-        self._exhausted = False
-        self._current_time_seconds = None
-        self._fps = 0.0
+        with self._lock:
+            if self._capture is not None:
+                self._capture.release()
+                self._capture = None
+            self._exhausted = False
+            self._current_time_seconds = None
+            self._fps = 0.0
 
     @staticmethod
     def _resolve_frame_stride() -> int:
