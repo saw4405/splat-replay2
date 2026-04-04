@@ -73,8 +73,8 @@ def start_backend_server(
             app_import_path,
             host=host,
             port=port,
-            log_level="debug",  # infoからdebugに変更
-            access_log=True,  # Falseからtrueに変更
+            log_level="info",
+            access_log=False,
             factory=True,
         )
     except Exception as e:
@@ -251,7 +251,7 @@ class SplatReplayWebViewApp:
             webview.start(debug=False, private_mode=False)
 
         except Exception as e:
-            self.logger.error("WebView error", error=str(e))
+            self.logger.error("WebView error", error=str(e), exc_info=True)
             raise
         finally:
             # クリーンアップ

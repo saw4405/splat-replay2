@@ -1,0 +1,4 @@
+interface:
+  display_name: "Test Ops"
+  short_description: "変更分類から必要なTaskfile検証入口と実行順序を決める"
+  default_prompt: "変更内容を伝えるので、必要な Taskfile の検証入口を選び、最小限の確認順序を提案してください。"

@@ -42,8 +42,8 @@ export const progressInfo = derived(setupState, ($state): ProgressInfo | null =>
 
   const steps = [
     'hardware_check',
-    'obs_setup',
     'ffmpeg_setup',
+    'obs_setup',
     'tesseract_setup',
     'font_installation',
     'transcription_setup',

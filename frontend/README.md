@@ -1,163 +1,108 @@
-# Splat Replay Web GUI
+# Splat Replay Frontend
 
-Web ベースの GUI フロントエンド (Svelte + FastAPI)
+Splat Replay の Web GUI フロントエンドです。Svelte 4 / Vite / TypeScript を使って実装しています。
 
-## 機能
+この README では、frontend のローカル開発・ビルド・検証だけを扱います。リポジトリ全体のセットアップや backend を含む開発フローは [`docs/DEVELOPMENT.md`](../docs/DEVELOPMENT.md) を参照してください。
 
-- 自動録画機能の開始
-- リアルタイムプレビュー映像表示 (WebSocket 経由)
-- モダンな Web インターフェース
+## この README の責務
 
-## 開発環境のセットアップ
+- frontend の依存関係インストール
+- frontend 開発サーバーの起動
+- frontend のビルド・検証・テスト
+- backend 連携の前提条件の共有
 
-### 前提条件
+## フロントエンドの役割
 
-- Python 3.13+
-- Node.js 18+
-- uv (Python パッケージマネージャー)
+- 録画や設定変更の UI を提供する
+- SSE と backend API を通して状態更新を受け取り、制御リクエストを送る
+- 仮想カメラまたは preview-frame API を使ってプレビュー映像を表示する
 
-### 依存関係のインストール
+## 前提条件
 
-```bash
-# Pythonの依存関係
-uv sync
+- Node.js 24.12.0+
 
-# フロントエンドの依存関係
+補足:
+
+- Node.js の要件は [`frontend/package.json`](./package.json) の `engines.node` に合わせています。
+- backend を含む統合動作確認には、別途 Python / uv を含む全体セットアップが必要です。詳細は [`docs/DEVELOPMENT.md`](../docs/DEVELOPMENT.md) を参照してください。
+
+## セットアップ
+
+```powershell
 cd frontend
 npm install
-cd ..
 ```
 
-## 開発サーバーの起動
+リポジトリ全体をまとめてセットアップする場合は、ルートで `task.exe install` を使用してください。手順全体は [`docs/DEVELOPMENT.md`](../docs/DEVELOPMENT.md) にあります。
 
-### フロントエンド + バックエンドを同時起動 (推奨)
+## 開発サーバー
 
-```bash
-uv run splat-replay web --dev
-```
+### frontend のみ起動する
 
-これにより以下が起動します:
-
-- フロントエンド開発サーバー: http://localhost:5173
-- バックエンド API サーバー: http://localhost:8000
-- API ドキュメント: http://localhost:8000/docs
-
-### 個別に起動
-
-#### バックエンドのみ
-
-```bash
-uv run splat-replay web
-```
-
-#### フロントエンドのみ
-
-```bash
+```powershell
 cd frontend
 npm run dev
 ```
 
-## 使用方法
+通常は `http://localhost:5173` で Vite 開発サーバーが起動します。
 
-1. 開発サーバーを起動
-2. ブラウザで http://localhost:5173 にアクセス
-3. 「録画開始」ボタンをクリック
-4. プレビュー映像が表示されます
+### backend 連携が必要な場合
 
-## アーキテクチャ
+この frontend は、既定で `http://localhost:8000` の backend API / SSE / preview エンドポイントを前提に動作します。録画開始、設定保存、プレビュー確認など backend 依存の機能を試す場合は、リポジトリルートから `task.exe dev` または `uv run splat-replay web --dev` を使って全体を起動してください。詳細は [`docs/DEVELOPMENT.md`](../docs/DEVELOPMENT.md) を参照してください。
 
-### フロントエンド
+## 主要コマンド
 
-- **フレームワーク**: Svelte 5
-- **ビルドツール**: Vite
-- **言語**: TypeScript
-- **通信**: WebSocket (プレビュー映像), REST API (制御)
+```powershell
+cd frontend
 
-### バックエンド
-
-- **フレームワーク**: FastAPI
-- **サーバー**: Uvicorn
-- **通信**: WebSocket (フレーム配信), REST API (エンドポイント)
-
-### 通信フロー
-
+npm run dev
+npm run build
+npm run preview
+npm run verify
+npm run test:logic
+npm run test:component
+npm run test:integration
+npm run test:unit
+npm run test:e2e
 ```
-┌─────────────┐      WebSocket      ┌──────────────┐
-│             │◄────────────────────┤              │
-│  Frontend   │                     │   Backend    │
-│  (Svelte)   │      REST API       │  (FastAPI)   │
-│             ├────────────────────►│              │
-└─────────────┘                     └──────────────┘
-                                           │
-                                           ▼
-                                    ┌──────────────┐
-                                    │ AutoRecorder │
-                                    │   Service    │
-                                    └──────────────┘
+
+補足:
+
+- `npm run verify` は `format:check + lint + type-check + svelte-check` をまとめて実行します。
+- テスト選定の基準は [`docs/test_strategy.md`](../docs/test_strategy.md) を参照してください。
+
+## ビルド
+
+```powershell
+cd frontend
+npm run build
 ```
+
+ビルド成果物の確認だけなら、続けて `npm run preview` を使えます。backend からの配信を含む確認は [`docs/DEVELOPMENT.md`](../docs/DEVELOPMENT.md) を参照してください。
 
 ## デバッグ
 
-### VS Code デバッグ設定
-
-`.vscode/launch.json`に以下を追加:
-
-```json
-{
-  "type": "python",
-  "request": "launch",
-  "name": "Web GUI Dev Server",
-  "module": "splat_replay.cli",
-  "args": ["web", "--dev"],
-  "console": "integratedTerminal"
-}
-```
-
-### ブラウザ開発者ツール
-
-- Chrome/Edge: F12
-- WebSocket メッセージを確認: Network タブ → WS
+- ブラウザ開発者ツールは Chrome / Edge の `F12`
+- Network タブで `/api/events/*` や `/api/recorder/preview-frame` を確認可能
+- API 呼び出し失敗時は Console と Network を合わせて確認
 
 ## トラブルシューティング
 
-### ポートが既に使用されている
+### `5173` 番ポートが既に使用されている
 
-```bash
-# Windowsでポートを確認
+```powershell
 netstat -ano | findstr :5173
-netstat -ano | findstr :8000
-
-# プロセスを終了
 taskkill /PID <プロセスID> /F
 ```
 
-### npm install が失敗する
+### `npm install` が失敗する
 
-```bash
+```powershell
 cd frontend
-rm -rf node_modules package-lock.json
+Remove-Item -Recurse -Force node_modules, package-lock.json
 npm install
 ```
 
-### バックエンドが起動しない
+### API やプレビューに接続できない
 
-```bash
-# 依存関係を再インストール
-uv sync --reinstall
-```
-
-## 本番ビルド
-
-```bash
-# フロントエンドをビルド
-cd frontend
-npm run build
-cd ..
-
-# バックエンドのみ起動 (ビルド済みフロントエンドを配信)
-uv run splat-replay web
-```
-
-## ライセンス
-
-プロジェクトのライセンスに準じます
+backend が起動していない可能性があります。frontend 単体の `npm run dev` では backend は起動しません。統合起動の手順は [`docs/DEVELOPMENT.md`](../docs/DEVELOPMENT.md) を参照してください。

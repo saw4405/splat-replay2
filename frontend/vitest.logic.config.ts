@@ -5,7 +5,8 @@ export default mergeConfig(
   baseVitestConfig,
   defineConfig({
     test: {
-      include: ['src/**/*.{test,component.test,integration.test}.ts'],
+      include: ['src/**/*.test.ts'],
+      exclude: ['src/**/*.component.test.ts', 'src/**/*.integration.test.ts'],
     },
   })
 );

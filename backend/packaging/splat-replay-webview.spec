@@ -16,6 +16,10 @@ dist_root = repo_root / 'dist'
 # データファイルを収集
 import certifi
 
+pythonnet_runtime_dir = (
+    backend_root / '.venv' / 'Lib' / 'site-packages' / 'pythonnet' / 'runtime'
+)
+
 datas = [
     # フロントエンドdist（_internal内に配置）
     (str(repo_root / 'frontend' / 'dist'), 'frontend/dist'),
@@ -23,7 +27,11 @@ datas = [
     (certifi.where(), 'certifi'),
 ]
 
-# 隠しインポート（動的インポートされるモジュール）
+# pythonnet ランタイム依存ファイルを明示同梱（Python.Runtime.deps.json 欠落対策）
+_pythonnet_deps_json = pythonnet_runtime_dir / 'Python.Runtime.deps.json'
+if _pythonnet_deps_json.exists():
+    datas.append((str(_pythonnet_deps_json), 'pythonnet/runtime'))
+
 hiddenimports = [
     'splat_replay.bootstrap.web_app',
     'splat_replay.interface.web.server',

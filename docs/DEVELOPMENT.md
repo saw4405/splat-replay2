@@ -1,173 +1,327 @@
 # 開発ガイド
 
-このドキュメントは、Splat Replay の開発を始めるための環境構築、テスト実行、品質確認の手順を説明します。
+このドキュメントは、Splat Replay の**開発環境構築・日常開発フロー・検証入口**をまとめた
+how-to です。特別な注記がない限り、コマンドはリポジトリルートで実行してください。
 
-## システム要件
+> Windows 環境では `task` ではなく **`task.exe`** を使用します。
 
-- **OS**: Windows 11
-- **Python**: 3.13 以上（`backend/.python-version` 記載バージョンに追随）
-- **uv**: Python パッケージマネージャー
-- **Node.js**: フロントエンドビルド用
-- **Task**: タスクランナー（ビルド・開発タスク管理）
+## この文書の責務
 
-## セットアップ
+この文書で扱う内容:
 
-### 依存関係のインストール
+- 開発に必要な前提ツール
+- 初回セットアップ
+- 開発サーバーの起動方法
+- 日常開発で使う主要コマンド
+- 完了前に通すべき検証入口
 
-```bash
-# すべての依存関係をインストール
+この文書で詳述しない内容:
+
+- プロジェクト概要: [`README.md`](../README.md)
+- アプリ利用者向けセットアップや外部ツール設定: [`docs/usage.md`](./usage.md)
+- テスト選定の SSOT: [`docs/test_strategy.md`](./test_strategy.md)
+- replay ベース E2E の詳細: [`docs/e2e_replay_test.md`](./e2e_replay_test.md)
+- 実装ルール・レイヤ責務: [`AGENTS.md`](../AGENTS.md) と各層の `AGENTS.md`
+
+## サポート環境と前提ツール
+
+- OS: Windows 11
+- シェル: PowerShell
+- Python: `3.13`
+  - 根拠: `backend/.python-version`, `backend/pyproject.toml`
+- Node.js: `>=24.12.0`
+  - 根拠: `frontend/package.json#engines`
+- 必須ツール:
+  - [uv](https://docs.astral.sh/uv/getting-started/installation/)
+  - [Task](https://taskfile.dev/installation/)
+  - Git
+- 条件付きで必要:
+  - [Git LFS](https://docs.github.com/en/repositories/working-with-files/managing-large-files/installing-git-large-file-storage)
+    - replay ベースの Playwright E2E を実行する場合に必要です。
+- 推奨:
+  - [pre-commit](https://pre-commit.com/)
+    - backend の dev dependency として Git hooks 設定に使います。追加のグローバル導入は不要です。
+
+以下は診断用の生コマンド例です。これらは Task 化対象外です。
+
+```bat
+python --version
+node --version
+uv --version
+task.exe --version
+git --version
+git lfs version
+```
+
+## 初回セットアップ
+
+### 推奨: まず `task.exe install` を実行する
+
+まずは推奨セットアップとして、次を実行してください。
+
+```bat
 task.exe install
 ```
 
-詳細は [ビルドガイド](./build_guide.md) を参照してください。
+このタスクは次を実行します。
 
-### 開発サーバーの起動
+- backend: `uv sync`
+- frontend: `npm install`
+- Git hooks の自動設定を試行
+- Git LFS の初期化を試行
 
-```bash
-# 開発モードで起動（ホットリロード有効）
+成功判定:
+
+- エラーなく終了する
+- backend の仮想環境と frontend の依存関係が解決される
+- Git hooks / Git LFS は利用可能な環境で自動設定される
+
+Git hooks や Git LFS を自動設定したくない場合は、次を使います。
+
+```bat
+task.exe install SKIP_HOOKS=1 SKIP_LFS=1
+```
+
+### Git hooks を有効化・再設定したい場合
+
+`task.exe install` は既定で Git hooks の設定を試行します。スキップした場合や、
+後からやり直したい場合は次を実行してください。
+
+```bat
+task.exe install:hooks
+```
+
+Git hooks では次を確認します。
+
+- `pre-commit` では backend の `ruff` / `ty` と、frontend の staged files 向け `prettier` / `eslint` を走らせます。
+- `pre-push` では frontend 全体の `type-check` / `svelte-check` と、backend の `import-lint` を走らせます。
+- `task.exe test` は自動では走りません。
+- 必須の品質確認は Git hooks ではなく、引き続き `task.exe verify` と CI で担保します。
+
+### workflow E2E を使う場合
+
+`frontend/tests/fixtures/e2e/**/*.mkv` は Git LFS 管理です。`task.exe install` は
+既定で Git LFS の初期化を試行します。初期化をやり直したい場合は次を実行してください。
+
+```bat
+task.exe install:lfs
+```
+
+E2E 実行時の補足:
+
+- `npm run test:e2e` の `pretest:e2e` で replay asset の実体化を確認します。
+- 必要なら内部的に `git lfs pull` を実行します。
+
+### 生成物を更新する場合
+
+OpenAPI や frontend の生成型を更新する必要がある場合だけ、手編集ではなく次を使います。
+
+```bat
+task.exe generate
+```
+
+対象:
+
+- `frontend/src/generated/openapi.json`
+- `frontend/src/generated/api.d.ts`
+
+## 開発サーバーの起動
+
+### 推奨: `task.exe dev` でまとめて起動する
+
+```bat
 task.exe dev
 ```
 
-## テスト実行
+Windows では frontend / backend 用の PowerShell が 2 つ開きます。
 
-### 日常の品質確認
+起動後の導線:
 
-```bash
-# フォーマット・リント・型チェック・テストを一括実行
-task.exe verify
+- frontend: `http://127.0.0.1:5173`
+- backend: `http://127.0.0.1:8000`
+- API docs: `http://127.0.0.1:8000/docs`
+
+補足:
+
+- frontend 側の `/api`, `/setup`, `/ws` は Vite から backend へプロキシされます。
+- backend 側は `uvicorn --reload` で起動するため、`task.exe dev` でもホットリロードされます。
+- `task.exe dev` 実行後の停止は、それぞれのウィンドウで `Ctrl+C` を使います。
+
+### 個別に起動したい場合は frontend / backend を別ターミナルで起動する
+
+ターミナル 1:
+
+```bat
+task.exe dev:backend
 ```
 
-### テストの分類と実行コマンド
+ターミナル 2:
 
-#### Backend テスト
-
-```bash
-# Backend 全テスト
-task.exe test:backend
-
-# 契約テスト（API / ドメインモデルの回帰確認）
-task.exe test:contract
+```bat
+task.exe dev:frontend
 ```
 
-#### Frontend テスト
+- `task.exe dev:backend` は `uvicorn --reload` を使うため、backend 単体の反復に向いています。
 
-```bash
-# Frontend 全ユニットテスト（logic + component + integration）
-task.exe test:frontend:unit
+## 日常開発の基本フロー
 
-# ロジックテスト（純粋な TypeScript ロジック）
-task.exe test:frontend:logic
+1. 依存関係や lockfile が変わっていれば `task.exe install`
+2. `task.exe dev` を実行
+   必要に応じて `task.exe dev:backend` と `task.exe dev:frontend` を個別起動
+3. 実装後、まず `task.exe test`
+4. 変更内容に応じて追加の入口を実行
+5. 完了前に `task.exe verify`
 
-# コンポーネントテスト（UI コンポーネント単体）
-task.exe test:frontend:component
+原則:
 
-# インテグレーションテスト（複数コンポーネント連携）
-task.exe test:frontend:integration
+- まず Taskfile の意味ベース入口を使います。
+- 生の `npm` / `uv` / `pytest` コマンドは、Task がない場合か、低レベルの切り分け時だけ使います。
+- テスト選定に迷ったら [`docs/test_strategy.md`](./test_strategy.md) を優先してください。
+
+## 検証とテスト
+
+### 基本入口
+
+| 目的                 | コマンド                 | 補足                                                            |
+| -------------------- | ------------------------ | --------------------------------------------------------------- |
+| 日常の基本テスト     | `task.exe test`          | backend の既定テスト + frontend unit                            |
+| 完了前の最低入口     | `task.exe verify`        | `format:check` / `lint` / `type-check` / `import-lint` / `test` |
+| backend の既定テスト | `task.exe test:backend`  | `pytest` 既定設定に従い `perf` は除外                           |
+| frontend unit 一括   | `task.exe test:frontend` | `logic + component + integration`                               |
+
+### 変更内容ごとの追加入口
+
+| 変更内容                                    | 追加で見る入口                       |
+| ------------------------------------------- | ------------------------------------ |
+| API / schema / 境界契約                     | `task.exe test:contract`             |
+| frontend の純粋ロジック                     | `task.exe test:frontend:logic`       |
+| frontend の UI コンポーネント単体           | `task.exe test:frontend:component`   |
+| 複数コンポーネント連携 / 状態管理           | `task.exe test:frontend:integration` |
+| replay を使う主要 workflow の軽量回帰       | `task.exe test:workflow:smoke`       |
+| bundled replay asset 全件での workflow 回帰 | `task.exe test:workflow:full`        |
+| 性能影響がある変更                          | `task.exe test:performance`          |
+
+### リリース前の入口
+
+| 目的                   | コマンド                            |
+| ---------------------- | ----------------------------------- |
+| リリース前の総合回帰   | `task.exe test:release`             |
+| 性能影響を含む総合回帰 | `task.exe test:release:performance` |
+
+補足:
+
+- `workflow:full` と `test:release*` は重いため、初手には向きません。
+- `task.exe test:workflow:*` は Playwright 側で backend / frontend を自動起動するため、
+  通常は事前に `task.exe dev:*` を立ち上げる必要はありません。
+- replay ベース E2E の詳しい運用は [`docs/e2e_replay_test.md`](./e2e_replay_test.md) を参照してください。
+- テスト選定の正本は [`docs/test_strategy.md`](./test_strategy.md) です。
+
+## 生成・ビルド・カバレッジ
+
+### 生成
+
+```bat
+task.exe generate
 ```
 
-#### E2E テスト（Playwright）
+使う場面:
 
-```bash
-# UI / 自動録画フローの軽量回帰確認
-task.exe test:workflow:smoke
+- backend の OpenAPI 変更を frontend に反映したいとき
+- `frontend/src/generated/` を再生成したいとき
 
-# 全 E2E テスト
-task.exe test:workflow:full
+### ビルド
+
+```bat
+task.exe build
 ```
 
-#### リリース前の総合確認
+成果物:
 
-```bash
-# 総合回帰確認（全テスト実行）
-task.exe test:release
+- 配布物: `dist/SplatReplay/`
+- 中間生成物: `backend/build/`
 
-# 性能影響を含むリリース前回帰確認
-task.exe test:release:performance
+補足:
+
+- `backend/build/` は中間生成物です。実行対象ではありません。
+- 配布物の実行は `dist/SplatReplay/SplatReplay.exe` を使います。
+
+### ビルド済みアプリの起動
+
+```bat
+task.exe run
 ```
 
-## カバレッジ測定
+### カバレッジ
 
-```bash
-# 全体のカバレッジ測定（backend + frontend）
+```bat
 task.exe coverage
-
-# Backend のみ
 task.exe coverage:backend
-
-# Frontend のみ
 task.exe coverage:frontend
-
-# カバレッジレポートをブラウザで開く
 task.exe coverage:report
 ```
 
-カバレッジレポートは以下の場所に生成されます：
+レポート出力先:
 
-- Backend: `backend/htmlcov/index.html`
-- Frontend: `frontend/coverage/index.html`
+- backend: `backend/htmlcov/index.html`
+- frontend: `frontend/coverage/index.html`
 
-## 品質チェック
+## 設計ルールと注意事項
 
-### 個別チェック
+- backend は Clean Architecture 前提です。
+  - 依存方向は `interface -> application -> domain`
+  - `import-lint` でレイヤ違反を検出します
+- 型注釈は必須です。
+  - Python では暗黙 `Any` を作らない
+  - TypeScript では `any` を避ける
+- 生成物や一時物はコミットしません。
+  - 例: `dist/`, `backend/build/`, `frontend/dist/`, `frontend/src/generated/`, `frontend/test-results/`
+- 秘密情報や認証情報はコミットしません。
+- OBS / FFmpeg / Tesseract / YouTube 認証など、アプリ利用者向けの外部ツール設定は
+  [`docs/usage.md`](./usage.md) を参照してください。
+- 実行コマンドの正本は [`Taskfile.yml`](../Taskfile.yml) です。
 
-```bash
-# フォーマット適用
-task.exe format
+## よくある補足
 
-# リント実行
-task.exe lint
+### `task.exe dev` を実行しても画面が増えない
 
-# 型チェック実行
-task.exe type-check
+Windows では PowerShell が 2 つ開く想定です。開かない場合は `task.exe dev` の標準出力にエラーが出ていないか確認してください。
+個別に切り分けたい場合は `task.exe dev:backend` と `task.exe dev:frontend` を別ターミナルで実行してください。
+
+### Playwright E2E で replay asset 関連のエラーが出る
+
+まず `git lfs version` で Git LFS が使えるか確認し、必要なら次を実行してください。
+
+```bat
+task.exe install:lfs
 ```
 
-### 領域別チェック
+そのうえで E2E を再実行してください。`pretest:e2e` が必要な取得処理を補助します。
 
-```bash
-# Backend のみ
-task.exe format:backend
-task.exe lint:backend
-task.exe type-check:backend
+### frontend の生成型が古い
 
-# Frontend のみ
-task.exe format:frontend
-task.exe lint:frontend
-task.exe type-check:frontend
+`frontend/src/generated/` を手で直さず、次を実行してください。
+
+```bat
+task.exe generate
 ```
 
-## 開発ワークフロー
+### どの Task があるか確認したい
 
-### 日常開発
-
-1. **コード変更**
-2. **フォーマット**: `task.exe format`
-3. **リント**: `task.exe lint`
-4. **型チェック**: `task.exe type-check`
-
-### 振る舞い変更時
-
-1. **テスト実行**: `task.exe test`
-2. **失敗したテストを修正**（失敗を残したまま完了しない）
-
-### PR 前
-
-1. **全チェック**: `task.exe verify`
-2. **全テストがパスすることを確認**
+```bat
+task.exe help
+```
 
 ## 関連ドキュメント
 
-- [テスト戦略](./test_strategy.md) - テストの分類と戦略の詳細
-- [動画リプレイ入力による E2E 回帰テスト](./e2e_replay_test.md) - E2E テストの詳細
-- [内部設計](./internal_design.md) - アーキテクチャと設計思想
-- [外部仕様](./external_spec.md) - 外部システムとのインターフェース
-
-## AI エージェント向けドキュメント
-
-コーディングエージェントを使用する場合は、以下のドキュメントを参照してください：
-
-- [AGENTS.md](../AGENTS.md) - プロジェクト全体の実装ルール
-- [backend/src/splat_replay/domain/AGENTS.md](../backend/src/splat_replay/domain/AGENTS.md) - ドメイン層の実装ルール
-- [backend/src/splat_replay/application/AGENTS.md](../backend/src/splat_replay/application/AGENTS.md) - アプリケーション層の実装ルール
-- [backend/src/splat_replay/infrastructure/AGENTS.md](../backend/src/splat_replay/infrastructure/AGENTS.md) - インフラ層の実装ルール
-- [backend/src/splat_replay/interface/AGENTS.md](../backend/src/splat_replay/interface/AGENTS.md) - インターフェース層の実装ルール
-- [frontend/AGENTS.md](../frontend/AGENTS.md) - フロントエンドの実装ルール
+- [`README.md`](../README.md) - プロジェクト概要
+- [`docs/usage.md`](./usage.md) - 利用者向けセットアップと外部ツール設定
+- [`docs/test_strategy.md`](./test_strategy.md) - テスト選定の SSOT
+- [`docs/e2e_replay_test.md`](./e2e_replay_test.md) - replay ベース E2E の詳細
+- [`docs/internal_design.md`](./internal_design.md) - 内部設計
+- [`docs/external_spec.md`](./external_spec.md) - 外部仕様
+- [`AGENTS.md`](../AGENTS.md) - プロジェクト全体の実装ルール
+- [`backend/src/splat_replay/domain/AGENTS.md`](../backend/src/splat_replay/domain/AGENTS.md) - domain 層のルール
+- [`backend/src/splat_replay/application/AGENTS.md`](../backend/src/splat_replay/application/AGENTS.md) - application 層のルール
+- [`backend/src/splat_replay/interface/AGENTS.md`](../backend/src/splat_replay/interface/AGENTS.md) - interface 層のルール
+- [`backend/src/splat_replay/infrastructure/AGENTS.md`](../backend/src/splat_replay/infrastructure/AGENTS.md) - infrastructure 層のルール
+- [`frontend/AGENTS.md`](../frontend/AGENTS.md) - frontend 固有ルール

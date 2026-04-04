@@ -114,8 +114,8 @@ frontend では **Vitest + @testing-library/svelte に統一** し、以下の 4
 **frontendディレクトリで実行**:
 
 ```bash
-npm run test                  # logic テストのみ（Vitest）
-npm run test:logic            # logic テストのみ（上と同じ）
+npm run test                  # logic + component + integration の一括実行
+npm run test:logic            # logic テストのみ（Vitest）
 npm run test:component        # component テストのみ（Vitest）
 npm run test:integration      # integration テストのみ（Vitest）
 npm run test:unit             # logic + component + integration の一括実行

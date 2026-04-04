@@ -13,7 +13,7 @@
 - API コントローラー（Web API）
 - CLI コマンド
 - GUI イベントハンドラー
-- WebSocket ハンドラー
+- イベントストリームハンドラー（SSE など）
 - DTO（Data Transfer Object）
 - リクエスト / レスポンス変換
 
@@ -102,11 +102,13 @@ def build_app(deps: CliDependencies) -> typer.Typer:
 - ユースケース呼び出しのみ
 - UI 更新はイベントハンドラー内で実行
 
-### 4.4 WebSocket ハンドラー
+### 4.4 イベントストリームハンドラー（SSE など）
 
-- イベントストリームをクライアントに転送
-- DTO に変換してから送信
-- エラーハンドリングを必ず実装
+- progress や domain event などのイベントストリームをクライアントへ転送
+- 必要に応じて JSON / DTO に整形してから配信
+- 長時間接続の cleanup とエラーハンドリングを必ず実装
+- 現行の Web UI は `/api/events/*` の SSE を利用する
+- 将来 WebSocket を追加する場合も、責務は同じとする
 
 ### 4.5 DTO（Data Transfer Object）
 

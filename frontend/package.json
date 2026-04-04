@@ -2,6 +2,9 @@
   "name": "splat-replay-frontend",
   "version": "0.1.0",
   "type": "module",
+  "engines": {
+    "node": ">=24.12.0"
+  },
   "scripts": {
     "dev": "vite",
     "build": "vite build",
@@ -9,9 +12,9 @@
     "pretest:e2e": "node ./scripts/ensure-e2e-assets.js",
     "test": "node --max-old-space-size=4096 ./node_modules/vitest/vitest.mjs run",
     "test:coverage": "node --max-old-space-size=4096 ./node_modules/vitest/vitest.mjs run --coverage",
-    "test:logic": "node --max-old-space-size=4096 ./node_modules/vitest/vitest.mjs run --exclude '**/components/**' --include 'src/**/*.test.ts'",
-    "test:component": "node --max-old-space-size=4096 ./node_modules/vitest/vitest.mjs run --include 'src/**/*.component.test.ts'",
-    "test:integration": "node --max-old-space-size=4096 ./node_modules/vitest/vitest.mjs run --include 'src/**/*.integration.test.ts'",
+    "test:logic": "node --max-old-space-size=4096 ./node_modules/vitest/vitest.mjs run --config vitest.logic.config.ts",
+    "test:component": "node --max-old-space-size=4096 ./node_modules/vitest/vitest.mjs run --config vitest.component.config.ts",
+    "test:integration": "node --max-old-space-size=4096 ./node_modules/vitest/vitest.mjs run --config vitest.integration.config.ts",
     "test:unit": "node --max-old-space-size=4096 ./node_modules/vitest/vitest.mjs run",
     "test:e2e": "playwright test",
     "check": "svelte-check --tsconfig ./tsconfig.json --threshold warning",

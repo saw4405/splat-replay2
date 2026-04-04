@@ -1,3 +1,7 @@
+default_install_hook_types:
+  - pre-commit
+  - pre-push
+
 repos:
   - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: v0.14.6
@@ -5,9 +9,11 @@ repos:
       - id: ruff-check
         args: [--config, backend/pyproject.toml]
         files: ^backend/
+        stages: [pre-commit]
       - id: ruff-format
         args: [--config, backend/pyproject.toml]
         files: ^backend/
+        stages: [pre-commit]
   - repo: local
     hooks:
       - id: ty
@@ -16,27 +22,37 @@ repos:
         language: system
         files: ^backend/src/|^backend/tests/
         pass_filenames: false
+        stages: [pre-commit]
       - id: frontend-format
         name: frontend format check
-        entry: npm run format:check --prefix frontend
+        entry: node frontend/scripts/run-pre-commit-frontend-tool.js prettier-check
         language: system
         files: ^frontend/
-        pass_filenames: false
+        stages: [pre-commit]
       - id: frontend-lint
         name: frontend lint
-        entry: npm run lint --prefix frontend
+        entry: node frontend/scripts/run-pre-commit-frontend-tool.js eslint
         language: system
         files: ^frontend/
-        pass_filenames: false
+        stages: [pre-commit]
       - id: frontend-type-check
         name: frontend type check
         entry: npm run type-check --prefix frontend
         language: system
         files: ^frontend/
         pass_filenames: false
+        stages: [pre-push]
       - id: frontend-svelte-check
         name: frontend svelte check
         entry: npm run check --prefix frontend
         language: system
         files: ^frontend/
         pass_filenames: false
+        stages: [pre-push]
+      - id: backend-import-lint
+        name: backend import lint
+        entry: uv --directory backend run lint-imports --no-cache
+        language: system
+        files: ^backend/
+        pass_filenames: false
+        stages: [pre-push]

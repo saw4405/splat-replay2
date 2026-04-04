@@ -13,6 +13,8 @@ src/generated/
 coverage/
 .vitest/
 node_modules/.vite-test/
+test-results/
+playwright-report/
 
 # Environment
 .env

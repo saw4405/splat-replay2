@@ -19,10 +19,18 @@ tasks:
   # インストール
   # ========================================
   install:
-    desc: Install all dependencies (backend + frontend)
+    desc: Install dependencies and recommended local setup (backend + frontend + hooks + LFS)
     cmds:
       - task: install:backend
       - task: install:frontend
+      - task: install:hooks
+        vars:
+          SKIP_HOOKS: '{{default "" .SKIP_HOOKS}}'
+        ignore_error: true
+      - task: install:lfs
+        vars:
+          SKIP_LFS: '{{default "" .SKIP_LFS}}'
+        ignore_error: true
 
   install:backend:
     desc: Install backend dependencies
@@ -35,6 +43,20 @@ tasks:
     dir: "{{.FRONTEND_DIR}}"
     cmds:
       - npm install
+
+  install:hooks:
+    desc: Install recommended Git hooks (pre-commit + pre-push)
+    vars:
+      SKIP_HOOKS_VALUE: '{{default "" .SKIP_HOOKS}}'
+    cmds:
+      - cmd: 'powershell -NoProfile -Command "if (''{{.SKIP_HOOKS_VALUE}}'' -eq ''1'') { Write-Host ''WARNING: SKIP_HOOKS=1 のため Git hooks 設定をスキップしました。必要になったら task.exe install:hooks を実行してください。'' -ForegroundColor Yellow; exit 0 }; uv --directory {{.BACKEND_DIR}} run pre-commit install --install-hooks --hook-type pre-commit --hook-type pre-push; if ((Get-Variable LASTEXITCODE -ValueOnly) -ne 0) { Write-Host ''WARNING: Git hooks の自動設定に失敗しました。必要になったら task.exe install:hooks を再実行してください。'' -ForegroundColor Yellow; exit (Get-Variable LASTEXITCODE -ValueOnly) }"'
+
+  install:lfs:
+    desc: Initialize Git LFS for replay-based workflow tests
+    vars:
+      SKIP_LFS_VALUE: '{{default "" .SKIP_LFS}}'
+    cmds:
+      - cmd: 'powershell -NoProfile -Command "if (''{{.SKIP_LFS_VALUE}}'' -eq ''1'') { Write-Host ''WARNING: SKIP_LFS=1 のため Git LFS 初期化をスキップしました。必要になったら task.exe install:lfs を実行してください。'' -ForegroundColor Yellow; exit 0 }; if (-not (Get-Command git -ErrorAction SilentlyContinue)) { Write-Host ''WARNING: git コマンドが見つからないため Git LFS 初期化をスキップしました。必要になったら task.exe install:lfs を実行してください。'' -ForegroundColor Yellow; exit 0 }; git lfs version; if ((Get-Variable LASTEXITCODE -ValueOnly) -ne 0) { Write-Host ''WARNING: Git LFS が未導入のため初期化をスキップしました。E2E を使う場合は Git LFS を導入した後で task.exe install:lfs を実行してください。'' -ForegroundColor Yellow; exit 0 }; git lfs install --skip-repo; if ((Get-Variable LASTEXITCODE -ValueOnly) -ne 0) { Write-Host ''WARNING: Git LFS の初期化に失敗しました。必要になったら task.exe install:lfs を再実行してください。'' -ForegroundColor Yellow; exit (Get-Variable LASTEXITCODE -ValueOnly) }"'
 
   # ========================================
   # OpenAPI 型生成
@@ -205,9 +227,10 @@ tasks:
   # 開発サーバー
   # ========================================
   dev:
-    desc: Start both frontend and backend dev servers (in separate terminals)
+    desc: Start both frontend and backend dev servers
+    dir: "{{.BACKEND_DIR}}"
     cmds:
-      - cmd: echo "Please run 'task dev:frontend' and 'task dev:backend' in separate terminals"
+      - uv run splat-replay web --dev
 
   dev:frontend:
     desc: Start frontend dev server
@@ -342,7 +365,7 @@ tasks:
   # テスト
   # ========================================
   test:
-    desc: Run all tests (logic tests only, excludes component/integration/e2e/performance)
+    desc: Run default tests (backend + frontend unit, excludes workflow/performance)
     cmds:
       - task: test:backend
       - task: test:frontend
@@ -354,12 +377,9 @@ tasks:
       - uv run pytest -q
 
   test:frontend:
-    desc: Run frontend logic tests (Vitest)
-    dir: "{{.FRONTEND_DIR}}"
-    deps:
-      - install:frontend
+    desc: Run frontend unit tests (logic + component + integration)
     cmds:
-      - npm run test
+      - task: test:frontend:unit
 
   test:frontend:logic:
     desc: Run frontend logic tests (Vitest)
