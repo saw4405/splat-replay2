@@ -1,5 +1,7 @@
-﻿<script lang="ts">
+<script lang="ts">
   import { onMount, onDestroy } from 'svelte';
+  import { slide } from 'svelte/transition';
+  import { cubicOut } from 'svelte/easing';
   import RecordedDataList from '../assets/RecordedDataList.svelte';
   import EditedDataList from '../assets/EditedDataList.svelte';
   import ProgressDialog from '../progress/ProgressDialog.svelte';
@@ -15,9 +17,10 @@
   } from '../../domainEvents';
   import { getProcessStatusPollIntervalMs, renderMode } from '../../renderMode';
 
-  // 展開状態: "closed" | "half" | "full"
-  type DrawerState = 'closed' | 'half' | 'full';
+  // 展開状態: "closed" | "full"
+  type DrawerState = 'closed' | 'full';
   let drawerState: DrawerState = 'closed';
+  let activeTab: 'recorded' | 'edited' = 'recorded';
   let recordedCount = 0;
   let editedCount = 0;
   let isProcessing = false;
@@ -208,14 +211,19 @@
   }
 
   function toggleDrawer(): void {
-    // 閉じた状態 → 半分展開 → 全画面展開 → 閉じた状態
     if (drawerState === 'closed') {
-      drawerState = 'half';
-    } else if (drawerState === 'half') {
       drawerState = 'full';
     } else {
       drawerState = 'closed';
     }
+  }
+
+  function activateTab(tab: 'recorded' | 'edited', event?: MouseEvent | KeyboardEvent): void {
+    if (event) {
+      event.stopPropagation();
+    }
+    activeTab = tab;
+    drawerState = 'full';
   }
 
   async function startProcessing(): Promise<void> {
@@ -346,12 +354,7 @@
   on:close={() => (showAlertDialog = false)}
 />
 
-<div
-  class="bottom-drawer"
-  class:half={drawerState === 'half'}
-  class:full={drawerState === 'full'}
-  bind:this={drawerElement}
->
+<div class="bottom-drawer" class:full={drawerState === 'full'} bind:this={drawerElement}>
   <!-- ヘッダーバー (常時表示) -->
   <div
     class="drawer-header"
@@ -377,161 +380,173 @@
             stroke-linecap="round"
             stroke-linejoin="round"
             class="expand-arrow"
-            class:half={drawerState === 'half'}
             class:full={drawerState === 'full'}
           />
         </svg>
         <span class="hint-text">
           {#if drawerState === 'closed'}
             詳細を表示
-          {:else if drawerState === 'half'}
-            全画面表示
           {:else}
             閉じる
           {/if}
         </span>
       </div>
-
-      <div class="status-badges">
-        <div class="badge recorded" class:has-data={recordedCount > 0}>
-          <div class="badge-glow"></div>
-          <span class="badge-icon">🎬</span>
-          <div class="badge-info">
-            <span class="badge-label">録画済</span>
-            <span class="badge-count" data-testid="recorded-count">{recordedCount}</span>
+      <div class="tabs">
+        <button
+          class="tab recorded"
+          class:has-data={recordedCount > 0}
+          class:active={drawerState === 'full' && activeTab === 'recorded'}
+          on:click={(e) => activateTab('recorded', e)}
+          on:keydown={(e) => e.key === 'Enter' && activateTab('recorded', e)}
+        >
+          <div class="tab-glow"></div>
+          <span class="tab-icon">🎬</span>
+          <div class="tab-info">
+            <span class="tab-label">録画済</span>
+            <span class="tab-count" data-testid="recorded-count">{recordedCount}</span>
           </div>
-        </div>
+        </button>
 
-        <div class="badge edited" class:has-data={editedCount > 0}>
-          <div class="badge-glow"></div>
-          <span class="badge-icon">✨</span>
-          <div class="badge-info">
-            <span class="badge-label">編集済</span>
-            <span class="badge-count">{editedCount}</span>
+        <button
+          class="tab edited"
+          class:has-data={editedCount > 0}
+          class:active={drawerState === 'full' && activeTab === 'edited'}
+          on:click={(e) => activateTab('edited', e)}
+          on:keydown={(e) => e.key === 'Enter' && activateTab('edited', e)}
+        >
+          <div class="tab-glow"></div>
+          <span class="tab-icon">✨</span>
+          <div class="tab-info">
+            <span class="tab-label">編集済</span>
+            <span class="tab-count">{editedCount}</span>
           </div>
-        </div>
+        </button>
       </div>
     </div>
 
-    <button
-      class="process-button"
-      class:processing={isProcessing}
-      class:ready={recordedCount > 0 || editedCount > 0}
-      disabled={isProcessing || (recordedCount === 0 && editedCount === 0)}
-      on:click|stopPropagation={async () => {
-        await startProcessing();
-      }}
-      title="録画データの編集とYouTubeへのアップロードを開始します"
-    >
-      <div class="button-background"></div>
-      <div class="button-content">
-        {#if isProcessing}
-          <span class="spinner"></span>
-          <span>処理中...</span>
-        {:else}
-          <svg
-            width="16"
-            height="16"
-            viewBox="0 0 16 16"
-            fill="none"
-            xmlns="http://www.w3.org/2000/svg"
-            class="play-icon"
-          >
-            <path d="M3 2L13 8L3 14V2Z" fill="currentColor" />
-          </svg>
-          <span>処理開始</span>
-        {/if}
-      </div>
-    </button>
+    <div class="header-right">
+      <button
+        class="process-button"
+        class:processing={isProcessing}
+        class:ready={recordedCount > 0 || editedCount > 0}
+        disabled={isProcessing || (recordedCount === 0 && editedCount === 0)}
+        on:click|stopPropagation={async () => {
+          await startProcessing();
+        }}
+        title="録画データの編集とYouTubeへのアップロードを開始します"
+      >
+        <div class="button-background"></div>
+        <div class="button-content">
+          {#if isProcessing}
+            <span class="spinner"></span>
+            <span>処理中...</span>
+          {:else}
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 16 16"
+              fill="none"
+              xmlns="http://www.w3.org/2000/svg"
+              class="play-icon"
+            >
+              <path d="M3 2L13 8L3 14V2Z" fill="currentColor" />
+            </svg>
+            <span>処理開始</span>
+          {/if}
+        </div>
+      </button>
+    </div>
   </div>
 
   <!-- 展開コンテンツ -->
   {#if drawerState !== 'closed'}
-    <div class="drawer-content">
-      <div class="data-lists">
-        <!-- 録画済データ -->
-        <div class="data-section">
-          <h3 class="section-title">
-            <span class="title-icon">🎬</span>
-            録画済データ ({recordedCount}件)
-          </h3>
-          <div class="list-container">
-            <RecordedDataList
-              videos={recordedVideos}
-              on:refresh={loadData}
-              on:modalOpen={() => {
-                console.log('BottomDrawer: modalOpen event received from RecordedDataList');
-                drawerState = 'full';
-                isModalOpen = true;
-                console.log(
-                  'BottomDrawer: drawerState =',
-                  drawerState,
-                  ', isModalOpen =',
-                  isModalOpen
-                );
-              }}
-              on:modalClose={() => {
-                console.log('BottomDrawer: modalClose event received from RecordedDataList');
-                // モーダルが閉じた直後のクリックイベントを無視するため、少し遅延
-                if (modalCloseTimer !== null) {
-                  window.clearTimeout(modalCloseTimer);
-                }
-                modalCloseTimer = window.setTimeout(() => {
-                  isModalOpen = false;
-                  modalCloseTimer = null;
+    <div class="drawer-content" transition:slide={{ duration: 250, easing: cubicOut }}>
+      <div class="tab-content">
+        {#if activeTab === 'recorded'}
+          <!-- 録画済データ -->
+          <div class="data-section">
+            <h3 class="section-title">
+              <span class="title-icon">🎬</span>
+              録画済データ ({recordedCount}件)
+            </h3>
+            <div class="list-container">
+              <RecordedDataList
+                videos={recordedVideos}
+                on:refresh={loadData}
+                on:modalOpen={() => {
+                  console.log('BottomDrawer: modalOpen event received from RecordedDataList');
+                  drawerState = 'full';
+                  isModalOpen = true;
                   console.log(
                     'BottomDrawer: drawerState =',
                     drawerState,
                     ', isModalOpen =',
                     isModalOpen
                   );
-                }, 100);
-              }}
-            />
+                }}
+                on:modalClose={() => {
+                  console.log('BottomDrawer: modalClose event received from RecordedDataList');
+                  // モーダルが閉じた直後のクリックイベントを無視するため、少し遅延
+                  if (modalCloseTimer !== null) {
+                    window.clearTimeout(modalCloseTimer);
+                  }
+                  modalCloseTimer = window.setTimeout(() => {
+                    isModalOpen = false;
+                    modalCloseTimer = null;
+                    console.log(
+                      'BottomDrawer: drawerState =',
+                      drawerState,
+                      ', isModalOpen =',
+                      isModalOpen
+                    );
+                  }, 100);
+                }}
+              />
+            </div>
           </div>
-        </div>
-
-        <!-- 編集済データ -->
-        <div class="data-section">
-          <h3 class="section-title">
-            <span class="title-icon">✨</span>
-            編集済データ ({editedCount}件)
-          </h3>
-          <div class="list-container">
-            <EditedDataList
-              videos={editedVideos}
-              on:refresh={loadData}
-              on:modalOpen={() => {
-                console.log('BottomDrawer: modalOpen event received from EditedDataList');
-                drawerState = 'full';
-                isModalOpen = true;
-                console.log(
-                  'BottomDrawer: drawerState =',
-                  drawerState,
-                  ', isModalOpen =',
-                  isModalOpen
-                );
-              }}
-              on:modalClose={() => {
-                console.log('BottomDrawer: modalClose event received from EditedDataList');
-                // モーダルが閉じた直後のクリックイベントを無視するため、少し遅延
-                if (modalCloseTimer !== null) {
-                  window.clearTimeout(modalCloseTimer);
-                }
-                modalCloseTimer = window.setTimeout(() => {
-                  isModalOpen = false;
-                  modalCloseTimer = null;
+        {:else if activeTab === 'edited'}
+          <!-- 編集済データ -->
+          <div class="data-section">
+            <h3 class="section-title">
+              <span class="title-icon">✨</span>
+              編集済データ ({editedCount}件)
+            </h3>
+            <div class="list-container">
+              <EditedDataList
+                videos={editedVideos}
+                on:refresh={loadData}
+                on:modalOpen={() => {
+                  console.log('BottomDrawer: modalOpen event received from EditedDataList');
+                  drawerState = 'full';
+                  isModalOpen = true;
                   console.log(
                     'BottomDrawer: drawerState =',
                     drawerState,
                     ', isModalOpen =',
                     isModalOpen
                   );
-                }, 100);
-              }}
-            />
+                }}
+                on:modalClose={() => {
+                  console.log('BottomDrawer: modalClose event received from EditedDataList');
+                  // モーダルが閉じた直後のクリックイベントを無視するため、少し遅延
+                  if (modalCloseTimer !== null) {
+                    window.clearTimeout(modalCloseTimer);
+                  }
+                  modalCloseTimer = window.setTimeout(() => {
+                    isModalOpen = false;
+                    modalCloseTimer = null;
+                    console.log(
+                      'BottomDrawer: drawerState =',
+                      drawerState,
+                      ', isModalOpen =',
+                      isModalOpen
+                    );
+                  }, 100);
+                }}
+              />
+            </div>
           </div>
-        </div>
+        {/if}
       </div>
     </div>
   {/if}
@@ -561,19 +576,10 @@
       0 -2px 6px rgba(var(--theme-rgb-accent), 0.08),
       inset 0 1px 0 rgba(var(--theme-rgb-white), 0.05);
     z-index: 100;
-    transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
-  }
-
-  .bottom-drawer.half {
-    height: 50vh;
-    box-shadow:
-      0 -8px 28px rgba(var(--theme-rgb-black), 0.34),
-      0 -3px 10px rgba(var(--theme-rgb-accent), 0.1),
-      inset 0 1px 0 rgba(var(--theme-rgb-white), 0.05);
+    transition: box-shadow 0.4s cubic-bezier(0.4, 0, 0.2, 1);
   }
 
   .bottom-drawer.full {
-    height: 100vh;
     box-shadow:
       0 -8px 28px rgba(var(--theme-rgb-black), 0.34),
       0 -3px 10px rgba(var(--theme-rgb-accent), 0.12),
@@ -644,10 +650,6 @@
     transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   }
 
-  .expand-arrow.half {
-    transform: rotate(180deg);
-  }
-
   .expand-arrow.full {
     transform: rotate(180deg) scale(1.2);
   }
@@ -657,12 +659,12 @@
     letter-spacing: 0.02em;
   }
 
-  .status-badges {
+  .tabs {
     display: flex;
     gap: 1rem;
   }
 
-  .badge {
+  .tab {
     position: relative;
     display: flex;
     align-items: center;
@@ -676,6 +678,8 @@
     border: 1px solid rgba(var(--theme-rgb-white), 0.1);
     border-radius: 12px;
     font-size: 0.95rem;
+    color: inherit;
+    cursor: pointer;
     transition:
       border-color 0.2s ease,
       background 0.2s ease,
@@ -683,7 +687,7 @@
     overflow: hidden;
   }
 
-  .badge-glow {
+  .tab-glow {
     position: absolute;
     inset: -1px;
     border-radius: 12px;
@@ -698,11 +702,11 @@
     z-index: -1;
   }
 
-  .badge.has-data .badge-glow {
+  .tab.has-data .tab-glow {
     opacity: 1;
   }
 
-  .badge:hover {
+  .tab:hover {
     border-color: rgba(var(--theme-rgb-accent), 0.3);
     background: linear-gradient(
       135deg,
@@ -711,22 +715,46 @@
     );
   }
 
-  .badge.has-data {
+  .tab.has-data {
     border-color: rgba(var(--theme-rgb-accent), 0.2);
   }
 
-  .badge-icon {
+  .tab.active {
+    border-color: var(--accent-color);
+    background: linear-gradient(
+      135deg,
+      rgba(var(--theme-rgb-accent), 0.15) 0%,
+      rgba(var(--theme-rgb-accent), 0.05) 100%
+    );
+    box-shadow: 0 0 12px rgba(var(--theme-rgb-accent), 0.2);
+  }
+
+  .tab.active::after {
+    content: '';
+    position: absolute;
+    bottom: -1px;
+    left: 20%;
+    right: 20%;
+    height: 3px;
+    background: var(--accent-color);
+    border-radius: 3px 3px 0 0;
+    box-shadow: 0 -2px 8px rgba(var(--theme-rgb-accent), 0.6);
+  }
+
+  .tab-icon {
     font-size: 1.3rem;
     filter: drop-shadow(0 2px 4px rgba(var(--theme-rgb-black), 0.3));
   }
 
-  .badge-info {
+  .tab-info {
     display: flex;
     flex-direction: column;
+    align-items: center;
     gap: 0.1rem;
+    text-align: center;
   }
 
-  .badge-label {
+  .tab-label {
     color: rgba(var(--theme-rgb-white), 0.7);
     font-size: 0.75rem;
     font-weight: 500;
@@ -734,12 +762,18 @@
     letter-spacing: 0.05em;
   }
 
-  .badge-count {
+  .tab-count {
     color: var(--accent-color);
     font-weight: 700;
     font-size: 1.25rem;
     line-height: 1;
     text-shadow: 0 0 6px rgba(var(--theme-rgb-accent), 0.3);
+  }
+
+  .header-right {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
   }
 
   .process-button {
@@ -833,6 +867,7 @@
   }
 
   .drawer-content {
+    height: calc(100vh - 84px);
     overflow-y: auto;
     padding: 1.5rem;
     display: flex;
@@ -846,15 +881,10 @@
     flex: 0 0 0.5rem;
   }
 
-  .data-lists {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    grid-auto-rows: minmax(0, 1fr);
-    gap: 2rem;
+  .tab-content {
+    display: flex;
+    flex-direction: column;
     width: 100%;
-    box-sizing: border-box;
-    max-width: none;
-    margin: 0;
     flex: 1;
     min-height: 0;
   }
@@ -926,10 +956,7 @@
 
   /* レスポンシブ対応 */
   @media (max-width: 1024px) {
-    .data-lists {
-      display: grid;
-      grid-template-columns: 1fr;
-      grid-auto-rows: minmax(clamp(11rem, 32vh, 17rem), auto);
+    .tab-content {
       gap: 1.5rem;
     }
 
@@ -958,7 +985,7 @@
       min-width: 0;
     }
 
-    .status-badges {
+    .tabs {
       flex-wrap: wrap;
       column-gap: 0.75rem;
       row-gap: 0.5rem;
