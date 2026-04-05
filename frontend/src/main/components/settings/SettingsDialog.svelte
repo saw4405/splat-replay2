@@ -1,34 +1,43 @@
-﻿<svelte:options accessors />
-
-<script lang="ts">
-  import { onDestroy } from 'svelte';
+﻿<script lang="ts">
+  import { onDestroy, untrack } from 'svelte';
   import BaseDialog from '../../../common/components/BaseDialog.svelte';
   import { resolveRenderModeFromSections, setRenderMode } from '../../renderMode';
   import FieldItem from './FieldItem.svelte';
   import type { FieldValue, SettingField, SettingsResponse, SettingsSection } from './types';
 
-  export let open = false;
+  interface Props {
+    open?: boolean;
+  }
 
-  let sections: SettingsSection[] = [];
-  let loading = false;
-  let saving = false;
-  let errorMessage = '';
-  let successMessage = '';
-  let activeSectionId: string | null = null;
-  let previousOpen = false;
+  let { open = $bindable(false) }: Props = $props();
+
+  // テストから component.open でアクセスできるように export
+  export { open };
+
+  let sections = $state<SettingsSection[]>([]);
+  let loading = $state(false);
+  let saving = $state(false);
+  let errorMessage = $state('');
+  let successMessage = $state('');
+  let activeSectionId = $state<string | null>(null);
   let successMessageTimer: ReturnType<typeof setTimeout> | null = null;
 
-  $: activeSection = sections.find((section) => section.id === activeSectionId) ?? null;
+  const activeSection = $derived(
+    sections.find((section) => section.id === activeSectionId) ?? null
+  );
 
-  // openの変化を監視し、明示的にハンドラを呼び出す
-  $: {
-    if (open && !previousOpen) {
-      handleDialogOpen();
-    } else if (!open && previousOpen) {
+  // open の変化を監視し、ダイアログの開閉に応じて履歴を呼び出す
+  // untrack で sections/loading を非依存にし、読み込んでも $effect が再実行されないようにする
+  $effect(() => {
+    if (open) {
+      // untrack 内で読むことで sections/loading をトラッキング対象から除外し無限ループを防ぐ
+      if (untrack(() => !loading && sections.length === 0)) {
+        void loadSettings();
+      }
+    } else {
       handleDialogClose();
     }
-    previousOpen = open;
-  }
+  });
 
   onDestroy(() => {
     clearSuccessMessageTimer();
@@ -38,12 +47,6 @@
     if (successMessageTimer !== null) {
       clearTimeout(successMessageTimer);
       successMessageTimer = null;
-    }
-  }
-
-  function handleDialogOpen(): void {
-    if (!loading && sections.length === 0) {
-      void loadSettings();
     }
   }
 
@@ -243,8 +246,8 @@
   secondaryButtonText="キャンセル"
   disablePrimaryButton={saving || loading}
   disableSecondaryButton={saving}
-  on:primary-click={handlePrimaryClick}
-  on:secondary-click={handleSecondaryClick}
+  onPrimaryClick={handlePrimaryClick}
+  onSecondaryClick={handleSecondaryClick}
   maxWidth="60rem"
   maxHeight="90vh"
   minHeight="90vh"
@@ -260,7 +263,7 @@
           <button
             class:selected={section.id === activeSectionId}
             type="button"
-            on:click={() => selectSection(section.id)}
+            onclick={() => selectSection(section.id)}
             data-testid={`settings-section-${section.id}`}
           >
             {section.label}
@@ -288,13 +291,13 @@
     </div>
   {/if}
 
-  <svelte:fragment slot="footer-status">
+  {#snippet footerStatus()}
     {#if errorMessage && sections.length}
       <p class="status error">{errorMessage}</p>
     {:else if successMessage}
       <p class="status success">{successMessage}</p>
     {/if}
-  </svelte:fragment>
+  {/snippet}
 </BaseDialog>
 
 <style>

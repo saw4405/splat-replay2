@@ -1,22 +1,55 @@
 ﻿<script lang="ts">
-  import { createEventDispatcher, onDestroy } from 'svelte';
+  import type { Snippet } from 'svelte';
 
-  const dispatch = createEventDispatcher();
+  interface Props {
+    open?: boolean;
+    title?: string;
+    showHeader?: boolean;
+    showFooter?: boolean;
+    footerVariant?: 'simple' | 'compact' | 'custom';
+    primaryButtonText?: string;
+    secondaryButtonText?: string;
+    maxWidth?: string;
+    maxHeight?: string;
+    minHeight?: string;
+    disablePrimaryButton?: boolean;
+    disableSecondaryButton?: boolean;
+    allowBackdropClose?: boolean;
+    showCloseButton?: boolean;
+    onPrimaryClick?: () => void | Promise<void>;
+    onSecondaryClick?: () => void;
+    onClose?: () => void;
+    header?: Snippet;
+    children?: Snippet;
+    footerStatus?: Snippet;
+    footer?: Snippet;
+  }
 
-  export let open = false;
-  export let title = '';
-  export let showHeader = true;
-  export let showFooter = true;
-  export let footerVariant: 'simple' | 'compact' | 'custom' = 'simple';
-  export let primaryButtonText = '保存';
-  export let secondaryButtonText = 'キャンセル';
-  export let maxWidth = '60rem';
-  export let maxHeight = '90vh';
-  export let minHeight: string | undefined = undefined;
-  export let disablePrimaryButton = false;
-  export let disableSecondaryButton = false;
-  export let allowBackdropClose = false; // ダイアログ外クリックで閉じるかどうか
-  export let showCloseButton = false; // ×ボタンを表示するかどうか
+  let {
+    open = $bindable(false),
+    title = '',
+    showHeader = true,
+    showFooter = true,
+    footerVariant = 'simple',
+    primaryButtonText = '保存',
+    secondaryButtonText = 'キャンセル',
+    maxWidth = '60rem',
+    maxHeight = '90vh',
+    minHeight = undefined,
+    disablePrimaryButton = false,
+    disableSecondaryButton = false,
+    allowBackdropClose = false,
+    showCloseButton = false,
+    onPrimaryClick,
+    onSecondaryClick,
+    header,
+    children,
+    footerStatus,
+    footer,
+    onClose = undefined,
+  }: Props = $props();
+
+  const resolvedMinHeight = $derived(minHeight ?? `clamp(37.5rem, 80vh, ${maxHeight})`);
 
   const handleKeydown = (event: KeyboardEvent): void => {
     if (event.key === 'Escape' && allowBackdropClose) {
@@ -24,49 +57,41 @@
     }
   };
 
-  let keydownListenerAttached = false;
-
-  $: resolvedMinHeight = minHeight ?? `clamp(37.5rem, 80vh, ${maxHeight})`;
-
-  $: {
-    if (open && !keydownListenerAttached) {
+  $effect(() => {
+    if (open) {
       window.addEventListener('keydown', handleKeydown);
-      keydownListenerAttached = true;
-    } else if (!open && keydownListenerAttached) {
-      window.removeEventListener('keydown', handleKeydown);
-      keydownListenerAttached = false;
-    }
-  }
-
-  onDestroy(() => {
-    if (keydownListenerAttached) {
-      window.removeEventListener('keydown', handleKeydown);
-      keydownListenerAttached = false;
+      return () => {
+        window.removeEventListener('keydown', handleKeydown);
+      };
     }
   });
 
   function closeDialog(): void {
-    open = false;
+    if (onClose) {
+      onClose();
+    } else {
+      open = false;
+    }
   }
 
   function handlePrimaryClick(): void {
-    dispatch('primary-click', {});
+    void onPrimaryClick?.();
   }
 
   function handleSecondaryClick(): void {
-    dispatch('secondary-click', {});
+    onSecondaryClick?.();
     closeDialog();
   }
 </script>
 
 {#if open}
-  <!-- svelte-ignore a11y-click-events-have-key-events -->
-  <!-- svelte-ignore a11y-no-static-element-interactions -->
-  <!-- svelte-ignore a11y-no-noninteractive-element-interactions -->
+  <!-- svelte-ignore a11y_click_events_have_key_events -->
+  <!-- svelte-ignore a11y_no_static_element_interactions -->
+  <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
   <div
     class="dialog-overlay"
     role="presentation"
-    on:click={allowBackdropClose ? closeDialog : undefined}
+    onclick={allowBackdropClose ? closeDialog : undefined}
   >
     <div
       class="dialog-container"
@@ -74,18 +99,20 @@
       tabindex="-1"
       aria-modal="true"
       aria-labelledby={showHeader ? 'dialog-title' : undefined}
-      on:click|stopPropagation
+      onclick={(e) => e.stopPropagation()}
       style:max-width={maxWidth}
       style:max-height={maxHeight}
       style:min-height={resolvedMinHeight}
     >
       {#if showHeader}
         <header class="dialog-header">
-          <slot name="header">
+          {#if header}
+            {@render header()}
+          {:else}
             <h2 id="dialog-title">{title}</h2>
-          </slot>
+          {/if}
           {#if showCloseButton}
-            <button class="icon-button" type="button" aria-label="閉じる" on:click={closeDialog}>
+            <button class="icon-button" type="button" aria-label="閉じる" onclick={closeDialog}>
               ✕
             </button>
           {/if}
@@ -93,12 +120,12 @@
       {/if}
 
       <section class="dialog-body">
-        <slot />
+        {@render children?.()}
       </section>
 
       {#if showFooter}
         <footer class="dialog-footer">
-          <slot name="footer-status" />
+          {@render footerStatus?.()}
 
           {#if footerVariant === 'simple'}
             <div class="actions">
@@ -106,7 +133,7 @@
                 type="button"
                 class="action-button secondary"
                 data-testid="dialog-cancel-button"
-                on:click={handleSecondaryClick}
+                onclick={handleSecondaryClick}
                 disabled={disableSecondaryButton}
               >
                 <span aria-hidden="true" class="button-background"></span>
@@ -116,7 +143,7 @@
                 type="button"
                 class="action-button primary"
                 data-testid="dialog-confirm-button"
-                on:click={handlePrimaryClick}
+                onclick={handlePrimaryClick}
                 disabled={disablePrimaryButton}
               >
                 <span aria-hidden="true" class="button-background"></span>
@@ -129,7 +156,7 @@
                 type="button"
                 class="action-button primary"
                 data-testid="dialog-confirm-button"
-                on:click={handlePrimaryClick}
+                onclick={handlePrimaryClick}
                 disabled={disablePrimaryButton}
               >
                 <span aria-hidden="true" class="button-background"></span>
@@ -137,7 +164,7 @@
               </button>
             </div>
           {:else}
-            <slot name="footer" />
+            {@render footer?.()}
           {/if}
         </footer>
       {/if}

@@ -1,9 +1,13 @@
 ﻿<script lang="ts">
   import BaseDialog from '../../../common/components/BaseDialog.svelte';
 
-  export let visible: boolean = false;
-  export let videoUrl: string = '';
-  export let videoTitle: string = '';
+  interface Props {
+    visible?: boolean;
+    videoUrl?: string;
+    videoTitle?: string;
+  }
+
+  let { visible = $bindable(false), videoUrl = '', videoTitle = '' }: Props = $props();
 </script>
 
 <BaseDialog

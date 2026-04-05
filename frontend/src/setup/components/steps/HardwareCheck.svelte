@@ -1,4 +1,5 @@
-﻿<script lang="ts">
+<script lang="ts">
+  import { untrack } from 'svelte';
   import { Check, Gamepad, Cpu, HardDrive, Wifi, Cable } from 'lucide-svelte';
   import { markSubstepCompleted } from '../../stores/navigation';
   import { setupState } from '../../stores/state';
@@ -15,7 +16,7 @@
     isConnection?: boolean;
   }
 
-  let requirements: HardwareRequirement[] = [
+  let requirements: HardwareRequirement[] = $state([
     {
       id: 'hardware-switch',
       name: 'Nintendo Switch',
@@ -52,18 +53,26 @@
       checked: false,
       isConnection: true,
     },
-  ];
+  ]);
 
-  let currentSubStepIndex = 0;
-  let hasInitializedSubstep = false;
+  let currentSubStepIndex = $state(0);
+  let hasInitializedSubstep = $state(false);
 
   // 親コンポーネントに通知するためのフラグ
-  export let canGoBack = false;
-  export let isStepCompleted = false;
+  interface Props {
+    canGoBack?: boolean;
+    isStepCompleted?: boolean;
+  }
 
-  $: isStepCompleted = requirements[currentSubStepIndex].checked;
+  let { canGoBack = $bindable(false), isStepCompleted = $bindable(false) }: Props = $props();
 
-  $: canGoBack = currentSubStepIndex > 0;
+  $effect(() => {
+    isStepCompleted = requirements[currentSubStepIndex].checked;
+  });
+
+  $effect(() => {
+    canGoBack = currentSubStepIndex > 0;
+  });
 
   function loadSavedSubstepIndex(maxIndex: number): number | null {
     if (typeof window === 'undefined') return null;
@@ -84,33 +93,40 @@
   }
 
   // 現在のステップが変更されたときにhasInitializedSubstepをリセット
-  $: if ($setupState?.current_step !== SetupStep.HARDWARE_CHECK) {
-    hasInitializedSubstep = false;
-  }
+  $effect(() => {
+    if ($setupState?.current_step !== SetupStep.HARDWARE_CHECK) {
+      hasInitializedSubstep = false;
+    }
+  });
 
   // Sync with installation state
-  $: if ($setupState && $setupState.step_details) {
-    const details = $setupState.step_details[SetupStep.HARDWARE_CHECK] || {};
-    const updatedRequirements = requirements.map((req) => ({
-      ...req,
-      checked: details[req.id] || false,
-    }));
-    requirements = updatedRequirements;
+  $effect(() => {
+    if ($setupState && $setupState.step_details) {
+      const details = $setupState.step_details[SetupStep.HARDWARE_CHECK] || {};
+      // untrack で requirements を依存関係から外す（楽観的更新が $effect で上書きされるのを防ぐ）
+      const updatedRequirements = untrack(() => requirements).map((req) => ({
+        ...req,
+        checked: details[req.id] || false,
+      }));
+      requirements = updatedRequirements;
 
-    if (!hasInitializedSubstep && $setupState.current_step === SetupStep.HARDWARE_CHECK) {
-      const savedIndex = loadSavedSubstepIndex(updatedRequirements.length - 1);
-      if (savedIndex !== null) {
-        currentSubStepIndex = savedIndex;
-      } else {
-        currentSubStepIndex = computeInitialSubstepIndex(updatedRequirements);
+      if (!hasInitializedSubstep && $setupState.current_step === SetupStep.HARDWARE_CHECK) {
+        const savedIndex = loadSavedSubstepIndex(updatedRequirements.length - 1);
+        if (savedIndex !== null) {
+          currentSubStepIndex = savedIndex;
+        } else {
+          currentSubStepIndex = computeInitialSubstepIndex(updatedRequirements);
+        }
+        hasInitializedSubstep = true;
       }
-      hasInitializedSubstep = true;
     }
-  }
+  });
 
-  $: if (hasInitializedSubstep) {
-    saveSubstepIndex(currentSubStepIndex);
-  }
+  $effect(() => {
+    if (hasInitializedSubstep) {
+      saveSubstepIndex(currentSubStepIndex);
+    }
+  });
 
   export async function next(options: { skip?: boolean } = {}): Promise<boolean> {
     // 現在のステップをチェック済みにする
@@ -181,22 +197,18 @@
     <div
       class="requirement-card glass-card"
       class:completed={requirements[currentSubStepIndex].checked}
-      on:click={handleCardClick}
-      on:keydown={handleKeyDown}
+      onclick={handleCardClick}
+      onkeydown={handleKeyDown}
       role="button"
       tabindex="0"
     >
       {#key currentSubStepIndex}
+        {@const IconComponent = requirements[currentSubStepIndex].icon}
         <div class="requirement-content-wrapper">
           <div class="card-header">
             <div class="header-left">
               <div class="requirement-icon-large">
-                <svelte:component
-                  this={requirements[currentSubStepIndex].icon}
-                  class="icon"
-                  size={32}
-                  stroke-width={1.5}
-                />
+                <IconComponent class="icon" size={32} stroke-width={1.5} />
               </div>
               <h3 class="requirement-name-large">
                 {requirements[currentSubStepIndex].name}

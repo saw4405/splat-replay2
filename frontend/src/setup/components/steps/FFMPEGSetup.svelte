@@ -1,4 +1,4 @@
-﻿<script lang="ts">
+<script lang="ts">
   import { onMount } from 'svelte';
   import { Download, ExternalLink, FolderOpen, Info, Check } from 'lucide-svelte';
   import { checkSystem, setupFFMPEG } from '../../stores/system';
@@ -7,39 +7,49 @@
   import { type SystemCheckResult, SetupStep } from '../../types';
   import NotificationDialog from '../../../common/components/NotificationDialog.svelte';
 
-  let ffmpegInstalled = false;
-  let _ffmpegVersion: string | null = null;
-  let isChecking = false;
-  let checkError: string | null = null;
-  let dialogOpen = false;
-  let dialogMessage = '';
-  let dialogVariant: 'info' | 'success' | 'warning' | 'error' = 'info';
+  let ffmpegInstalled = $state(false);
+  let _ffmpegVersion = $state<string | null>(null);
+  let isChecking = $state(false);
+  let checkError = $state<string | null>(null);
+  let dialogOpen = $state(false);
+  let dialogMessage = $state('');
+  let dialogVariant = $state<'info' | 'success' | 'warning' | 'error'>('info');
 
-  let setupCompleted = {
+  let setupCompleted = $state({
     downloadAndExtract: false,
-  };
+  });
 
-  let currentSubStepIndex = 0;
+  let currentSubStepIndex = $state(0);
 
   // 親コンポーネントに通知するためのフラグ
-  export let canGoBack = false;
-  export let isStepCompleted = false;
+  interface Props {
+    canGoBack?: boolean;
+    isStepCompleted?: boolean;
+  }
 
-  $: isStepCompleted = setupCompleted.downloadAndExtract;
+  let { canGoBack = $bindable(false), isStepCompleted = $bindable(false) }: Props = $props();
 
-  $: canGoBack = currentSubStepIndex > 0;
+  $effect(() => {
+    isStepCompleted = setupCompleted.downloadAndExtract;
+  });
+
+  $effect(() => {
+    canGoBack = currentSubStepIndex > 0;
+  });
 
   onMount(async () => {
     await checkFFMPEGInstallation();
   });
 
   // Sync with installation state
-  $: if ($setupState && $setupState.step_details) {
-    const details = $setupState.step_details[SetupStep.FFMPEG_SETUP] || {};
-    setupCompleted = {
-      downloadAndExtract: details['ffmpeg-download-extract'] || false,
-    };
-  }
+  $effect(() => {
+    if ($setupState && $setupState.step_details) {
+      const details = $setupState.step_details[SetupStep.FFMPEG_SETUP] || {};
+      setupCompleted = {
+        downloadAndExtract: details['ffmpeg-download-extract'] || false,
+      };
+    }
+  });
 
   export async function next(options: { skip?: boolean } = {}): Promise<boolean> {
     if (!ffmpegInstalled) {
@@ -194,8 +204,8 @@
       class="step-card glass-card"
       class:completed={setupCompleted.downloadAndExtract}
       class:disabled={isChecking || (setupCompleted.downloadAndExtract && ffmpegInstalled)}
-      on:click={handleCardClick}
-      on:keydown={handleKeyDown}
+      onclick={handleCardClick}
+      onkeydown={handleKeyDown}
       role="button"
       tabindex="0"
     >
@@ -225,7 +235,7 @@
                 <button
                   class="link-button"
                   type="button"
-                  on:click={() =>
+                  onclick={() =>
                     openUrl('https://github.com/BtbN/FFmpeg-Builds/releases/tag/latest')}
                 >
                   <Download class="icon" size={16} />
@@ -262,7 +272,7 @@
     isOpen={dialogOpen}
     variant={dialogVariant}
     message={dialogMessage}
-    on:close={() => (dialogOpen = false)}
+    onClose={() => (dialogOpen = false)}
   />
 </div>
 

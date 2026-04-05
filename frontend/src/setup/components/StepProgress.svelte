@@ -2,7 +2,11 @@
   import { Check } from 'lucide-svelte';
   import type { ProgressInfo } from '../types';
 
-  export let progress: ProgressInfo | null = null;
+  interface Props {
+    progress?: ProgressInfo | null;
+  }
+
+  let { progress = null }: Props = $props();
 </script>
 
 {#if progress}

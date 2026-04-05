@@ -19,41 +19,45 @@
 
   // 展開状態: "closed" | "full"
   type DrawerState = 'closed' | 'full';
-  let drawerState: DrawerState = 'closed';
-  let activeTab: 'recorded' | 'edited' = 'recorded';
-  let recordedCount = 0;
-  let editedCount = 0;
-  let isProcessing = false;
-  let isModalOpen = false; // モーダルが開いているかどうか
-  let showProgressDialog = false; // 進捗ダイアログ表示フラグ
-  let showAlertDialog = false; // アラートダイアログ表示フラグ
-  let alertMessage = ''; // アラートメッセージ
-  let alertVariant: 'info' | 'success' | 'warning' | 'error' = 'info';
-  let showYouTubePermissionDialog = false; // YouTube権限ダイアログ表示フラグ
+  let drawerState = $state<DrawerState>('closed');
+  let activeTab = $state<'recorded' | 'edited'>('recorded');
+  let isProcessing = $state(false);
+  let isModalOpen = $state(false); // モーダルが開いているかどうか
+  let showProgressDialog = $state(false); // 進捗ダイアログ表示フラグ
+  let showAlertDialog = $state(false); // アラートダイアログ表示フラグ
+  let alertMessage = $state(''); // アラートメッセージ
+  let alertVariant = $state<'info' | 'success' | 'warning' | 'error'>('info');
+  let showYouTubePermissionDialog = $state(false); // YouTube権限ダイアログ表示フラグ
 
-  let recordedVideos: RecordedVideo[] = [];
-  let editedVideos: EditedVideo[] = [];
-  let processStatus: EditUploadStatus | null = null;
+  let recordedVideos = $state<RecordedVideo[]>([]);
+  let editedVideos = $state<EditedVideo[]>([]);
+  let processStatus = $state<EditUploadStatus | null>(null);
 
   let statusPollingInterval: number | null = null;
   let assetEventSource: EventSource | null = null;
   let assetEventRetryTimer: number | null = null;
-  let isLoadingData = false;
-  let pendingDataReload = false;
-  let drawerElement: HTMLDivElement | null = null;
-  let modalCloseTimer: number | null = null; // モーダル閉じるタイマー
-  let processStatusPollIntervalMs = getProcessStatusPollIntervalMs('cpu');
+  let isLoadingData = $state(false);
+  let pendingDataReload = $state(false);
+  let drawerElement = $state<HTMLDivElement | null>(null);
+  let modalCloseTimer: number | null = null; // モーダルを閉じるタイマー
+  let processStatusPollIntervalMs = $state(getProcessStatusPollIntervalMs('cpu'));
 
-  $: recordedCount = recordedVideos.length;
-  $: editedCount = editedVideos.length;
-  $: isProcessing = processStatus?.state === 'running';
-  $: nextProcessStatusPollIntervalMs = getProcessStatusPollIntervalMs($renderMode);
-  $: if (processStatusPollIntervalMs !== nextProcessStatusPollIntervalMs) {
-    processStatusPollIntervalMs = nextProcessStatusPollIntervalMs;
-    if (statusPollingInterval !== null) {
-      startStatusPolling();
+  const recordedCount = $derived(recordedVideos.length);
+  const editedCount = $derived(editedVideos.length);
+
+  $effect(() => {
+    isProcessing = processStatus?.state === 'running';
+  });
+
+  $effect(() => {
+    const next = getProcessStatusPollIntervalMs($renderMode);
+    if (processStatusPollIntervalMs !== next) {
+      processStatusPollIntervalMs = next;
+      if (statusPollingInterval !== null) {
+        startStatusPolling();
+      }
     }
-  }
+  });
 
   onMount(() => {
     // 初回データ取得
@@ -137,6 +141,8 @@
     };
     assetEventSource.onopen = () => {
       console.log('[BottomDrawer] SSE connection opened (domain-events)');
+      // 接続確立時にデータを再取得（バックエンド起動遅延への対策）
+      void loadData();
     };
   }
 
@@ -213,6 +219,7 @@
   function toggleDrawer(): void {
     if (drawerState === 'closed') {
       drawerState = 'full';
+      void loadData();
     } else {
       drawerState = 'closed';
     }
@@ -274,7 +281,7 @@
   }
 
   /**
-   * 自動処理通知から実行を開始する。
+   * 自動処理フローから実行を開始するための関数
    */
   export function startAutoProcessing(): void {
     if (isProcessing) {
@@ -297,7 +304,7 @@
       clearInterval(statusPollingInterval);
     }
 
-    // render_mode に応じた間隔で状態をチェック
+    // render_mode に応じた間隔で状況をチェック
     statusPollingInterval = window.setInterval(async () => {
       try {
         const status = await fetchEditUploadStatus();
@@ -323,13 +330,13 @@
           }
         }
       } catch (error) {
-        console.error('状態取得エラー:', error);
+        console.error('状況取得エラー:', error);
       }
     }, processStatusPollIntervalMs);
   }
 
   /**
-   * 外部（MainAppなど）から進捗表示を開始するための関数
+   * 外部(MainAppなど)から進捗表示を開始するための関数
    */
   export function openProgress(): void {
     showProgressDialog = true;
@@ -340,18 +347,18 @@
 <!-- YouTube権限ダイアログ -->
 <YouTubePermissionDialog
   bind:open={showYouTubePermissionDialog}
-  on:close={handleYouTubePermissionDialogClose}
+  onClose={handleYouTubePermissionDialogClose}
 />
 
 <!-- 進捗ダイアログ -->
-<ProgressDialog isOpen={showProgressDialog} on:close={() => (showProgressDialog = false)} />
+<ProgressDialog bind:isOpen={showProgressDialog} />
 
 <!-- アラートダイアログ -->
 <NotificationDialog
   isOpen={showAlertDialog}
   variant={alertVariant}
   message={alertMessage}
-  on:close={() => (showAlertDialog = false)}
+  onClose={() => (showAlertDialog = false)}
 />
 
 <div class="bottom-drawer" class:full={drawerState === 'full'} bind:this={drawerElement}>
@@ -360,8 +367,8 @@
     class="drawer-header"
     role="button"
     tabindex="0"
-    on:click={toggleDrawer}
-    on:keydown={(e) => e.key === 'Enter' && toggleDrawer()}
+    onclick={toggleDrawer}
+    onkeydown={(e) => e.key === 'Enter' && toggleDrawer()}
     data-testid="bottom-drawer-toggle"
   >
     <div class="header-left">
@@ -396,8 +403,8 @@
           class="tab recorded"
           class:has-data={recordedCount > 0}
           class:active={drawerState === 'full' && activeTab === 'recorded'}
-          on:click={(e) => activateTab('recorded', e)}
-          on:keydown={(e) => e.key === 'Enter' && activateTab('recorded', e)}
+          onclick={(e) => activateTab('recorded', e)}
+          onkeydown={(e) => e.key === 'Enter' && activateTab('recorded', e)}
         >
           <div class="tab-glow"></div>
           <span class="tab-icon">🎬</span>
@@ -411,8 +418,8 @@
           class="tab edited"
           class:has-data={editedCount > 0}
           class:active={drawerState === 'full' && activeTab === 'edited'}
-          on:click={(e) => activateTab('edited', e)}
-          on:keydown={(e) => e.key === 'Enter' && activateTab('edited', e)}
+          onclick={(e) => activateTab('edited', e)}
+          onkeydown={(e) => e.key === 'Enter' && activateTab('edited', e)}
         >
           <div class="tab-glow"></div>
           <span class="tab-icon">✨</span>
@@ -430,8 +437,9 @@
         class:processing={isProcessing}
         class:ready={recordedCount > 0 || editedCount > 0}
         disabled={isProcessing || (recordedCount === 0 && editedCount === 0)}
-        on:click|stopPropagation={async () => {
-          await startProcessing();
+        onclick={(e) => {
+          e.stopPropagation();
+          startProcessing();
         }}
         title="録画データの編集とYouTubeへのアップロードを開始します"
       >
@@ -472,8 +480,8 @@
             <div class="list-container">
               <RecordedDataList
                 videos={recordedVideos}
-                on:refresh={loadData}
-                on:modalOpen={() => {
+                onRefresh={loadData}
+                onModalOpen={() => {
                   console.log('BottomDrawer: modalOpen event received from RecordedDataList');
                   drawerState = 'full';
                   isModalOpen = true;
@@ -484,7 +492,7 @@
                     isModalOpen
                   );
                 }}
-                on:modalClose={() => {
+                onModalClose={() => {
                   console.log('BottomDrawer: modalClose event received from RecordedDataList');
                   // モーダルが閉じた直後のクリックイベントを無視するため、少し遅延
                   if (modalCloseTimer !== null) {
@@ -514,8 +522,8 @@
             <div class="list-container">
               <EditedDataList
                 videos={editedVideos}
-                on:refresh={loadData}
-                on:modalOpen={() => {
+                onRefresh={loadData}
+                onModalOpen={() => {
                   console.log('BottomDrawer: modalOpen event received from EditedDataList');
                   drawerState = 'full';
                   isModalOpen = true;
@@ -526,7 +534,7 @@
                     isModalOpen
                   );
                 }}
-                on:modalClose={() => {
+                onModalClose={() => {
                   console.log('BottomDrawer: modalClose event received from EditedDataList');
                   // モーダルが閉じた直後のクリックイベントを無視するため、少し遅延
                   if (modalCloseTimer !== null) {
@@ -564,18 +572,17 @@
     flex-direction: column;
     background: linear-gradient(
       to top,
-      rgba(var(--theme-rgb-surface-deep), 0.98) 0%,
-      rgba(var(--theme-rgb-surface-overlay), 0.95) 50%,
-      rgba(var(--theme-rgb-space-2), 0.92) 100%
+      rgb(var(--theme-rgb-surface-card-dark)) 0%,
+      rgb(var(--theme-rgb-surface-card)) 100%
     );
-    backdrop-filter: blur(12px) saturate(145%);
-    -webkit-backdrop-filter: blur(12px) saturate(145%);
-    border-top: 1px solid rgba(var(--theme-rgb-accent), 0.2);
+    backdrop-filter: blur(8px) saturate(135%);
+    -webkit-backdrop-filter: blur(8px) saturate(135%);
+    border-top: 1px solid rgba(var(--theme-rgb-accent), 0.16);
     box-shadow:
       0 -6px 22px rgba(var(--theme-rgb-black), 0.3),
       0 -2px 6px rgba(var(--theme-rgb-accent), 0.08),
       inset 0 1px 0 rgba(var(--theme-rgb-white), 0.05);
-    z-index: 100;
+    z-index: 300;
     transition: box-shadow 0.4s cubic-bezier(0.4, 0, 0.2, 1);
   }
 
@@ -898,6 +905,7 @@
     word-wrap: break-word; /* 古いブラウザ対応 */
     display: flex;
     flex-direction: column;
+    flex: 1 1 auto; /* 親の残领域を全て使う（データなし時も100%高さ） */
     min-height: 0;
     overflow: hidden; /* コンテンツがはみ出さないようにする */
     align-self: stretch; /* ensure grid item fills the grid cell vertically/horizontally */

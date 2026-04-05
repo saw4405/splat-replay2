@@ -25,15 +25,18 @@ describe('BaseDialog.svelte', () => {
     expect(heading).toBeInTheDocument();
   });
 
-  it('プライマリボタンをクリックすると primary-click イベントが発火する', async () => {
+  it('プライマリボタンをクリックすると onPrimaryClick が呼ばれる', async () => {
     const user = userEvent.setup();
     const mockPrimaryClick = vi.fn();
 
-    const { component } = render(BaseDialog, {
-      props: { open: true, title: 'テスト', primaryButtonText: '保存' },
+    render(BaseDialog, {
+      props: {
+        open: true,
+        title: 'テスト',
+        primaryButtonText: '保存',
+        onPrimaryClick: mockPrimaryClick,
+      },
     });
-
-    component.$on('primary-click', mockPrimaryClick);
 
     const primaryButton = screen.getByRole('button', { name: '保存' });
     await user.click(primaryButton);
@@ -41,15 +44,18 @@ describe('BaseDialog.svelte', () => {
     expect(mockPrimaryClick).toHaveBeenCalledTimes(1);
   });
 
-  it('セカンダリボタンをクリックすると secondary-click イベントが発火する', async () => {
+  it('セカンダリボタンをクリックすると onSecondaryClick が呼ばれる', async () => {
     const user = userEvent.setup();
     const mockSecondaryClick = vi.fn();
 
-    const { component } = render(BaseDialog, {
-      props: { open: true, title: 'テスト', secondaryButtonText: 'キャンセル' },
+    render(BaseDialog, {
+      props: {
+        open: true,
+        title: 'テスト',
+        secondaryButtonText: 'キャンセル',
+        onSecondaryClick: mockSecondaryClick,
+      },
     });
-
-    component.$on('secondary-click', mockSecondaryClick);
 
     const secondaryButton = screen.getByRole('button', { name: 'キャンセル' });
     await user.click(secondaryButton);

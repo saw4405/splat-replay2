@@ -1,18 +1,24 @@
 ﻿<script lang="ts">
-  import { createEventDispatcher } from 'svelte';
   import { Info, CircleCheck, TriangleAlert, CircleAlert } from 'lucide-svelte';
   import BaseDialog from './BaseDialog.svelte';
 
-  export let isOpen = false;
-  export let message = '';
-  export let variant: 'info' | 'success' | 'warning' | 'error' = 'info';
-  export let title = '';
-  export let buttonText = '閉じる';
+  interface Props {
+    isOpen?: boolean;
+    message?: string;
+    variant?: 'info' | 'success' | 'warning' | 'error';
+    title?: string;
+    buttonText?: string;
+    onClose?: () => void;
+  }
 
-  const dispatch = createEventDispatcher();
-
-  $: resolvedTitle = title || variantConfig[variant].title;
-  $: IconComponent = variantConfig[variant].icon;
+  let {
+    isOpen = $bindable(false),
+    message = '',
+    variant = 'info',
+    title = '',
+    buttonText = '閉じる',
+    onClose,
+  }: Props = $props();
 
   const variantConfig = {
     info: {
@@ -45,9 +51,12 @@
     },
   };
 
+  const resolvedTitle = $derived(title || variantConfig[variant].title);
+  const IconComponent = $derived(variantConfig[variant].icon);
+
   function handleClose(): void {
     isOpen = false;
-    dispatch('close');
+    onClose?.();
   }
 </script>
 
@@ -55,18 +64,18 @@
   bind:open={isOpen}
   footerVariant="compact"
   primaryButtonText={buttonText}
-  on:primary-click={handleClose}
+  onPrimaryClick={handleClose}
   maxWidth="28rem"
   minHeight="auto"
 >
-  <svelte:fragment slot="header">
+  {#snippet header()}
     <div class="notification-header">
       <div class="notification-icon" style="color: {variantConfig[variant].color};">
-        <svelte:component this={IconComponent} size={28} />
+        <IconComponent size={28} />
       </div>
       <h2 id="dialog-title" class="notification-title">{resolvedTitle}</h2>
     </div>
-  </svelte:fragment>
+  {/snippet}
 
   <p class="message">{message}</p>
 </BaseDialog>

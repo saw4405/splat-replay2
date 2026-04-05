@@ -1,4 +1,4 @@
-﻿<script lang="ts">
+<script lang="ts">
   import { onDestroy } from 'svelte';
   import { fetchEditUploadStatus, updateEditUploadProcessOptions } from '../../api/assets';
   import BaseDialog from '../../../common/components/BaseDialog.svelte';
@@ -45,24 +45,28 @@
     status: PhaseStatus;
   }
 
-  export let isOpen = false;
+  interface Props {
+    isOpen?: boolean;
+  }
 
-  let tasks: Record<string, TaskState> = {};
+  let { isOpen = $bindable(false) }: Props = $props();
+
+  let tasks = $state<Record<string, TaskState>>({});
 
   let eventSource: EventSource | null = null;
   let messageHandler: ((event: MessageEvent) => void) | null = null;
   let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   let countdownTimer: ReturnType<typeof setInterval> | null = null;
-  let reconnectAttempt = 0;
-  let retryCountdown = 0;
+  let reconnectAttempt = $state(0);
+  let retryCountdown = $state(0);
 
-  let connectionState: ConnectionState = 'idle';
-  let editUploadStatus: EditUploadStatus | null = null;
-  let optionLoading = false;
-  let optionSaving = false;
-  let optionErrorMessage = '';
-  let wasOpen = false;
-  let statusRequestId = 0;
+  let connectionState = $state<ConnectionState>('idle');
+  let editUploadStatus = $state<EditUploadStatus | null>(null);
+  let optionLoading = $state(false);
+  let optionSaving = $state(false);
+  let optionErrorMessage = $state('');
+  let wasOpen = $state(false);
+  let statusRequestId = $state(0);
 
   const dialogMinHeight = 'min(70vh, 46rem)';
   const dialogMaxHeight = '90vh';
@@ -124,51 +128,56 @@
 
   const streamEventNames = ['progress_event', 'progress'];
 
-  $: orderedTasks = taskOrder
-    .map((id) => tasks[id])
-    .filter((task): task is TaskState => Boolean(task));
+  const orderedTasks = $derived(
+    taskOrder.map((id) => tasks[id]).filter((task): task is TaskState => Boolean(task))
+  );
 
-  $: extraTasks = Object.values(tasks).filter((task) => !taskOrder.includes(task.id));
+  const extraTasks = $derived(Object.values(tasks).filter((task) => !taskOrder.includes(task.id)));
 
-  $: taskList = [...orderedTasks, ...extraTasks];
+  const taskList = $derived([...orderedTasks, ...extraTasks]);
 
-  $: allFinished =
+  const allFinished = $derived(
     taskList.length > 0 &&
-    taskOrder.every((id) => tasks[id] !== undefined) &&
-    taskList.every((task) => task.status === 'succeeded' || task.status === 'failed');
+      taskOrder.every((id) => tasks[id] !== undefined) &&
+      taskList.every((task) => task.status === 'succeeded' || task.status === 'failed')
+  );
 
-  $: anyRunning = taskList.some((task) => task.status === 'running');
-  $: anyFailure = taskList.some((task) => task.status === 'failed');
+  const anyRunning = $derived(taskList.some((task) => task.status === 'running'));
+  const anyFailure = $derived(taskList.some((task) => task.status === 'failed'));
 
   // フェーズステッパーの状態を導出
-  $: phases = computePhases(tasks);
+  const phases = $derived(computePhases(tasks));
 
   // 経過時間の計測
   let elapsedTimers: Record<string, number> = {};
-  let elapsedSeconds: Record<string, number> = {};
+  let elapsedSeconds = $state<Record<string, number>>({});
 
   // 完了サマリー
-  $: totalItemsProcessed = taskList.reduce((sum, t) => sum + t.completed, 0);
-  $: sleepAfterUploadEnabled = editUploadStatus?.sleepAfterUploadEffective ?? false;
-  $: sleepToggleDisabled = optionLoading || optionSaving || !editUploadStatus;
+  const totalItemsProcessed = $derived(taskList.reduce((sum, t) => sum + t.completed, 0));
+  const sleepAfterUploadEnabled = $derived(editUploadStatus?.sleepAfterUploadEffective ?? false);
+  const sleepToggleDisabled = $derived(optionLoading || optionSaving || !editUploadStatus);
 
-  $: if (isOpen) {
-    ensureStream();
-  } else {
-    pauseStream();
-  }
-
-  $: if (isOpen !== wasOpen) {
-    wasOpen = isOpen;
+  $effect(() => {
     if (isOpen) {
-      optionErrorMessage = '';
-      void loadEditUploadStatus();
+      ensureStream();
     } else {
-      optionErrorMessage = '';
-      optionLoading = false;
-      optionSaving = false;
+      pauseStream();
     }
-  }
+  });
+
+  $effect(() => {
+    if (isOpen !== wasOpen) {
+      wasOpen = isOpen;
+      if (isOpen) {
+        optionErrorMessage = '';
+        void loadEditUploadStatus();
+      } else {
+        optionErrorMessage = '';
+        optionLoading = false;
+        optionSaving = false;
+      }
+    }
+  });
 
   onDestroy(() => {
     disposeStream();
@@ -786,7 +795,7 @@
     openStream();
   }
 
-  $: closeDisabled = anyRunning;
+  const closeDisabled = $derived(anyRunning);
 
   function handleClose(): void {
     if (closeDisabled) {
@@ -859,7 +868,7 @@
   maxWidth="640px"
   maxHeight={dialogMaxHeight}
   minHeight={dialogMinHeight}
-  on:close={handleClose}
+  onClose={handleClose}
 >
   <section class="dialog-body">
     <!-- 接続バナー（エラー時のみ表示） -->
@@ -876,7 +885,7 @@
         {#if retryCountdown > 0}
           {retryCountdown}秒後に再試行
         {/if}
-        <button type="button" class="retry-button" on:click={manualReconnect}>再接続</button>
+        <button type="button" class="retry-button" onclick={manualReconnect}>再接続</button>
       </div>
     {/if}
 
@@ -1026,37 +1035,39 @@
     </div>
   </section>
 
-  <footer slot="footer" class="dialog-footer">
-    <!-- スリープトグル -->
-    <div class="footer-option">
-      <label class="sleep-toggle" class:disabled={sleepToggleDisabled}>
-        <input
-          type="checkbox"
-          checked={sleepAfterUploadEnabled}
-          disabled={sleepToggleDisabled}
-          aria-label="完了後スリープ"
-          on:change={handleSleepAfterUploadChange}
-        />
-        <span class="toggle-slider"></span>
-        <span class="toggle-label">完了後スリープ</span>
-      </label>
-      {#if optionErrorMessage}
-        <span class="option-error" role="alert">{optionErrorMessage}</span>
-      {/if}
-    </div>
+  {#snippet footer()}
+    <footer class="dialog-footer">
+      <!-- スリープトグル -->
+      <div class="footer-option">
+        <label class="sleep-toggle" class:disabled={sleepToggleDisabled}>
+          <input
+            type="checkbox"
+            checked={sleepAfterUploadEnabled}
+            disabled={sleepToggleDisabled}
+            aria-label="完了後スリープ"
+            onchange={handleSleepAfterUploadChange}
+          />
+          <span class="toggle-slider"></span>
+          <span class="toggle-label">完了後スリープ</span>
+        </label>
+        {#if optionErrorMessage}
+          <span class="option-error" role="alert">{optionErrorMessage}</span>
+        {/if}
+      </div>
 
-    <div class="footer-actions">
-      <button
-        type="button"
-        class="action-button primary"
-        on:click={handleClose}
-        disabled={closeDisabled}
-        title={closeDisabled ? '処理中は閉じることができません' : ''}
-      >
-        閉じる
-      </button>
-    </div>
-  </footer>
+      <div class="footer-actions">
+        <button
+          type="button"
+          class="action-button primary"
+          onclick={handleClose}
+          disabled={closeDisabled}
+          title={closeDisabled ? '処理中は閉じることができません' : ''}
+        >
+          閉じる
+        </button>
+      </div>
+    </footer>
+  {/snippet}
 </BaseDialog>
 
 <style>

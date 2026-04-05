@@ -1,11 +1,14 @@
 ﻿<script lang="ts">
-  import { createEventDispatcher } from 'svelte';
   import BaseDialog from '../../../common/components/BaseDialog.svelte';
 
-  const dispatch = createEventDispatcher();
+  interface Props {
+    open?: boolean;
+    onClose?: () => void;
+  }
 
-  export let open = false;
-  let dontShowAgain = false;
+  let { open = $bindable(false), onClose }: Props = $props();
+
+  let dontShowAgain = $state(false);
 
   async function handleClose(): Promise<void> {
     if (dontShowAgain) {
@@ -20,8 +23,7 @@
       }
     }
     open = false;
-    // 親コンポーネントに close イベントを通知
-    dispatch('close');
+    onClose?.();
   }
 </script>
 
@@ -31,12 +33,11 @@
   primaryButtonText="閉じる"
   maxWidth="32rem"
   minHeight="auto"
-  on:close={handleClose}
-  on:primary-click={handleClose}
+  onPrimaryClick={handleClose}
 >
-  <svelte:fragment slot="header">
+  {#snippet header()}
     <h2 id="dialog-title">YouTubeへのアクセス許可</h2>
-  </svelte:fragment>
+  {/snippet}
 
   <div class="dialog-content">
     <div class="info-section">

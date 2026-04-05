@@ -1,5 +1,5 @@
-﻿<script lang="ts">
-  import { onMount } from 'svelte';
+<script lang="ts">
+  import { onMount, untrack } from 'svelte';
   import { Download, ExternalLink, RefreshCw, Check, Search, Eye, EyeOff } from 'lucide-svelte';
   import { checkSystem } from '../../stores/system';
   import { markSubstepCompleted } from '../../stores/navigation';
@@ -15,7 +15,7 @@
 
   const SUBSTEP_STORAGE_KEY = 'obs_substep_index';
 
-  interface SetupStep {
+  interface SetupStepItem {
     id: string;
     title: string;
     description: string;
@@ -23,27 +23,27 @@
     url?: string;
   }
 
-  let obsInstalled = false;
-  let obsVersion: string | null = null;
-  let obsPath: string | null = null;
-  let _isChecking = false;
-  let _checkingIndex: number | null = null;
+  let obsInstalled = $state(false);
+  let obsVersion = $state<string | null>(null);
+  let obsPath = $state<string | null>(null);
+  let _isChecking = $state(false);
+  let _checkingIndex = $state<number | null>(null);
 
-  let ndiInstalled = false;
-  let ndiVersion: string | null = null;
-  let ndiPath: string | null = null;
+  let ndiInstalled = $state(false);
+  let ndiVersion = $state<string | null>(null);
+  let ndiPath = $state<string | null>(null);
 
-  let websocketPassword = '';
-  let showWebsocketPassword = false;
-  let videoDevices: string[] = [];
-  let selectedCaptureDevice = '';
-  let isLoadingDevices = false;
+  let websocketPassword = $state('');
+  let showWebsocketPassword = $state(false);
+  let videoDevices = $state<string[]>([]);
+  let selectedCaptureDevice = $state('');
+  let isLoadingDevices = $state(false);
 
-  let dialogOpen = false;
-  let dialogMessage = '';
-  let dialogVariant: 'info' | 'success' | 'warning' | 'error' = 'info';
+  let dialogOpen = $state(false);
+  let dialogMessage = $state('');
+  let dialogVariant = $state<'info' | 'success' | 'warning' | 'error'>('info');
 
-  let setupSteps: SetupStep[] = [
+  let setupSteps: SetupStepItem[] = $state([
     {
       id: 'obs-install',
       title: 'OBS Studio のインストール',
@@ -89,49 +89,56 @@
       description: 'OBS WebSocketのパスワードを設定します',
       completed: false,
     },
-  ];
+  ]);
 
-  let currentSubStepIndex = 0;
-  let hasInitializedSubstep = false;
+  let currentSubStepIndex = $state(0);
+  let hasInitializedSubstep = $state(false);
 
   // 親コンポーネントに通知するためのフラグ
-  export let canGoBack = false;
-  export let isStepCompleted = false;
+  interface Props {
+    canGoBack?: boolean;
+    isStepCompleted?: boolean;
+  }
+
+  let { canGoBack = $bindable(false), isStepCompleted = $bindable(false) }: Props = $props();
 
   // obsInstalled, ndiInstalled の変更にも反応するように直接参照
-  $: {
+  // サーバー状態(setupSteps)も考慮し、obsInstalled が初期化前でも正しく表示する
+  $effect(() => {
     const _obsInstalled = obsInstalled;
     const _ndiInstalled = ndiInstalled;
     const _currentIndex = currentSubStepIndex;
     const _steps = setupSteps;
 
     if (_currentIndex === 0) {
-      isStepCompleted = _obsInstalled;
+      isStepCompleted = _obsInstalled || (_steps[0]?.completed ?? false);
     } else if (_currentIndex === 2) {
-      isStepCompleted = _ndiInstalled;
+      isStepCompleted = _ndiInstalled || (_steps[2]?.completed ?? false);
     } else {
       isStepCompleted = _steps[_currentIndex]?.completed || false;
     }
-  }
+  });
 
   // UIで使用するためのreactive変数
-  let currentStepChecked = false;
-  $: {
+  let currentStepChecked = $state(false);
+  $effect(() => {
     const _obsInstalled = obsInstalled;
     const _ndiInstalled = ndiInstalled;
     const _currentIndex = currentSubStepIndex;
     const _steps = setupSteps;
 
     if (_currentIndex === 0) {
-      currentStepChecked = _obsInstalled;
+      currentStepChecked = _obsInstalled || (_steps[0]?.completed ?? false);
     } else if (_currentIndex === 2) {
-      currentStepChecked = _ndiInstalled;
+      currentStepChecked = _ndiInstalled || (_steps[2]?.completed ?? false);
     } else {
       currentStepChecked = _steps[_currentIndex]?.completed || false;
     }
-  }
+  });
 
-  $: canGoBack = currentSubStepIndex > 0;
+  $effect(() => {
+    canGoBack = currentSubStepIndex > 0;
+  });
 
   onMount(async () => {
     try {
@@ -166,72 +173,85 @@
     window.sessionStorage.setItem(SUBSTEP_STORAGE_KEY, index.toString());
   }
 
-  function computeInitialSubstepIndex(_steps: SetupStep[]): number {
+  function computeInitialSubstepIndex(_steps: SetupStepItem[]): number {
     // 常に最初の手順から開始する
     return 0;
   }
 
   // 現在のステップが変更されたときにhasInitializedSubstepをリセット
-  $: if ($setupState?.current_step !== SetupStep.OBS_SETUP) {
-    hasInitializedSubstep = false;
-  }
+  $effect(() => {
+    if ($setupState?.current_step !== SetupStep.OBS_SETUP) {
+      hasInitializedSubstep = false;
+    }
+  });
 
   // Sync with installation state
-  $: if ($setupState && $setupState.step_details) {
-    const details = $setupState.step_details[SetupStep.OBS_SETUP] || {};
-    const updatedSteps = setupSteps.map((step) => ({
-      ...step,
-      completed: details[step.id] || false,
-    }));
-    setupSteps = updatedSteps;
+  $effect(() => {
+    if ($setupState && $setupState.step_details) {
+      const details = $setupState.step_details[SetupStep.OBS_SETUP] || {};
+      // untrack で setupSteps を依存関係から外す（楽観的更新が $effect で上書きされるのを防ぐ）
+      const updatedSteps = untrack(() => setupSteps).map((step) => ({
+        ...step,
+        completed: details[step.id] || false,
+      }));
+      setupSteps = updatedSteps;
 
-    if (!hasInitializedSubstep && $setupState.current_step === SetupStep.OBS_SETUP) {
-      const savedIndex = loadSavedSubstepIndex(updatedSteps.length - 1);
-      if (savedIndex !== null) {
-        currentSubStepIndex = savedIndex;
-      } else {
-        currentSubStepIndex = computeInitialSubstepIndex(updatedSteps);
+      if (!hasInitializedSubstep && $setupState.current_step === SetupStep.OBS_SETUP) {
+        const savedIndex = loadSavedSubstepIndex(updatedSteps.length - 1);
+        if (savedIndex !== null) {
+          currentSubStepIndex = savedIndex;
+        } else {
+          currentSubStepIndex = computeInitialSubstepIndex(updatedSteps);
+        }
+        hasInitializedSubstep = true;
       }
-      hasInitializedSubstep = true;
     }
-  }
+  });
 
-  $: if (hasInitializedSubstep) {
-    saveSubstepIndex(currentSubStepIndex);
-  }
+  $effect(() => {
+    if (hasInitializedSubstep) {
+      saveSubstepIndex(currentSubStepIndex);
+    }
+  });
 
   // 手順1が表示されたときにOBSチェックを実行
-  let lastCheckedOBSIndex = -1;
-  $: if (
-    hasInitializedSubstep &&
-    currentSubStepIndex === 0 &&
-    lastCheckedOBSIndex !== currentSubStepIndex
-  ) {
-    lastCheckedOBSIndex = currentSubStepIndex;
-    checkOBSInstallation(false);
-  }
+  let lastCheckedOBSIndex = $state(-1);
+  $effect(() => {
+    if (
+      hasInitializedSubstep &&
+      currentSubStepIndex === 0 &&
+      lastCheckedOBSIndex !== currentSubStepIndex
+    ) {
+      lastCheckedOBSIndex = currentSubStepIndex;
+      void checkOBSInstallation(false);
+    }
+  });
 
   // 手順3が表示されたときにNDIチェックを実行
-  let lastCheckedNDIIndex = -1;
-  $: if (
-    hasInitializedSubstep &&
-    currentSubStepIndex === 2 &&
-    lastCheckedNDIIndex !== currentSubStepIndex
-  ) {
-    lastCheckedNDIIndex = currentSubStepIndex;
-    checkNDIInstallation(false);
-  }
+  let lastCheckedNDIIndex = $state(-1);
+  $effect(() => {
+    if (
+      hasInitializedSubstep &&
+      currentSubStepIndex === 2 &&
+      lastCheckedNDIIndex !== currentSubStepIndex
+    ) {
+      lastCheckedNDIIndex = currentSubStepIndex;
+      void checkNDIInstallation(false);
+    }
+  });
 
   // 手順4が表示されたときにビデオデバイス一覧を取得
-  let lastLoadedDevicesIndex = -1;
-  $: if (
-    hasInitializedSubstep &&
-    currentSubStepIndex === 3 &&
-    lastLoadedDevicesIndex !== currentSubStepIndex
-  ) {
-    lastLoadedDevicesIndex = currentSubStepIndex;
-    loadVideoDevices();
-  }
+  let lastLoadedDevicesIndex = $state(-1);
+  $effect(() => {
+    if (
+      hasInitializedSubstep &&
+      currentSubStepIndex === 3 &&
+      lastLoadedDevicesIndex !== currentSubStepIndex
+    ) {
+      lastLoadedDevicesIndex = currentSubStepIndex;
+      void loadVideoDevices();
+    }
+  });
 
   export async function next(options: { skip?: boolean } = {}): Promise<boolean> {
     const currentStep = setupSteps[currentSubStepIndex];
@@ -462,7 +482,11 @@
   }
 
   function isStepAutoCompleted(index: number): boolean {
-    return (index === 0 && obsInstalled) || (index === 2 && ndiInstalled);
+    // obsInstalled/ndiInstalled はサーバー同期前でも false のため、サーバー状態(setupSteps)も考慮する
+    return (
+      (index === 0 && (obsInstalled || (setupSteps[0]?.completed ?? false))) ||
+      (index === 2 && (ndiInstalled || (setupSteps[2]?.completed ?? false)))
+    );
   }
 
   function _isStepChecked(index: number): boolean {
@@ -504,8 +528,8 @@
       class="step-card glass-card"
       class:completed={currentStepChecked}
       class:disabled={isStepAutoCompleted(currentSubStepIndex)}
-      on:click={handleCardClick}
-      on:keydown={handleKeyDown}
+      onclick={handleCardClick}
+      onkeydown={handleKeyDown}
       role="button"
       tabindex="0"
     >
@@ -540,7 +564,7 @@
                     <button
                       class="link-button"
                       type="button"
-                      on:click={() => openUrl('https://obsproject.com/ja/download')}
+                      onclick={() => openUrl('https://obsproject.com/ja/download')}
                     >
                       <Download class="icon" size={16} />
                       ダウンロードページを開く
@@ -560,7 +584,7 @@
                     <button
                       class="link-button"
                       type="button"
-                      on:click={() => openUrl('https://github.com/obs-ndi/obs-ndi/releases')}
+                      onclick={() => openUrl('https://github.com/obs-ndi/obs-ndi/releases')}
                     >
                       <Download class="icon" size={16} />
                       ダウンロードページを開く
@@ -582,7 +606,7 @@
                     <button
                       class="link-button"
                       type="button"
-                      on:click={() => openUrl('http://ndi.link/NDIRedistV6')}
+                      onclick={() => openUrl('http://ndi.link/NDIRedistV6')}
                     >
                       <Download class="icon" size={16} />
                       ダウンロードする
@@ -606,7 +630,7 @@
                     <select
                       class="device-select"
                       bind:value={selectedCaptureDevice}
-                      on:click={(e) => e.stopPropagation()}
+                      onclick={(e) => e.stopPropagation()}
                       disabled={isLoadingDevices}
                     >
                       <option value="">-- デバイスを選択 --</option>
@@ -617,7 +641,7 @@
                     <button
                       class="refresh-button"
                       type="button"
-                      on:click={refreshVideoDevices}
+                      onclick={refreshVideoDevices}
                       disabled={isLoadingDevices}
                       title="デバイス一覧を更新"
                     >
@@ -642,7 +666,7 @@
               <button
                 class="search-box"
                 type="button"
-                on:click={() => openUrl('https://www.google.com/search?q=OBS録画設定')}
+                onclick={() => openUrl('https://www.google.com/search?q=OBS録画設定')}
               >
                 <Search class="search-icon" size={18} />
                 <span class="search-keyword">OBS録画設定</span>
@@ -674,13 +698,13 @@
                         class="password-input"
                         placeholder="WebSocket サーバーパスワードを入力"
                         value={websocketPassword}
-                        on:input={(e) => (websocketPassword = e.currentTarget.value)}
-                        on:click={(e) => e.stopPropagation()}
+                        oninput={(e) => (websocketPassword = e.currentTarget.value)}
+                        onclick={(e) => e.stopPropagation()}
                       />
                       <button
                         type="button"
                         class="password-toggle"
-                        on:click={(e) => {
+                        onclick={(e) => {
                           e.stopPropagation();
                           showWebsocketPassword = !showWebsocketPassword;
                         }}

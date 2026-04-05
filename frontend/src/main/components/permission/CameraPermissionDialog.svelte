@@ -1,8 +1,13 @@
 ﻿<script lang="ts">
   import BaseDialog from '../../../common/components/BaseDialog.svelte';
 
-  export let open = false;
-  let dontShowAgain = false;
+  interface Props {
+    open?: boolean;
+  }
+
+  let { open = $bindable(false) }: Props = $props();
+
+  let dontShowAgain = $state(false);
 
   async function handleClose(): Promise<void> {
     if (dontShowAgain) {
@@ -26,12 +31,11 @@
   primaryButtonText="閉じる"
   maxWidth="32rem"
   minHeight="auto"
-  on:close={handleClose}
-  on:primary-click={handleClose}
+  onPrimaryClick={handleClose}
 >
-  <svelte:fragment slot="header">
+  {#snippet header()}
     <h2 id="dialog-title">カメラ入力の許可</h2>
-  </svelte:fragment>
+  {/snippet}
 
   <div class="dialog-content">
     <div class="info-section">

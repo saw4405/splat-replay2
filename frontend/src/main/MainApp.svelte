@@ -14,10 +14,10 @@
     AutoSleepPendingPayload,
   } from './domainEvents';
 
-  let isSettingsOpen = false;
-  let autoProcessPayload: AutoProcessPendingPayload | null = null;
-  let autoSleepPayload: AutoSleepPendingPayload | null = null;
-  let bottomDrawerRef: BottomDrawer | null = null;
+  let isSettingsOpen = $state(false);
+  let autoProcessPayload = $state<AutoProcessPendingPayload | null>(null);
+  let autoSleepPayload = $state<AutoSleepPendingPayload | null>(null);
+  let bottomDrawerRef = $state<BottomDrawer | null>(null);
 
   function openSettings(): void {
     isSettingsOpen = true;
@@ -65,7 +65,7 @@
       class="icon-button settings-button"
       type="button"
       aria-label="Settings"
-      on:click={openSettings}
+      onclick={openSettings}
       title="設定"
       data-testid="settings-button"
     >

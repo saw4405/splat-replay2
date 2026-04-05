@@ -5,7 +5,7 @@
   import MainApp from './main/MainApp.svelte';
   import { initializeRenderMode, setRenderMode } from './main/renderMode';
 
-  let isCheckingInstallation = true;
+  let isCheckingInstallation = $state(true);
 
   onMount(async () => {
     setRenderMode('cpu');
@@ -18,8 +18,10 @@
     await renderModePromise;
   });
 
-  $: showSetup = !isCheckingInstallation && (!$setupState || !$setupState.is_completed);
-  $: showMainApp = !isCheckingInstallation && $setupState && $setupState.is_completed;
+  const showSetup = $derived(
+    !isCheckingInstallation && (!$setupState || !$setupState.is_completed)
+  );
+  const showMainApp = $derived(!isCheckingInstallation && $setupState && $setupState.is_completed);
 </script>
 
 {#if isCheckingInstallation}

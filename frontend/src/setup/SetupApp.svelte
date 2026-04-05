@@ -1,5 +1,5 @@
 ﻿<script lang="ts">
-  import type { ComponentType } from 'svelte';
+  import type { Component } from 'svelte';
   import { setupState } from './stores/state';
   import { SetupStep } from './types';
   import SetupWizard from './components/SetupWizard.svelte';
@@ -14,36 +14,38 @@
   } from './components/steps';
 
   // 各ステップのコンポーネント
-  let currentStepComponent: ComponentType | null = null;
+  let currentStepComponent = $state<Component | null>(null);
 
-  $: if ($setupState) {
-    // 現在のステップに応じてコンポーネントを切り替え
-    switch ($setupState.current_step) {
-      case SetupStep.HARDWARE_CHECK:
-        currentStepComponent = HardwareCheck;
-        break;
-      case SetupStep.OBS_SETUP:
-        currentStepComponent = OBSSetup;
-        break;
-      case SetupStep.FFMPEG_SETUP:
-        currentStepComponent = FFMPEGSetup;
-        break;
-      case SetupStep.TESSERACT_SETUP:
-        currentStepComponent = TesseractSetup;
-        break;
-      case SetupStep.FONT_INSTALLATION:
-        currentStepComponent = FontInstallation;
-        break;
-      case SetupStep.TRANSCRIPTION_SETUP:
-        currentStepComponent = TranscriptionSetup;
-        break;
-      case SetupStep.YOUTUBE_SETUP:
-        currentStepComponent = YouTubeSetup;
-        break;
-      default:
-        currentStepComponent = null;
+  $effect(() => {
+    if ($setupState) {
+      // 現在のステップに応じてコンポーネントを切り替え
+      switch ($setupState.current_step) {
+        case SetupStep.HARDWARE_CHECK:
+          currentStepComponent = HardwareCheck;
+          break;
+        case SetupStep.OBS_SETUP:
+          currentStepComponent = OBSSetup;
+          break;
+        case SetupStep.FFMPEG_SETUP:
+          currentStepComponent = FFMPEGSetup;
+          break;
+        case SetupStep.TESSERACT_SETUP:
+          currentStepComponent = TesseractSetup;
+          break;
+        case SetupStep.FONT_INSTALLATION:
+          currentStepComponent = FontInstallation;
+          break;
+        case SetupStep.TRANSCRIPTION_SETUP:
+          currentStepComponent = TranscriptionSetup;
+          break;
+        case SetupStep.YOUTUBE_SETUP:
+          currentStepComponent = YouTubeSetup;
+          break;
+        default:
+          currentStepComponent = null;
+      }
     }
-  }
+  });
 </script>
 
 <main class="setup-app">

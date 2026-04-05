@@ -1,5 +1,5 @@
-﻿<script lang="ts">
-  import { onMount } from 'svelte';
+<script lang="ts">
+  import { onMount, untrack } from 'svelte';
   import { Download, ExternalLink, FolderOpen, Check } from 'lucide-svelte';
   import { checkSystem, setupTesseract } from '../../stores/system';
   import { markSubstepCompleted } from '../../stores/navigation';
@@ -9,22 +9,22 @@
 
   const SUBSTEP_STORAGE_KEY = 'tesseract_substep_index';
 
-  interface SetupStep {
+  interface SetupStepItem {
     id: string;
     title: string;
     description: string;
     completed: boolean;
   }
 
-  let tesseractInstalled = false;
-  let _tesseractVersion: string | null = null;
-  let isChecking = false;
-  let hasInitializedSubstep = false;
-  let dialogOpen = false;
-  let dialogMessage = '';
-  let dialogVariant: 'info' | 'success' | 'warning' | 'error' = 'info';
+  let tesseractInstalled = $state(false);
+  let _tesseractVersion = $state<string | null>(null);
+  let isChecking = $state(false);
+  let hasInitializedSubstep = $state(false);
+  let dialogOpen = $state(false);
+  let dialogMessage = $state('');
+  let dialogVariant = $state<'info' | 'success' | 'warning' | 'error'>('info');
 
-  let setupSteps: SetupStep[] = [
+  let setupSteps: SetupStepItem[] = $state([
     {
       id: 'tesseract-install',
       title: 'Tesseractのインストール',
@@ -37,17 +37,25 @@
       description: 'Tesseract OCR の追加言語データをダウンロードして配置します。',
       completed: false,
     },
-  ];
+  ]);
 
-  let currentSubStepIndex = 0;
+  let currentSubStepIndex = $state(0);
 
   // 親コンポーネントに通知するためのフラグ
-  export let canGoBack = false;
-  export let isStepCompleted = false;
+  interface Props {
+    canGoBack?: boolean;
+    isStepCompleted?: boolean;
+  }
 
-  $: isStepCompleted = setupSteps[currentSubStepIndex].completed;
+  let { canGoBack = $bindable(false), isStepCompleted = $bindable(false) }: Props = $props();
 
-  $: canGoBack = currentSubStepIndex > 0;
+  $effect(() => {
+    isStepCompleted = setupSteps[currentSubStepIndex].completed;
+  });
+
+  $effect(() => {
+    canGoBack = currentSubStepIndex > 0;
+  });
 
   onMount(async () => {
     await checkTesseractInstallation();
@@ -67,39 +75,46 @@
     window.sessionStorage.setItem(SUBSTEP_STORAGE_KEY, index.toString());
   }
 
-  function computeInitialSubstepIndex(_steps: SetupStep[]): number {
+  function computeInitialSubstepIndex(_steps: SetupStepItem[]): number {
     // 常に最初の手順から開始する
     return 0;
   }
 
   // 現在のステップが変更されたときにhasInitializedSubstepをリセット
-  $: if ($setupState?.current_step !== SetupStep.TESSERACT_SETUP) {
-    hasInitializedSubstep = false;
-  }
+  $effect(() => {
+    if ($setupState?.current_step !== SetupStep.TESSERACT_SETUP) {
+      hasInitializedSubstep = false;
+    }
+  });
 
   // Sync with installation state
-  $: if ($setupState && $setupState.step_details) {
-    const details = $setupState.step_details[SetupStep.TESSERACT_SETUP] || {};
-    const updatedSteps = setupSteps.map((step) => ({
-      ...step,
-      completed: details[step.id] || false,
-    }));
-    setupSteps = updatedSteps;
+  $effect(() => {
+    if ($setupState && $setupState.step_details) {
+      const details = $setupState.step_details[SetupStep.TESSERACT_SETUP] || {};
+      // untrack で setupSteps を依存関係から外す（楽観的更新が $effect で上書きされるのを防ぐ）
+      const updatedSteps = untrack(() => setupSteps).map((step) => ({
+        ...step,
+        completed: details[step.id] || false,
+      }));
+      setupSteps = updatedSteps;
 
-    if (!hasInitializedSubstep && $setupState.current_step === SetupStep.TESSERACT_SETUP) {
-      const savedIndex = loadSavedSubstepIndex(updatedSteps.length - 1);
-      if (savedIndex !== null) {
-        currentSubStepIndex = savedIndex;
-      } else {
-        currentSubStepIndex = computeInitialSubstepIndex(updatedSteps);
+      if (!hasInitializedSubstep && $setupState.current_step === SetupStep.TESSERACT_SETUP) {
+        const savedIndex = loadSavedSubstepIndex(updatedSteps.length - 1);
+        if (savedIndex !== null) {
+          currentSubStepIndex = savedIndex;
+        } else {
+          currentSubStepIndex = computeInitialSubstepIndex(updatedSteps);
+        }
+        hasInitializedSubstep = true;
       }
-      hasInitializedSubstep = true;
     }
-  }
+  });
 
-  $: if (hasInitializedSubstep) {
-    saveSubstepIndex(currentSubStepIndex);
-  }
+  $effect(() => {
+    if (hasInitializedSubstep) {
+      saveSubstepIndex(currentSubStepIndex);
+    }
+  });
 
   export async function next(options: { skip?: boolean } = {}): Promise<boolean> {
     const currentStep = setupSteps[currentSubStepIndex];
@@ -242,8 +257,8 @@
       class:completed={setupSteps[currentSubStepIndex].completed}
       class:disabled={(currentSubStepIndex === 0 && tesseractInstalled) ||
         (currentSubStepIndex === 0 && isChecking)}
-      on:click={handleCardClick}
-      on:keydown={handleKeyDown}
+      onclick={handleCardClick}
+      onkeydown={handleKeyDown}
       role="button"
       tabindex="0"
     >
@@ -281,7 +296,7 @@
                     <button
                       class="link-button"
                       type="button"
-                      on:click={() => openUrl('https://github.com/UB-Mannheim/tesseract/wiki')}
+                      onclick={() => openUrl('https://github.com/UB-Mannheim/tesseract/wiki')}
                     >
                       <Download class="icon" size={16} />
                       ダウンロードページを開く
@@ -306,7 +321,7 @@
                     <button
                       class="link-button"
                       type="button"
-                      on:click={() =>
+                      onclick={() =>
                         openUrl(
                           'https://github.com/tesseract-ocr/tessdata_best/blob/main/eng.traineddata'
                         )}
@@ -339,7 +354,7 @@
     isOpen={dialogOpen}
     variant={dialogVariant}
     message={dialogMessage}
-    on:close={() => (dialogOpen = false)}
+    onClose={() => (dialogOpen = false)}
   />
 </div>
 

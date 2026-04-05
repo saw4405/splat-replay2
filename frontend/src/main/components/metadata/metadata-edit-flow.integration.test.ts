@@ -204,16 +204,15 @@ describe('Metadata編集フロー Integration', () => {
 
   describe('保存フロー', () => {
     it('保存ボタンをクリックするとsaveイベントが発火する', async () => {
-      const { component } = render(MetadataEditDialog, {
+      const saveHandler = vi.fn();
+      render(MetadataEditDialog, {
         props: {
           visible: true,
           videoId: 'test-video.mp4',
           metadata: mockMetadata,
+          onSave: saveHandler,
         },
       });
-
-      const saveHandler = vi.fn();
-      component.$on('save', saveHandler);
 
       await waitFor(() => {
         expect(screen.getByLabelText('キル数')).toBeInTheDocument();
@@ -226,16 +225,15 @@ describe('Metadata編集フロー Integration', () => {
     });
 
     it('保存イベントにvideoIdと編集後のメタデータが含まれる', async () => {
-      const { component } = render(MetadataEditDialog, {
+      const saveHandler = vi.fn();
+      render(MetadataEditDialog, {
         props: {
           visible: true,
           videoId: 'test-video.mp4',
           metadata: mockMetadata,
+          onSave: saveHandler,
         },
       });
-
-      const saveHandler = vi.fn();
-      component.$on('save', saveHandler);
 
       await waitFor(() => {
         expect(screen.getByLabelText('キル数')).toBeInTheDocument();
@@ -249,9 +247,9 @@ describe('Metadata編集フロー Integration', () => {
       await fireEvent.click(saveButton);
 
       expect(saveHandler).toHaveBeenCalledTimes(1);
-      const event = saveHandler.mock.calls[0][0];
-      expect(event.detail.videoId).toBe('test-video.mp4');
-      expect(event.detail.metadata.kill).toBe(25);
+      const args = saveHandler.mock.calls[0][0] as { videoId: string; metadata: { kill: number } };
+      expect(args.videoId).toBe('test-video.mp4');
+      expect(args.metadata.kill).toBe(25);
     });
 
     it('保存後にダイアログが閉じる', async () => {
@@ -300,16 +298,15 @@ describe('Metadata編集フロー Integration', () => {
     });
 
     it('キャンセル時は編集内容が破棄される', async () => {
-      const { component } = render(MetadataEditDialog, {
+      const saveHandler = vi.fn();
+      render(MetadataEditDialog, {
         props: {
           visible: true,
           videoId: 'test-video.mp4',
           metadata: mockMetadata,
+          onSave: saveHandler,
         },
       });
-
-      const saveHandler = vi.fn();
-      component.$on('save', saveHandler);
 
       await waitFor(() => {
         expect(screen.getByLabelText('キル数')).toBeInTheDocument();

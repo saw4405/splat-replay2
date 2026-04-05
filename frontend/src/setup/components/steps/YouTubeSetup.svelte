@@ -1,5 +1,5 @@
-﻿<script lang="ts">
-  import { createEventDispatcher } from 'svelte';
+<script lang="ts">
+  import { untrack } from 'svelte';
   import { ExternalLink, FolderOpen, Key, AlertCircle, Check } from 'lucide-svelte';
   import { checkSystem } from '../../stores/system';
   import { markSubstepCompleted } from '../../stores/navigation';
@@ -10,26 +10,22 @@
 
   const SUBSTEP_STORAGE_KEY = 'youtube_substep_index';
 
-  interface SetupStep {
+  interface SetupStepItem {
     id: string;
     title: string;
     description: string;
     completed: boolean;
   }
 
-  const dispatch = createEventDispatcher<{
-    substepChange: { isFinalSubstep: boolean };
-  }>();
+  let credentialsInstalled = $state(false);
+  let isChecking = $state(false);
+  let hasInitializedSubstep = $state(false);
+  let dialogOpen = $state(false);
+  let dialogMessage = $state('');
+  let dialogVariant = $state<'info' | 'success' | 'warning' | 'error'>('info');
+  let privacyStatus = $state<'public' | 'unlisted' | 'private'>('private');
 
-  let credentialsInstalled = false;
-  let isChecking = false;
-  let hasInitializedSubstep = false;
-  let dialogOpen = false;
-  let dialogMessage = '';
-  let dialogVariant: 'info' | 'success' | 'warning' | 'error' = 'info';
-  let privacyStatus: 'public' | 'unlisted' | 'private' = 'private';
-
-  let setupSteps: SetupStep[] = [
+  let setupSteps: SetupStepItem[] = $state([
     {
       id: 'youtube-create-project',
       title: 'Google Cloud プロジェクトの作成',
@@ -72,16 +68,27 @@
       description: 'アップロードする動画のデフォルトの公開範囲を設定します。',
       completed: false,
     },
-  ];
+  ]);
 
-  let currentSubStepIndex = 0;
-  let isOnFinalSubstep = false;
+  let currentSubStepIndex = $state(0);
+  let isOnFinalSubstep = $state(false);
 
   // 親コンポーネントに通知するためのフラグ
-  export let canGoBack = false;
-  export let isStepCompleted = false;
+  interface Props {
+    canGoBack?: boolean;
+    isStepCompleted?: boolean;
+    onSubstepChange?: (isFinalSubstep: boolean) => void;
+  }
 
-  $: isStepCompleted = setupSteps[currentSubStepIndex].completed;
+  let {
+    canGoBack = $bindable(false),
+    isStepCompleted = $bindable(false),
+    onSubstepChange,
+  }: Props = $props();
+
+  $effect(() => {
+    isStepCompleted = setupSteps[currentSubStepIndex].completed;
+  });
 
   function loadSavedSubstepIndex(maxIndex: number): number | null {
     if (typeof window === 'undefined') return null;
@@ -97,7 +104,7 @@
     window.sessionStorage.setItem(SUBSTEP_STORAGE_KEY, index.toString());
   }
 
-  function computeInitialSubstepIndex(_steps: SetupStep[]): number {
+  function computeInitialSubstepIndex(_steps: SetupStepItem[]): number {
     const firstIncomplete = _steps.findIndex((step) => !step.completed);
     if (firstIncomplete !== -1) {
       return firstIncomplete;
@@ -105,54 +112,64 @@
     return _steps.length > 0 ? _steps.length - 1 : 0;
   }
 
-  $: {
+  $effect(() => {
     isOnFinalSubstep = currentSubStepIndex >= setupSteps.length - 1;
-    dispatch('substepChange', { isFinalSubstep: isOnFinalSubstep });
-  }
+    onSubstepChange?.(isOnFinalSubstep);
+  });
 
-  $: canGoBack = currentSubStepIndex > 0;
+  $effect(() => {
+    canGoBack = currentSubStepIndex > 0;
+  });
 
   // 現在のステップが変更されたときにhasInitializedSubstepをリセット
-  $: if ($setupState?.current_step !== SetupStep.YOUTUBE_SETUP) {
-    hasInitializedSubstep = false;
-  }
+  $effect(() => {
+    if ($setupState?.current_step !== SetupStep.YOUTUBE_SETUP) {
+      hasInitializedSubstep = false;
+    }
+  });
 
   // Sync with installation state
-  $: if ($setupState && $setupState.step_details) {
-    const details = $setupState.step_details[SetupStep.YOUTUBE_SETUP] || {};
-    const updatedSteps = setupSteps.map((step, index) => ({
-      ...step,
-      // 手順1〜5（インデックス0〜4）は credentialsInstalled も考慮
-      // 手順6,7（インデックス5,6）は details のみから状態を取得
-      completed: index <= 4 ? details[step.id] || credentialsInstalled : details[step.id] || false,
-    }));
-    setupSteps = updatedSteps;
+  $effect(() => {
+    if ($setupState && $setupState.step_details) {
+      const details = $setupState.step_details[SetupStep.YOUTUBE_SETUP] || {};
+      // untrack で setupSteps を依存関係から外す（楽観的更新が $effect で上書きされるのを防ぐ）
+      const updatedSteps = untrack(() => setupSteps).map((step, index) => ({
+        ...step,
+        // 手順1?5（インデックス0?4）は credentialsInstalled も考慮
+        // 手順6,7（インデックス5,6）は details のみから状態を取得
+        completed:
+          index <= 4 ? details[step.id] || credentialsInstalled : details[step.id] || false,
+      }));
+      setupSteps = updatedSteps;
 
-    if (!hasInitializedSubstep && $setupState.current_step === SetupStep.YOUTUBE_SETUP) {
-      // ステップに入った時に認証情報ファイルの有無をチェック
-      checkSystem('youtube')
-        .then((result: SystemCheckResult) => {
-          if (result.is_installed) {
-            credentialsInstalled = true;
-          }
-        })
-        .catch((error) => {
-          console.error('Initial YouTube credentials check failed:', error);
-        });
+      if (!hasInitializedSubstep && $setupState.current_step === SetupStep.YOUTUBE_SETUP) {
+        // ステップに入った時に認証情報ファイルの有無をチェック
+        checkSystem('youtube')
+          .then((result: SystemCheckResult) => {
+            if (result.is_installed) {
+              credentialsInstalled = true;
+            }
+          })
+          .catch((error) => {
+            console.error('Initial YouTube credentials check failed:', error);
+          });
 
-      const savedIndex = loadSavedSubstepIndex(updatedSteps.length - 1);
-      if (savedIndex !== null) {
-        currentSubStepIndex = savedIndex;
-      } else {
-        currentSubStepIndex = computeInitialSubstepIndex(updatedSteps);
+        const savedIndex = loadSavedSubstepIndex(updatedSteps.length - 1);
+        if (savedIndex !== null) {
+          currentSubStepIndex = savedIndex;
+        } else {
+          currentSubStepIndex = computeInitialSubstepIndex(updatedSteps);
+        }
+        hasInitializedSubstep = true;
       }
-      hasInitializedSubstep = true;
     }
-  }
+  });
 
-  $: if (hasInitializedSubstep) {
-    saveSubstepIndex(currentSubStepIndex);
-  }
+  $effect(() => {
+    if (hasInitializedSubstep) {
+      saveSubstepIndex(currentSubStepIndex);
+    }
+  });
 
   export async function next(_options: { skip?: boolean } = {}): Promise<boolean> {
     const currentStep = setupSteps[currentSubStepIndex];
@@ -163,7 +180,7 @@
       try {
         const result: SystemCheckResult = await checkSystem('youtube');
         if (result.is_installed) {
-          // ファイルが存在する場合、手順1〜5を完了とする
+          // ファイルが存在する場合、手順1?5を完了とする
           credentialsInstalled = true;
           for (let i = 0; i <= 4; i++) {
             await markSubstepCompleted(SetupStep.YOUTUBE_SETUP, setupSteps[i].id, true);
@@ -226,7 +243,7 @@
         try {
           const result: SystemCheckResult = await checkSystem('youtube');
           if (result.is_installed) {
-            // ファイルが存在する場合、手順1〜5(インデックス0〜4)を完了とする
+            // ファイルが存在する場合、手順1?5(インデックス0?4)を完了とする
             credentialsInstalled = true;
             for (let i = 0; i <= 4; i++) {
               await markSubstepCompleted(SetupStep.YOUTUBE_SETUP, setupSteps[i].id, true);
@@ -246,7 +263,7 @@
         await markSubstepCompleted(SetupStep.YOUTUBE_SETUP, step.id, false);
       }
     } else if (index <= 3) {
-      // 手順1〜4 (インデックス0〜3) はファイル確認せずに単純にトグルする
+      // 手順1?4 (インデックス0?3) はファイル確認せずに単純にトグルする
       // インストール済の場合はチェックを外せないようにする
       if (credentialsInstalled && step.completed) return;
 
@@ -330,8 +347,8 @@
       class:completed={setupSteps[currentSubStepIndex].completed}
       class:disabled={(credentialsInstalled && currentSubStepIndex <= 4) ||
         (currentSubStepIndex === 4 && isChecking)}
-      on:click={handleCardClick}
-      on:keydown={handleKeyDown}
+      onclick={handleCardClick}
+      onkeydown={handleKeyDown}
       role="button"
       tabindex="0"
     >
@@ -369,7 +386,7 @@
                     <button
                       class="link-button"
                       type="button"
-                      on:click={() => openUrl('https://console.cloud.google.com/projectcreate')}
+                      onclick={() => openUrl('https://console.cloud.google.com/projectcreate')}
                     >
                       <ExternalLink class="icon" size={16} />
                       新しいプロジェクトを作成します
@@ -388,7 +405,7 @@
                     <button
                       class="link-button"
                       type="button"
-                      on:click={() =>
+                      onclick={() =>
                         openUrl(
                           'https://console.cloud.google.com/apis/library/youtube.googleapis.com'
                         )}
@@ -413,7 +430,7 @@
                     <button
                       class="link-button"
                       type="button"
-                      on:click={() =>
+                      onclick={() =>
                         openUrl('https://console.cloud.google.com/apis/credentials/consent')}
                     >
                       <ExternalLink class="icon" size={16} />
@@ -448,7 +465,7 @@
                     <button
                       class="link-button"
                       type="button"
-                      on:click={() => openUrl('https://console.cloud.google.com/apis/credentials')}
+                      onclick={() => openUrl('https://console.cloud.google.com/apis/credentials')}
                     >
                       <Key class="icon" size={16} />
                       認証情報ページを開く
@@ -493,7 +510,7 @@
                     <button
                       class="link-button"
                       type="button"
-                      on:click={() => openUrl('https://www.youtube.com/verify')}
+                      onclick={() => openUrl('https://www.youtube.com/verify')}
                     >
                       <ExternalLink class="icon" size={16} />
                       アカウント認証ページを開く
@@ -524,7 +541,7 @@
                     name="privacy"
                     value="private"
                     bind:group={privacyStatus}
-                    on:click={(e) => e.stopPropagation()}
+                    onclick={(e) => e.stopPropagation()}
                   />
                   <div class="option-content">
                     <div class="option-title">非公開</div>
@@ -537,7 +554,7 @@
                     name="privacy"
                     value="unlisted"
                     bind:group={privacyStatus}
-                    on:click={(e) => e.stopPropagation()}
+                    onclick={(e) => e.stopPropagation()}
                   />
                   <div class="option-content">
                     <div class="option-title">限定公開</div>
@@ -550,7 +567,7 @@
                     name="privacy"
                     value="public"
                     bind:group={privacyStatus}
-                    on:click={(e) => e.stopPropagation()}
+                    onclick={(e) => e.stopPropagation()}
                   />
                   <div class="option-content">
                     <div class="option-title">公開</div>
@@ -570,7 +587,7 @@
   isOpen={dialogOpen}
   variant={dialogVariant}
   message={dialogMessage}
-  on:close={() => (dialogOpen = false)}
+  onClose={() => (dialogOpen = false)}
 />
 
 <style>

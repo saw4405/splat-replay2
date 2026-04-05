@@ -3,12 +3,23 @@
   import BaseDialog from './BaseDialog.svelte';
   import type { ApiError } from '../types';
 
-  export let open = false;
-  export let error: ApiError | null = null;
-  export let title = 'エラーが発生しました';
-  export let message = '';
-  export let onClose: (() => void) | undefined = undefined;
-  export let onRetry: (() => void) | undefined = undefined;
+  interface Props {
+    open?: boolean;
+    error?: ApiError | null;
+    title?: string;
+    message?: string;
+    onClose?: () => void;
+    onRetry?: () => void;
+  }
+
+  let {
+    open = $bindable(false),
+    error = null,
+    title = 'エラーが発生しました',
+    message = '',
+    onClose,
+    onRetry,
+  }: Props = $props();
 
   function handleClose(): void {
     open = false;
@@ -36,8 +47,8 @@
   footerVariant={onRetry ? 'simple' : 'compact'}
   primaryButtonText={onRetry ? '再試行' : '閉じる'}
   secondaryButtonText="閉じる"
-  on:primary-click={onRetry ? handleRetry : handleClose}
-  on:secondary-click={handleSecondaryClick}
+  onPrimaryClick={onRetry ? handleRetry : handleClose}
+  onSecondaryClick={handleSecondaryClick}
   maxWidth="32rem"
   minHeight="auto"
 >

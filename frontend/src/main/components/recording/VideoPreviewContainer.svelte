@@ -1,4 +1,4 @@
-﻿<script lang="ts">
+<script lang="ts">
   import { onMount } from 'svelte';
   import { Info, X } from 'lucide-svelte';
   import VideoPreview from './VideoPreview.svelte';
@@ -25,18 +25,18 @@
 
   const NOTIFICATION_DURATION_MS = 5000;
 
-  let isRecording = false;
-  let startPending = false;
-  let preparePending = false;
-  let _status = 'デバイス確認中...';
-  let deviceState: PreviewState = 'checking';
-  let deviceErrorMessage = '';
+  let isRecording = $state(false);
+  let startPending = $state(false);
+  let preparePending = $state(false);
+  let _status = $state('デバイス確認中...');
+  let deviceState = $state<PreviewState>('checking');
+  let deviceErrorMessage = $state('');
   let deviceStatusTimer: number | null = null;
-  let isPrepared = false;
-  let isMetadataOpen = false;
-  let isRefreshingDeviceStatus = false; // 多重実行防止フラグ
-  let isCameraPermissionDialogOpen = false;
-  let isVideoFileInput = false;
+  let isPrepared = $state(false);
+  let isMetadataOpen = $state(false);
+  let isRefreshingDeviceStatus = $state(false); // 多重実行防止フラグ
+  let isCameraPermissionDialogOpen = $state(false);
+  let isVideoFileInput = $state(false);
   let deviceStatusPollIntervalMs = getDeviceStatusPollIntervalMs('cpu');
   type MetadataValue = string | number | string[] | null | undefined;
   type MetadataFieldKey =
@@ -140,16 +140,18 @@
     }
     return `status ${response.status}`;
   }
-  let metadataNotifications: MetadataNotification[] = [];
+  let metadataNotifications = $state<MetadataNotification[]>([]);
   let notificationIdCounter = 0;
   let lastMetadata: Partial<Record<MetadataFieldKey, string>> = {};
   let pendingMetadataSessionReset = false;
 
-  $: nextDeviceStatusPollIntervalMs = getDeviceStatusPollIntervalMs($renderMode);
-  $: if (deviceStatusPollIntervalMs !== nextDeviceStatusPollIntervalMs) {
-    deviceStatusPollIntervalMs = nextDeviceStatusPollIntervalMs;
-    restartDeviceStatusPolling();
-  }
+  $effect(() => {
+    const next = getDeviceStatusPollIntervalMs($renderMode);
+    if (deviceStatusPollIntervalMs !== next) {
+      deviceStatusPollIntervalMs = next;
+      restartDeviceStatusPolling();
+    }
+  });
 
   function restartDeviceStatusPolling(): void {
     if (deviceStatusTimer !== null) {
@@ -795,7 +797,7 @@
       <button
         class="metadata-toggle-btn glass-icon-button"
         type="button"
-        on:click={toggleMetadata}
+        onclick={toggleMetadata}
         aria-label={isMetadataOpen ? 'メタデータを閉じる' : 'メタデータを表示'}
         title={isMetadataOpen ? 'メタデータを閉じる' : 'メタデータを表示'}
         data-testid="metadata-toggle-button"

@@ -1,4 +1,4 @@
-﻿<script lang="ts">
+<script lang="ts">
   import { onMount, onDestroy } from 'svelte';
   import { slide } from 'svelte/transition';
   import NotificationDialog from '../../../common/components/NotificationDialog.svelte';
@@ -19,20 +19,25 @@
     type LiveMetadataState,
   } from '../../metadata/live';
 
-  export let visible: boolean = false;
-  let showAlertDialog = false; // アラートダイアログ表示フラグ
-  let alertMessage = ''; // アラートメッセージ
-  let alertVariant: 'info' | 'success' | 'warning' | 'error' = 'info';
+  interface Props {
+    visible?: boolean;
+  }
+
+  let { visible = $bindable(false) }: Props = $props();
+
+  let showAlertDialog = $state(false); // アラートダイアログ表示フラグ
+  let alertMessage = $state(''); // アラートメッセージ
+  let alertVariant = $state<'info' | 'success' | 'warning' | 'error'>('info');
 
   // SSE接続
   let domainEventSource: EventSource | null = null;
 
   // メタデータ (SSE経由で更新)
-  let metadata: LiveMetadataState = createEmptyLiveMetadataState();
-  let editableMetadata: EditableMetadata = createEmptyEditableMetadata();
+  let metadata = $state<LiveMetadataState>(createEmptyLiveMetadataState());
+  let editableMetadata = $state<EditableMetadata>(createEmptyEditableMetadata());
 
   // 手動編集フラグ (各フィールドごと)
-  let manuallyEdited: LiveManualEditState = createEmptyLiveManualEditState();
+  let manuallyEdited = $state<LiveManualEditState>(createEmptyLiveManualEditState());
 
   const placeholderLabel = {
     gameMode: '未取得',
@@ -43,11 +48,11 @@
     judgement: '未判定',
     startedAt: '未開始',
   };
-  let gameModeOptions: MetadataOptionItem[] = [];
-  let matchOptions: MetadataOptionItem[] = [];
-  let ruleOptions: MetadataOptionItem[] = [];
-  let stageOptions: MetadataOptionItem[] = [];
-  let judgementOptions: MetadataOptionItem[] = [];
+  let gameModeOptions = $state<MetadataOptionItem[]>([]);
+  let matchOptions = $state<MetadataOptionItem[]>([]);
+  let ruleOptions = $state<MetadataOptionItem[]>([]);
+  let stageOptions = $state<MetadataOptionItem[]>([]);
+  let judgementOptions = $state<MetadataOptionItem[]>([]);
   const editableFieldToLiveField: Record<keyof EditableMetadata, keyof LiveMetadataState> = {
     gameMode: 'game_mode',
     startedAt: 'started_at',
@@ -65,7 +70,7 @@
     enemies: 'enemies',
   };
 
-  let hasLoadedInitial = false;
+  let hasLoadedInitial = $state(false);
 
   async function loadMetadataOptions(): Promise<void> {
     try {
@@ -227,9 +232,11 @@
   }
 
   // visibleが変更されたときに初期データを取得
-  $: if (visible && !hasLoadedInitial) {
-    fetchCurrentMetadata();
-  }
+  $effect(() => {
+    if (visible && !hasLoadedInitial) {
+      void fetchCurrentMetadata();
+    }
+  });
 
   onMount(() => {
     loadMetadataOptions();
@@ -246,7 +253,7 @@
   isOpen={showAlertDialog}
   variant={alertVariant}
   message={alertMessage}
-  on:close={() => (showAlertDialog = false)}
+  onClose={() => (showAlertDialog = false)}
 />
 
 {#if visible}
@@ -270,8 +277,8 @@
       </div>
 
       <div class="panel-footer">
-        <button type="button" class="reset-btn" on:click={handleReset}>リセット</button>
-        <button type="button" class="save-btn" on:click={saveMetadata}>保存</button>
+        <button type="button" class="reset-btn" onclick={handleReset}>リセット</button>
+        <button type="button" class="save-btn" onclick={saveMetadata}>保存</button>
       </div>
     </div>
   </div>

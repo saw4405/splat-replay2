@@ -1,22 +1,31 @@
 ﻿<script lang="ts">
-  import { createEventDispatcher } from 'svelte';
   import BaseDialog from './BaseDialog.svelte';
 
-  const dispatch = createEventDispatcher();
+  interface Props {
+    isOpen?: boolean;
+    message?: string;
+    confirmText?: string;
+    cancelText?: string;
+    onConfirm?: () => void;
+    onCancel?: () => void;
+  }
 
-  export let isOpen = false;
-  export let message = '';
-  export let confirmText = 'OK';
-  export let cancelText = 'キャンセル';
+  let {
+    isOpen = $bindable(false),
+    message = '',
+    confirmText = 'OK',
+    cancelText = 'キャンセル',
+    onConfirm,
+    onCancel,
+  }: Props = $props();
 
   function handleConfirm(): void {
-    dispatch('confirm');
     isOpen = false;
+    onConfirm?.();
   }
 
   function handleCancel(): void {
-    dispatch('cancel');
-    isOpen = false;
+    onCancel?.();
   }
 </script>
 
@@ -26,8 +35,8 @@
   footerVariant="simple"
   primaryButtonText={confirmText}
   secondaryButtonText={cancelText}
-  on:primary-click={handleConfirm}
-  on:secondary-click={handleCancel}
+  onPrimaryClick={handleConfirm}
+  onSecondaryClick={handleCancel}
   maxWidth="28rem"
   minHeight="auto"
 >

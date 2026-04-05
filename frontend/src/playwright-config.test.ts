@@ -2,6 +2,20 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 const BACKEND_SETTINGS_URL = 'http://127.0.0.1:8000/api/settings';
 
+// playwright.config はモジュールレベルで bootstrapE2EEnvironment() を実行するため
+// ファイル IO を避けてインポート速度を改善するためにモック化する
+vi.mock('../tests/e2e/support/e2eEnv', () => ({
+  bootstrapE2EEnvironment: vi.fn(() => ({
+    mode: 'smoke',
+    rootDir: '/tmp/splat-replay-e2e-test',
+    settingsFile: '/tmp/splat-replay-e2e-test/settings.toml',
+    replayInputFile: '/tmp/splat-replay-e2e-test/replay.json',
+    storageDir: '/tmp/splat-replay-e2e-test/videos',
+    autoRecordingReplayDir: '/tmp/splat-replay-e2e-test/auto-recording',
+    replayAssets: [],
+  })),
+}));
+
 describe('playwright config', () => {
   afterEach(() => {
     vi.unstubAllEnvs();

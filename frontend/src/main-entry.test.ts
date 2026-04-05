@@ -3,14 +3,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 const mountMock = vi.hoisted(() => vi.fn(() => ({ $set: vi.fn(), $on: vi.fn() })));
 const flushSyncMock = vi.hoisted(() => vi.fn());
 
-vi.mock('svelte', async () => {
-  const actual = await vi.importActual<typeof import('svelte')>('svelte');
-  return {
-    ...actual,
-    mount: mountMock,
-    flushSync: flushSyncMock,
-  };
-});
+// main.ts は mount と flushSync しか使わないため importActual 不要
+vi.mock('svelte', () => ({
+  mount: mountMock,
+  flushSync: flushSyncMock,
+}));
 
 vi.mock('./App.svelte', () => ({
   default: {},

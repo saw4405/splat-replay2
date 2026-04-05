@@ -15,19 +15,18 @@ describe('ConfirmDialog.svelte (integration)', () => {
     expect(screen.getByText('本当に削除しますか？')).toBeInTheDocument();
   });
 
-  it('確認ボタンをクリックすると confirm イベントが発火し、ダイアログが閉じる', async () => {
+  it('確認ボタンをクリックすると onConfirm が呼ばれ、ダイアログが閉じる', async () => {
     const user = userEvent.setup();
     const mockConfirm = vi.fn();
 
-    const { component } = render(ConfirmDialog, {
+    render(ConfirmDialog, {
       props: {
         isOpen: true,
         message: 'テストメッセージ',
         confirmText: '確認',
+        onConfirm: mockConfirm,
       },
     });
-
-    component.$on('confirm', mockConfirm);
 
     expect(screen.getByRole('dialog')).toBeInTheDocument();
 
@@ -42,19 +41,18 @@ describe('ConfirmDialog.svelte (integration)', () => {
     expect(mockConfirm).toHaveBeenCalledTimes(1);
   });
 
-  it('キャンセルボタンをクリックすると cancel イベントが発火し、ダイアログが閉じる', async () => {
+  it('キャンセルボタンをクリックすると onCancel が呼ばれ、ダイアログが閉じる', async () => {
     const user = userEvent.setup();
     const mockCancel = vi.fn();
 
-    const { component } = render(ConfirmDialog, {
+    render(ConfirmDialog, {
       props: {
         isOpen: true,
         message: 'テストメッセージ',
         cancelText: 'やめる',
+        onCancel: mockCancel,
       },
     });
-
-    component.$on('cancel', mockCancel);
 
     expect(screen.getByRole('dialog')).toBeInTheDocument();
 

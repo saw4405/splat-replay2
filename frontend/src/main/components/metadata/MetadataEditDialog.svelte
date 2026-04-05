@@ -1,5 +1,5 @@
 ﻿<script lang="ts">
-  import { createEventDispatcher, onMount } from 'svelte';
+  import { onMount } from 'svelte';
   import BaseDialog from '../../../common/components/BaseDialog.svelte';
   import MetadataForm from './MetadataForm.svelte';
   import { getMetadataOptions } from '../../api/metadata';
@@ -11,47 +11,54 @@
     type EditableMetadata,
   } from '../../metadata/editable';
 
-  const dispatch = createEventDispatcher();
-
-  export let visible: boolean = false;
-  export let videoId: string = '';
-  export let metadata: EditableMetadata;
-
-  let editedMetadata: EditableMetadata = createEmptyEditableMetadata();
-  let matchOptions: MetadataOptionItem[] = [];
-  let ruleOptions: MetadataOptionItem[] = [];
-  let stageOptions: MetadataOptionItem[] = [];
-  let judgementOptions: MetadataOptionItem[] = [];
-
-  let previousVisible = false;
-  let hasNormalisedSelectFieldsForSession = false;
-
-  $: if (visible && !previousVisible && metadata) {
-    editedMetadata = cloneEditableMetadata(metadata);
-    hasNormalisedSelectFieldsForSession = false;
-    previousVisible = true;
-  } else if (!visible) {
-    previousVisible = false;
-    hasNormalisedSelectFieldsForSession = false;
+  interface Props {
+    visible?: boolean;
+    videoId?: string;
+    metadata: EditableMetadata;
+    onSave?: (data: { videoId: string; metadata: EditableMetadata }) => void;
   }
 
-  $: if (
-    visible &&
-    !hasNormalisedSelectFieldsForSession &&
-    (matchOptions.length > 0 ||
-      ruleOptions.length > 0 ||
-      stageOptions.length > 0 ||
-      judgementOptions.length > 0)
-  ) {
-    editedMetadata = normaliseEditableMetadataSelectFields(editedMetadata, {
-      gameModes: [],
-      matches: matchOptions,
-      rules: ruleOptions,
-      stages: stageOptions,
-      judgements: judgementOptions,
-    });
-    hasNormalisedSelectFieldsForSession = true;
-  }
+  let { visible = $bindable(false), videoId = '', metadata, onSave }: Props = $props();
+
+  let editedMetadata = $state(createEmptyEditableMetadata());
+  let matchOptions = $state<MetadataOptionItem[]>([]);
+  let ruleOptions = $state<MetadataOptionItem[]>([]);
+  let stageOptions = $state<MetadataOptionItem[]>([]);
+  let judgementOptions = $state<MetadataOptionItem[]>([]);
+
+  let hasNormalisedSelectFieldsForSession = $state(false);
+  let previousVisible = $state(false);
+
+  $effect(() => {
+    if (visible && !previousVisible && metadata) {
+      editedMetadata = cloneEditableMetadata(metadata);
+      hasNormalisedSelectFieldsForSession = false;
+      previousVisible = true;
+    } else if (!visible) {
+      previousVisible = false;
+      hasNormalisedSelectFieldsForSession = false;
+    }
+  });
+
+  $effect(() => {
+    if (
+      visible &&
+      !hasNormalisedSelectFieldsForSession &&
+      (matchOptions.length > 0 ||
+        ruleOptions.length > 0 ||
+        stageOptions.length > 0 ||
+        judgementOptions.length > 0)
+    ) {
+      editedMetadata = normaliseEditableMetadataSelectFields(editedMetadata, {
+        gameModes: [],
+        matches: matchOptions,
+        rules: ruleOptions,
+        stages: stageOptions,
+        judgements: judgementOptions,
+      });
+      hasNormalisedSelectFieldsForSession = true;
+    }
+  });
 
   async function loadMetadataOptions(): Promise<void> {
     try {
@@ -70,7 +77,7 @@
   });
 
   function handleSave(): void {
-    dispatch('save', { videoId, metadata: editedMetadata });
+    onSave?.({ videoId, metadata: editedMetadata });
     visible = false;
   }
 
@@ -85,8 +92,8 @@
   footerVariant="simple"
   primaryButtonText="保存"
   secondaryButtonText="キャンセル"
-  on:primary-click={handleSave}
-  on:secondary-click={handleCancel}
+  onPrimaryClick={handleSave}
+  onSecondaryClick={handleCancel}
   maxWidth="37.5rem"
   maxHeight="85vh"
 >

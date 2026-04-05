@@ -1,22 +1,39 @@
 ﻿<script lang="ts">
-  import { createEventDispatcher, onDestroy, onMount, tick } from 'svelte';
+  import { onDestroy, onMount, tick } from 'svelte';
 
-  export let id: string;
-  export let options: string[] = [];
-  export let optionLabels: Record<string, string> = {};
-  export let value = '';
-  export let disabled = false;
-  export let labelId: string | undefined;
-  export let descriptionId: string | undefined;
-  export let placeholder = '選択してください';
+  interface Props {
+    id: string;
+    options?: string[];
+    optionLabels?: Record<string, string>;
+    value?: string;
+    disabled?: boolean;
+    labelId?: string;
+    descriptionId?: string;
+    placeholder?: string;
+    onChange?: (value: string) => void;
+  }
 
-  const dispatch = createEventDispatcher<{ change: string }>();
+  let {
+    id,
+    options = [],
+    optionLabels = {},
+    value = '',
+    disabled = false,
+    labelId = undefined,
+    descriptionId = undefined,
+    placeholder = '選択してください',
+    onChange,
+  }: Props = $props();
 
-  let isOpen = false;
-  let highlightedIndex = -1;
-  let buttonElement: HTMLButtonElement | null = null;
-  let listboxElement: HTMLUListElement | null = null;
-  let containerElement: HTMLDivElement | null = null;
+  let isOpen = $state(false);
+  let highlightedIndex = $state(-1);
+  let buttonElement = $state<HTMLButtonElement | null>(null);
+  let listboxElement = $state<HTMLUListElement | null>(null);
+  let containerElement = $state<HTMLDivElement | null>(null);
+
+  const displayValue = $derived(
+    value && options.includes(value) ? labelFor(value) : (placeholder ?? options[0] ?? '')
+  );
 
   function labelFor(option: string): string {
     return optionLabels[option] ?? option;
@@ -66,7 +83,7 @@
     if (disabled) {
       return;
     }
-    dispatch('change', option);
+    onChange?.(option);
     closeDropdown();
     buttonElement?.focus();
   }
@@ -137,9 +154,6 @@
   onDestroy(() => {
     document.removeEventListener('mousedown', handleOutsideClick);
   });
-
-  $: displayValue =
-    value && options.includes(value) ? labelFor(value) : (placeholder ?? options[0] ?? '');
 </script>
 
 <div class="select-container" bind:this={containerElement}>
@@ -154,8 +168,8 @@
     aria-controls={`${id}-listbox`}
     aria-labelledby={labelId}
     aria-describedby={descriptionId}
-    on:click={toggleDropdown}
-    on:keydown={handleButtonKeydown}
+    onclick={toggleDropdown}
+    onkeydown={handleButtonKeydown}
     disabled={disabled || options.length === 0}
   >
     <span class="select-value">{displayValue}</span>
@@ -170,7 +184,7 @@
       tabindex="-1"
       aria-labelledby={labelId}
       aria-activedescendant={highlightedIndex >= 0 ? `${id}-option-${highlightedIndex}` : undefined}
-      on:keydown={handleListboxKeydown}
+      onkeydown={handleListboxKeydown}
     >
       {#each options as option, index}
         <li
@@ -179,8 +193,11 @@
           class:selected={option === value}
           class:highlighted={index === highlightedIndex}
           aria-selected={option === value}
-          on:mousedown|preventDefault={() => selectOption(option)}
-          on:mouseenter={() => setHighlightedIndex(index)}
+          onmousedown={(e) => {
+            e.preventDefault();
+            selectOption(option);
+          }}
+          onmouseenter={() => setHighlightedIndex(index)}
         >
           <span>{labelFor(option)}</span>
           {#if option === value}

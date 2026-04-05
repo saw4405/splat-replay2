@@ -1,44 +1,49 @@
-﻿<script lang="ts">
-  import { createEventDispatcher } from 'svelte';
+<script lang="ts">
   import type { EditedVideo } from '../../api/types';
   import VideoPlayerDialog from '../media/VideoPlayerDialog.svelte';
   import ThumbnailZoomDialog from '../media/ThumbnailZoomDialog.svelte';
   import NotificationDialog from '../../../common/components/NotificationDialog.svelte';
   import ConfirmDialog from '../../../common/components/ConfirmDialog.svelte';
 
-  export let videos: EditedVideo[] = [];
+  interface Props {
+    videos?: EditedVideo[];
+    onRefresh?: () => void;
+    onModalOpen?: () => void;
+    onModalClose?: () => void;
+  }
 
-  const dispatch = createEventDispatcher();
+  let { videos = $bindable([]), onRefresh, onModalOpen, onModalClose }: Props = $props();
 
-  let showVideoPlayer = false;
-  let showThumbnailZoom = false;
-  let showAlertDialog = false;
-  let showConfirmDialog = false;
-  let alertMessage = '';
-  let alertVariant: 'info' | 'success' | 'warning' | 'error' = 'info';
-  let confirmMessage = '';
-  let pendingDeleteVideo: EditedVideo | null = null;
-  let currentVideoUrl = '';
-  let currentThumbnailUrl = '';
-  let _currentVideoTitle = '';
-  let wasModalOpen = false; // モーダルが開いていたかどうかを追跡
-  let deletingVideoId: string | null = null; // 削除中の動画ID
+  let showVideoPlayer = $state(false);
+  let showThumbnailZoom = $state(false);
+  let showAlertDialog = $state(false);
+  let showConfirmDialog = $state(false);
+  let alertMessage = $state('');
+  let alertVariant = $state<'info' | 'success' | 'warning' | 'error'>('info');
+  let confirmMessage = $state('');
+  let pendingDeleteVideo = $state<EditedVideo | null>(null);
+  let currentVideoUrl = $state('');
+  let currentThumbnailUrl = $state('');
+  let _currentVideoTitle = $state('');
+  // $state ではなく普通の変数で保持することで、$effect の依存ループを避ける
+  let wasModalOpen = false;
+  let deletingVideoId = $state<string | null>(null); // 削除中の動画ID
 
-  // モーダルの開閉状態を監視
-  $: {
-    const isAnyModalOpen =
-      showVideoPlayer || showThumbnailZoom || showAlertDialog || showConfirmDialog;
+  // モーダルの開閉状態を監視（$derived で計算し $effect で副作用を実行）
+  const isAnyModalOpen = $derived(
+    showVideoPlayer || showThumbnailZoom || showAlertDialog || showConfirmDialog
+  );
 
+  $effect(() => {
+    // isAnyModalOpen は $derived（非 $state）なので、wasModalOpen への書き込みで再実行されない
     if (isAnyModalOpen && !wasModalOpen) {
-      // モーダルが開いた
-      dispatch('modalOpen');
+      onModalOpen?.();
       wasModalOpen = true;
     } else if (!isAnyModalOpen && wasModalOpen) {
-      // モーダルが閉じた
-      dispatch('modalClose');
+      onModalClose?.();
       wasModalOpen = false;
     }
-  }
+  });
 
   function getThumbnailUrl(filename: string): string {
     // ファイル名から拡張子を除去して .png を追加
@@ -93,7 +98,7 @@
       console.log('Video deleted successfully:', video.id);
 
       // ビデオリストを再読み込み
-      dispatch('refresh');
+      onRefresh?.();
     } catch (error) {
       console.error('Failed to delete video:', error);
       alertMessage = `動画の削除に失敗しました: ${error}`;
@@ -124,7 +129,7 @@
           class="delete-button glass-icon-button"
           class:deleting={deletingVideoId === video.id}
           disabled={deletingVideoId === video.id}
-          on:click={(e) => handleDeleteVideo(e, video)}
+          onclick={(e) => handleDeleteVideo(e, video)}
           title="動画を削除"
         >
           {#if deletingVideoId === video.id}
@@ -178,12 +183,12 @@
                 <img
                   src={getThumbnailUrl(video.filename)}
                   alt={video.filename}
-                  on:error={handleImageError}
+                  onerror={handleImageError}
                 />
                 <div class="thumbnail-overlay">
                   <button
                     class="overlay-button play-button"
-                    on:click={() => handlePlayVideo(video)}
+                    onclick={() => handlePlayVideo(video)}
                     title="動画を再生"
                   >
                     <svg
@@ -198,7 +203,7 @@
                   </button>
                   <button
                     class="overlay-button zoom-button"
-                    on:click={() => handleZoomThumbnail(video)}
+                    onclick={() => handleZoomThumbnail(video)}
                     title="拡大表示"
                   >
                     <svg
@@ -264,14 +269,14 @@
   isOpen={showAlertDialog}
   variant={alertVariant}
   message={alertMessage}
-  on:close={() => (showAlertDialog = false)}
+  onClose={() => (showAlertDialog = false)}
 />
 <ConfirmDialog
   isOpen={showConfirmDialog}
   message={confirmMessage}
   confirmText="削除"
-  on:confirm={confirmDelete}
-  on:cancel={cancelDelete}
+  onConfirm={confirmDelete}
+  onCancel={cancelDelete}
 />
 
 <!-- モーダル -->

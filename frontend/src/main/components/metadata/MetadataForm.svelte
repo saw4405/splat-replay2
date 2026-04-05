@@ -31,42 +31,60 @@
     rate: string;
   };
 
-  export let metadata: EditableMetadata;
-  export let variant: 'dialog' | 'overlay' = 'dialog';
-  export let showGameMode: boolean = false;
-  export let gameModeOptions: MetadataOptionItem[] = [];
-  export let matchOptions: MetadataOptionItem[] = [];
-  export let ruleOptions: MetadataOptionItem[] = [];
-  export let stageOptions: MetadataOptionItem[] = [];
-  export let judgementOptions: MetadataOptionItem[] = [];
-  export let fieldLabels: FieldLabels = {
-    gameMode: 'ゲームモード',
-    startedAt: '開始時間',
-    match: 'マッチ',
-    rule: 'ルール',
-    stage: 'ステージ',
-    rate: 'レート',
-    judgement: '判定',
-    kill: 'キル数',
-    death: 'デス数',
-    special: 'スペシャル',
-    goldMedals: '金表彰',
-    silverMedals: '銀表彰',
-    allies: '味方ブキ',
-    enemies: '敵ブキ',
-  };
-  export let placeholderLabels: PlaceholderLabels = {
-    gameMode: '未取得',
-    startedAt: '例: 2026-03-09 12:34:56',
-    match: '未取得',
-    rule: '未取得',
-    stage: '未取得',
-    judgement: '未判定',
-    rate: '未検出',
-  };
-  export let startedAtActionText: string | null = null;
-  export let onStartedAtAction: (() => void) | null = null;
-  export let onFieldEdited: ((field: keyof EditableMetadata) => void) | null = null;
+  interface Props {
+    metadata: EditableMetadata;
+    variant?: 'dialog' | 'overlay';
+    showGameMode?: boolean;
+    gameModeOptions?: MetadataOptionItem[];
+    matchOptions?: MetadataOptionItem[];
+    ruleOptions?: MetadataOptionItem[];
+    stageOptions?: MetadataOptionItem[];
+    judgementOptions?: MetadataOptionItem[];
+    fieldLabels?: FieldLabels;
+    placeholderLabels?: PlaceholderLabels;
+    startedAtActionText?: string | null;
+    onStartedAtAction?: (() => void) | null;
+    onFieldEdited?: ((field: keyof EditableMetadata) => void) | null;
+  }
+
+  let {
+    metadata = $bindable() as EditableMetadata,
+    variant = 'dialog',
+    showGameMode = false,
+    gameModeOptions = [],
+    matchOptions = [],
+    ruleOptions = [],
+    stageOptions = [],
+    judgementOptions = [],
+    fieldLabels = {
+      gameMode: 'ゲームモード',
+      startedAt: '開始時間',
+      match: 'マッチ',
+      rule: 'ルール',
+      stage: 'ステージ',
+      rate: 'レート',
+      judgement: '判定',
+      kill: 'キル数',
+      death: 'デス数',
+      special: 'スペシャル',
+      goldMedals: '金表彰',
+      silverMedals: '銀表彰',
+      allies: '味方ブキ',
+      enemies: '敵ブキ',
+    },
+    placeholderLabels = {
+      gameMode: '未取得',
+      startedAt: '例: 2026-03-09 12:34:56',
+      match: '未取得',
+      rule: '未取得',
+      stage: '未取得',
+      judgement: '未判定',
+      rate: '未検出',
+    },
+    startedAtActionText = null,
+    onStartedAtAction = null,
+    onFieldEdited = null,
+  }: Props = $props();
 
   function notifyFieldEdited(field: keyof EditableMetadata): void {
     onFieldEdited?.(field);
@@ -137,7 +155,7 @@
       <select
         id="game_mode"
         value={metadata.gameMode}
-        on:change={(event) => handleSelectChange('gameMode', event)}
+        onchange={(event) => handleSelectChange('gameMode', event)}
       >
         <option value="" selected={metadata.gameMode === ''}>{placeholderLabels.gameMode}</option>
         {#each gameModeOptions as mode}
@@ -156,9 +174,9 @@
           type="text"
           value={metadata.startedAt}
           placeholder={placeholderLabels.startedAt}
-          on:input={(event) => handleTextInput('startedAt', event)}
+          oninput={(event) => handleTextInput('startedAt', event)}
         />
-        <button type="button" class="started-at-action" on:click={handleStartedAtAction}>
+        <button type="button" class="started-at-action" onclick={handleStartedAtAction}>
           {startedAtActionText}
         </button>
       </div>
@@ -168,7 +186,7 @@
         type="text"
         value={metadata.startedAt}
         placeholder={placeholderLabels.startedAt}
-        on:input={(event) => handleTextInput('startedAt', event)}
+        oninput={(event) => handleTextInput('startedAt', event)}
       />
     {/if}
   </div>
@@ -178,7 +196,7 @@
     <select
       id="match"
       value={metadata.match}
-      on:change={(event) => handleSelectChange('match', event)}
+      onchange={(event) => handleSelectChange('match', event)}
     >
       <option value="" selected={metadata.match === ''}>{placeholderLabels.match}</option>
       {#each matchOptions as match}
@@ -189,11 +207,7 @@
 
   <div class="form-group">
     <label for="rule">{fieldLabels.rule}</label>
-    <select
-      id="rule"
-      value={metadata.rule}
-      on:change={(event) => handleSelectChange('rule', event)}
-    >
+    <select id="rule" value={metadata.rule} onchange={(event) => handleSelectChange('rule', event)}>
       <option value="" selected={metadata.rule === ''}>{placeholderLabels.rule}</option>
       {#each ruleOptions as rule}
         <option value={rule.key} selected={rule.key === metadata.rule}>{rule.label}</option>
@@ -206,7 +220,7 @@
     <select
       id="stage"
       value={metadata.stage}
-      on:change={(event) => handleSelectChange('stage', event)}
+      onchange={(event) => handleSelectChange('stage', event)}
     >
       <option value="" selected={metadata.stage === ''}>{placeholderLabels.stage}</option>
       {#each stageOptions as stage}
@@ -222,7 +236,7 @@
       type="text"
       value={metadata.rate}
       placeholder={placeholderLabels.rate}
-      on:input={(event) => handleTextInput('rate', event)}
+      oninput={(event) => handleTextInput('rate', event)}
     />
   </div>
 
@@ -231,7 +245,7 @@
     <select
       id="judgement"
       value={metadata.judgement}
-      on:change={(event) => handleSelectChange('judgement', event)}
+      onchange={(event) => handleSelectChange('judgement', event)}
     >
       <option value="" selected={metadata.judgement === ''}>{placeholderLabels.judgement}</option>
       {#each judgementOptions as judgement}
@@ -250,7 +264,7 @@
         type="number"
         min="0"
         value={metadata.kill}
-        on:input={(event) => handleNumberInput('kill', event)}
+        oninput={(event) => handleNumberInput('kill', event)}
       />
     </div>
 
@@ -261,7 +275,7 @@
         type="number"
         min="0"
         value={metadata.death}
-        on:input={(event) => handleNumberInput('death', event)}
+        oninput={(event) => handleNumberInput('death', event)}
       />
     </div>
 
@@ -272,7 +286,7 @@
         type="number"
         min="0"
         value={metadata.special}
-        on:input={(event) => handleNumberInput('special', event)}
+        oninput={(event) => handleNumberInput('special', event)}
       />
     </div>
   </div>
@@ -286,7 +300,7 @@
         min="0"
         max="3"
         value={metadata.goldMedals}
-        on:input={(event) => handleMedalInput('goldMedals', event)}
+        oninput={(event) => handleMedalInput('goldMedals', event)}
       />
     </div>
 
@@ -298,7 +312,7 @@
         min="0"
         max="3"
         value={metadata.silverMedals}
-        on:input={(event) => handleMedalInput('silverMedals', event)}
+        oninput={(event) => handleMedalInput('silverMedals', event)}
       />
     </div>
   </div>
@@ -314,7 +328,7 @@
             type="text"
             value={weapon}
             placeholder="不明"
-            on:input={(event) => handleWeaponInput('allies', index, event)}
+            oninput={(event) => handleWeaponInput('allies', index, event)}
           />
         </div>
       {/each}
@@ -330,7 +344,7 @@
             type="text"
             value={weapon}
             placeholder="不明"
-            on:input={(event) => handleWeaponInput('enemies', index, event)}
+            oninput={(event) => handleWeaponInput('enemies', index, event)}
           />
         </div>
       {/each}

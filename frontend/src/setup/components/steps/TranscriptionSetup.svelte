@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { onMount, untrack } from 'svelte';
   import { Check, ExternalLink, RefreshCw, Eye, EyeOff } from 'lucide-svelte';
   import { markSubstepCompleted } from '../../stores/navigation';
   import { setupState } from '../../stores/state';
@@ -21,7 +21,7 @@
     completed: boolean;
   }
 
-  let setupSteps: SetupStepItem[] = [
+  let setupSteps: SetupStepItem[] = $state([
     {
       id: 'transcription-enable',
       title: '文字起こしの使用選択',
@@ -46,38 +46,46 @@
       description: '認識しやすくしたい単語を1行ずつ入力します。',
       completed: false,
     },
-  ];
+  ]);
 
-  let currentSubStepIndex = 0;
-  let hasInitializedSubstep = false;
-  let isSaving = false;
-  let dialogOpen = false;
-  let dialogMessage = '';
-  let dialogVariant: 'info' | 'success' | 'warning' | 'error' = 'info';
+  let currentSubStepIndex = $state(0);
+  let hasInitializedSubstep = $state(false);
+  let isSaving = $state(false);
+  let dialogOpen = $state(false);
+  let dialogMessage = $state('');
+  let dialogVariant: 'info' | 'success' | 'warning' | 'error' = $state('info');
 
-  let micDeviceName = '';
-  let groqApiKey = '';
-  let showApiKey = false;
-  let language = 'ja-JP';
-  let customDictionaryText = '';
-  let microphoneDevices: string[] = [];
-  let isLoadingMicrophones = false;
-  let useTranscription: boolean | null = null;
-  let hasLoadedMicrophones = false;
+  let micDeviceName = $state('');
+  let groqApiKey = $state('');
+  let showApiKey = $state(false);
+  let language = $state('ja-JP');
+  let customDictionaryText = $state('');
+  let microphoneDevices: string[] = $state([]);
+  let isLoadingMicrophones = $state(false);
+  let useTranscription: boolean | null = $state(null);
+  let hasLoadedMicrophones = $state(false);
 
-  export let canGoBack = false;
-  export let isStepCompleted = false;
+  // 親コンポーネントに通知するためのフラグ
+  interface Props {
+    canGoBack?: boolean;
+    isStepCompleted?: boolean;
+  }
 
-  let currentStepCompleted = false;
-  $: {
+  let { canGoBack = $bindable(false), isStepCompleted = $bindable(false) }: Props = $props();
+
+  let currentStepCompleted = $state(false);
+  $effect(() => {
     if (currentSubStepIndex === 0) {
       currentStepCompleted = useTranscription !== null;
     } else {
       currentStepCompleted = setupSteps[currentSubStepIndex]?.completed || false;
     }
     isStepCompleted = currentStepCompleted;
-  }
-  $: canGoBack = currentSubStepIndex > 0;
+  });
+
+  $effect(() => {
+    canGoBack = currentSubStepIndex > 0;
+  });
 
   onMount(async () => {
     await loadConfig();
@@ -104,32 +112,39 @@
     return 0;
   }
 
-  $: if ($setupState?.current_step !== SetupStep.TRANSCRIPTION_SETUP) {
-    hasInitializedSubstep = false;
-  }
-
-  $: if ($setupState && $setupState.step_details) {
-    const details = $setupState.step_details[SetupStep.TRANSCRIPTION_SETUP] || {};
-    const updatedSteps = setupSteps.map((step) => ({
-      ...step,
-      completed: details[step.id] || false,
-    }));
-    setupSteps = updatedSteps;
-
-    if (!hasInitializedSubstep && $setupState.current_step === SetupStep.TRANSCRIPTION_SETUP) {
-      const savedIndex = loadSavedSubstepIndex(updatedSteps.length - 1);
-      if (savedIndex !== null) {
-        currentSubStepIndex = savedIndex;
-      } else {
-        currentSubStepIndex = computeInitialSubstepIndex(updatedSteps);
-      }
-      hasInitializedSubstep = true;
+  $effect(() => {
+    if ($setupState?.current_step !== SetupStep.TRANSCRIPTION_SETUP) {
+      hasInitializedSubstep = false;
     }
-  }
+  });
 
-  $: if (hasInitializedSubstep) {
-    saveSubstepIndex(currentSubStepIndex);
-  }
+  $effect(() => {
+    if ($setupState && $setupState.step_details) {
+      const details = $setupState.step_details[SetupStep.TRANSCRIPTION_SETUP] || {};
+      // untrack で setupSteps を依存関係から外す（楽観的更新が $effect で上書きされるのを防ぐ）
+      const updatedSteps = untrack(() => setupSteps).map((step) => ({
+        ...step,
+        completed: details[step.id] || false,
+      }));
+      setupSteps = updatedSteps;
+
+      if (!hasInitializedSubstep && $setupState.current_step === SetupStep.TRANSCRIPTION_SETUP) {
+        const savedIndex = loadSavedSubstepIndex(updatedSteps.length - 1);
+        if (savedIndex !== null) {
+          currentSubStepIndex = savedIndex;
+        } else {
+          currentSubStepIndex = computeInitialSubstepIndex(updatedSteps);
+        }
+        hasInitializedSubstep = true;
+      }
+    }
+  });
+
+  $effect(() => {
+    if (hasInitializedSubstep) {
+      saveSubstepIndex(currentSubStepIndex);
+    }
+  });
 
   export async function next(options: { skip?: boolean } = {}): Promise<boolean> {
     const currentStep = setupSteps[currentSubStepIndex];
@@ -352,8 +367,8 @@
       class="step-card glass-card"
       class:completed={currentStepCompleted}
       class:disabled={isSaving}
-      on:click={handleCardClick}
-      on:keydown={handleKeyDown}
+      onclick={handleCardClick}
+      onkeydown={handleKeyDown}
       role="button"
       tabindex="0"
     >
@@ -384,7 +399,7 @@
                       class="choice-button"
                       class:active={useTranscription === true}
                       aria-pressed={useTranscription === true}
-                      on:click={() => setTranscriptionUsage(true)}
+                      onclick={() => setTranscriptionUsage(true)}
                     >
                       使用する
                     </button>
@@ -393,7 +408,7 @@
                       class="choice-button"
                       class:active={useTranscription === false}
                       aria-pressed={useTranscription === false}
-                      on:click={() => setTranscriptionUsage(false)}
+                      onclick={() => setTranscriptionUsage(false)}
                     >
                       使用しない
                     </button>
@@ -414,7 +429,7 @@
                     <select
                       class="device-select"
                       bind:value={micDeviceName}
-                      on:click={(e) => e.stopPropagation()}
+                      onclick={(e) => e.stopPropagation()}
                       disabled={isLoadingMicrophones}
                     >
                       <option value="">-- マイクを選択 --</option>
@@ -425,7 +440,7 @@
                     <button
                       class="refresh-button"
                       type="button"
-                      on:click={refreshMicrophones}
+                      onclick={refreshMicrophones}
                       disabled={isLoadingMicrophones}
                       title="マイク一覧を更新"
                     >
@@ -478,13 +493,13 @@
                         type={showApiKey ? 'text' : 'password'}
                         placeholder="gsk_..."
                         value={groqApiKey}
-                        on:input={(e) => (groqApiKey = e.currentTarget.value)}
-                        on:click={(e) => e.stopPropagation()}
+                        oninput={(e) => (groqApiKey = e.currentTarget.value)}
+                        onclick={(e) => e.stopPropagation()}
                       />
                       <button
                         type="button"
                         class="password-toggle"
-                        on:click={(e) => {
+                        onclick={(e) => {
                           e.stopPropagation();
                           showApiKey = !showApiKey;
                         }}
@@ -510,7 +525,7 @@
                       rows="6"
                       placeholder="例:\nナイス\nキル\nデス"
                       bind:value={customDictionaryText}
-                      on:click={(e) => e.stopPropagation()}
+                      onclick={(e) => e.stopPropagation()}
                     ></textarea>
                   </div>
                 </li>
@@ -530,7 +545,7 @@
   bind:isOpen={dialogOpen}
   variant={dialogVariant}
   message={dialogMessage}
-  on:close={() => (dialogOpen = false)}
+  onClose={() => (dialogOpen = false)}
 />
 
 <style>

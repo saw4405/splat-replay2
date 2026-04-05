@@ -1,6 +1,6 @@
-﻿<script lang="ts">
+<script lang="ts">
   import { onMount } from 'svelte';
-  import type { ComponentType } from 'svelte';
+  import type { Component } from 'svelte';
   import { ChevronLeft, ChevronRight } from 'lucide-svelte';
   import {
     setupState,
@@ -21,57 +21,53 @@
   import ErrorDialog from '../../common/components/ErrorDialog.svelte';
   import NotificationDialog from '../../common/components/NotificationDialog.svelte';
 
-  // ステップコンポーネントのスロット
-  export let currentStepComponent: ComponentType | null = null;
-
-  // 現在のステップコンポーネントのインスタンス
-  let stepComponentInstance: unknown;
-
-  // 子コンポーネントが戻れるかどうか
-  let childCanGoBack = false;
-  let childAtFinalSubstep = false;
-  let childStepCompleted = false;
-  let shouldShowCompletion = false;
-  let lastObservedStep: SetupStep | null = null;
-
-  let showErrorDialog = false;
-  let showCompletionDialog = false;
-  let showWarningDialog = false;
-  let hasIncompleteTasksMessage = '';
-  let isAllTasksCompleted = true;
-
-  $: if ($error) {
-    showErrorDialog = true;
+  interface Props {
+    currentStepComponent?: Component | null;
   }
 
-  $: canGoBack = $setupState ? $setupState.current_step !== SetupStep.HARDWARE_CHECK : false;
+  let { currentStepComponent = null }: Props = $props();
 
-  $: isLastStep = $setupState ? $setupState.current_step === SetupStep.YOUTUBE_SETUP : false;
+  // 現在のステップコンポーネントのインスタンス
+  let stepComponentInstance = $state<unknown>(undefined);
 
-  $: {
+  // 子コンポーネントが戻れるかどうか
+  let childCanGoBack = $state(false);
+  let childAtFinalSubstep = $state(false);
+  let childStepCompleted = $state(false);
+  let shouldShowCompletion = $state(false);
+  let lastObservedStep = $state<SetupStep | null>(null);
+
+  let showErrorDialog = $state(false);
+  let showCompletionDialog = $state(false);
+  let showWarningDialog = $state(false);
+  let hasIncompleteTasksMessage = $state('');
+  let isAllTasksCompleted = $state(true);
+
+  $effect(() => {
+    if ($error) {
+      showErrorDialog = true;
+    }
+  });
+
+  const canGoBack = $derived(
+    $setupState ? $setupState.current_step !== SetupStep.HARDWARE_CHECK : false
+  );
+
+  const isLastStep = $derived(
+    $setupState ? $setupState.current_step === SetupStep.YOUTUBE_SETUP : false
+  );
+
+  $effect(() => {
     const currentStep = $setupState?.current_step ?? null;
     if (currentStep !== lastObservedStep) {
       childAtFinalSubstep = false;
       lastObservedStep = currentStep;
     }
-  }
+  });
 
-  $: shouldShowCompletion = isLastStep && childAtFinalSubstep;
-
-  $: {
-    console.log('[SetupWizard] State update', {
-      isLastStep,
-      childAtFinalSubstep,
-      shouldShowCompletion,
-      childStepCompleted,
-      showCompletionDialog,
-    });
-  }
-
-  // 最後のステップの最後のサブステップに到達したら、次へボタンを押した時に完了処理を実行する
-  $: if (shouldShowCompletion && !showCompletionDialog) {
-    // フラグのみ設定し、実際の完了処理はhandleNext()で行う
-  }
+  $effect(() => {
+    shouldShowCompletion = isLastStep && childAtFinalSubstep;
+  });
 
   /**
    * すべてのタスクが完了しているかチェック
@@ -199,8 +195,8 @@
     await goToPreviousStep();
   }
 
-  function handleSubstepChange(event: CustomEvent<{ isFinalSubstep: boolean }>): void {
-    childAtFinalSubstep = event.detail.isFinalSubstep;
+  function handleSubstepChange(isFinalSubstep: boolean): void {
+    childAtFinalSubstep = isFinalSubstep;
   }
 
   function handleErrorClose(): void {
@@ -257,21 +253,19 @@
     {:else if $setupState}
       <div class="step-container">
         <div class="step-wrapper">
-          <slot name="step-content">
-            {#if currentStepComponent}
-              <svelte:component
-                this={currentStepComponent}
-                bind:this={stepComponentInstance}
-                bind:canGoBack={childCanGoBack}
-                bind:isStepCompleted={childStepCompleted}
-                on:substepChange={handleSubstepChange}
-              />
-            {:else}
-              <div class="placeholder-content">
-                <p>ステップコンテンツがありません</p>
-              </div>
-            {/if}
-          </slot>
+          {#if currentStepComponent}
+            {@const StepComp = currentStepComponent as unknown as import('svelte').Component}
+            <StepComp
+              bind:this={stepComponentInstance}
+              bind:canGoBack={childCanGoBack}
+              bind:isStepCompleted={childStepCompleted}
+              onSubstepChange={handleSubstepChange}
+            />
+          {:else}
+            <div class="placeholder-content">
+              <p>ステップコンテンツがありません</p>
+            </div>
+          {/if}
         </div>
       </div>
     {:else}
@@ -287,7 +281,7 @@
         class="button button-secondary"
         type="button"
         disabled={(!canGoBack && !childCanGoBack) || $isLoading}
-        on:click={handleBack}
+        onclick={handleBack}
       >
         <ChevronLeft class="button-icon" size={20} />
         戻る
@@ -300,7 +294,7 @@
         class:button-skip={!shouldShowCompletion && !childStepCompleted}
         type="button"
         disabled={$isLoading}
-        on:click={handleNext}
+        onclick={handleNext}
       >
         {shouldShowCompletion ? '完了' : childStepCompleted ? '次へ' : 'スキップ'}
         <ChevronRight class="button-icon" size={20} />
@@ -322,7 +316,7 @@
   title="セットアップ完了！"
   message="Splat Replay のセットアップが完了しました。"
   buttonText="アプリケーションを開始"
-  on:close={handleCompletionContinue}
+  onClose={handleCompletionContinue}
 />
 
 <NotificationDialog
@@ -332,7 +326,7 @@
   message={hasIncompleteTasksMessage +
     '\n\nセットアップを完了させるには、すべてのタスクを完了してください。'}
   buttonText="閉じる"
-  on:close={handleWarningClose}
+  onClose={handleWarningClose}
 />
 
 <style>

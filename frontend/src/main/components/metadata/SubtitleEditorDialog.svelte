@@ -1,64 +1,72 @@
-﻿<script lang="ts">
+<script lang="ts">
   import { onMount } from 'svelte';
   import BaseDialog from '../../../common/components/BaseDialog.svelte';
   import ConfirmDialog from '../../../common/components/ConfirmDialog.svelte';
   import type { SubtitleBlock, SubtitleData } from '../../api/types';
   import { getRecordedSubtitle, updateRecordedSubtitle } from '../../api/metadata';
 
-  export let visible = false;
-  export let videoId: string;
-  export let videoUrl: string;
+  interface Props {
+    visible?: boolean;
+    videoId: string;
+    videoUrl: string;
+    onSaved?: () => void;
+  }
 
-  let subtitleData: SubtitleData | null = null;
-  let blocks: SubtitleBlock[] = [];
-  let videoDuration: number | null = null;
-  let videoElementDuration: number | null = null;
-  let blocksMaxDuration: number | null = null;
-  let timelineDuration: number | null = null;
-  let loading = true;
-  let saving = false;
-  let error: string | null = null;
+  let { visible = $bindable(false), videoId, videoUrl, onSaved }: Props = $props();
+
+  let subtitleData = $state<SubtitleData | null>(null);
+  let blocks = $state<SubtitleBlock[]>([]);
+  let videoDuration = $state<number | null>(null);
+  let videoElementDuration = $state<number | null>(null);
+  let loading = $state(true);
+  let saving = $state(false);
+  let error = $state<string | null>(null);
 
   // 動画プレイヤー
-  let videoElement: HTMLVideoElement;
-  let currentTime = 0;
-  let playing = false;
-  let selectedBlockIndex: number | null = null;
+  let videoElement = $state<HTMLVideoElement>(undefined as unknown as HTMLVideoElement);
+  let currentTime = $state(0);
+  let playing = $state(false);
+  let selectedBlockIndex = $state<number | null>(null);
 
   // タイムラインの状態
-  let timelineWidth = 800; // デフォルト幅
-  let timelineContainer: HTMLElement;
-  let draggingBlock: number | null = null;
-  let draggingEdge: 'start' | 'end' | 'move' | null = null;
-  let dragStartX = 0;
-  let dragStartTime = 0;
+  let timelineWidth = $state(800); // デフォルト幅
+  let timelineContainer = $state<HTMLElement>(undefined as unknown as HTMLElement);
+  let draggingBlock = $state<number | null>(null);
+  let draggingEdge = $state<'start' | 'end' | 'move' | null>(null);
+  let dragStartX = $state(0);
+  let dragStartTime = $state(0);
 
   // ポップアップ編集フォームの位置
-  let popupLeft = 0;
-  let popupTop = 0;
-  let popupArrowLeft = 50; // 三角形の位置（%）
-  let showPopup = false;
-  let showDeleteConfirm = false;
-  let pendingDeleteIndex: number | null = null;
+  let popupLeft = $state(0);
+  let popupTop = $state(0);
+  let popupArrowLeft = $state(50); // 三角形の位置（%）
+  let showPopup = $state(false);
+  let showDeleteConfirm = $state(false);
+  let pendingDeleteIndex = $state<number | null>(null);
 
   // 字幕追加用のポップアップ
-  let showAddPopup = false;
-  let addPopupTime = 0;
-  let addPopupLeft = 0;
+  let showAddPopup = $state(false);
+  let addPopupTime = $state(0);
+  let addPopupLeft = $state(0);
 
   // フォーム入力時の重複チェック
-  let editedStartTime = 0;
-  let editedEndTime = 0;
-  $: hasTimeOverlap =
-    selectedBlockIndex !== null && hasOverlap(editedStartTime, editedEndTime, selectedBlockIndex);
+  let editedStartTime = $state(0);
+  let editedEndTime = $state(0);
+  const hasTimeOverlap = $derived(
+    selectedBlockIndex !== null && hasOverlap(editedStartTime, editedEndTime, selectedBlockIndex)
+  );
 
-  $: if (visible && videoId) {
-    loadSubtitle();
-  }
+  $effect(() => {
+    if (visible && videoId) {
+      loadSubtitle();
+    }
+  });
 
-  $: if (!visible) {
-    cleanup();
-  }
+  $effect(() => {
+    if (!visible) {
+      cleanup();
+    }
+  });
 
   async function loadSubtitle() {
     loading = true;
@@ -91,7 +99,7 @@
       };
 
       await updateRecordedSubtitle(videoId, updatedData);
-      dispatchEvent(new CustomEvent('saved'));
+      onSaved?.();
       close();
     } catch (err) {
       error = `字幕の保存に失敗しました: ${err}`;
@@ -163,7 +171,7 @@
   }
 
   // currentTimeまたはblocksが変更されたら再計算
-  $: currentSubtitleText = blocks && currentTime >= 0 ? getCurrentSubtitle() : '';
+  let currentSubtitleText = $derived(blocks && currentTime >= 0 ? getCurrentSubtitle() : '');
 
   function normalizeDuration(duration: number | null): number | null {
     if (duration === null) return null;
@@ -171,13 +179,15 @@
     return duration;
   }
 
-  $: blocksMaxDuration =
-    blocks.length > 0 ? Math.max(...blocks.map((block) => block.end_time)) : null;
+  let blocksMaxDuration = $derived(
+    blocks.length > 0 ? Math.max(...blocks.map((block) => block.end_time)) : null
+  );
 
-  $: timelineDuration =
+  let timelineDuration = $derived(
     normalizeDuration(videoDuration) ??
-    normalizeDuration(videoElementDuration) ??
-    normalizeDuration(blocksMaxDuration);
+      normalizeDuration(videoElementDuration) ??
+      normalizeDuration(blocksMaxDuration)
+  );
 
   // 時間重複チェック関数
   function hasOverlap(startTime: number, endTime: number, excludeIndex: number = -1): boolean {
@@ -515,8 +525,8 @@
     footerVariant="simple"
     primaryButtonText={saving ? '保存中...' : '保存'}
     secondaryButtonText="キャンセル"
-    on:primary-click={saveSubtitle}
-    on:secondary-click={close}
+    onPrimaryClick={saveSubtitle}
+    onSecondaryClick={close}
     disablePrimaryButton={saving || loading}
     disableSecondaryButton={saving}
     maxWidth="90vw"
@@ -534,11 +544,11 @@
             <video
               bind:this={videoElement}
               src={videoUrl}
-              on:timeupdate={handleVideoTimeUpdate}
-              on:play={handleVideoPlay}
-              on:pause={handleVideoPause}
-              on:loadedmetadata={handleVideoMetadataLoaded}
-              on:durationchange={handleVideoMetadataLoaded}
+              ontimeupdate={handleVideoTimeUpdate}
+              onplay={handleVideoPlay}
+              onpause={handleVideoPause}
+              onloadedmetadata={handleVideoMetadataLoaded}
+              ondurationchange={handleVideoMetadataLoaded}
               controls
             >
               <track kind="captions" />
@@ -558,8 +568,8 @@
             class="timeline-container"
             bind:this={timelineContainer}
             bind:clientWidth={timelineWidth}
-            on:click={handleTimelineClick}
-            on:keydown={(e) => {
+            onclick={handleTimelineClick}
+            onkeydown={(e) => {
               if (e.key === 'Enter' || e.key === ' ') {
                 e.preventDefault();
                 const rect = e.currentTarget.getBoundingClientRect();
@@ -610,8 +620,11 @@
                   class="subtitle-block"
                   class:selected={selectedBlockIndex === i}
                   style="left: {left}px; width: {width}px"
-                  on:click|stopPropagation={(e) => selectBlock(i, e)}
-                  on:keydown={(e) => {
+                  onclick={(e) => {
+                    e.stopPropagation();
+                    selectBlock(i, e);
+                  }}
+                  onkeydown={(e) => {
                     if (e.key === 'Enter' || e.key === ' ') {
                       e.preventDefault();
                       e.stopPropagation();
@@ -624,7 +637,7 @@
                   <!-- 左端ハンドル（開始時間調整） -->
                   <div
                     class="resize-handle left"
-                    on:mousedown={(e) => handleTimelineMouseDown(e, i, 'start')}
+                    onmousedown={(e) => handleTimelineMouseDown(e, i, 'start')}
                     role="button"
                     tabindex="-1"
                     aria-label="開始時間調整"
@@ -633,7 +646,7 @@
                   <!-- 本体（移動） -->
                   <div
                     class="block-body"
-                    on:mousedown={(e) => handleTimelineMouseDown(e, i, 'move')}
+                    onmousedown={(e) => handleTimelineMouseDown(e, i, 'move')}
                     role="button"
                     tabindex="-1"
                     aria-label="字幕ブロック移動"
@@ -645,7 +658,7 @@
                   <!-- 右端ハンドル（終了時間調整） -->
                   <div
                     class="resize-handle right"
-                    on:mousedown={(e) => handleTimelineMouseDown(e, i, 'end')}
+                    onmousedown={(e) => handleTimelineMouseDown(e, i, 'end')}
                     role="button"
                     tabindex="-1"
                     aria-label="終了時間調整"
@@ -656,20 +669,20 @@
 
             <!-- ポップアップ編集フォーム -->
             {#if showPopup && selectedBlockIndex !== null && blocks[selectedBlockIndex]}
-              <!-- svelte-ignore a11y-no-static-element-interactions -->
-              <!-- svelte-ignore a11y-no-noninteractive-element-interactions -->
+              <!-- svelte-ignore a11y_no_static_element_interactions -->
+              <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
               <div
                 class="popup-editor"
                 style="left: {popupLeft}px; top: {popupTop}px; --arrow-left: {popupArrowLeft}%"
-                on:click|stopPropagation
-                on:keydown={(e) => e.stopPropagation()}
+                onclick={(e) => e.stopPropagation()}
+                onkeydown={(e) => e.stopPropagation()}
                 role="dialog"
                 tabindex="-1"
                 aria-label="字幕編集"
               >
                 <div class="popup-header">
                   <span class="popup-title">字幕 #{selectedBlockIndex + 1}</span>
-                  <button class="popup-close" on:click={closePopup}>✕</button>
+                  <button class="popup-close" onclick={closePopup}>?</button>
                 </div>
                 <div class="popup-body">
                   <div class="popup-row">
@@ -680,7 +693,7 @@
                         placeholder="0:00.000"
                         value={formatTimeForEdit(blocks[selectedBlockIndex].start_time)}
                         class:error={hasTimeOverlap}
-                        on:input={(e) => {
+                        oninput={(e) => {
                           const parsed = parseTimeString(e.currentTarget.value);
                           if (parsed !== null && selectedBlockIndex !== null) {
                             editedStartTime = parsed;
@@ -690,7 +703,7 @@
                             }
                           }
                         }}
-                        on:blur={(e) => {
+                        onblur={(e) => {
                           // フォーカスを失ったときに正しい形式に整形
                           if (selectedBlockIndex !== null) {
                             e.currentTarget.value = formatTimeForEdit(
@@ -707,7 +720,7 @@
                         placeholder="0:00.000"
                         value={formatTimeForEdit(blocks[selectedBlockIndex].end_time)}
                         class:error={hasTimeOverlap}
-                        on:input={(e) => {
+                        oninput={(e) => {
                           const parsed = parseTimeString(e.currentTarget.value);
                           if (parsed !== null && selectedBlockIndex !== null) {
                             editedEndTime = parsed;
@@ -717,7 +730,7 @@
                             }
                           }
                         }}
-                        on:blur={(e) => {
+                        onblur={(e) => {
                           // フォーカスを失ったときに正しい形式に整形
                           if (selectedBlockIndex !== null) {
                             e.currentTarget.value = formatTimeForEdit(
@@ -736,7 +749,7 @@
                       テキスト
                       <textarea
                         value={blocks[selectedBlockIndex].text}
-                        on:input={(e) => {
+                        oninput={(e) => {
                           if (selectedBlockIndex !== null) {
                             blocks[selectedBlockIndex].text = e.currentTarget.value;
                             blocks = [...blocks];
@@ -749,8 +762,7 @@
                   <div class="popup-actions">
                     <button
                       class="delete-button"
-                      on:click={() =>
-                        selectedBlockIndex !== null && deleteBlock(selectedBlockIndex)}
+                      onclick={() => selectedBlockIndex !== null && deleteBlock(selectedBlockIndex)}
                     >
                       🗑️ 削除
                     </button>
@@ -764,8 +776,8 @@
               <div
                 class="add-popup"
                 style="left: {addPopupLeft}px;"
-                on:click={handleAddPopupClick}
-                on:keydown={(e) => {
+                onclick={handleAddPopupClick}
+                onkeydown={(e) => {
                   if (e.key === 'Enter' || e.key === ' ') {
                     e.preventDefault();
                     handleAddPopupClick(e);
@@ -787,8 +799,8 @@
     isOpen={showDeleteConfirm}
     message="この字幕ブロックを削除しますか?"
     confirmText="削除"
-    on:confirm={confirmDeleteBlock}
-    on:cancel={cancelDeleteBlock}
+    onConfirm={confirmDeleteBlock}
+    onCancel={cancelDeleteBlock}
   />
 {/if}
 

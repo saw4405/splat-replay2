@@ -1,21 +1,26 @@
 <script lang="ts">
-  import { onMount, onDestroy } from 'svelte';
+  import { onMount, onDestroy, untrack } from 'svelte';
   import { Clock } from 'lucide-svelte';
   import type { AutoProcessPendingPayload, AutoSleepPendingPayload } from '../domainEvents';
   import { UI_COUNTDOWN_TICK_INTERVAL_MS } from '../renderMode';
 
   type CountdownPayload = AutoProcessPendingPayload | AutoSleepPendingPayload;
 
-  export let payload: CountdownPayload;
-  export let title: string = '自動処理の開始予告';
-  export let onDismiss: () => void;
-  export let onStart: () => void | Promise<void>;
+  interface Props {
+    payload: CountdownPayload;
+    title?: string;
+    onDismiss: () => void;
+    onStart: () => void | Promise<void>;
+  }
 
-  let remainingSeconds = payload.timeout_seconds;
-  let progress = 100;
+  let { payload, title = '自動処理の開始予告', onDismiss, onStart }: Props = $props();
+
+  // マウント時の初期値のみ使用（カウントダウン中に payload は変化しない）
+  let remainingSeconds = $state(untrack(() => payload.timeout_seconds));
+  let progress = $state(100);
   let intervalId: number;
-  let startRequested = false;
-  const totalSeconds = payload.timeout_seconds;
+  let startRequested = $state(false);
+  const totalSeconds = $derived(payload.timeout_seconds);
 
   async function handleStart() {
     if (startRequested) {
@@ -77,7 +82,7 @@
 
     <div class="action-row">
       <span class="timer">あと {remainingSeconds} 秒</span>
-      <button class="cancel-button" on:click={handleCancel} disabled={startRequested}>
+      <button class="cancel-button" onclick={handleCancel} disabled={startRequested}>
         キャンセル
       </button>
     </div>

@@ -326,10 +326,9 @@ describe('RecordedDataList', () => {
         throw new Error(`Unexpected fetch: ${url}`);
       });
 
-      const { component } = render(RecordedDataList, {
-        props: { videos: [structuredClone(mockVideos[0])] },
+      const { component: _component } = render(RecordedDataList, {
+        props: { videos: [structuredClone(mockVideos[0])], onRefresh: refreshHandler },
       });
-      component.$on('refresh', refreshHandler);
 
       await fireEvent.click(screen.getByRole('button', { name: '動画を削除' }));
       await waitFor(() => {
@@ -357,10 +356,9 @@ describe('RecordedDataList', () => {
         throw new Error(`Unexpected fetch: ${url}`);
       });
 
-      const { component } = render(RecordedDataList, {
-        props: { videos: [structuredClone(mockVideos[0])] },
+      render(RecordedDataList, {
+        props: { videos: [structuredClone(mockVideos[0])], onRefresh: refreshHandler },
       });
-      component.$on('refresh', refreshHandler);
 
       await fireEvent.click(screen.getByRole('button', { name: '動画を削除' }));
       await waitFor(() => {

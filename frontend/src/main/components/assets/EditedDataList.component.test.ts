@@ -92,9 +92,10 @@ describe('EditedDataList', () => {
 
   describe('モーダル状態管理', () => {
     it('動画プレイヤーを開くとmodalOpenイベントが発火する', async () => {
-      const { component, container } = render(EditedDataList, { props: { videos: mockVideos } });
       const modalOpenHandler = vi.fn();
-      component.$on('modalOpen', modalOpenHandler);
+      const { container } = render(EditedDataList, {
+        props: { videos: mockVideos, onModalOpen: modalOpenHandler },
+      });
 
       // オーバーレイ内の再生ボタンをクリック
       const playButton = container.querySelector('.play-button') as HTMLButtonElement;
@@ -105,9 +106,10 @@ describe('EditedDataList', () => {
     });
 
     it('サムネイルズームを開くとmodalOpenイベントが発火する', async () => {
-      const { component, container } = render(EditedDataList, { props: { videos: mockVideos } });
       const modalOpenHandler = vi.fn();
-      component.$on('modalOpen', modalOpenHandler);
+      const { container } = render(EditedDataList, {
+        props: { videos: mockVideos, onModalOpen: modalOpenHandler },
+      });
 
       // オーバーレイ内のズームボタンをクリック
       const zoomButton = container.querySelector('.zoom-button') as HTMLButtonElement;

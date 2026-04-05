@@ -1,4 +1,4 @@
-﻿<script lang="ts">
+<script lang="ts">
   import { onMount, onDestroy } from 'svelte';
   import { Circle, Pause, Square, Play, Mic } from 'lucide-svelte';
   import {
@@ -10,24 +10,24 @@
   import { getPreviewFramePollIntervalMs, renderMode } from '../../renderMode';
 
   let eventSource: EventSource | null = null;
-  let videoEl: HTMLVideoElement | null = null;
+  let videoEl = $state<HTMLVideoElement | null>(null);
   let mediaStream: MediaStream | null = null;
-  let devices: MediaDeviceInfo[] = [];
-  let selectedDeviceId: string | null = null;
-  let recorderState: string = 'STOPPED'; // STOPPED, RECORDING, PAUSED
-  let isHovered = false;
-  let cameraStartInFlight: boolean = false;
-  let isVideoFileInput = false;
-  let previewImageUrl: string | null = null;
+  let devices = $state<MediaDeviceInfo[]>([]);
+  let selectedDeviceId = $state<string | null>(null);
+  let recorderState = $state<string>('STOPPED'); // STOPPED, RECORDING, PAUSED
+  let isHovered = $state(false);
+  let cameraStartInFlight = $state<boolean>(false);
+  let isVideoFileInput = $state(false);
+  let previewImageUrl = $state<string | null>(null);
   let previewImageObjectUrl: string | null = null;
   let previewFramePollTimer: number | null = null;
   let previewFrameFetchInFlight = false;
-  let previewFramePollIntervalMs = getPreviewFramePollIntervalMs('cpu');
+  let previewFramePollIntervalMs = $state(getPreviewFramePollIntervalMs('cpu'));
 
   // Speech recognition preview state
   type SpeechState = 'idle' | 'listening' | 'recognized';
-  let speechState: SpeechState = 'idle';
-  let speechText: string = '';
+  let speechState = $state<SpeechState>('idle');
+  let speechText = $state<string>('');
   let speechFadeTimeout: number | null = null;
   let speechListeningTimeout: number | null = null;
   let speechRecognizedMinTimeout: number | null = null;
@@ -448,40 +448,46 @@
     stopPreviewFramePolling(true);
   });
 
-  $: nextPreviewFramePollIntervalMs = getPreviewFramePollIntervalMs($renderMode);
-  $: if (previewFramePollIntervalMs !== nextPreviewFramePollIntervalMs) {
-    previewFramePollIntervalMs = nextPreviewFramePollIntervalMs;
-    if (isVideoFileInput) {
-      stopPreviewFramePolling();
-      startPreviewFramePolling();
-    }
-  }
-
-  $: if (!isVideoFileInput) {
-    if (!mediaStream) {
-      if (selectedDeviceId) {
-        void ensureCameraStream(selectedDeviceId);
-      } else {
-        console.warn('No selected device ID for camera stream');
+  $effect(() => {
+    const next = getPreviewFramePollIntervalMs($renderMode);
+    if (previewFramePollIntervalMs !== next) {
+      previewFramePollIntervalMs = next;
+      if (isVideoFileInput) {
+        stopPreviewFramePolling();
+        startPreviewFramePolling();
       }
-    } else if (videoEl && videoEl.srcObject === null) {
-      videoEl.srcObject = mediaStream;
-      void videoEl.play().catch(() => {});
     }
-  } else {
-    if (videoEl) {
-      try {
-        videoEl.pause();
-      } catch {}
-      videoEl.srcObject = null;
-    }
-  }
+  });
 
-  $: if (isVideoFileInput) {
-    startPreviewFramePolling();
-  } else {
-    stopPreviewFramePolling(!isVideoFileInput);
-  }
+  $effect(() => {
+    if (!isVideoFileInput) {
+      if (!mediaStream) {
+        if (selectedDeviceId) {
+          void ensureCameraStream(selectedDeviceId);
+        } else {
+          console.warn('No selected device ID for camera stream');
+        }
+      } else if (videoEl && videoEl.srcObject === null) {
+        videoEl.srcObject = mediaStream;
+        void videoEl.play().catch(() => {});
+      }
+    } else {
+      if (videoEl) {
+        try {
+          videoEl.pause();
+        } catch {}
+        videoEl.srcObject = null;
+      }
+    }
+  });
+
+  $effect(() => {
+    if (isVideoFileInput) {
+      startPreviewFramePolling();
+    } else {
+      stopPreviewFramePolling(!isVideoFileInput);
+    }
+  });
 
   // 録画状態に応じた表示設定
   type RecorderVisuals = {
@@ -496,9 +502,11 @@
     borderColor: 'var(--theme-preview-neutral)',
   };
 
-  let recorderVisuals: RecorderVisuals = defaultVisuals;
+  let recorderVisuals = $state<RecorderVisuals>(defaultVisuals);
 
-  $: recorderVisuals = getRecorderVisuals(recorderState);
+  $effect(() => {
+    recorderVisuals = getRecorderVisuals(recorderState);
+  });
 
   function getRecorderVisuals(state: string): RecorderVisuals {
     switch (state) {
@@ -578,10 +586,10 @@
   aria-label="ビデオプレビューと録画コントロール"
   tabindex="0"
   data-testid="video-preview"
-  on:mouseenter={() => (isHovered = true)}
-  on:mouseleave={() => (isHovered = false)}
-  on:focus={() => (isHovered = true)}
-  on:blur={() => (isHovered = false)}
+  onmouseenter={() => (isHovered = true)}
+  onmouseleave={() => (isHovered = false)}
+  onfocus={() => (isHovered = true)}
+  onblur={() => (isHovered = false)}
 >
   <!-- 録画状態表示とコントロール -->
   <div class="status-control-bar" class:hovered={isHovered}>
@@ -594,21 +602,21 @@
       <div class="divider"></div>
 
       {#if recorderState === 'STOPPED'}
-        <button class="control-btn start" on:click={handleStartRecording} title="録画開始">
+        <button class="control-btn start" onclick={handleStartRecording} title="録画開始">
           <Circle size={12} fill="currentColor" />
         </button>
       {:else if recorderState === 'RECORDING'}
-        <button class="control-btn pause" on:click={handlePauseRecording} title="一時停止">
+        <button class="control-btn pause" onclick={handlePauseRecording} title="一時停止">
           <Pause size={12} />
         </button>
-        <button class="control-btn stop" on:click={handleStopRecording} title="停止">
+        <button class="control-btn stop" onclick={handleStopRecording} title="停止">
           <Square size={12} fill="currentColor" />
         </button>
       {:else if recorderState === 'PAUSED'}
-        <button class="control-btn resume" on:click={handleResumeRecording} title="再開">
+        <button class="control-btn resume" onclick={handleResumeRecording} title="再開">
           <Play size={12} fill="currentColor" />
         </button>
-        <button class="control-btn stop" on:click={handleStopRecording} title="停止">
+        <button class="control-btn stop" onclick={handleStopRecording} title="停止">
           <Square size={12} fill="currentColor" />
         </button>
       {/if}

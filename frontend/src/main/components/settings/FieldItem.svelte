@@ -1,36 +1,44 @@
 ﻿<script lang="ts">
   import { Eye, EyeOff } from 'lucide-svelte';
+  import FieldItem from './FieldItem.svelte';
   import SelectField from './SelectField.svelte';
   import type { FieldValue, PrimitiveValue, SettingField } from './types';
 
-  export let field: SettingField;
-  export let sectionId: string;
-  export let path: string[] = [];
-  export let updateField: (field: SettingField, value: FieldValue) => void;
-  export let updateGroupField: (
-    group: SettingField,
-    child: SettingField,
-    value: FieldValue
-  ) => void;
-  export let parentGroup: SettingField | null = null;
+  interface Props {
+    field: SettingField;
+    sectionId: string;
+    path?: string[];
+    updateField: (field: SettingField, value: FieldValue) => void;
+    updateGroupField: (group: SettingField, child: SettingField, value: FieldValue) => void;
+    parentGroup?: SettingField | null;
+  }
 
-  const pathTokens = [...path, field.id];
-  const elementId = `${sectionId}-${pathTokens.join('-')}`;
-  const labelElementId = `${elementId}-label`;
-  const descriptionId = `${elementId}-description`;
+  let {
+    field,
+    sectionId,
+    path = [],
+    updateField,
+    updateGroupField,
+    parentGroup = null,
+  }: Props = $props();
 
-  let showPassword = false;
-  let listText = '';
+  const pathTokens = $derived([...path, field.id]);
+  const elementId = $derived(`${sectionId}-${pathTokens.join('-')}`);
+  const labelElementId = $derived(`${elementId}-label`);
+  const descriptionId = $derived(`${elementId}-description`);
+
+  let showPassword = $state(false);
+  let listText = $state('');
 
   // field.value のみに依存するように最適化（field全体への依存を回避）
-  $: {
+  $effect(() => {
     if (field.type === 'list' && Array.isArray(field.value)) {
       const newListText = field.value.join('\n');
       if (newListText !== listText) {
         listText = newListText;
       }
     }
-  }
+  });
 
   function commitPrimitive(value: PrimitiveValue): void {
     if (parentGroup) {
@@ -96,7 +104,7 @@
     {/if}
     <div class="field-group-children">
       {#each field.children as child (child.id)}
-        <svelte:self
+        <FieldItem
           field={child}
           {sectionId}
           path={[...pathTokens]}
@@ -128,7 +136,7 @@
           aria-describedby={field.description ? descriptionId : undefined}
           type="checkbox"
           checked={Boolean(field.value)}
-          on:change={commitCheckbox}
+          onchange={commitCheckbox}
         />
         <span class="toggle-slider"></span>
       </label>
@@ -139,7 +147,7 @@
         type="number"
         step="1"
         value={typeof field.value === 'number' ? field.value : ''}
-        on:input={commitInteger}
+        oninput={commitInteger}
       />
     {:else if field.type === 'float'}
       <input
@@ -148,7 +156,7 @@
         type="number"
         step="any"
         value={typeof field.value === 'number' ? field.value : ''}
-        on:input={commitFloat}
+        oninput={commitFloat}
       />
     {:else if field.type === 'select'}
       <SelectField
@@ -159,7 +167,7 @@
         optionLabels={field.choice_labels ?? {}}
         value={typeof field.value === 'string' ? field.value : ''}
         placeholder="選択してください"
-        on:change={(event) => commitSelectValue(event.detail)}
+        onChange={(v) => commitSelectValue(v)}
       />
     {:else if field.type === 'list'}
       <textarea
@@ -168,7 +176,7 @@
         class="list-input"
         rows="6"
         value={listText}
-        on:input={commitList}
+        oninput={commitList}
       ></textarea>
     {:else if field.type === 'password'}
       <div class="password-field">
@@ -177,13 +185,13 @@
           aria-describedby={field.description ? descriptionId : undefined}
           type={showPassword ? 'text' : 'password'}
           value={stringValue(field.value)}
-          on:input={commitText}
+          oninput={commitText}
           autocomplete="current-password"
         />
         <button
           type="button"
           class="password-toggle"
-          on:click={() => (showPassword = !showPassword)}
+          onclick={() => (showPassword = !showPassword)}
           aria-label={showPassword ? 'パスワードを隠す' : 'パスワードを表示'}
         >
           {#if showPassword}
@@ -199,7 +207,7 @@
         aria-describedby={field.description ? descriptionId : undefined}
         rows="4"
         value={stringValue(field.value)}
-        on:input={commitText}
+        oninput={commitText}
       ></textarea>
     {:else}
       <input
@@ -207,7 +215,7 @@
         aria-describedby={field.description ? descriptionId : undefined}
         type="text"
         value={stringValue(field.value)}
-        on:input={commitText}
+        oninput={commitText}
       />
     {/if}
   </div>
