@@ -264,7 +264,7 @@ class TestOBSConfigEndpoints:
             "/setup/config/obs/websocket-password", json=request_data
         )
 
-        assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
+        assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
 
 
 class TestDeviceEndpoints:
@@ -300,7 +300,7 @@ class TestDeviceEndpoints:
         assert response.status_code in [
             status.HTTP_200_OK,
             status.HTTP_400_BAD_REQUEST,
-            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status.HTTP_422_UNPROCESSABLE_CONTENT,
         ]
 
 
@@ -318,5 +318,5 @@ class TestYouTubeConfigEndpoints:
         assert response.status_code in [
             status.HTTP_200_OK,
             status.HTTP_400_BAD_REQUEST,
-            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status.HTTP_422_UNPROCESSABLE_CONTENT,
         ]

@@ -46,6 +46,7 @@ FRONTEND_API_CONTRACT: list[tuple[str, str, int | list[int] | None]] = [
     ("GET", "/api/health", 200),
     # Settings
     ("GET", "/api/settings", 200),
+    ("GET", "/api/settings/webview-render-mode", 200),
     ("PUT", "/api/settings", None),
     # Device status
     ("GET", "/api/device/status", 200),
@@ -146,4 +147,5 @@ def test_openapi_schema_generation(client: TestClient) -> None:
     paths = schema["paths"]
     assert "/api/health" in paths
     assert "/api/settings" in paths
+    assert "/api/settings/webview-render-mode" in paths
     assert "/api/recorder/start" in paths

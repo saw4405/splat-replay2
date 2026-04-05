@@ -511,7 +511,7 @@
                       placeholder="例:\nナイス\nキル\nデス"
                       bind:value={customDictionaryText}
                       on:click={(e) => e.stopPropagation()}
-                    />
+                    ></textarea>
                   </div>
                 </li>
               </ol>

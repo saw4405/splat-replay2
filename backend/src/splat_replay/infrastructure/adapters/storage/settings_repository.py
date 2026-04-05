@@ -72,6 +72,10 @@ class TomlSettingsRepository(SettingsRepositoryPort):
             )
         return sections
 
+    def fetch_webview_render_mode(self) -> str:
+        settings = load_settings_from_toml(self._settings_path)
+        return settings.webview.render_mode
+
     def update_sections(self, updates: List[SectionUpdate]) -> None:
         if not updates:
             return

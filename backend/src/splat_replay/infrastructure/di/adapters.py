@@ -38,7 +38,7 @@ from splat_replay.application.interfaces import (
     VideoEditorPort,
     VideoRecorderPort,
 )
-from splat_replay.domain.config import VideoStorageSettings
+from splat_replay.domain.config import VideoEditSettings, VideoStorageSettings
 from splat_replay.domain.models import Frame
 from splat_replay.domain.ports import (
     BattleMedalRecognizerPort,
@@ -62,15 +62,11 @@ from splat_replay.infrastructure import (
     FileBattleHistoryRepository,
     FileVideoAssetRepository,
     FramePublisherAdapter,
-    GoogleTextToSpeech,
     GuiRuntimePortAdapter,
     ImageDrawer,
-    IntegratedSpeechRecognizer,
     MatcherRegistry,
-    MicrophoneEnumerator,
     RecorderWithTranscription,
     SetupStateFileAdapter,
-    SpeechTranscriber,
     SubtitleEditor,
     SystemCommandAdapter,
     SystemPower,
@@ -100,7 +96,19 @@ def register_adapters(container: punq.Container) -> None:
     """アダプターを DI コンテナに登録する。"""
     container.register(CaptureDevicePort, AdaptiveCaptureDeviceChecker)
     container.register(CaptureDeviceEnumeratorPort, CaptureDeviceEnumerator)
-    container.register(MicrophoneEnumeratorPort, MicrophoneEnumerator)
+
+    def _microphone_enumerator_factory() -> MicrophoneEnumeratorPort:
+        from splat_replay.infrastructure.adapters.audio.microphone_enumerator import (
+            MicrophoneEnumerator,
+        )
+
+        return MicrophoneEnumerator(
+            cast(BoundLogger, container.resolve(BoundLogger))
+        )
+
+    container.register(
+        MicrophoneEnumeratorPort, factory=_microphone_enumerator_factory
+    )
     container.register(
         CapturePort, AdaptiveCapture, scope=punq.Scope.singleton
     )
@@ -177,7 +185,6 @@ def register_adapters(container: punq.Container) -> None:
         return cast(FramePublisher, FramePublisherAdapter(rt.frame_hub))
 
     container.register(FramePublisher, factory=_frame_publisher_factory)
-    container.register(IntegratedSpeechRecognizer, IntegratedSpeechRecognizer)
 
     # Aggregated GUI runtime ports (command/event/frame)
     def _gui_runtime_factory() -> GuiRuntimePortAdapter:
@@ -185,11 +192,9 @@ def register_adapters(container: punq.Container) -> None:
         return GuiRuntimePortAdapter(rt)
 
     container.register(GuiRuntimePortAdapter, factory=_gui_runtime_factory)
-    try:
-        container.register(SpeechTranscriberPort, SpeechTranscriber)
-        container.resolve(SpeechTranscriberPort)
-    except Exception:
-        container.register(SpeechTranscriberPort, factory=lambda: None)
+    container.register(
+        SpeechTranscriberPort, factory=lambda: _build_speech_transcriber()[0]
+    )
     container.register(ImageMatcherPort, MatcherRegistry)
     container.register(SubtitleEditorPort, SubtitleEditor)
     container.register(
@@ -200,11 +205,21 @@ def register_adapters(container: punq.Container) -> None:
         WeaponRecognitionAdapter,
         scope=punq.Scope.singleton,
     )
-    try:
-        container.register(TextToSpeechPort, GoogleTextToSpeech)
-        container.resolve(TextToSpeechPort)
-    except Exception:
-        container.register(TextToSpeechPort, factory=lambda: None)
+
+    def _text_to_speech_factory() -> TextToSpeechPort | None:
+        try:
+            from splat_replay.infrastructure.adapters.audio.google_text_to_speech import (
+                GoogleTextToSpeech,
+            )
+
+            return GoogleTextToSpeech(
+                cast(VideoEditSettings, container.resolve(VideoEditSettings)),
+                cast(BoundLogger, container.resolve(BoundLogger)),
+            )
+        except Exception:
+            return None
+
+    container.register(TextToSpeechPort, factory=_text_to_speech_factory)
 
     def _settings_repository_factory() -> SettingsRepositoryPort:
         device_enumerator = container.resolve(CaptureDeviceEnumeratorPort)
@@ -282,6 +297,13 @@ def register_adapters(container: punq.Container) -> None:
             logger.info("文字起こしを無効化します", reason="マイク名が未設定")
             return None, fingerprint
         try:
+            from splat_replay.infrastructure.adapters.audio.integrated_speech_recognition import (
+                IntegratedSpeechRecognizer,
+            )
+            from splat_replay.infrastructure.adapters.audio.speech_transcriber import (
+                SpeechTranscriber,
+            )
+
             recognizer = IntegratedSpeechRecognizer(speech_settings, logger)
             return (
                 SpeechTranscriber(

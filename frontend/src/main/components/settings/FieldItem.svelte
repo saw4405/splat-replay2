@@ -169,7 +169,7 @@
         rows="6"
         value={listText}
         on:input={commitList}
-      />
+      ></textarea>
     {:else if field.type === 'password'}
       <div class="password-field">
         <input
@@ -200,7 +200,7 @@
         rows="4"
         value={stringValue(field.value)}
         on:input={commitText}
-      />
+      ></textarea>
     {:else}
       <input
         id={elementId}

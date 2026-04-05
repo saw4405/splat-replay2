@@ -45,6 +45,12 @@ def create_settings_router(server: WebAPIServer) -> APIRouter:
         sections = server.settings_service.fetch_sections()
         return JSONResponse(content={"sections": sections})
 
+    @router.get("/settings/webview-render-mode")
+    async def get_webview_render_mode() -> JSONResponse:
+        """起動時に必要な描画モードだけを軽量取得する。"""
+        render_mode = server.settings_service.fetch_webview_render_mode()
+        return JSONResponse(content={"render_mode": render_mode})
+
     @router.put("/settings")
     async def update_settings(
         request: SettingsUpdateRequest,
@@ -73,7 +79,7 @@ def create_settings_router(server: WebAPIServer) -> APIRouter:
             ) from exc
         except ValidationError as exc:
             raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                 detail=exc.errors(),
             ) from exc
         except SettingsServiceError as exc:

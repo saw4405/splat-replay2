@@ -73,6 +73,22 @@ describe('renderMode runtime', () => {
     expect(document.documentElement.dataset.renderMode).toBe('gpu');
   });
 
+  it('initializeRenderMode は軽量な render mode endpoint を利用する', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ render_mode: 'cpu' }),
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    await initializeRenderMode(document);
+
+    expect(fetchMock).toHaveBeenCalledWith('/api/settings/webview-render-mode', {
+      cache: 'no-store',
+    });
+    expect(get(renderMode)).toBe('cpu');
+    expect(document.documentElement.dataset.renderMode).toBe('cpu');
+  });
+
   it('cpu は gpu より遅いプレビュー更新間隔を使う', () => {
     expect(GPU_PREVIEW_FRAME_POLL_INTERVAL_MS).toBe(500);
     expect(CPU_PREVIEW_FRAME_POLL_INTERVAL_MS).toBe(1200);

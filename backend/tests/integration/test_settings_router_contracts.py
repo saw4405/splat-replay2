@@ -57,6 +57,13 @@ class TestSettingsEndpoints:
         }
         assert render_mode["value"] in {"cpu", "gpu"}
 
+    def test_get_webview_render_mode(self, client: TestClient) -> None:
+        """GET /api/settings/webview-render-mode - 描画モードだけを軽量取得できる。"""
+        response = client.get("/api/settings/webview-render-mode")
+
+        assert response.status_code == status.HTTP_200_OK
+        assert response.json() == {"render_mode": "gpu"}
+
     def test_update_settings_valid(self, client: TestClient) -> None:
         """PUT /api/settings - 設定更新（正常系）。"""
         # 最小限の有効なリクエスト
@@ -67,7 +74,7 @@ class TestSettingsEndpoints:
         assert response.status_code in [
             status.HTTP_200_OK,
             status.HTTP_400_BAD_REQUEST,
-            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status.HTTP_422_UNPROCESSABLE_CONTENT,
         ]
 
         if response.status_code == status.HTTP_200_OK:
@@ -120,7 +127,7 @@ class TestSettingsEndpoints:
         # 無効なフィールドは400または422
         assert response.status_code in [
             status.HTTP_400_BAD_REQUEST,
-            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status.HTTP_422_UNPROCESSABLE_CONTENT,
         ]
 
     def test_update_settings_invalid_value_type(
@@ -141,7 +148,7 @@ class TestSettingsEndpoints:
         assert response.status_code in [
             status.HTTP_400_BAD_REQUEST,
             status.HTTP_404_NOT_FOUND,  # obsセクションが存在しない場合
-            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status.HTTP_422_UNPROCESSABLE_CONTENT,
         ]
 
     def test_update_settings_invalid_schema(self, client: TestClient) -> None:
@@ -150,7 +157,7 @@ class TestSettingsEndpoints:
         request_data = {"invalid_field": "value"}
         response = client.put("/api/settings", json=request_data)
 
-        assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
+        assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
 
     def test_update_settings_roundtrip_webview_render_mode(
         self, client: TestClient
@@ -265,7 +272,7 @@ class TestPermissionDialogEndpoints:
         # 200または422を許容
         assert response.status_code in [
             status.HTTP_200_OK,
-            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status.HTTP_422_UNPROCESSABLE_CONTENT,
         ]
 
 
@@ -286,7 +293,7 @@ class TestSettingsPersistence:
         assert update_response.status_code in [
             status.HTTP_200_OK,
             status.HTTP_400_BAD_REQUEST,
-            status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status.HTTP_422_UNPROCESSABLE_CONTENT,
         ]
 
         # 3. 再度取得して一貫性を確認

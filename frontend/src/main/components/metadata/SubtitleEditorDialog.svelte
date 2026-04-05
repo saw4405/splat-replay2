@@ -664,6 +664,7 @@
                 on:click|stopPropagation
                 on:keydown={(e) => e.stopPropagation()}
                 role="dialog"
+                tabindex="-1"
                 aria-label="字幕編集"
               >
                 <div class="popup-header">

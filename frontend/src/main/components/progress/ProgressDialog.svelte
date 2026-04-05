@@ -903,7 +903,7 @@
               class="phase-connector"
               data-filled={phase.status === 'completed'}
               data-active={phase.status === 'active'}
-            />
+            ></div>
           {/if}
         {/each}
       </nav>
@@ -958,7 +958,7 @@
                 aria-valuemax="100"
                 aria-valuenow={taskProgress(task)}
               >
-                <div class="task-progress-fill" style={`width: ${taskProgress(task)}%`} />
+                <div class="task-progress-fill" style={`width: ${taskProgress(task)}%`}></div>
               </div>
 
               {#if task.status === 'failed' && task.errorMessage}

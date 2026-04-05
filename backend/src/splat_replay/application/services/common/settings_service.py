@@ -40,6 +40,10 @@ class SettingsService:
         """Return all settings sections with field metadata and current values."""
         return self._repository.fetch_sections()
 
+    def fetch_webview_render_mode(self) -> str:
+        """Return the lightweight webview render mode setting."""
+        return self._repository.fetch_webview_render_mode()
+
     def update_sections(self, updates: List[SectionUpdate]) -> None:
         """Persist provided settings section updates to the TOML settings file."""
         if not updates:

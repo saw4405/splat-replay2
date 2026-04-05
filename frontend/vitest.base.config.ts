@@ -1,8 +1,9 @@
 import { defineConfig } from 'vitest/config';
 import { svelte } from '@sveltejs/vite-plugin-svelte';
+import { svelteTesting } from '@testing-library/svelte/vite';
 
 export const baseVitestConfig = defineConfig({
-  plugins: [svelte({ hot: !process.env.VITEST })],
+  plugins: [svelte(), svelteTesting()],
   cacheDir: 'node_modules/.vite-test',
   test: {
     globals: true,

@@ -1,4 +1,5 @@
 ﻿<script lang="ts">
+  import type { ComponentType } from 'svelte';
   import { setupState } from './stores/state';
   import { SetupStep } from './types';
   import SetupWizard from './components/SetupWizard.svelte';
@@ -13,7 +14,7 @@
   } from './components/steps';
 
   // 各ステップのコンポーネント
-  let currentStepComponent: typeof HardwareCheck | null = null;
+  let currentStepComponent: ComponentType | null = null;
 
   $: if ($setupState) {
     // 現在のステップに応じてコンポーネントを切り替え

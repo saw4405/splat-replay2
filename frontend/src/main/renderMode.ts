@@ -42,6 +42,10 @@ export function resolveRenderModeFromSettingsResponse(
   return resolveRenderModeFromSections(response.sections) ?? 'gpu';
 }
 
+type RenderModeResponse = {
+  render_mode?: unknown;
+};
+
 export function setRenderMode(mode: RenderMode, doc: Document = document): void {
   renderMode.set(mode);
   doc.documentElement.dataset.renderMode = mode;
@@ -49,13 +53,13 @@ export function setRenderMode(mode: RenderMode, doc: Document = document): void 
 
 export async function initializeRenderMode(doc: Document = document): Promise<RenderMode> {
   try {
-    const response = await fetch('/api/settings', { cache: 'no-store' });
+    const response = await fetch('/api/settings/webview-render-mode', { cache: 'no-store' });
     if (!response.ok) {
       throw new Error(`status ${response.status}`);
     }
 
-    const data = (await response.json()) as SettingsResponse;
-    const mode = resolveRenderModeFromSettingsResponse(data);
+    const data = (await response.json()) as RenderModeResponse;
+    const mode = normalizeRenderMode(data.render_mode);
     setRenderMode(mode, doc);
     return mode;
   } catch {

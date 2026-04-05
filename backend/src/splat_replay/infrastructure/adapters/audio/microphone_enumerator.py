@@ -5,7 +5,6 @@ from __future__ import annotations
 from typing import Any, List, Protocol, cast
 import sys
 
-import speech_recognition as sr
 from structlog.stdlib import BoundLogger
 
 from splat_replay.application.interfaces.audio import MicrophoneEnumeratorPort
@@ -28,6 +27,8 @@ class MicrophoneEnumerator(MicrophoneEnumeratorPort):
                         count=len(devices),
                     )
                     return devices
+            import speech_recognition as sr
+
             devices = sr.Microphone.list_microphone_names()
             self._logger.info("マイク一覧を取得しました", count=len(devices))
             return list(devices)

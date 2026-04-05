@@ -2,6 +2,7 @@
 """PyInstaller spec file for Splat Replay WebView Desktop App."""
 
 from pathlib import Path
+import sys
 
 block_cipher = None
 
@@ -9,6 +10,14 @@ block_cipher = None
 spec_root = Path(SPECPATH).resolve()
 backend_root = spec_root.parent
 repo_root = backend_root.parent
+backend_src = backend_root / 'src'
+
+if str(backend_src) not in sys.path:
+    sys.path.insert(0, str(backend_src))
+
+from splat_replay.bootstrap.pyinstaller_hiddenimports import (  # noqa: E402
+    collect_pyinstaller_hiddenimports,
+)
 
 # 出力先をプロジェクトルートの dist/ に変更
 dist_root = repo_root / 'dist'
@@ -102,6 +111,8 @@ hiddenimports = [
     'cyndilib.wrapper.ndi_send',
     'cyndilib.wrapper.ndi_structs',
 ]
+hiddenimports.extend(collect_pyinstaller_hiddenimports())
+hiddenimports = list(dict.fromkeys(hiddenimports))
 
 import glob
 
@@ -116,7 +127,7 @@ if cyndilib_path.exists():
 
 a = Analysis(
     [str(backend_root / 'src' / 'splat_replay' / 'bootstrap' / 'webview.py')],
-    pathex=[],
+    pathex=[str(backend_src)],
     binaries=cyndilib_binaries,
     datas=datas,
     hiddenimports=hiddenimports,

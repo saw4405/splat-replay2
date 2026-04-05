@@ -229,7 +229,7 @@ class TestEditUploadProcessEndpoints:
             "/api/process/edit-upload/options", json=request_data
         )
 
-        assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
+        assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
 
     def test_update_edit_upload_options_invalid_type(
         self, client: TestClient
@@ -240,7 +240,7 @@ class TestEditUploadProcessEndpoints:
             "/api/process/edit-upload/options", json=request_data
         )
 
-        assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
+        assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
 
 
 class TestAssetsMapperContract:

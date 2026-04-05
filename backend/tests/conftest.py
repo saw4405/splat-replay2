@@ -9,7 +9,12 @@ import pytest
 from fastapi.testclient import TestClient
 
 from splat_replay.bootstrap.web_app import create_app
+from splat_replay.infrastructure.config import (
+    load_settings_from_toml,
+    save_settings_to_toml,
+)
 from splat_replay.infrastructure.di import configure_container
+from splat_replay.infrastructure.filesystem import paths
 
 if TYPE_CHECKING:
     pass
@@ -40,7 +45,9 @@ def perf_recorder() -> Iterator[Callable[[PerfRecord], None]]:
 
 
 @pytest.fixture
-def client(monkeypatch: pytest.MonkeyPatch) -> Iterator[TestClient]:
+def client(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> Iterator[TestClient]:
     """FastAPI TestClient のフィクスチャ。
 
     全 integration テストで使用する。
@@ -83,6 +90,15 @@ def client(monkeypatch: pytest.MonkeyPatch) -> Iterator[TestClient]:
     monkeypatch.setattr(OBSRecorderController, "resume", mock_resume)
     monkeypatch.setattr(OBSRecorderController, "setup", mock_setup)
     monkeypatch.setattr(OBSRecorderController, "teardown", mock_teardown)
+
+    test_settings_path = tmp_path / "config" / "settings.toml"
+    settings = load_settings_from_toml(
+        paths.SETTINGS_FILE, create_if_missing=False
+    )
+    settings.speech_transcriber.enabled = False
+    save_settings_to_toml(settings, test_settings_path)
+    monkeypatch.setenv("SPLAT_REPLAY_SETTINGS_FILE", str(test_settings_path))
+    monkeypatch.setattr(paths, "SETTINGS_FILE", test_settings_path)
 
     container = configure_container()
     # 契約テストでは起動タスクを不要にするため lifespan を無効化

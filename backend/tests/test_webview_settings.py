@@ -78,3 +78,23 @@ def test_update_sections_persists_webview_render_mode(
     settings = load_settings_from_toml(settings_path, create_if_missing=False)
 
     assert settings.webview.render_mode == "gpu"
+
+
+def test_fetch_webview_render_mode_avoids_device_enumeration(
+    tmp_path: Path,
+) -> None:
+    class _FailingVideoEnumerator:
+        def list_video_devices(self) -> list[str]:
+            raise AssertionError("video enumeration should not run")
+
+    class _FailingMicrophoneEnumerator:
+        def list_microphones(self) -> list[str]:
+            raise AssertionError("microphone enumeration should not run")
+
+    repository = TomlSettingsRepository(
+        settings_path=tmp_path / "settings.toml",
+        device_enumerator=_FailingVideoEnumerator(),
+        microphone_enumerator=_FailingMicrophoneEnumerator(),
+    )
+
+    assert repository.fetch_webview_render_mode() == "gpu"

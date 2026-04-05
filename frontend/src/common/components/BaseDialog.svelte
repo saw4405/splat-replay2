@@ -71,6 +71,7 @@
     <div
       class="dialog-container"
       role="dialog"
+      tabindex="-1"
       aria-modal="true"
       aria-labelledby={showHeader ? 'dialog-title' : undefined}
       on:click|stopPropagation
