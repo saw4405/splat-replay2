@@ -131,7 +131,7 @@
   function formatWeaponSlots(value: string[] | null | undefined): string {
     return normaliseWeaponSlots(value, '不明')
       .map((weapon) => weapon.trim() || '不明')
-      .join(', ');
+      .join('\n');
   }
 
   onMount(() => {
@@ -371,128 +371,141 @@
               onclick={() => handleEditMetadata(video)}
               onkeydown={(event) => triggerActionOnKeydown(event, () => handleEditMetadata(video))}
             >
-              <div class="metadata-row">
-                <div class="metadata-item">
-                  <span class="metadata-label">開始時間:</span>
-                  <span class="metadata-value" data-testid="recorded-video-started-at">
-                    {formatTimestamp(video.startedAt)}
-                  </span>
-                </div>
-              </div>
-              <div class="metadata-row">
-                <div class="metadata-item" class:incomplete={!video.gameMode}>
-                  <span class="metadata-label">モード:</span>
-                  <span class="metadata-value" data-testid="recorded-video-game-mode">
-                    {resolveMetadataLabel(
-                      video.gameMode,
-                      metadataOptionMap?.gameModes ?? null,
-                      '未取得'
-                    )}
-                  </span>
-                </div>
-              </div>
-              <div class="metadata-row">
-                <div class="metadata-item" class:incomplete={!video.match}>
-                  <span class="metadata-label">マッチ:</span>
-                  <span class="metadata-value" data-testid="recorded-video-match">
-                    {resolveMetadataLabel(
-                      video.match,
-                      metadataOptionMap?.matches ?? null,
-                      '未取得'
-                    )}
-                  </span>
-                </div>
-              </div>
-              <div class="metadata-row">
-                <div class="metadata-item" class:incomplete={!video.rule}>
-                  <span class="metadata-label">ルール:</span>
-                  <span class="metadata-value" data-testid="recorded-video-rule">
-                    {resolveMetadataLabel(video.rule, metadataOptionMap?.rules ?? null, '未取得')}
-                  </span>
-                </div>
-              </div>
-              <div class="metadata-row">
-                <div class="metadata-item" class:incomplete={!video.stage}>
-                  <span class="metadata-label">ステージ:</span>
-                  <span class="metadata-value" data-testid="recorded-video-stage">
-                    {resolveMetadataLabel(video.stage, metadataOptionMap?.stages ?? null, '未取得')}
-                  </span>
-                </div>
-              </div>
-              <div class="metadata-row">
-                <div class="metadata-item" class:incomplete={!video.rate}>
-                  <span class="metadata-label">レート:</span>
-                  <span class="metadata-value" data-testid="recorded-video-rate">
-                    {video.rate ?? '未検出'}
-                  </span>
-                </div>
-              </div>
-              <div class="metadata-row">
-                <div class="metadata-item" class:incomplete={!video.judgement}>
-                  <span class="metadata-label">判定:</span>
-                  <span
-                    class="metadata-value {getJudgementClass(video.judgement ?? '')}"
-                    data-testid="recorded-video-judgement"
-                  >
-                    {resolveMetadataLabel(
-                      video.judgement,
-                      metadataOptionMap?.judgements ?? null,
-                      '未判定'
-                    )}
-                  </span>
-                </div>
-              </div>
-              <div class="metadata-row">
-                <div class="metadata-item stat-item">
-                  <span class="metadata-label">キルレ:</span>
-                  <span class="stat-icon">💀</span>
-                  <span class="stat-value">
-                    <span data-testid="recorded-video-kill">{video.kill ?? 0}</span>K/
-                    <span data-testid="recorded-video-death">{video.death ?? 0}</span>D
-                  </span>
-                </div>
-                <div class="metadata-item stat-item special-stat-item">
-                  <span class="metadata-label metadata-label-placeholder" aria-hidden="true"></span>
-                  <span class="stat-icon">✨</span>
-                  <span class="stat-value">
-                    SP×<span data-testid="recorded-video-special">{video.special ?? 0}</span>
-                  </span>
-                </div>
-              </div>
-              <div class="metadata-row">
-                <div class="metadata-item">
-                  <span class="metadata-label">表彰:</span>
-                  <span class="stat-value">
-                    🥇x<span data-testid="recorded-video-gold-medals">{video.goldMedals ?? 0}</span>
-                    {' '}
-                    🥈x<span data-testid="recorded-video-silver-medals">
-                      {video.silverMedals ?? 0}
+              <div class="metadata-main">
+                <div class="metadata-row">
+                  <div class="metadata-item">
+                    <span class="metadata-label">開始時間:</span>
+                    <span class="metadata-value" data-testid="recorded-video-started-at">
+                      {formatTimestamp(video.startedAt)}
                     </span>
-                  </span>
+                  </div>
+                </div>
+                <div class="metadata-row">
+                  <div class="metadata-item" class:incomplete={!video.gameMode}>
+                    <span class="metadata-label">モード:</span>
+                    <span class="metadata-value" data-testid="recorded-video-game-mode">
+                      {resolveMetadataLabel(
+                        video.gameMode,
+                        metadataOptionMap?.gameModes ?? null,
+                        '未取得'
+                      )}
+                    </span>
+                  </div>
+                </div>
+                <div class="metadata-row">
+                  <div class="metadata-item" class:incomplete={!video.match}>
+                    <span class="metadata-label">マッチ:</span>
+                    <span class="metadata-value" data-testid="recorded-video-match">
+                      {resolveMetadataLabel(
+                        video.match,
+                        metadataOptionMap?.matches ?? null,
+                        '未取得'
+                      )}
+                    </span>
+                  </div>
+                </div>
+                <div class="metadata-row">
+                  <div class="metadata-item" class:incomplete={!video.rule}>
+                    <span class="metadata-label">ルール:</span>
+                    <span class="metadata-value" data-testid="recorded-video-rule">
+                      {resolveMetadataLabel(video.rule, metadataOptionMap?.rules ?? null, '未取得')}
+                    </span>
+                  </div>
+                </div>
+                <div class="metadata-row">
+                  <div class="metadata-item" class:incomplete={!video.stage}>
+                    <span class="metadata-label">ステージ:</span>
+                    <span class="metadata-value" data-testid="recorded-video-stage">
+                      {resolveMetadataLabel(
+                        video.stage,
+                        metadataOptionMap?.stages ?? null,
+                        '未取得'
+                      )}
+                    </span>
+                  </div>
+                </div>
+                <div class="metadata-row">
+                  <div class="metadata-item" class:incomplete={!video.rate}>
+                    <span class="metadata-label">レート:</span>
+                    <span class="metadata-value" data-testid="recorded-video-rate">
+                      {video.rate ?? '未検出'}
+                    </span>
+                  </div>
+                </div>
+                <div class="metadata-row">
+                  <div class="metadata-item" class:incomplete={!video.judgement}>
+                    <span class="metadata-label">判定:</span>
+                    <span
+                      class="metadata-value {getJudgementClass(video.judgement ?? '')}"
+                      data-testid="recorded-video-judgement"
+                    >
+                      {resolveMetadataLabel(
+                        video.judgement,
+                        metadataOptionMap?.judgements ?? null,
+                        '未判定'
+                      )}
+                    </span>
+                  </div>
+                </div>
+                <div class="metadata-row">
+                  <div class="metadata-item stat-item">
+                    <span class="metadata-label">キルレ:</span>
+                    <span class="stat-icon">💀</span>
+                    <span class="stat-value">
+                      <span data-testid="recorded-video-kill">{video.kill ?? 0}</span>K/
+                      <span data-testid="recorded-video-death">{video.death ?? 0}</span>D
+                    </span>
+                  </div>
+                  <div class="metadata-item stat-item special-stat-item">
+                    <span class="metadata-label metadata-label-placeholder" aria-hidden="true"
+                    ></span>
+                    <span class="stat-icon">✨</span>
+                    <span class="stat-value">
+                      SP×<span data-testid="recorded-video-special">{video.special ?? 0}</span>
+                    </span>
+                  </div>
+                </div>
+                <div class="metadata-row">
+                  <div class="metadata-item">
+                    <span class="metadata-label">表彰:</span>
+                    <span class="stat-value">
+                      🥇x<span data-testid="recorded-video-gold-medals"
+                        >{video.goldMedals ?? 0}</span
+                      >
+                      {' '}
+                      🥈x<span data-testid="recorded-video-silver-medals">
+                        {video.silverMedals ?? 0}
+                      </span>
+                    </span>
+                  </div>
                 </div>
               </div>
-              <div class="metadata-row">
-                <div
-                  class="metadata-item weapon-item"
-                  class:incomplete={!hasDetectedWeapon(video.allies)}
-                >
-                  <span class="metadata-label">味方ブキ:</span>
-                  <span class="metadata-value" data-testid="recorded-video-allies">
-                    {formatWeaponSlots(video.allies)}
-                  </span>
+              <!-- /metadata-main -->
+              <div class="metadata-weapons">
+                <div class="metadata-row">
+                  <div
+                    class="metadata-item weapon-item"
+                    class:incomplete={!hasDetectedWeapon(video.allies)}
+                  >
+                    <span class="metadata-label">味方ブキ:</span>
+                    <span class="metadata-value weapon-value" data-testid="recorded-video-allies">
+                      {formatWeaponSlots(video.allies)}
+                    </span>
+                  </div>
+                </div>
+                <div class="metadata-row">
+                  <div
+                    class="metadata-item weapon-item"
+                    class:incomplete={!hasDetectedWeapon(video.enemies)}
+                  >
+                    <span class="metadata-label">敵ブキ:</span>
+                    <span class="metadata-value weapon-value" data-testid="recorded-video-enemies">
+                      {formatWeaponSlots(video.enemies)}
+                    </span>
+                  </div>
                 </div>
               </div>
-              <div class="metadata-row">
-                <div
-                  class="metadata-item weapon-item"
-                  class:incomplete={!hasDetectedWeapon(video.enemies)}
-                >
-                  <span class="metadata-label">敵ブキ:</span>
-                  <span class="metadata-value" data-testid="recorded-video-enemies">
-                    {formatWeaponSlots(video.enemies)}
-                  </span>
-                </div>
-              </div>
+              <!-- /metadata-weapons -->
             </div>
 
             <!-- 字幕情報（独立した要素） -->
@@ -619,6 +632,7 @@
     padding: 1.25rem;
     width: 100%;
     box-sizing: border-box;
+    container-type: inline-size;
     transition: box-shadow 0.25s ease;
   }
 
@@ -687,7 +701,7 @@
 
   .video-content {
     display: block;
-    --thumbnail-width: clamp(184px, calc(12vw + 56px), 240px);
+    --thumbnail-width: 280px;
   }
 
   .video-content::after {
@@ -861,6 +875,10 @@
     word-break: break-word;
   }
 
+  .weapon-value {
+    white-space: pre-wrap;
+  }
+
   .metadata-label {
     color: rgba(var(--theme-rgb-white), 0.6);
     font-size: 0.8rem;
@@ -943,22 +961,34 @@
     background: rgba(var(--theme-rgb-accent), 0.5);
   }
 
+  @container (min-width: 750px) {
+    .video-metadata {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0 1.5rem;
+      align-items: start;
+    }
+
+    .metadata-main {
+      grid-column: 1;
+    }
+
+    .metadata-weapons {
+      grid-column: 2;
+    }
+  }
+
   @media (max-width: 1024px) {
     .video-list {
       min-height: clamp(3rem, 20vh, 6rem);
     }
-
-    .video-content {
-      --thumbnail-width: clamp(244px, 30vw, 304px);
-    }
   }
 
-  @media (max-width: 768px) {
+  @media (max-width: 750px) {
     .video-content {
       display: flex;
       flex-direction: column;
-      gap: 0.75rem;
-      --thumbnail-width: min(100%, 344px);
+      gap: 1.25rem;
     }
 
     .video-content::after {
@@ -968,7 +998,7 @@
     .video-thumbnail-container {
       float: none;
       align-self: flex-end;
-      margin: 0;
+      margin: 0 0 0.75rem;
     }
   }
 </style>

@@ -405,7 +405,7 @@
 
   .video-content {
     display: block;
-    --thumbnail-width: clamp(184px, calc(12vw + 56px), 240px);
+    --thumbnail-width: 280px;
   }
 
   .video-content::after {
@@ -494,14 +494,19 @@
 
   /* 動画情報 (タイトル・説明) */
   .video-info {
-    display: block;
+    --info-label-width: 3.5rem;
+    display: flow-root;
     font-size: 0.85rem;
     padding: 0 0.5rem 0.5rem;
     border-radius: 6px;
+    text-align: left;
   }
 
   .info-item {
-    display: block;
+    display: flex;
+    flex-wrap: nowrap;
+    align-items: flex-start;
+    gap: 0.35rem;
     margin: 0 0 0.35rem;
   }
 
@@ -510,18 +515,21 @@
   }
 
   .info-label {
-    display: inline;
+    flex: 0 0 var(--info-label-width);
+    width: var(--info-label-width);
     color: rgba(var(--theme-rgb-white), 0.6);
     font-size: 0.8rem;
-    margin-right: 0.35rem;
+    white-space: nowrap;
   }
 
   .info-value {
-    display: inline;
+    flex: 1 1 auto;
+    min-width: 0;
     color: var(--accent-color);
     font-weight: 500;
-    word-break: break-all;
+    word-break: break-word;
     overflow-wrap: break-word;
+    white-space: pre-wrap;
   }
 
   .info-value-dim {
@@ -532,12 +540,14 @@
 
   /* 字幕情報 */
   .subtitle-info {
-    display: block;
+    --info-label-width: 3.5rem;
+    display: flow-root;
     font-size: 0.85rem;
     border-top: 1px solid rgba(var(--theme-rgb-white), 0.1);
     margin-top: 0.35rem;
     padding: 0.75rem 0.5rem 0.5rem;
     border-radius: 6px;
+    text-align: left;
   }
 
   .metadata-row {
@@ -545,23 +555,26 @@
   }
 
   .metadata-item {
-    display: inline-flex;
-    flex-wrap: wrap;
-    gap: 0.25rem;
-    align-items: baseline;
-    margin: 0 0.75rem 0.25rem 0;
-    vertical-align: top;
+    display: flex;
+    flex-wrap: nowrap;
+    gap: 0.35rem;
+    align-items: flex-start;
   }
 
   .metadata-label {
+    flex: 0 0 var(--info-label-width);
+    width: var(--info-label-width);
     color: rgba(var(--theme-rgb-white), 0.6);
     font-size: 0.8rem;
+    white-space: nowrap;
   }
 
   .metadata-value {
+    flex: 1 1 auto;
+    min-width: 0;
     color: var(--accent-color);
     font-weight: 500;
-    word-break: break-all;
+    word-break: break-word;
     overflow-wrap: break-word;
   }
 
@@ -597,18 +610,13 @@
     .video-list {
       min-height: clamp(3rem, 20vh, 6rem);
     }
-
-    .video-content {
-      --thumbnail-width: clamp(244px, 30vw, 304px);
-    }
   }
 
-  @media (max-width: 768px) {
+  @media (max-width: 750px) {
     .video-content {
       display: flex;
       flex-direction: column;
-      gap: 0.75rem;
-      --thumbnail-width: min(100%, 344px);
+      gap: 1.25rem;
     }
 
     .video-content::after {
@@ -618,7 +626,7 @@
     .video-thumbnail-container {
       float: none;
       align-self: flex-end;
-      margin: 0;
+      margin: 0 0 0.75rem;
     }
   }
 </style>

@@ -682,7 +682,7 @@
               >
                 <div class="popup-header">
                   <span class="popup-title">字幕 #{selectedBlockIndex + 1}</span>
-                  <button class="popup-close" onclick={closePopup}>?</button>
+                  <button class="popup-close" onclick={closePopup}>×</button>
                 </div>
                 <div class="popup-body">
                   <div class="popup-row">
