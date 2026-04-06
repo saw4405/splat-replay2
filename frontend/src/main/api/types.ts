@@ -122,6 +122,29 @@ export interface SubtitleData {
   video_duration: number | null;
 }
 
+// 対戦履歴
+export interface BattleHistoryEntry {
+  record_id: string;
+  source_video_id: string;
+  game_mode: string;
+  started_at: string | null;
+  match: string | null;
+  rule: string | null;
+  stage: string | null;
+  judgement: string | null;
+  kill: number | null;
+  death: number | null;
+  special: number | null;
+  assist: number | null;
+  gold_medals: number | null;
+  silver_medals: number | null;
+  session_rate: string | null;
+}
+
+export interface BattleHistoryResponse {
+  records: BattleHistoryEntry[];
+}
+
 // 進捗イベント
 export type ProgressEventKind =
   | 'start'

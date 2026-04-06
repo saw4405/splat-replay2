@@ -29,7 +29,7 @@ from splat_replay.application.interfaces.common import (
     PathsPort,
 )
 from splat_replay.application.interfaces.history import (
-    BattleHistoryRecord,
+    BattleHistoryEntry,
     BattleHistoryRepositoryPort,
 )
 from splat_replay.application.interfaces.data import (
@@ -105,7 +105,7 @@ from splat_replay.domain.ports import ImageMatcherPort, OCRPort
 
 __all__ = [
     # Common
-    "BattleHistoryRecord",
+    "BattleHistoryEntry",
     "BattleHistoryRepositoryPort",
     "ClockPort",
     "ConfigPort",

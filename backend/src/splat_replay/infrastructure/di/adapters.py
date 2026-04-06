@@ -234,13 +234,12 @@ def register_adapters(container: punq.Container) -> None:
     )
 
     def _battle_history_repo_factory() -> BattleHistoryRepositoryPort:
-        history_file = paths.OUTPUTS_DIR / "history" / "battle_history.json"
+        settings = cast(
+            VideoStorageSettings, container.resolve(VideoStorageSettings)
+        )
         return FileBattleHistoryRepository(
-            cast(
-                VideoStorageSettings, container.resolve(VideoStorageSettings)
-            ),
+            settings,
             cast(BoundLogger, container.resolve(BoundLogger)),
-            history_file=history_file,
         )
 
     container.register(

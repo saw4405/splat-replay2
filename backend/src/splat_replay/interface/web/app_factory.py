@@ -13,6 +13,7 @@ from splat_replay.interface.web.routers import (
     create_assets_router,
     create_events_router,
     create_file_serving_router,
+    create_history_router,
     create_metadata_router,
     create_notifications_router,
     create_process_router,
@@ -139,6 +140,9 @@ def create_app(server: WebAPIServer, enable_lifespan: bool = True) -> FastAPI:
 
     process_router = create_process_router(server)
     app.include_router(process_router)
+
+    history_router = create_history_router(server)
+    app.include_router(history_router)
 
     # === SPA用 Catch-all ルート (最後に定義してAPIルートより優先度を下げる) ===
     if frontend_exists:

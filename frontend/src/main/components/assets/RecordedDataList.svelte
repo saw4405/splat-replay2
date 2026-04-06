@@ -255,7 +255,7 @@
   {#if videos.length === 0}
     <div class="empty-state glass-panel">
       <div class="empty-icon">📁</div>
-      <p>録画済データはありません</p>
+      <p>録画済データがありません</p>
     </div>
   {:else}
     {#each videos as video (video.id)}

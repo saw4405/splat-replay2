@@ -38,6 +38,7 @@
 ### Task 1: recorded seed helper を追加する
 
 **Files:**
+
 - Create: `frontend/src/recordedSeed.test.ts`
 - Create: `frontend/tests/e2e/support/recordedSeed.ts`
 - Modify: `frontend/tests/e2e/support/appHelpers.ts`
@@ -48,29 +49,29 @@
 Create: `frontend/src/recordedSeed.test.ts`
 
 ```ts
-import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { bootstrapE2EEnvironment } from '../tests/e2e/support/e2eEnv';
-import { seedRecordedVideos } from '../tests/e2e/support/recordedSeed';
+import { bootstrapE2EEnvironment } from "../tests/e2e/support/e2eEnv";
+import { seedRecordedVideos } from "../tests/e2e/support/recordedSeed";
 
 const temporaryRoots: string[] = [];
 
 function bootEnvironment() {
-  const rootDir = mkdtempSync(join(tmpdir(), 'splat-replay-recorded-seed-'));
+  const rootDir = mkdtempSync(join(tmpdir(), "splat-replay-recorded-seed-"));
   temporaryRoots.push(rootDir);
 
-  vi.stubEnv('SPLAT_REPLAY_E2E_ROOT', rootDir);
-  vi.stubEnv('SPLAT_REPLAY_SETTINGS_FILE', join(rootDir, 'settings.toml'));
-  vi.stubEnv('SPLAT_REPLAY_E2E_MODE', 'smoke');
+  vi.stubEnv("SPLAT_REPLAY_E2E_ROOT", rootDir);
+  vi.stubEnv("SPLAT_REPLAY_SETTINGS_FILE", join(rootDir, "settings.toml"));
+  vi.stubEnv("SPLAT_REPLAY_E2E_MODE", "smoke");
 
   return bootstrapE2EEnvironment(true);
 }
 
-describe('recorded seed helper', () => {
+describe("recorded seed helper", () => {
   afterEach(() => {
     vi.unstubAllEnvs();
     while (temporaryRoots.length > 0) {
@@ -82,32 +83,32 @@ describe('recorded seed helper', () => {
     }
   });
 
-  it('copies replay asset into recorded storage with metadata json', () => {
+  it("copies replay asset into recorded storage with metadata json", () => {
     const environment = bootEnvironment();
     const asset = environment.replayAssets[0];
 
     const [seeded] = seedRecordedVideos(environment, [{ asset }]);
-    const metadata = JSON.parse(readFileSync(seeded.metadataPath, 'utf-8')) as {
+    const metadata = JSON.parse(readFileSync(seeded.metadataPath, "utf-8")) as {
       game_mode?: string;
       scenario?: unknown;
     };
 
     expect(existsSync(seeded.videoPath)).toBe(true);
-    expect(metadata.game_mode).toBe('BATTLE');
+    expect(metadata.game_mode).toBe("BATTLE");
     expect(metadata.scenario).toBeUndefined();
   });
 
-  it('supports duplicate seeds with file stem and metadata overrides', () => {
+  it("supports duplicate seeds with file stem and metadata overrides", () => {
     const environment = bootEnvironment();
     const asset = environment.replayAssets[0];
 
     seedRecordedVideos(environment, [
-      { asset, fileStem: '20260312_222200_regular_first' },
+      { asset, fileStem: "20260312_222200_regular_first" },
       {
         asset,
-        fileStem: '20260312_222201_regular_second',
+        fileStem: "20260312_222201_regular_second",
         metadataOverride: {
-          started_at: '2026-03-12T22:22:01.999005',
+          started_at: "2026-03-12T22:22:01.999005",
           kill: 21,
         },
       },
@@ -117,17 +118,17 @@ describe('recorded seed helper', () => {
       readFileSync(
         join(
           environment.storageDir,
-          'recorded',
-          '20260312_222201_regular_second.json'
+          "recorded",
+          "20260312_222201_regular_second.json",
         ),
-        'utf-8'
-      )
+        "utf-8",
+      ),
     ) as {
       started_at?: string;
       kill?: number;
     };
 
-    expect(secondMetadata.started_at).toBe('2026-03-12T22:22:01.999005');
+    expect(secondMetadata.started_at).toBe("2026-03-12T22:22:01.999005");
     expect(secondMetadata.kill).toBe(21);
   });
 });
@@ -144,17 +145,17 @@ Expected: `Cannot find module '../tests/e2e/support/recordedSeed'` で FAIL す�
 Create: `frontend/tests/e2e/support/recordedSeed.ts`
 
 ```ts
-import { copyFileSync, linkSync, mkdirSync, writeFileSync } from 'node:fs';
-import { extname, join } from 'node:path';
+import { copyFileSync, linkSync, mkdirSync, writeFileSync } from "node:fs";
+import { extname, join } from "node:path";
 
 import {
   loadSidecarMetadata,
   type E2EEnvironment,
   type ReplayAsset,
   type SidecarMetadata,
-} from './e2eEnv';
+} from "./e2eEnv";
 
-export type RecordedSeedMetadata = Omit<SidecarMetadata, 'scenario'>;
+export type RecordedSeedMetadata = Omit<SidecarMetadata, "scenario">;
 
 export type RecordedSeedSource = {
   asset: ReplayAsset;
@@ -175,10 +176,14 @@ function linkOrCopy(source: string, destination: string): void {
   }
 }
 
-function buildRecordedMetadata(source: RecordedSeedSource): RecordedSeedMetadata {
+function buildRecordedMetadata(
+  source: RecordedSeedSource,
+): RecordedSeedMetadata {
   const sidecar = loadSidecarMetadata(source.asset);
   if (!sidecar) {
-    throw new Error(`Recorded seed requires sidecar metadata: ${source.asset.name}`);
+    throw new Error(
+      `Recorded seed requires sidecar metadata: ${source.asset.name}`,
+    );
   }
 
   const { scenario: _scenario, ...metadata } = sidecar;
@@ -190,21 +195,24 @@ function buildRecordedMetadata(source: RecordedSeedSource): RecordedSeedMetadata
 
 export function seedRecordedVideos(
   environment: E2EEnvironment,
-  sources: RecordedSeedSource[]
+  sources: RecordedSeedSource[],
 ): SeededRecordedVideo[] {
-  const recordedDir = join(environment.storageDir, 'recorded');
+  const recordedDir = join(environment.storageDir, "recorded");
   mkdirSync(recordedDir, { recursive: true });
 
   return sources.map((source, index) => {
     const fileStem = source.fileStem ?? `${source.asset.id}-seed-${index + 1}`;
-    const videoPath = join(recordedDir, `${fileStem}${extname(source.asset.videoPath)}`);
+    const videoPath = join(
+      recordedDir,
+      `${fileStem}${extname(source.asset.videoPath)}`,
+    );
     const metadataPath = join(recordedDir, `${fileStem}.json`);
 
     linkOrCopy(source.asset.videoPath, videoPath);
     writeFileSync(
       metadataPath,
       JSON.stringify(buildRecordedMetadata(source), null, 2),
-      'utf-8'
+      "utf-8",
     );
 
     return {
@@ -218,16 +226,13 @@ export function seedRecordedVideos(
 Modify: `frontend/tests/e2e/support/appHelpers.ts`
 
 ```ts
-import {
-  seedRecordedVideos,
-  type RecordedSeedSource,
-} from './recordedSeed';
+import { seedRecordedVideos, type RecordedSeedSource } from "./recordedSeed";
 ```
 
 ```ts
 export function prepareRecordedSeedAsset(
   environment: E2EEnvironment,
-  asset: ReplayAsset
+  asset: ReplayAsset,
 ): void {
   resetE2EState(environment);
   seedRecordedVideos(environment, [{ asset }]);
@@ -235,7 +240,7 @@ export function prepareRecordedSeedAsset(
 
 export function prepareRecordedSeedAssets(
   environment: E2EEnvironment,
-  sources: RecordedSeedSource[]
+  sources: RecordedSeedSource[],
 ): void {
   resetE2EState(environment);
   seedRecordedVideos(environment, sources);
@@ -258,6 +263,7 @@ git commit -m "test: add recorded seed helper for e2e"
 ### Task 2: edit-upload workflow を seed 化する
 
 **Files:**
+
 - Modify: `frontend/tests/e2e/edit-upload-workflow.spec.ts`
 - Test: `frontend/tests/e2e/edit-upload-workflow.spec.ts`
 
@@ -270,7 +276,7 @@ let autoEnableRequestCount = 0;
 
 test.beforeEach(async ({ page }) => {
   autoEnableRequestCount = 0;
-  await page.route('**/api/recorder/enable-auto', async (route) => {
+  await page.route("**/api/recorder/enable-auto", async (route) => {
     autoEnableRequestCount += 1;
     await route.continue();
   });
@@ -292,7 +298,7 @@ Expected: `Expected: 0` / `Received: 1` で FAIL する。
 Replace the import block and setup in `frontend/tests/e2e/edit-upload-workflow.spec.ts` with:
 
 ```ts
-import { expect, test } from '@playwright/test';
+import { expect, test } from "@playwright/test";
 
 import {
   environment,
@@ -300,21 +306,21 @@ import {
   openRecordedVideos,
   prepareRecordedSeedAsset,
   recordableReplayAssets,
-} from './support/appHelpers';
+} from "./support/appHelpers";
 
 const e2eEnvironment = environment();
 const firstSeedAsset = recordableReplayAssets(e2eEnvironment)[0];
 let autoEnableRequestCount = 0;
 
 test.beforeAll(async ({ request }) => {
-  await request.post('/api/settings/youtube-permission-dialog', {
+  await request.post("/api/settings/youtube-permission-dialog", {
     data: { shown: true },
   });
 });
 
 test.beforeEach(async ({ page }) => {
   autoEnableRequestCount = 0;
-  await page.route('**/api/recorder/enable-auto', async (route) => {
+  await page.route("**/api/recorder/enable-auto", async (route) => {
     autoEnableRequestCount += 1;
     await route.continue();
   });
@@ -337,7 +343,7 @@ prepareRecordedSeedAsset(e2eEnvironment, firstSeedAsset);
 
 await gotoMain(page);
 await openRecordedVideos(page);
-await expect(page.getByTestId('recorded-count')).toHaveText('1', {
+await expect(page.getByTestId("recorded-count")).toHaveText("1", {
   timeout: 30_000,
 });
 ```
@@ -360,6 +366,7 @@ git commit -m "test: seed edit upload e2e workflow"
 ### Task 3: multi-video management を seed 化し、重複ケースを削る
 
 **Files:**
+
 - Modify: `frontend/tests/e2e/multi-video-management.spec.ts`
 - Test: `frontend/tests/e2e/multi-video-management.spec.ts`
 
@@ -372,7 +379,7 @@ let autoEnableRequestCount = 0;
 
 test.beforeEach(async ({ page }) => {
   autoEnableRequestCount = 0;
-  await page.route('**/api/recorder/enable-auto', async (route) => {
+  await page.route("**/api/recorder/enable-auto", async (route) => {
     autoEnableRequestCount += 1;
     await route.continue();
   });
@@ -394,7 +401,7 @@ Expected: `Expected: 0` / `Received: 2` 以上で FAIL する。
 Add this helper block to `frontend/tests/e2e/multi-video-management.spec.ts`:
 
 ```ts
-import type { Page } from '@playwright/test';
+import type { Page } from "@playwright/test";
 ```
 
 ```ts
@@ -406,7 +413,7 @@ import {
   recordableReplayAssets,
   resetReplayTestState,
   waitForRecordedVideoCount,
-} from './support/appHelpers';
+} from "./support/appHelpers";
 ```
 
 ```ts
@@ -420,12 +427,12 @@ function seedMultiVideoAssets(): boolean {
   }
 
   prepareRecordedSeedAssets(e2eEnvironment, [
-    { asset: primarySeedAsset, fileStem: '20260312_222200_regular_first' },
+    { asset: primarySeedAsset, fileStem: "20260312_222200_regular_first" },
     {
       asset: primarySeedAsset,
-      fileStem: '20260312_222201_regular_second',
+      fileStem: "20260312_222201_regular_second",
       metadataOverride: {
-        started_at: '2026-03-12T22:22:01.999005',
+        started_at: "2026-03-12T22:22:01.999005",
         kill: 7,
         death: 5,
         special: 2,
@@ -439,7 +446,7 @@ function seedMultiVideoAssets(): boolean {
 async function openSeededMultiVideoList(page: Page): Promise<void> {
   await gotoMain(page);
   await openRecordedVideos(page);
-  await expect(page.getByTestId('recorded-video-item')).toHaveCount(2);
+  await expect(page.getByTestId("recorded-video-item")).toHaveCount(2);
 }
 ```
 
@@ -460,12 +467,12 @@ Replace the empty-state test setup with:
 resetReplayTestState(e2eEnvironment);
 
 await gotoMain(page);
-await page.getByTestId('bottom-drawer-toggle').click();
-await expect(page.getByTestId('recorded-video-list')).toBeVisible();
-await expect(page.getByTestId('recorded-count')).toHaveText('0', {
+await page.getByTestId("bottom-drawer-toggle").click();
+await expect(page.getByTestId("recorded-video-list")).toBeVisible();
+await expect(page.getByTestId("recorded-count")).toHaveText("0", {
   timeout: 10_000,
 });
-await expect(page.getByTestId('recorded-video-item')).toHaveCount(0);
+await expect(page.getByTestId("recorded-video-item")).toHaveCount(0);
 ```
 
 Keep exactly one edit-independence test and remove the duplicate block named:
@@ -477,40 +484,40 @@ test('複数ビデオ一覧ワークフロー - ビデオごとに独立した�
 Retain the stronger second-item edit test, using this assertion body:
 
 ```ts
-const videoItems = page.getByTestId('recorded-video-item');
+const videoItems = page.getByTestId("recorded-video-item");
 const firstVideo = videoItems.first();
 const secondVideo = videoItems.nth(1);
 const firstKillBefore = (
-  await firstVideo.getByTestId('recorded-video-kill').textContent()
+  await firstVideo.getByTestId("recorded-video-kill").textContent()
 )?.trim();
 const secondKillBefore = (
-  await secondVideo.getByTestId('recorded-video-kill').textContent()
+  await secondVideo.getByTestId("recorded-video-kill").textContent()
 )?.trim();
 
-await secondVideo.getByTestId('recorded-video-metadata-button').click();
-await expect(page.getByRole('dialog', { name: 'メタデータ編集' })).toBeVisible({
+await secondVideo.getByTestId("recorded-video-metadata-button").click();
+await expect(page.getByRole("dialog", { name: "メタデータ編集" })).toBeVisible({
   timeout: 10_000,
 });
 
-const newKillValue = String(Number.parseInt(secondKillBefore ?? '0', 10) + 7);
-await page.getByLabel('キル数').fill(newKillValue);
-await page.getByRole('button', { name: '保存' }).click();
-await expect(page.getByRole('dialog', { name: 'メタデータ編集' })).toBeHidden({
+const newKillValue = String(Number.parseInt(secondKillBefore ?? "0", 10) + 7);
+await page.getByLabel("キル数").fill(newKillValue);
+await page.getByRole("button", { name: "保存" }).click();
+await expect(page.getByRole("dialog", { name: "メタデータ編集" })).toBeHidden({
   timeout: 10_000,
 });
 
 const firstKillAfter = (
   await page
-    .getByTestId('recorded-video-item')
+    .getByTestId("recorded-video-item")
     .first()
-    .getByTestId('recorded-video-kill')
+    .getByTestId("recorded-video-kill")
     .textContent()
 )?.trim();
 const secondKillAfter = (
   await page
-    .getByTestId('recorded-video-item')
+    .getByTestId("recorded-video-item")
     .nth(1)
-    .getByTestId('recorded-video-kill')
+    .getByTestId("recorded-video-kill")
     .textContent()
 )?.trim();
 
@@ -534,6 +541,7 @@ git commit -m "test: seed multi video management e2e"
 ### Task 4: recorded metadata workflow を seed 化し、成功系を 3 本へ圧縮する
 
 **Files:**
+
 - Modify: `frontend/tests/e2e/recorded-metadata-edit-workflow.spec.ts`
 - Test: `frontend/tests/e2e/recorded-metadata-edit-workflow.spec.ts`
 
@@ -546,7 +554,7 @@ let autoEnableRequestCount = 0;
 
 test.beforeEach(async ({ page }) => {
   autoEnableRequestCount = 0;
-  await page.route('**/api/recorder/enable-auto', async (route) => {
+  await page.route("**/api/recorder/enable-auto", async (route) => {
     autoEnableRequestCount += 1;
     await route.continue();
   });
@@ -568,8 +576,8 @@ Expected: `Expected: 0` / `Received: 1` で FAIL する。
 Replace the import block and setup with:
 
 ```ts
-import type { Page } from '@playwright/test';
-import { expect, test } from '@playwright/test';
+import type { Page } from "@playwright/test";
+import { expect, test } from "@playwright/test";
 
 import {
   environment,
@@ -578,7 +586,7 @@ import {
   openRecordedVideos,
   prepareRecordedSeedAsset,
   recordableReplayAssets,
-} from './support/appHelpers';
+} from "./support/appHelpers";
 
 const e2eEnvironment = environment();
 const firstSeedAsset = recordableReplayAssets(e2eEnvironment)[0];
@@ -600,28 +608,30 @@ async function openSeededRecordedVideo(page: Page) {
 Keep exactly these three tests:
 
 ```ts
-test('録画済みメタデータ編集 - 代表保存', async ({ page }) => {
+test("録画済みメタデータ編集 - 代表保存", async ({ page }) => {
   const recordedVideo = await openSeededRecordedVideo(page);
   if (!recordedVideo) {
     return;
   }
 
-  await recordedVideo.getByTestId('recorded-video-metadata-button').click();
-  await expect(page.getByRole('dialog', { name: 'メタデータ編集' })).toBeVisible({
+  await recordedVideo.getByTestId("recorded-video-metadata-button").click();
+  await expect(
+    page.getByRole("dialog", { name: "メタデータ編集" }),
+  ).toBeVisible({
     timeout: 10_000,
   });
 
-  await page.getByLabel('キル数').fill('20');
-  await page.getByLabel('デス数').fill('4');
+  await page.getByLabel("キル数").fill("20");
+  await page.getByLabel("デス数").fill("4");
 
-  const ruleSelect = page.getByLabel('ルール');
+  const ruleSelect = page.getByLabel("ルール");
   const initialRuleValue = await ruleSelect.inputValue();
-  const options = await ruleSelect.locator('option').all();
+  const options = await ruleSelect.locator("option").all();
   let nextRuleValue: string | null = null;
 
   for (const option of options) {
-    const value = await option.getAttribute('value');
-    if (value && value !== initialRuleValue && value !== '') {
+    const value = await option.getAttribute("value");
+    if (value && value !== initialRuleValue && value !== "") {
       nextRuleValue = value;
       break;
     }
@@ -629,47 +639,63 @@ test('録画済みメタデータ編集 - 代表保存', async ({ page }) => {
 
   expect(nextRuleValue).not.toBeNull();
   await ruleSelect.selectOption(nextRuleValue!);
-  await page.getByRole('button', { name: '保存' }).click();
-  await expect(page.getByRole('dialog', { name: 'メタデータ編集' })).toBeHidden({
-    timeout: 10_000,
-  });
+  await page.getByRole("button", { name: "保存" }).click();
+  await expect(page.getByRole("dialog", { name: "メタデータ編集" })).toBeHidden(
+    {
+      timeout: 10_000,
+    },
+  );
 
   const updatedRecordedVideo = await firstRecordedVideo(page);
-  await expect(updatedRecordedVideo.getByTestId('recorded-video-kill')).toHaveText('20');
-  await expect(updatedRecordedVideo.getByTestId('recorded-video-death')).toHaveText('4');
-  await expect(updatedRecordedVideo.getByTestId('recorded-video-rule')).not.toHaveText('');
+  await expect(
+    updatedRecordedVideo.getByTestId("recorded-video-kill"),
+  ).toHaveText("20");
+  await expect(
+    updatedRecordedVideo.getByTestId("recorded-video-death"),
+  ).toHaveText("4");
+  await expect(
+    updatedRecordedVideo.getByTestId("recorded-video-rule"),
+  ).not.toHaveText("");
 });
 
-test('録画済みメタデータ編集 - キャンセル', async ({ page }) => {
+test("録画済みメタデータ編集 - キャンセル", async ({ page }) => {
   const recordedVideo = await openSeededRecordedVideo(page);
   if (!recordedVideo) {
     return;
   }
 
-  const initialKill = await recordedVideo.getByTestId('recorded-video-kill').textContent();
-  await recordedVideo.getByTestId('recorded-video-metadata-button').click();
-  await page.getByLabel('キル数').fill('99');
-  await page.getByRole('button', { name: 'キャンセル' }).click();
+  const initialKill = await recordedVideo
+    .getByTestId("recorded-video-kill")
+    .textContent();
+  await recordedVideo.getByTestId("recorded-video-metadata-button").click();
+  await page.getByLabel("キル数").fill("99");
+  await page.getByRole("button", { name: "キャンセル" }).click();
 
   const updatedRecordedVideo = await firstRecordedVideo(page);
-  const displayedKill = await updatedRecordedVideo.getByTestId('recorded-video-kill').textContent();
+  const displayedKill = await updatedRecordedVideo
+    .getByTestId("recorded-video-kill")
+    .textContent();
   expect(displayedKill?.trim()).toBe(initialKill?.trim());
 });
 
-test('録画済みメタデータ編集 - 保存値を再オープンで引き継ぐ', async ({ page }) => {
+test("録画済みメタデータ編集 - 保存値を再オープンで引き継ぐ", async ({
+  page,
+}) => {
   const recordedVideo = await openSeededRecordedVideo(page);
   if (!recordedVideo) {
     return;
   }
 
-  await recordedVideo.getByTestId('recorded-video-metadata-button').click();
-  await page.getByLabel('キル数').fill('22');
-  await page.getByRole('button', { name: '保存' }).click();
+  await recordedVideo.getByTestId("recorded-video-metadata-button").click();
+  await page.getByLabel("キル数").fill("22");
+  await page.getByRole("button", { name: "保存" }).click();
 
   const updatedRecordedVideo = await firstRecordedVideo(page);
-  await updatedRecordedVideo.getByTestId('recorded-video-metadata-button').click();
-  await expect(page.getByLabel('キル数')).toHaveValue('22');
-  await page.getByRole('button', { name: 'キャンセル' }).click();
+  await updatedRecordedVideo
+    .getByTestId("recorded-video-metadata-button")
+    .click();
+  await expect(page.getByLabel("キル数")).toHaveValue("22");
+  await page.getByRole("button", { name: "キャンセル" }).click();
 });
 ```
 
@@ -691,6 +717,7 @@ git commit -m "test: seed recorded metadata e2e"
 ### Task 5: error-recovery を live / recorded / settings に分割する
 
 **Files:**
+
 - Create: `frontend/tests/e2e/error-recovery-recording-live.spec.ts`
 - Create: `frontend/tests/e2e/error-recovery-recorded-assets.spec.ts`
 - Create: `frontend/tests/e2e/error-recovery-settings.spec.ts`
@@ -710,7 +737,7 @@ Expected: `No tests found` で FAIL する。
 Create: `frontend/tests/e2e/error-recovery-recording-live.spec.ts`
 
 ```ts
-import { expect, test } from '@playwright/test';
+import { expect, test } from "@playwright/test";
 
 import {
   ensureAutoRecordingEnabled,
@@ -721,26 +748,32 @@ import {
   replayAssets,
   stopRecordingForTeardown,
   waitForRecordingLifecycle,
-} from './support/appHelpers';
+} from "./support/appHelpers";
 
 const e2eEnvironment = environment();
 const firstAsset = replayAssets(e2eEnvironment)[0];
 const liveRecordingBootstrapScenario = {
   replay_bootstrap: {
-    phase: 'in_game',
-    game_mode: 'BATTLE',
+    phase: "in_game",
+    game_mode: "BATTLE",
   },
 };
 
-test('エラー復旧 - メタデータオプション読み込み失敗時のフォールバック', async ({ page }) => {
+test("エラー復旧 - メタデータオプション読み込み失敗時のフォールバック", async ({
+  page,
+}) => {
   if (!firstAsset) {
     test.skip();
     return;
   }
 
-  prepareReplayAssetWithScenario(e2eEnvironment, firstAsset, liveRecordingBootstrapScenario);
-  await page.route('**/api/metadata/options', (route) => {
-    route.abort('failed');
+  prepareReplayAssetWithScenario(
+    e2eEnvironment,
+    firstAsset,
+    liveRecordingBootstrapScenario,
+  );
+  await page.route("**/api/metadata/options", (route) => {
+    route.abort("failed");
   });
 
   await gotoMain(page);
@@ -748,58 +781,70 @@ test('エラー復旧 - メタデータオプション読み込み失敗時の�
   await waitForRecordingLifecycle(page);
   await ensureLiveMetadataVisible(page);
 
-  const killInput = page.getByLabel('キル数');
+  const killInput = page.getByLabel("キル数");
   await expect(killInput).toBeVisible();
-  await killInput.fill('10');
-  await expect(killInput).toHaveValue('10');
+  await killInput.fill("10");
+  await expect(killInput).toHaveValue("10");
 
   await stopRecordingForTeardown(page);
-  await page.unroute('**/api/metadata/options');
+  await page.unroute("**/api/metadata/options");
 });
 
-test('エラー復旧 - 録画中メタデータ保存失敗後に再保存できる', async ({ page }) => {
+test("エラー復旧 - 録画中メタデータ保存失敗後に再保存できる", async ({
+  page,
+}) => {
   if (!firstAsset) {
     test.skip();
     return;
   }
 
-  prepareReplayAssetWithScenario(e2eEnvironment, firstAsset, liveRecordingBootstrapScenario);
+  prepareReplayAssetWithScenario(
+    e2eEnvironment,
+    firstAsset,
+    liveRecordingBootstrapScenario,
+  );
   await gotoMain(page);
   await ensureAutoRecordingEnabled(page);
   await waitForRecordingLifecycle(page);
   await ensureLiveMetadataVisible(page);
 
-  const killInput = page.getByLabel('キル数');
-  await killInput.fill('15');
+  const killInput = page.getByLabel("キル数");
+  await killInput.fill("15");
 
-  await page.route('**/api/recorder/metadata', (route) => {
-    if (route.request().method() === 'PATCH') {
+  await page.route("**/api/recorder/metadata", (route) => {
+    if (route.request().method() === "PATCH") {
       route.fulfill({
         status: 500,
-        contentType: 'application/json',
-        body: JSON.stringify({ error: 'Internal Server Error' }),
+        contentType: "application/json",
+        body: JSON.stringify({ error: "Internal Server Error" }),
       });
       return;
     }
     route.continue();
   });
 
-  const saveButton = page.getByRole('button', { name: '保存' });
+  const saveButton = page.getByRole("button", { name: "保存" });
   await saveButton.click();
-  await expect(page.getByText('メタデータの保存に失敗しました')).toBeVisible({
+  await expect(page.getByText("メタデータの保存に失敗しました")).toBeVisible({
     timeout: 10_000,
   });
-  await page.getByRole('dialog', { name: 'エラー' }).getByRole('button', { name: '閉じる' }).click();
-  await expect(killInput).toHaveValue('15');
+  await page
+    .getByRole("dialog", { name: "エラー" })
+    .getByRole("button", { name: "閉じる" })
+    .click();
+  await expect(killInput).toHaveValue("15");
 
-  await page.unroute('**/api/recorder/metadata');
+  await page.unroute("**/api/recorder/metadata");
   await page.waitForTimeout(500);
 
   await saveButton.click();
-  await expect(page.getByText('メタデータを保存しました')).toBeVisible({
+  await expect(page.getByText("メタデータを保存しました")).toBeVisible({
     timeout: 10_000,
   });
-  await page.getByRole('dialog', { name: '完了' }).getByRole('button', { name: '閉じる' }).click();
+  await page
+    .getByRole("dialog", { name: "完了" })
+    .getByRole("button", { name: "閉じる" })
+    .click();
   await stopRecordingForTeardown(page);
 });
 ```
@@ -807,8 +852,8 @@ test('エラー復旧 - 録画中メタデータ保存失敗後に再保存で�
 Create: `frontend/tests/e2e/error-recovery-recorded-assets.spec.ts`
 
 ```ts
-import type { Page } from '@playwright/test';
-import { expect, test } from '@playwright/test';
+import type { Page } from "@playwright/test";
+import { expect, test } from "@playwright/test";
 
 import {
   environment,
@@ -817,7 +862,7 @@ import {
   openRecordedVideos,
   prepareRecordedSeedAsset,
   recordableReplayAssets,
-} from './support/appHelpers';
+} from "./support/appHelpers";
 
 const e2eEnvironment = environment();
 const firstSeedAsset = recordableReplayAssets(e2eEnvironment)[0];
@@ -837,7 +882,7 @@ async function openSeededRecordedVideo(page: Page) {
 
 test.beforeEach(async ({ page }) => {
   autoEnableRequestCount = 0;
-  await page.route('**/api/recorder/enable-auto', async (route) => {
+  await page.route("**/api/recorder/enable-auto", async (route) => {
     autoEnableRequestCount += 1;
     await route.continue();
   });
@@ -847,48 +892,57 @@ test.afterEach(() => {
   expect(autoEnableRequestCount).toBe(0);
 });
 
-test('エラー復旧 - 録画済みメタデータ更新失敗', async ({ page }) => {
+test("エラー復旧 - 録画済みメタデータ更新失敗", async ({ page }) => {
   const recordedVideo = await openSeededRecordedVideo(page);
   if (!recordedVideo) {
     return;
   }
 
-  await recordedVideo.getByTestId('recorded-video-metadata-button').click();
-  await page.getByLabel('キル数').fill('50');
+  await recordedVideo.getByTestId("recorded-video-metadata-button").click();
+  await page.getByLabel("キル数").fill("50");
 
   let metadataUpdateRequestCount = 0;
-  await page.route('**/api/assets/recorded/*/metadata', (route) => {
-    if (route.request().method() === 'PATCH') {
+  await page.route("**/api/assets/recorded/*/metadata", (route) => {
+    if (route.request().method() === "PATCH") {
       metadataUpdateRequestCount += 1;
       route.fulfill({
         status: 500,
-        contentType: 'application/json',
-        body: JSON.stringify({ error: 'Failed to update metadata' }),
+        contentType: "application/json",
+        body: JSON.stringify({ error: "Failed to update metadata" }),
       });
       return;
     }
     route.continue();
   });
 
-  const saveButton = page.getByRole('button', { name: '保存' });
+  const saveButton = page.getByRole("button", { name: "保存" });
   await saveButton.click();
-  await expect.poll(() => metadataUpdateRequestCount, { timeout: 10_000 }).toBe(1);
+  await expect
+    .poll(() => metadataUpdateRequestCount, { timeout: 10_000 })
+    .toBe(1);
   await expect(page.getByText(/メタデータの保存に失敗しました:/)).toBeVisible({
     timeout: 10_000,
   });
-  await page.getByRole('dialog', { name: 'エラー' }).getByRole('button', { name: '閉じる' }).click();
+  await page
+    .getByRole("dialog", { name: "エラー" })
+    .getByRole("button", { name: "閉じる" })
+    .click();
 
-  await page.unroute('**/api/assets/recorded/*/metadata');
+  await page.unroute("**/api/assets/recorded/*/metadata");
   const recordedVideoAfterError = await firstRecordedVideo(page);
-  await recordedVideoAfterError.getByTestId('recorded-video-metadata-button').click();
-  await page.getByLabel('キル数').fill('50');
+  await recordedVideoAfterError
+    .getByTestId("recorded-video-metadata-button")
+    .click();
+  await page.getByLabel("キル数").fill("50");
   await saveButton.click();
-  await expect(page.getByRole('dialog', { name: 'メタデータ編集' })).toBeHidden({
-    timeout: 10_000,
-  });
+  await expect(page.getByRole("dialog", { name: "メタデータ編集" })).toBeHidden(
+    {
+      timeout: 10_000,
+    },
+  );
 });
 
-test('エラー復旧 - 録画済みリスト取得失敗', async ({ page }) => {
+test("エラー復旧 - 録画済みリスト取得失敗", async ({ page }) => {
   if (!firstSeedAsset) {
     test.skip();
     return;
@@ -897,28 +951,30 @@ test('エラー復旧 - 録画済みリスト取得失敗', async ({ page }) => 
   prepareRecordedSeedAsset(e2eEnvironment, firstSeedAsset);
 
   let fetchRecordedRequestCount = 0;
-  await page.route('**/api/assets/recorded', (route) => {
+  await page.route("**/api/assets/recorded", (route) => {
     fetchRecordedRequestCount += 1;
     route.fulfill({
       status: 500,
-      contentType: 'application/json',
-      body: JSON.stringify({ error: 'Failed to fetch recorded videos' }),
+      contentType: "application/json",
+      body: JSON.stringify({ error: "Failed to fetch recorded videos" }),
     });
   });
 
-  await page.goto('/');
+  await page.goto("/");
   await gotoMain(page);
-  await expect.poll(() => fetchRecordedRequestCount, { timeout: 10_000 }).toBeGreaterThan(0);
+  await expect
+    .poll(() => fetchRecordedRequestCount, { timeout: 10_000 })
+    .toBeGreaterThan(0);
 
-  await page.getByTestId('bottom-drawer-toggle').click();
-  await expect(page.getByTestId('recorded-video-item')).toHaveCount(0);
-  await expect(page.getByText('録画済みデータはありません')).toBeVisible();
+  await page.getByTestId("bottom-drawer-toggle").click();
+  await expect(page.getByTestId("recorded-video-item")).toHaveCount(0);
+  await expect(page.getByText("録画済みデータがありません")).toBeVisible();
 
-  await page.unroute('**/api/assets/recorded');
+  await page.unroute("**/api/assets/recorded");
   await page.reload();
   await gotoMain(page);
-  await page.getByTestId('bottom-drawer-toggle').click();
-  await expect(page.getByTestId('recorded-video-item')).toHaveCount(1, {
+  await page.getByTestId("bottom-drawer-toggle").click();
+  await expect(page.getByTestId("recorded-video-item")).toHaveCount(1, {
     timeout: 30_000,
   });
 });
@@ -937,13 +993,13 @@ test('エラー復旧 - バリデーションエラーからの再保存', async
 Create: `frontend/tests/e2e/error-recovery-settings.spec.ts`
 
 ```ts
-import { expect, test } from '@playwright/test';
+import { expect, test } from "@playwright/test";
 
 import {
   environment,
   gotoMain,
   resetReplayTestState,
-} from './support/appHelpers';
+} from "./support/appHelpers";
 
 const e2eEnvironment = environment();
 let autoEnableRequestCount = 0;
@@ -951,7 +1007,7 @@ let autoEnableRequestCount = 0;
 test.beforeEach(async ({ page }) => {
   resetReplayTestState(e2eEnvironment);
   autoEnableRequestCount = 0;
-  await page.route('**/api/recorder/enable-auto', async (route) => {
+  await page.route("**/api/recorder/enable-auto", async (route) => {
     autoEnableRequestCount += 1;
     await route.continue();
   });
@@ -961,35 +1017,37 @@ test.afterEach(() => {
   expect(autoEnableRequestCount).toBe(0);
 });
 
-test('エラー復旧 - 設定保存失敗時のフィードバック', async ({ page }) => {
+test("エラー復旧 - 設定保存失敗時のフィードバック", async ({ page }) => {
   await gotoMain(page);
-  await page.getByTestId('settings-button').click();
-  await expect(page.getByRole('dialog', { name: '設定' })).toBeVisible({
+  await page.getByTestId("settings-button").click();
+  await expect(page.getByRole("dialog", { name: "設定" })).toBeVisible({
     timeout: 10_000,
   });
 
   let settingsSaveRequestCount = 0;
-  await page.route('**/api/settings', (route) => {
-    if (route.request().method() !== 'PUT') {
+  await page.route("**/api/settings", (route) => {
+    if (route.request().method() !== "PUT") {
       route.continue();
       return;
     }
     settingsSaveRequestCount += 1;
     route.fulfill({
       status: 500,
-      contentType: 'application/json',
-      body: JSON.stringify({ detail: 'Failed to save settings' }),
+      contentType: "application/json",
+      body: JSON.stringify({ detail: "Failed to save settings" }),
     });
   });
 
-  await page.getByTestId('settings-section-behavior').click();
-  await page.getByRole('button', { name: '保存' }).click();
-  await expect.poll(() => settingsSaveRequestCount, { timeout: 10_000 }).toBe(1);
-  await expect(page.getByText('Failed to save settings')).toBeVisible({
+  await page.getByTestId("settings-section-behavior").click();
+  await page.getByRole("button", { name: "保存" }).click();
+  await expect
+    .poll(() => settingsSaveRequestCount, { timeout: 10_000 })
+    .toBe(1);
+  await expect(page.getByText("Failed to save settings")).toBeVisible({
     timeout: 10_000,
   });
-  await page.unroute('**/api/settings');
-  await page.getByRole('button', { name: 'キャンセル' }).click();
+  await page.unroute("**/api/settings");
+  await page.getByRole("button", { name: "キャンセル" }).click();
 });
 ```
 
@@ -1021,6 +1079,7 @@ git commit -m "test: split error recovery e2e flows"
 ### Task 6: E2E ドキュメントを replay / seed / no-video 分類へ更新する
 
 **Files:**
+
 - Modify: `docs/e2e_replay_test.md`
 - Test: `docs/e2e_replay_test.md`
 
@@ -1034,7 +1093,7 @@ Expected: 出力なし
 
 Replace the outdated suite overview section in `docs/e2e_replay_test.md` with:
 
-~~~md
+````md
 ## 4. 現在の E2E 構成
 
 現在の workflow E2E は「動画ファイルが必要なもの」と「録画済み seed で足りるもの」を分けて運用します。
@@ -1100,7 +1159,7 @@ cd /d C:\Users\shogo\repo\splat-replay2\frontend
 npm run test:e2e -- tests/e2e/settings-persistence.spec.ts
 npm run test:e2e -- tests/e2e/error-recovery-settings.spec.ts
 ```
-~~~
+````
 
 - [ ] **Step 3: ドキュメント更新が入ったことを確認する**
 

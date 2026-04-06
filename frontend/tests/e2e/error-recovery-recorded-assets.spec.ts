@@ -54,7 +54,7 @@ test('録画済み一覧の取得失敗から再読込で復旧できる', async
   await expect.poll(() => fetchRecordedRequestCount, { timeout: 10_000 }).toBeGreaterThan(0);
   await openRecordedVideos(page);
   await expect(page.getByTestId('recorded-video-item')).toHaveCount(0);
-  await expect(page.getByText('録画済データはありません')).toBeVisible();
+  await expect(page.getByText('録画済データがありません')).toBeVisible();
 
   await page.unroute('**/api/assets/recorded');
 

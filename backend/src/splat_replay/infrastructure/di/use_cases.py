@@ -8,6 +8,7 @@ from __future__ import annotations
 import punq
 
 from splat_replay.application.interfaces import (
+    BattleHistoryRepositoryPort,
     LoggerPort,
     VideoAssetRepositoryPort,
     VideoEditorPort,
@@ -22,6 +23,9 @@ from splat_replay.application.use_cases.assets import (
     ListEditedVideosUseCase,
     ListRecordedVideosUseCase,
     StartEditUploadUseCase,
+)
+from splat_replay.application.use_cases.history.list_battle_history import (
+    ListBattleHistoryUseCase,
 )
 from splat_replay.application.use_cases.metadata import (
     GetRecordedSubtitleStructuredUseCase,
@@ -134,4 +138,14 @@ def register_app_usecases(container: punq.Container) -> None:
     container.register(
         UpdateRecordedSubtitleStructuredUseCase,
         factory=update_recorded_subtitle_structured_factory,
+    )
+
+    # History Use Cases
+    def list_battle_history_factory() -> ListBattleHistoryUseCase:
+        return ListBattleHistoryUseCase(
+            repository=container.resolve(BattleHistoryRepositoryPort),
+        )
+
+    container.register(
+        ListBattleHistoryUseCase, factory=list_battle_history_factory
     )

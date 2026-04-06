@@ -40,6 +40,9 @@ from splat_replay.application.use_cases.metadata import (
     UpdateRecordedMetadataUseCase,
     UpdateRecordedSubtitleStructuredUseCase,
 )
+from splat_replay.application.use_cases.history.list_battle_history import (
+    ListBattleHistoryUseCase,
+)
 from splat_replay.domain.config import AppSettings
 from splat_replay.infrastructure.adapters.system.gui_runtime_port_adapter import (
     GuiRuntimePortAdapter,
@@ -96,6 +99,7 @@ def build_web_api_server(container: punq.Container) -> WebAPIServer:
     update_recorded_subtitle_structured_uc = resolve(
         container, UpdateRecordedSubtitleStructuredUseCase
     )
+    list_battle_history_uc = resolve(container, ListBattleHistoryUseCase)
 
     # 録画ファイル保存先を取得
     app_settings = resolve(container, AppSettings)
@@ -140,6 +144,8 @@ def build_web_api_server(container: punq.Container) -> WebAPIServer:
         update_recorded_metadata_uc=update_recorded_metadata_uc,
         get_recorded_subtitle_structured_uc=get_recorded_subtitle_structured_uc,
         update_recorded_subtitle_structured_uc=update_recorded_subtitle_structured_uc,
+        # History Use Cases
+        list_battle_history_uc=list_battle_history_uc,
     )
 
 

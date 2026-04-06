@@ -19,6 +19,22 @@ from splat_replay.infrastructure.filesystem import RUNTIME_ROOT
 _initialized = False
 
 
+class _WindowsSafeTimedRotatingFileHandler(TimedRotatingFileHandler):
+    """Windows マルチプロセス環境でローテーション失敗を無視するハンドラー。
+
+    uvicorn がワーカープロセスをサブプロセスで起動すると、メインと子の両方が
+    同一ファイルを保持し、Windows の排他ロックにより rename が PermissionError
+    になる。子プロセス側はエラーを無視して書き続け、メインプロセスが
+    次の機会にローテーションを完遂する。
+    """
+
+    def doRollover(self) -> None:
+        try:
+            super().doRollover()
+        except PermissionError:
+            pass
+
+
 def _resolve_log_dir(log_dir: str | Path | None) -> Path:
     if log_dir is not None:
         return Path(log_dir)
@@ -103,7 +119,7 @@ def initialize_logger(
         root_logger.addHandler(console_handler)
 
         # ファイル出力用ハンドラー（JSON）
-        file_handler = TimedRotatingFileHandler(
+        file_handler = _WindowsSafeTimedRotatingFileHandler(
             filename=str(log_dir_path / log_file),
             when="midnight",
             interval=1,

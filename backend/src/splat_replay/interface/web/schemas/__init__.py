@@ -25,6 +25,10 @@ from splat_replay.interface.web.schemas.metadata import (
     SubtitleBlock,
     SubtitleData,
 )
+from splat_replay.interface.web.schemas.history import (
+    BattleHistoryItem,
+    BattleHistoryResponse,
+)
 from splat_replay.interface.web.schemas.settings import (
     SettingsUpdateRequest,
     SettingsUpdateSection,
@@ -75,4 +79,7 @@ __all__ = [
     "SystemCheckResponse",
     "VideoDeviceListResponse",
     "YouTubePrivacyStatusRequest",
+    # History
+    "BattleHistoryItem",
+    "BattleHistoryResponse",
 ]

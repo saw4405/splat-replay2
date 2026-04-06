@@ -40,6 +40,9 @@ from splat_replay.application.use_cases.metadata import (
     UpdateRecordedMetadataUseCase,
     UpdateRecordedSubtitleStructuredUseCase,
 )
+from splat_replay.application.use_cases.history.list_battle_history import (
+    ListBattleHistoryUseCase,
+)
 from splat_replay.interface.web.error_handler import WebErrorHandler
 from structlog.stdlib import BoundLogger
 
@@ -90,6 +93,9 @@ class WebAPIServer:
         UpdateRecordedSubtitleStructuredUseCase
     )
 
+    # History Use Cases
+    list_battle_history_uc: ListBattleHistoryUseCase
+
     def __init__(
         self,
         settings_service: SettingsService,
@@ -125,6 +131,8 @@ class WebAPIServer:
         update_recorded_metadata_uc: UpdateRecordedMetadataUseCase,
         get_recorded_subtitle_structured_uc: GetRecordedSubtitleStructuredUseCase,
         update_recorded_subtitle_structured_uc: UpdateRecordedSubtitleStructuredUseCase,
+        # History Use Cases
+        list_battle_history_uc: ListBattleHistoryUseCase,
     ) -> None:
         """初期化。
 
@@ -158,6 +166,7 @@ class WebAPIServer:
             update_recorded_metadata_uc: メタデータ更新ユースケース
             get_recorded_subtitle_structured_uc: 構造化字幕取得ユースケース
             update_recorded_subtitle_structured_uc: 構造化字幕更新ユースケース
+            list_battle_history_uc: 対戦履歴一覧取得ユースケース
         """
         self.settings_service = settings_service
         self.setup_service = setup_service
@@ -197,6 +206,9 @@ class WebAPIServer:
         self.update_recorded_subtitle_structured_uc = (
             update_recorded_subtitle_structured_uc
         )
+
+        # History Use Cases
+        self.list_battle_history_uc = list_battle_history_uc
 
 
 __all__ = ["WebAPIServer"]

@@ -286,8 +286,20 @@ def _build_metadata(
     )
 
 
-def _read_history_file(path: Path) -> dict[str, Any]:
-    return json.loads(path.read_text(encoding="utf-8"))
+def _read_record_file(
+    history_dir: Path, source_video_id: str
+) -> dict[str, Any]:
+    """個別履歴ファイルを読み込む。"""
+    filename = Path(source_video_id).stem + ".json"
+    return json.loads((history_dir / filename).read_text(encoding="utf-8"))
+
+
+def _list_record_files(history_dir: Path) -> list[dict[str, Any]]:
+    """history_dir 内の全レコードを読み込む。"""
+    results = []
+    for path in sorted(history_dir.glob("*.json")):
+        results.append(json.loads(path.read_text(encoding="utf-8")))
+    return results
 
 
 def test_settings_repository_exposes_and_persists_record_battle_history(
@@ -348,30 +360,25 @@ def test_battle_history_service_creates_complete_record(
 
     service.sync_recording(video_path, _build_metadata())
 
-    payload = _read_history_file(settings.battle_history_file)
-    assert payload["version"] == 1
-    records = cast(list[dict[str, Any]], payload["records"])
-    assert len(records) == 1
-    record = records[0]
-    assert record["source_video_id"] == "recorded/battle1.mp4"
+    record = _read_record_file(settings.history_dir, "recorded/battle1.mp4")
     assert record["match"] == "X"
     assert record["rule"] == "RAINMAKER"
     assert record["stage"] == "HAMMERHEAD_BRIDGE"
     assert record["judgement"] == "WIN"
-    assert record["is_partial"] is False
-    assert record["missing_fields"] == []
+    assert record["kill"] == 7
+    assert "source_video_id" not in record
 
 
-def test_battle_history_service_writes_to_separate_history_output(
+def test_battle_history_service_writes_to_custom_history_dir(
     tmp_path: Path,
 ) -> None:
     logger = _DummyLogger()
     settings = VideoStorageSettings(base_dir=tmp_path / "videos")
-    history_file = tmp_path / "outputs" / "history" / "battle_history.json"
+    custom_history_dir = tmp_path / "custom_history"
     repository = FileBattleHistoryRepository(
         settings,
         cast(BoundLogger, logger),
-        history_file=history_file,
+        history_dir=custom_history_dir,
     )
     service = BattleHistoryService(
         repository=repository,
@@ -383,13 +390,14 @@ def test_battle_history_service_writes_to_separate_history_output(
     video_path.parent.mkdir(parents=True, exist_ok=True)
     video_path.touch()
 
-    service.sync_recording(video_path, _build_metadata())
+    service.sync_recording(view_path := video_path, _build_metadata())
+    _ = view_path
 
-    assert history_file.exists()
-    assert not settings.battle_history_file.exists()
-    payload = _read_history_file(history_file)
-    records = cast(list[dict[str, Any]], payload["records"])
-    assert records[0]["source_video_id"] == "recorded/battle_outputs.mp4"
+    record = _read_record_file(
+        custom_history_dir, "recorded/battle_outputs.mp4"
+    )
+    assert record["judgement"] == "WIN"
+    assert not settings.history_dir.exists()
 
 
 def test_battle_history_service_marks_partial_record(
@@ -420,25 +428,13 @@ def test_battle_history_service_marks_partial_record(
 
     service.sync_recording(video_path, metadata)
 
-    payload = _read_history_file(settings.battle_history_file)
-    records = cast(list[dict[str, Any]], payload["records"])
-    record = records[0]
+    record = _read_record_file(settings.history_dir, "recorded/battle2.mp4")
     assert record["allies"] == ["スシ", "", "ジム", "ラピ"]
     assert record["enemies"] == ["不明", "ロング", "ハイドラ", "ボトル"]
-    assert record["is_partial"] is True
-    assert set(record["missing_fields"]) == {
-        "match",
-        "rule",
-        "stage",
-        "kill",
-        "death",
-        "special",
-        "gold_medals",
-        "silver_medals",
-        "judgement",
-        "allies",
-        "enemies",
-    }
+    # result=None のためバトル結果フィールド自体が存在しない
+    assert "match" not in record
+    assert "kill" not in record
+    assert record["judgement"] is None
 
 
 def test_battle_history_service_keeps_partial_battle_result_fields(
@@ -474,17 +470,15 @@ def test_battle_history_service_keeps_partial_battle_result_fields(
 
     service.sync_recording(video_path, metadata)
 
-    payload = _read_history_file(settings.battle_history_file)
-    records = cast(list[dict[str, Any]], payload["records"])
-    record = records[0]
+    record = _read_record_file(
+        settings.history_dir, "recorded/battle_partial.mp4"
+    )
     assert record["match"] == Match.X.name
     assert record["rule"] == Rule.RAINMAKER.name
     assert record["stage"] is None
     assert record["kill"] == 9
     assert record["death"] == 4
     assert record["special"] == 3
-    assert record["is_partial"] is True
-    assert "stage" in record["missing_fields"]
 
 
 def test_battle_history_service_skips_new_record_when_disabled(
@@ -508,7 +502,7 @@ def test_battle_history_service_skips_new_record_when_disabled(
         _build_metadata(),
     )
 
-    assert not settings.battle_history_file.exists()
+    assert not settings.history_dir.exists()
 
 
 def test_battle_history_service_updates_existing_record_when_disabled(
@@ -546,8 +540,7 @@ def test_battle_history_service_updates_existing_record_when_disabled(
         ),
     )
 
-    payload = _read_history_file(settings.battle_history_file)
-    records = cast(list[dict[str, Any]], payload["records"])
+    records = _list_record_files(settings.history_dir)
     assert len(records) == 1
     record = records[0]
     assert record["judgement"] == "LOSE"
@@ -576,7 +569,7 @@ def test_battle_history_service_skips_non_battle_mode(
         _build_metadata(game_mode=GameMode.SALMON),
     )
 
-    assert not settings.battle_history_file.exists()
+    assert not settings.history_dir.exists()
 
 
 def test_recorded_video_deletion_does_not_remove_history(
@@ -606,9 +599,9 @@ def test_recorded_video_deletion_does_not_remove_history(
     history_service.sync_recording(video_path, _build_metadata())
 
     assert repository.delete_recording(video_path) is True
-    assert settings.battle_history_file.exists()
-    payload = _read_history_file(settings.battle_history_file)
-    records = cast(list[dict[str, Any]], payload["records"])
+    record_file = settings.history_dir / "battle4.json"
+    assert record_file.exists()
+    records = _list_record_files(settings.history_dir)
     assert len(records) == 1
 
 

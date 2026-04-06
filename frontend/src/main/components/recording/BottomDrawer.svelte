@@ -4,12 +4,19 @@
   import { cubicOut } from 'svelte/easing';
   import RecordedDataList from '../assets/RecordedDataList.svelte';
   import EditedDataList from '../assets/EditedDataList.svelte';
+  import StatisticsDataView from '../assets/StatisticsDataView.svelte';
   import ProgressDialog from '../progress/ProgressDialog.svelte';
   import NotificationDialog from '../../../common/components/NotificationDialog.svelte';
   import YouTubePermissionDialog from '../permission/YouTubePermissionDialog.svelte';
   import { fetchRecordedVideos, fetchEditedVideos } from '../../api/assets';
+  import { fetchBattleHistory } from '../../api/history';
   import { startEditUploadProcess, fetchEditUploadStatus } from '../../api/assets';
-  import type { RecordedVideo, EditedVideo, EditUploadStatus } from '../../api/types';
+  import type {
+    RecordedVideo,
+    EditedVideo,
+    EditUploadStatus,
+    BattleHistoryEntry,
+  } from '../../api/types';
   import {
     subscribeDomainEvents,
     type DomainEvent,
@@ -20,7 +27,7 @@
   // 展開状態: "closed" | "full"
   type DrawerState = 'closed' | 'full';
   let drawerState = $state<DrawerState>('closed');
-  let activeTab = $state<'recorded' | 'edited'>('recorded');
+  let activeTab = $state<'recorded' | 'edited' | 'statistics'>('recorded');
   let isProcessing = $state(false);
   let isModalOpen = $state(false); // モーダルが開いているかどうか
   let showProgressDialog = $state(false); // 進捗ダイアログ表示フラグ
@@ -31,6 +38,7 @@
 
   let recordedVideos = $state<RecordedVideo[]>([]);
   let editedVideos = $state<EditedVideo[]>([]);
+  let battleHistory = $state<BattleHistoryEntry[]>([]);
   let processStatus = $state<EditUploadStatus | null>(null);
 
   let statusPollingInterval: number | null = null;
@@ -44,6 +52,7 @@
 
   const recordedCount = $derived(recordedVideos.length);
   const editedCount = $derived(editedVideos.length);
+  const battleCount = $derived(battleHistory.length);
 
   $effect(() => {
     isProcessing = processStatus?.state === 'running';
@@ -95,11 +104,16 @@
     isLoadingData = true;
     try {
       console.log('[BottomDrawer] Loading asset data...');
-      const [recorded, edited] = await Promise.all([fetchRecordedVideos(), fetchEditedVideos()]);
+      const [recorded, edited, history] = await Promise.all([
+        fetchRecordedVideos(),
+        fetchEditedVideos(),
+        fetchBattleHistory(),
+      ]);
       recordedVideos = recorded;
       editedVideos = edited;
+      battleHistory = history;
       console.log(
-        `[BottomDrawer] Asset data loaded: ${recorded.length} recorded, ${edited.length} edited`
+        `[BottomDrawer] Asset data loaded: ${recorded.length} recorded, ${edited.length} edited, ${history.length} battle history`
       );
     } catch (error) {
       console.error('データ取得エラー:', error);
@@ -225,7 +239,10 @@
     }
   }
 
-  function activateTab(tab: 'recorded' | 'edited', event?: MouseEvent | KeyboardEvent): void {
+  function activateTab(
+    tab: 'recorded' | 'edited' | 'statistics',
+    event?: MouseEvent | KeyboardEvent
+  ): void {
     if (event) {
       event.stopPropagation();
     }
@@ -428,6 +445,21 @@
             <span class="tab-count">{editedCount}</span>
           </div>
         </button>
+
+        <button
+          class="tab statistics"
+          class:has-data={recordedCount > 0}
+          class:active={drawerState === 'full' && activeTab === 'statistics'}
+          onclick={(e) => activateTab('statistics', e)}
+          onkeydown={(e) => e.key === 'Enter' && activateTab('statistics', e)}
+        >
+          <div class="tab-glow"></div>
+          <span class="tab-icon">📊</span>
+          <div class="tab-info">
+            <span class="tab-label">戦績</span>
+            <span class="tab-count">{battleCount}</span>
+          </div>
+        </button>
       </div>
     </div>
 
@@ -552,6 +584,17 @@
                   }, 100);
                 }}
               />
+            </div>
+          </div>
+        {:else if activeTab === 'statistics'}
+          <!-- 戦績データ -->
+          <div class="data-section">
+            <h3 class="section-title">
+              <span class="title-icon">📊</span>
+              戦績・統計
+            </h3>
+            <div class="list-container">
+              <StatisticsDataView battles={battleHistory} />
             </div>
           </div>
         {/if}
@@ -749,11 +792,15 @@
   }
 
   .tab-icon {
+    width: 1.5rem;
+    text-align: center;
+    flex-shrink: 0;
     font-size: 1.3rem;
     filter: drop-shadow(0 2px 4px rgba(var(--theme-rgb-black), 0.3));
   }
 
   .tab-info {
+    min-width: 3.25rem;
     display: flex;
     flex-direction: column;
     align-items: center;

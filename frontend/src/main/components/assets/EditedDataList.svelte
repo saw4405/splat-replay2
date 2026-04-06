@@ -119,7 +119,7 @@
   {#if videos.length === 0}
     <div class="empty-state glass-panel">
       <div class="empty-icon">📦</div>
-      <p>編集済データはありません</p>
+      <p>編集済データがありません</p>
     </div>
   {:else}
     {#each videos as video (video.id)}
