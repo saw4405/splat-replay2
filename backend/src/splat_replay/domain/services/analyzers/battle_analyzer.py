@@ -48,19 +48,10 @@ class BattleFrameAnalyzer(AnalyzerPlugin):
         self.ocr = ocr
         self.image_editor_factory = image_editor_factory
         self.medal_recognizer = medal_recognizer
-        # 軽量キャッシュ (単一プロセス内での同一フレーム反復呼び出し高速化)
-        self._xp_cache: Dict[int, XP] = {}
-        self._result_cache: Dict[int, BattleResult] = {}
 
     # ---------------------------------------------------------------
     # 内部ユーティリティ
     # ---------------------------------------------------------------
-    def _fingerprint(self, arr: np.ndarray) -> int:
-        """高速な簡易ハッシュ (画素サブサンプリング + 合計)"""
-        # サブサンプリングで計算量削減 (BGR 先頭チャネルのみ)
-        sample = arr[::64, ::64, 0]
-        return int(sample.sum()) & 0xFFFFFFFF
-
     async def _ensure_ocr_warm(self) -> None:
         # OCR のウォームアップは重いので、ここでは行わない
         return None
@@ -89,11 +80,6 @@ class BattleFrameAnalyzer(AnalyzerPlugin):
     async def extract_xp(self, frame: Frame) -> Optional[XP]:
         """XPを取得する。"""
         xp_image = frame[190:240, 1730:1880]
-        fp = self._fingerprint(xp_image)
-        cached = self._xp_cache.get(fp)
-        if cached is not None:
-            return cached
-        # 変換コストの高い処理はキャッシュミス時のみ実行
         xp_proc = (
             self.image_editor_factory(xp_image)
             .rotate(-4)
@@ -113,9 +99,7 @@ class BattleFrameAnalyzer(AnalyzerPlugin):
             xp = float(xp_str)
         except ValueError:
             return None
-        value = XP(xp)
-        self._xp_cache[fp] = value
-        return value
+        return XP(xp)
 
     async def detect_session_start(self, frame: Frame) -> bool:
         return await self.matcher.match("battle_start", frame)
@@ -149,11 +133,6 @@ class BattleFrameAnalyzer(AnalyzerPlugin):
         self, frame: Frame
     ) -> Optional[BattleResult]:
         """結果画面から試合結果を抽出する (可能な部分を並列化)。"""
-        fp = self._fingerprint(frame)
-        cached = self._result_cache.get(fp)
-        if cached is not None:
-            return cached
-
         match = await self.extract_battle_match(frame)
         if match is None:
             return None
@@ -186,7 +165,6 @@ class BattleFrameAnalyzer(AnalyzerPlugin):
             gold_medals=medal_counts[0],
             silver_medals=medal_counts[1],
         )
-        self._result_cache[fp] = result
         return result
 
     async def extract_battle_medals(self, frame: Frame) -> Tuple[int, int]:
