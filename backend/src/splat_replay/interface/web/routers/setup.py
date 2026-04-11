@@ -24,6 +24,7 @@ from splat_replay.application.services import (
 )
 from splat_replay.domain.models import SetupStep
 from splat_replay.interface.web.schemas import (
+    CaptureDeviceSaveResponse,
     CaptureDeviceRequest,
     InstallationStatusResponse,
     MessageResponse,
@@ -493,19 +494,19 @@ def create_setup_router(
                 detail=error_response.user_message,
             )
 
-    @router.post("/config/capture-device", response_model=MessageResponse)
+    @router.post(
+        "/config/capture-device", response_model=CaptureDeviceSaveResponse
+    )
     async def save_capture_device(
         request: CaptureDeviceRequest,
-    ) -> MessageResponse:
+    ) -> CaptureDeviceSaveResponse:
         """キャプチャデバイス名を保存する。"""
         try:
-            recording_preparation_service.save_capture_device(
-                request.device_name
+            binding = device_checker.save_selected_device(request.device_name)
+            return CaptureDeviceSaveResponse(
+                message="Capture device saved successfully",
+                binding_status=binding.binding_status,
             )
-            device_checker.update_settings(
-                recording_preparation_service.get_capture_device_settings()
-            )
-            return MessageResponse(message="Capture device saved successfully")
         except Exception as e:
             logger.error("Failed to save capture device", error=str(e))
             error_response = error_handler.handle_error(e)

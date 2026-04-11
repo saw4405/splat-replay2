@@ -10,8 +10,17 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { startRecorder, getRecorderState, getRecorderPreviewMode } from './recording.ts';
-import type { RecorderStateResponse, RecorderPreviewModeResponse } from './types.ts';
+import {
+  getRecorderPreviewMode,
+  getRecorderState,
+  recoverCaptureDevice,
+  startRecorder,
+} from './recording.ts';
+import type {
+  CaptureDeviceRecoveryResponse,
+  RecorderPreviewModeResponse,
+  RecorderStateResponse,
+} from './types.ts';
 
 describe('recording API', () => {
   let fetchMock: ReturnType<typeof vi.fn>;
@@ -194,6 +203,40 @@ describe('recording API', () => {
       await expect(getRecorderPreviewMode()).rejects.toThrow(
         'Failed to fetch recorder preview mode'
       );
+    });
+  });
+
+  describe('recoverCaptureDevice', () => {
+    it('復旧 API のレスポンスを返す', async () => {
+      const mockResponse: CaptureDeviceRecoveryResponse = {
+        attempted: true,
+        recovered: false,
+        message: 'recover failed',
+        action: 'restart-device',
+      };
+
+      fetchMock.mockResolvedValueOnce({
+        ok: true,
+        json: async () => mockResponse,
+      });
+
+      const result = await recoverCaptureDevice('manual');
+
+      expect(result).toEqual(mockResponse);
+      expect(fetchMock).toHaveBeenCalledWith('/api/device/recover', {
+        method: 'POST',
+        headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
+        body: JSON.stringify({ trigger: 'manual' }),
+      });
+    });
+
+    it('復旧 API が失敗したときは detail を含むエラーを返す', async () => {
+      fetchMock.mockResolvedValueOnce({
+        ok: false,
+        text: async () => 'restart failed',
+      });
+
+      await expect(recoverCaptureDevice('manual')).rejects.toThrow('restart failed');
     });
   });
 });

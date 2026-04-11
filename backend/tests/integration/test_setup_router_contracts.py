@@ -14,6 +14,9 @@ import pytest
 from fastapi import status
 from fastapi.testclient import TestClient
 
+from splat_replay.application.interfaces import CaptureDeviceBindingResult
+from splat_replay.application.services import DeviceChecker
+
 pytestmark = pytest.mark.contract
 
 
@@ -302,6 +305,32 @@ class TestDeviceEndpoints:
             status.HTTP_400_BAD_REQUEST,
             status.HTTP_422_UNPROCESSABLE_CONTENT,
         ]
+
+    def test_post_capture_device_returns_binding_status(
+        self, client: TestClient, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """POST /setup/config/capture-device - binding_status を返す。"""
+
+        def _fake_save(
+            self: DeviceChecker, device_name: str
+        ) -> CaptureDeviceBindingResult:
+            return CaptureDeviceBindingResult(
+                device_name=device_name,
+                binding_status="bound",
+                message="bound",
+            )
+
+        monkeypatch.setattr(DeviceChecker, "save_selected_device", _fake_save)
+
+        response = client.post(
+            "/setup/config/capture-device",
+            json={"device_name": "Test Device"},
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+        data = response.json()
+        assert data["message"] == "Capture device saved successfully"
+        assert data["binding_status"] == "bound"
 
 
 class TestYouTubeConfigEndpoints:

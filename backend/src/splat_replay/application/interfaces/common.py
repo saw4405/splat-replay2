@@ -15,138 +15,80 @@ from splat_replay.application.interfaces.data import (
 
 
 class LoggerPort(Protocol):
-    """ロガーのポート（構造化ログ出力）。
+    """Application layer logging abstraction."""
 
-    Application 層は concrete な logger に依存せず、
-    このポートを通じてログ出力を行う。
-    """
+    def debug(self, event: str, **kw: object) -> None: ...
 
-    def debug(self, event: str, **kw: object) -> None:
-        """デバッグレベルのログ出力。"""
-        ...
+    def info(self, event: str, **kw: object) -> None: ...
 
-    def info(self, event: str, **kw: object) -> None:
-        """情報レベルのログ出力。"""
-        ...
+    def warning(self, event: str, **kw: object) -> None: ...
 
-    def warning(self, event: str, **kw: object) -> None:
-        """警告レベルのログ出力。"""
-        ...
+    def error(self, event: str, **kw: object) -> None: ...
 
-    def error(self, event: str, **kw: object) -> None:
-        """エラーレベルのログ出力。"""
-        ...
-
-    def exception(self, event: str, **kw: object) -> None:
-        """例外レベルのログ出力。"""
-        ...
+    def exception(self, event: str, **kw: object) -> None: ...
 
 
 class ClockPort(Protocol):
-    """現在時刻取得のポート。
+    """Abstraction for the current capture timeline clock."""
 
-    live_capture では壁時計、video_file では入力ソース上の経過時刻を
-    同一インターフェースで扱う。
-    """
-
-    def now(self) -> float:
-        """現在時刻を秒単位で返す。"""
-        ...
+    def now(self) -> float: ...
 
 
 class ConfigPort(Protocol):
-    """設定値取得のポート。
+    """Configuration access abstraction."""
 
-    Application 層は concrete な設定実装に依存せず、
-    このポートを通じて設定値を取得する。
-    """
+    def get_behavior_settings(self) -> BehaviorSettingsView: ...
 
-    def get_behavior_settings(self) -> BehaviorSettingsView:
-        """動作設定を取得。"""
-        ...
+    def get_upload_settings(self) -> UploadSettingsView: ...
 
-    def get_upload_settings(self) -> UploadSettingsView:
-        """アップロード設定を取得。"""
-        ...
+    def get_video_edit_settings(self) -> VideoEditSettingsView: ...
 
-    def get_video_edit_settings(self) -> VideoEditSettingsView:
-        """動画編集設定を取得。"""
-        ...
+    def get_obs_settings(self) -> OBSSettingsView: ...
 
-    def get_obs_settings(self) -> OBSSettingsView:
-        """OBS 設定を取得。"""
-        ...
+    def save_obs_websocket_password(self, password: str) -> None: ...
 
-    def save_obs_websocket_password(self, password: str) -> None:
-        """OBS WebSocketパスワードを保存。"""
-        ...
+    def get_capture_device_settings(self) -> CaptureDeviceSettingsView: ...
 
-    def get_capture_device_settings(self) -> CaptureDeviceSettingsView:
-        """キャプチャデバイス設定を取得。"""
-        ...
+    def save_capture_device_name(self, device_name: str) -> None: ...
 
-    def save_capture_device_name(self, device_name: str) -> None:
-        """キャプチャデバイス名を保存。"""
-        ...
+    def save_capture_device_binding(
+        self,
+        device_name: str,
+        hardware_id: str | None = None,
+        location_path: str | None = None,
+        parent_instance_id: str | None = None,
+    ) -> None: ...
 
-    def save_upload_privacy_status(self, privacy_status: str) -> None:
-        """YouTube公開設定を保存。"""
-        ...
+    def save_upload_privacy_status(self, privacy_status: str) -> None: ...
 
 
 class PathsPort(Protocol):
-    """ファイルパス解決のポート。
+    """Filesystem path lookup abstraction."""
 
-    Application 層は concrete なパス実装に依存せず、
-    このポートを通じてファイルパスを解決する。
-    """
+    def get_settings_file(self) -> Path: ...
 
-    def get_settings_file(self) -> Path:
-        """設定ファイルパスを取得。"""
-        ...
+    def get_config_dir(self) -> Path: ...
 
-    def get_config_dir(self) -> Path:
-        """設定ディレクトリパスを取得。"""
-        ...
+    def get_thumbnail_assets_dir(self) -> Path: ...
 
-    def get_thumbnail_assets_dir(self) -> Path:
-        """サムネイルアセットディレクトリパスを取得。"""
-        ...
-
-    def get_thumbnail_asset(self, filename: str) -> Path:
-        """サムネイルアセットファイルパスを取得。"""
-        ...
+    def get_thumbnail_asset(self, filename: str) -> Path: ...
 
 
 class FileSystemPort(Protocol):
-    """ファイルシステム操作のポート。"""
+    """Filesystem interaction abstraction."""
 
-    def exists(self, path: Path) -> bool:
-        """パスが存在するかを確認。"""
-        ...
+    def exists(self, path: Path) -> bool: ...
 
-    def is_file(self, path: Path) -> bool:
-        """ファイルかどうかを確認。"""
-        ...
+    def is_file(self, path: Path) -> bool: ...
 
-    def is_dir(self, path: Path) -> bool:
-        """ディレクトリかどうかを確認。"""
-        ...
+    def is_dir(self, path: Path) -> bool: ...
 
-    def read_bytes(self, path: Path) -> bytes:
-        """バイナリを読み込む。"""
-        ...
+    def read_bytes(self, path: Path) -> bytes: ...
 
     def write_text(
         self, path: Path, content: str, encoding: str = "utf-8"
-    ) -> None:
-        """テキストを書き込む。"""
-        ...
+    ) -> None: ...
 
-    def write_bytes(self, path: Path, data: bytes) -> None:
-        """バイナリを書き込む。"""
-        ...
+    def write_bytes(self, path: Path, data: bytes) -> None: ...
 
-    def unlink(self, path: Path, *, missing_ok: bool = True) -> None:
-        """ファイルを削除する。"""
-        ...
+    def unlink(self, path: Path, *, missing_ok: bool = True) -> None: ...

@@ -18,6 +18,7 @@ from splat_replay.domain.models import Frame
 if TYPE_CHECKING:
     from splat_replay.application.dto import ReplayBootstrapDTO
     from splat_replay.application.interfaces.data import (
+        CaptureDeviceDescriptor,
         CaptureDeviceSettingsView,
         OBSSettingsView,
     )
@@ -27,139 +28,88 @@ RecorderStatus = Literal["started", "paused", "resumed", "stopped"]
 
 
 class CaptureDevicePort(Protocol):
-    """キャプチャデバイスの接続確認を行うポート。"""
+    """Capture-device connectivity abstraction."""
 
-    def update_settings(self, settings: CaptureDeviceSettingsView) -> None:
-        """Update capture device settings."""
-        ...
+    def update_settings(self, settings: CaptureDeviceSettingsView) -> None: ...
 
-    def is_connected(self) -> bool:
-        """Check if capture device is connected."""
-        ...
+    def is_connected(self) -> bool: ...
 
 
 class CaptureDeviceEnumeratorPort(Protocol):
-    """キャプチャデバイスの列挙を行うポート。"""
+    """Capture-device enumeration abstraction."""
 
-    def list_video_devices(self) -> list[str]:
-        """List available video capture devices."""
-        ...
+    def list_video_devices(self) -> list[str]: ...
+
+    def list_video_device_descriptors(
+        self,
+    ) -> list[CaptureDeviceDescriptor]: ...
 
 
 class CapturePort(Protocol):
-    """キャプチャデバイスからの映像を取得するポート。"""
+    """Port for reading frames from the configured capture source."""
 
-    def setup(self) -> None:
-        """Setup capture device."""
-        ...
+    def setup(self) -> None: ...
 
-    def capture(self) -> Optional[Frame]:
-        """Capture a single frame."""
-        ...
+    def capture(self) -> Optional[Frame]: ...
 
-    def current_time_seconds(self) -> Optional[float]:
-        """入力ソース上の現在位置を秒単位で返す。
+    def current_time_seconds(self) -> Optional[float]: ...
 
-        live_capture のように位置を持たない入力は None を返す。
-        """
-        ...
-
-    def teardown(self) -> None:
-        """Teardown capture device."""
-        ...
+    def teardown(self) -> None: ...
 
 
 class VideoRecorderPort(Protocol):
-    """録画を制御するアウトバウンドポート（OBS等）。"""
+    """Port for controlling the external recorder (OBS)."""
 
-    def update_settings(self, settings: OBSSettingsView) -> None:
-        """Update recorder settings."""
-        ...
+    def update_settings(self, settings: OBSSettingsView) -> None: ...
 
-    async def setup(self) -> None:
-        """Setup recorder."""
-        ...
+    async def setup(self) -> None: ...
 
-    async def start(self) -> None:
-        """Start recording."""
-        ...
+    async def start(self) -> None: ...
 
-    async def stop(self) -> Optional[Path]:
-        """Stop recording and return video path."""
-        ...
+    async def stop(self) -> Optional[Path]: ...
 
-    async def pause(self) -> None:
-        """Pause recording."""
-        ...
+    async def pause(self) -> None: ...
 
-    async def resume(self) -> None:
-        """Resume recording."""
-        ...
+    async def resume(self) -> None: ...
 
-    async def teardown(self) -> None:
-        """Teardown recorder."""
-        ...
+    async def teardown(self) -> None: ...
 
     def add_status_listener(
         self, listener: Callable[[RecorderStatus], Awaitable[None]]
-    ) -> None:
-        """Add status change listener."""
-        ...
+    ) -> None: ...
 
     def remove_status_listener(
         self, listener: Callable[[RecorderStatus], Awaitable[None]]
-    ) -> None:
-        """Remove status change listener."""
-        ...
+    ) -> None: ...
 
 
 class RecorderWithTranscriptionPort(Protocol):
-    """録画+音声文字起こしを制御するポート。"""
+    """Port for a recorder bundled with transcription support."""
 
-    async def setup(self) -> None:
-        """Setup recorder with transcription."""
-        ...
+    async def setup(self) -> None: ...
 
-    async def start(self) -> None:
-        """Start recording with transcription."""
-        ...
+    async def start(self) -> None: ...
 
-    async def stop(self) -> Tuple[Optional[Path], Optional[Path]]:
-        """Stop recording and return (video_path, subtitle_path)."""
-        ...
+    async def stop(self) -> Tuple[Optional[Path], Optional[Path]]: ...
 
-    async def pause(self) -> None:
-        """Pause recording and transcription."""
-        ...
+    async def pause(self) -> None: ...
 
-    async def resume(self) -> None:
-        """Resume recording and transcription."""
-        ...
+    async def resume(self) -> None: ...
 
-    async def cancel(self) -> None:
-        """Cancel recording."""
-        ...
+    async def cancel(self) -> None: ...
 
-    async def teardown(self) -> None:
-        """Teardown recorder and transcription."""
-        ...
+    async def teardown(self) -> None: ...
 
     def add_status_listener(
         self, listener: Callable[[RecorderStatus], Awaitable[None]]
-    ) -> None:
-        """Add status change listener."""
-        ...
+    ) -> None: ...
 
     def remove_status_listener(
         self, listener: Callable[[RecorderStatus], Awaitable[None]]
-    ) -> None:
-        """Remove status change listener."""
-        ...
+    ) -> None: ...
 
 
 class ReplayBootstrapResolverPort(Protocol):
-    """E2E リプレイ入力に応じた bootstrap を返すポート。"""
+    """Port for resolving replay bootstrap data in E2E/test-input mode."""
 
-    def resolve(self) -> ReplayBootstrapDTO | None:
-        """録画コンテキストへ適用する bootstrap を返す。"""
-        ...
+    def resolve(self) -> ReplayBootstrapDTO | None: ...

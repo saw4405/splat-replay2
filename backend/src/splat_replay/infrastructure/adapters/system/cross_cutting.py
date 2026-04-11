@@ -105,8 +105,22 @@ class TomlConfigAdapter(ConfigPort):
         self._settings = settings
 
     def save_capture_device_name(self, device_name: str) -> None:
+        self.save_capture_device_binding(device_name)
+
+    def save_capture_device_binding(
+        self,
+        device_name: str,
+        hardware_id: str | None = None,
+        location_path: str | None = None,
+        parent_instance_id: str | None = None,
+    ) -> None:
         settings = self._load_settings()
-        settings.capture_device = CaptureDeviceSettings(name=device_name)
+        settings.capture_device = CaptureDeviceSettings(
+            name=device_name,
+            hardware_id=hardware_id,
+            location_path=location_path,
+            parent_instance_id=parent_instance_id,
+        )
         save_settings_to_toml(settings, self._settings_path)
         self._settings = settings
 

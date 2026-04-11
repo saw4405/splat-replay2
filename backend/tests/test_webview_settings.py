@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from splat_replay.application.interfaces import CaptureDeviceDescriptor
 from splat_replay.infrastructure.adapters.storage.settings_repository import (
     TomlSettingsRepository,
 )
@@ -86,6 +87,11 @@ def test_fetch_webview_render_mode_avoids_device_enumeration(
     class _FailingVideoEnumerator:
         def list_video_devices(self) -> list[str]:
             raise AssertionError("video enumeration should not run")
+
+        def list_video_device_descriptors(
+            self,
+        ) -> list[CaptureDeviceDescriptor]:
+            raise AssertionError("video descriptor enumeration should not run")
 
     class _FailingMicrophoneEnumerator:
         def list_microphones(self) -> list[str]:

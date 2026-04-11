@@ -34,7 +34,12 @@ from splat_replay.interface.web.schemas.settings import (
     SettingsUpdateSection,
 )
 from splat_replay.interface.web.schemas.setup import (
+    CaptureDeviceDiagnosticsResponse,
+    CaptureDeviceDescriptorResponse,
+    CaptureDeviceRecoveryRequest,
+    CaptureDeviceRecoveryResponse,
     CaptureDeviceRequest,
+    CaptureDeviceSaveResponse,
     ErrorResponse,
     InstallationStatusResponse,
     MessageResponse,
@@ -68,7 +73,12 @@ __all__ = [
     "SettingsUpdateRequest",
     "SettingsUpdateSection",
     # Setup
+    "CaptureDeviceDiagnosticsResponse",
+    "CaptureDeviceDescriptorResponse",
+    "CaptureDeviceRecoveryRequest",
+    "CaptureDeviceRecoveryResponse",
     "CaptureDeviceRequest",
+    "CaptureDeviceSaveResponse",
     "ErrorResponse",
     "InstallationStatusResponse",
     "MessageResponse",

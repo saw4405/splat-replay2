@@ -10,11 +10,48 @@
 
 from __future__ import annotations
 
+import asyncio
+from typing import TYPE_CHECKING, cast
+
 import pytest
 from fastapi import status
+from fastapi.routing import APIRoute
 from fastapi.testclient import TestClient
 
+from splat_replay.application.interfaces import (
+    CaptureDeviceBindingResult,
+    CaptureDeviceDiagnostics,
+    CaptureDeviceRecoveryResult,
+    CaptureDeviceRecoveryTrigger,
+)
+from splat_replay.application.services import DeviceChecker
+
+if TYPE_CHECKING:
+    from splat_replay.interface.web.server import WebAPIServer
+
 pytestmark = pytest.mark.contract
+
+
+def _current_capture_device_name(client: TestClient) -> str:
+    response = client.get("/api/settings")
+    assert response.status_code == status.HTTP_200_OK
+    sections = response.json()["sections"]
+    capture_section = next(
+        section for section in sections if section["id"] == "capture_device"
+    )
+    name_field = next(
+        field for field in capture_section["fields"] if field["id"] == "name"
+    )
+    assert isinstance(name_field["value"], str)
+    return name_field["value"]
+
+
+def _route_by_path(router, path: str) -> APIRoute:
+    return next(
+        route
+        for route in router.routes
+        if isinstance(route, APIRoute) and route.path == path
+    )
 
 
 class TestSettingsEndpoints:
@@ -203,6 +240,269 @@ class TestDeviceStatusEndpoints:
         # is_connected: bool を返すことを想定
         data = response.json()
         assert isinstance(data, (bool, dict))
+
+    @pytest.mark.asyncio
+    async def test_get_device_status_offloads_sync_check_to_thread(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from splat_replay.interface.web.routers.settings import (
+            create_settings_router,
+        )
+
+        class _DummyLogger:
+            def error(self, event: str, **kw: object) -> None:
+                _ = event, kw
+
+        class _DummyDeviceChecker:
+            def is_connected(self) -> bool:
+                return True
+
+        class _DummyServer:
+            def __init__(self) -> None:
+                self.device_checker = _DummyDeviceChecker()
+                self.logger = _DummyLogger()
+
+        called: list[object] = []
+
+        async def _fake_to_thread(func, /, *args, **kwargs):
+            called.append(func)
+            return func(*args, **kwargs)
+
+        monkeypatch.setattr(asyncio, "to_thread", _fake_to_thread)
+
+        server = cast("WebAPIServer", _DummyServer())
+        router = create_settings_router(server)
+        route = _route_by_path(router, "/api/device/status")
+
+        response = await route.endpoint()
+
+        assert response.body == b"true"
+        assert called == [server.device_checker.is_connected]
+
+    @pytest.mark.asyncio
+    async def test_post_device_recover_offloads_sync_recovery_to_thread(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from splat_replay.interface.web.routers.settings import (
+            create_settings_router,
+        )
+        from splat_replay.interface.web.schemas import (
+            CaptureDeviceRecoveryRequest,
+        )
+
+        class _DummyLogger:
+            def error(self, event: str, **kw: object) -> None:
+                _ = event, kw
+
+        class _DummyDeviceChecker:
+            def recover_device(
+                self, trigger: CaptureDeviceRecoveryTrigger
+            ) -> CaptureDeviceRecoveryResult:
+                return CaptureDeviceRecoveryResult(
+                    trigger=trigger,
+                    attempted=True,
+                    recovered=False,
+                    message="recover failed",
+                    action="restart-device",
+                )
+
+        class _DummyServer:
+            def __init__(self) -> None:
+                self.device_checker = _DummyDeviceChecker()
+                self.logger = _DummyLogger()
+
+        called: list[tuple[object, tuple[object, ...]]] = []
+
+        async def _fake_to_thread(func, /, *args, **kwargs):
+            called.append((func, args))
+            return func(*args, **kwargs)
+
+        monkeypatch.setattr(asyncio, "to_thread", _fake_to_thread)
+
+        server = cast("WebAPIServer", _DummyServer())
+        router = create_settings_router(server)
+        route = _route_by_path(router, "/api/device/recover")
+
+        response = await route.endpoint(
+            CaptureDeviceRecoveryRequest(trigger="manual")
+        )
+
+        assert response.attempted is True
+        assert response.recovered is False
+        assert called == [(server.device_checker.recover_device, ("manual",))]
+
+    @pytest.mark.asyncio
+    async def test_get_device_diagnostics_offloads_sync_lookup_to_thread(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from splat_replay.interface.web.routers.settings import (
+            create_settings_router,
+        )
+
+        class _DummyLogger:
+            def error(self, event: str, **kw: object) -> None:
+                _ = event, kw
+
+        class _DummyDeviceChecker:
+            def get_diagnostics(self) -> CaptureDeviceDiagnostics:
+                return CaptureDeviceDiagnostics(
+                    configured_device_name="MiraBox Capture",
+                    configured_hardware_id="USB\\VID_534D&PID_2109",
+                    configured_location_path="PCIROOT(0)#PCI(1400)#USBROOT(0)#USB(3)#USB(2)",
+                    configured_parent_instance_id="USB\\VID_534D&PID_2109\\6&23427119&0&2",
+                    resolved_device=None,
+                    available_devices=[],
+                    last_recovery=None,
+                )
+
+        class _DummyServer:
+            def __init__(self) -> None:
+                self.device_checker = _DummyDeviceChecker()
+                self.logger = _DummyLogger()
+
+        called: list[object] = []
+
+        async def _fake_to_thread(func, /, *args, **kwargs):
+            called.append(func)
+            return func(*args, **kwargs)
+
+        monkeypatch.setattr(asyncio, "to_thread", _fake_to_thread)
+
+        server = cast("WebAPIServer", _DummyServer())
+        router = create_settings_router(server)
+        route = _route_by_path(router, "/api/device/diagnostics")
+
+        response = await route.endpoint()
+
+        assert response.configured_device_name == "MiraBox Capture"
+        assert called == [server.device_checker.get_diagnostics]
+
+    def test_post_device_recover(
+        self, client: TestClient, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """POST /api/device/recover - 復旧レスポンスを返す。"""
+
+        def _fake_recover(
+            self: DeviceChecker, trigger: CaptureDeviceRecoveryTrigger
+        ) -> CaptureDeviceRecoveryResult:
+            return CaptureDeviceRecoveryResult(
+                trigger=trigger,
+                attempted=True,
+                recovered=False,
+                message="recover failed",
+                action="restart-device",
+            )
+
+        monkeypatch.setattr(DeviceChecker, "recover_device", _fake_recover)
+
+        response = client.post(
+            "/api/device/recover", json={"trigger": "manual"}
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+        data = response.json()
+        assert data["attempted"] is True
+        assert data["recovered"] is False
+        assert data["message"] == "recover failed"
+
+    def test_get_device_diagnostics(
+        self, client: TestClient, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """GET /api/device/diagnostics - 診断情報を返す。"""
+
+        def _fake_diagnostics(self: DeviceChecker) -> CaptureDeviceDiagnostics:
+            return CaptureDeviceDiagnostics(
+                configured_device_name="MiraBox Capture",
+                configured_hardware_id="USB\\VID_534D&PID_2109",
+                configured_location_path="PCIROOT(0)#PCI(1400)#USBROOT(0)#USB(3)#USB(2)",
+                configured_parent_instance_id="USB\\VID_534D&PID_2109\\6&23427119&0&2",
+                resolved_device=None,
+                available_devices=[],
+                last_recovery=None,
+            )
+
+        monkeypatch.setattr(
+            DeviceChecker, "get_diagnostics", _fake_diagnostics
+        )
+
+        response = client.get("/api/device/diagnostics")
+
+        assert response.status_code == status.HTTP_200_OK
+        data = response.json()
+        assert data["configured_device_name"] == "MiraBox Capture"
+        assert "available_devices" in data
+
+    def test_update_settings_capture_device_rebinds(
+        self, client: TestClient, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """PUT /api/settings - capture_device 更新後に再バインドを通す。"""
+        calls: list[str] = []
+        current_name = _current_capture_device_name(client)
+        next_name = (
+            "MiraBox Capture"
+            if current_name != "MiraBox Capture"
+            else "Capture Device"
+        )
+
+        def _fake_rebind(self: DeviceChecker) -> CaptureDeviceBindingResult:
+            calls.append("rebind")
+            return CaptureDeviceBindingResult(
+                device_name=next_name,
+                binding_status="bound",
+                message="bound",
+            )
+
+        monkeypatch.setattr(
+            DeviceChecker, "rebind_configured_device", _fake_rebind
+        )
+
+        response = client.put(
+            "/api/settings",
+            json={
+                "sections": [
+                    {
+                        "id": "capture_device",
+                        "values": {"name": next_name},
+                    }
+                ]
+            },
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+        assert calls == ["rebind"]
+
+    def test_update_settings_skips_capture_device_rebind_when_name_is_unchanged(
+        self, client: TestClient, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        calls: list[str] = []
+        current_name = _current_capture_device_name(client)
+
+        def _fake_rebind(self: DeviceChecker) -> CaptureDeviceBindingResult:
+            calls.append("rebind")
+            return CaptureDeviceBindingResult(
+                device_name=current_name,
+                binding_status="name_only",
+                message="unchanged",
+            )
+
+        monkeypatch.setattr(
+            DeviceChecker, "rebind_configured_device", _fake_rebind
+        )
+
+        response = client.put(
+            "/api/settings",
+            json={
+                "sections": [
+                    {
+                        "id": "capture_device",
+                        "values": {"name": current_name},
+                    }
+                ]
+            },
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+        assert calls == []
 
 
 class TestPermissionDialogEndpoints:

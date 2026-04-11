@@ -8,6 +8,7 @@
 // 録画制御
 export type RecorderState = 'stopped' | 'recording' | 'paused';
 export type RecorderPreviewMode = 'live_capture' | 'video_file';
+export type CaptureDeviceRecoveryTrigger = 'manual' | 'startup_auto' | 'idle_auto';
 
 export interface RecorderStateResponse {
   state: RecorderState;
@@ -15,6 +16,13 @@ export interface RecorderStateResponse {
 
 export interface RecorderPreviewModeResponse {
   mode: RecorderPreviewMode;
+}
+
+export interface CaptureDeviceRecoveryResponse {
+  attempted: boolean;
+  recovered: boolean;
+  message: string;
+  action: string;
 }
 
 // 編集・アップロード

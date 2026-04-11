@@ -87,6 +87,15 @@ class _DummyConfig:
     def save_capture_device_name(self, device_name: str) -> None:
         _ = device_name
 
+    def save_capture_device_binding(
+        self,
+        device_name: str,
+        hardware_id: str | None = None,
+        location_path: str | None = None,
+        parent_instance_id: str | None = None,
+    ) -> None:
+        _ = (device_name, hardware_id, location_path, parent_instance_id)
+
     def save_upload_privacy_status(self, privacy_status: str) -> None:
         _ = privacy_status
 

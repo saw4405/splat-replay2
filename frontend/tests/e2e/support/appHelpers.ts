@@ -365,7 +365,10 @@ function formatWeaponSlots(value: string[] | null | undefined): string[] {
 }
 
 function parseWeaponSlots(value: string): string[] {
-  const slots = value.split(',').map((weapon) => normalizeText(weapon) || '不明');
+  const slots = value
+    .split(/\r?\n|,/)
+    .map((weapon) => normalizeText(weapon))
+    .filter((weapon) => weapon.length > 0);
   while (slots.length < 4) {
     slots.push('不明');
   }
@@ -384,6 +387,10 @@ function expectRecognizedWeaponSlots(value: string[], fieldName: string): void {
 
 async function readTestIdText(item: Locator, testId: string): Promise<string> {
   return normalizeText(await item.getByTestId(testId).textContent());
+}
+
+async function readTestIdRawText(item: Locator, testId: string): Promise<string> {
+  return (await item.getByTestId(testId).textContent()) ?? '';
 }
 
 async function expectedRecordedVideoValues(
@@ -491,8 +498,8 @@ export async function readRecordedVideoItemValues(item: Locator): Promise<Record
     special: await readTestIdText(item, 'recorded-video-special'),
     gold_medals: await readTestIdText(item, 'recorded-video-gold-medals'),
     silver_medals: await readTestIdText(item, 'recorded-video-silver-medals'),
-    allies: parseWeaponSlots(await readTestIdText(item, 'recorded-video-allies')),
-    enemies: parseWeaponSlots(await readTestIdText(item, 'recorded-video-enemies')),
+    allies: parseWeaponSlots(await readTestIdRawText(item, 'recorded-video-allies')),
+    enemies: parseWeaponSlots(await readTestIdRawText(item, 'recorded-video-enemies')),
   };
 }
 

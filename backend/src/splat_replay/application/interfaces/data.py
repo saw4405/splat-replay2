@@ -70,6 +70,9 @@ class CaptureDeviceSettingsView(Protocol):
     """Capture device settings shape passed to hardware ports."""
 
     name: str
+    hardware_id: str | None
+    location_path: str | None
+    parent_instance_id: str | None
 
 
 class SecretString(Protocol):
@@ -115,6 +118,56 @@ class SectionUpdate(TypedDict):
 
 
 # Request/Response dataclasses
+
+
+CaptureDeviceBindingStatus = Literal["bound", "name_only"]
+CaptureDeviceRecoveryTrigger = Literal["manual", "startup_auto", "idle_auto"]
+
+
+@dataclass(frozen=True)
+class CaptureDeviceDescriptor:
+    """Structured capture-device descriptor resolved from FFmpeg and PnP."""
+
+    name: str
+    alternative_name: str | None = None
+    pnp_instance_id: str | None = None
+    hardware_id: str | None = None
+    location_path: str | None = None
+    parent_instance_id: str | None = None
+
+
+@dataclass(frozen=True)
+class CaptureDeviceBindingResult:
+    """Result of rebinding the configured capture device."""
+
+    device_name: str
+    binding_status: CaptureDeviceBindingStatus
+    message: str
+    matched_descriptor: CaptureDeviceDescriptor | None = None
+
+
+@dataclass(frozen=True)
+class CaptureDeviceRecoveryResult:
+    """Result of a software recovery attempt for the capture device."""
+
+    trigger: CaptureDeviceRecoveryTrigger
+    attempted: bool
+    recovered: bool
+    message: str
+    action: str
+
+
+@dataclass(frozen=True)
+class CaptureDeviceDiagnostics:
+    """Snapshot of current capture-device configuration and resolution."""
+
+    configured_device_name: str
+    configured_hardware_id: str | None
+    configured_location_path: str | None
+    configured_parent_instance_id: str | None
+    resolved_device: CaptureDeviceDescriptor | None
+    available_devices: list[CaptureDeviceDescriptor]
+    last_recovery: CaptureDeviceRecoveryResult | None
 
 
 @dataclass(frozen=True)

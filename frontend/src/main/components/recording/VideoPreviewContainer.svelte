@@ -7,7 +7,7 @@
   import CameraPermissionDialog from '../permission/CameraPermissionDialog.svelte';
   import { subscribeDomainEvents, type DomainEvent } from '../../domainEvents';
   import { buildMetadataOptionMap, getMetadataOptions } from '../../api/metadata';
-  import { getRecorderPreviewMode } from '../../api/recording';
+  import { getRecorderPreviewMode, recoverCaptureDevice } from '../../api/recording';
   import { notifyRecordingReady } from '../../notification';
   import { getDeviceStatusPollIntervalMs, renderMode } from '../../renderMode';
 
@@ -23,6 +23,13 @@
     error?: string;
   };
 
+  type RecoverDeviceResponse = {
+    attempted: boolean;
+    recovered: boolean;
+    message: string;
+    action: string;
+  };
+
   const NOTIFICATION_DURATION_MS = 5000;
 
   let isRecording = $state(false);
@@ -35,6 +42,9 @@
   let isPrepared = $state(false);
   let isMetadataOpen = $state(false);
   let isRefreshingDeviceStatus = $state(false); // 多重実行防止フラグ
+  let recoveryPending = $state(false);
+  let hasTriedStartupRecovery = $state(false);
+  let hasTriedIdleRecoveryForCurrentDisconnect = $state(false);
   let isCameraPermissionDialogOpen = $state(false);
   let isVideoFileInput = $state(false);
   let deviceStatusPollIntervalMs = getDeviceStatusPollIntervalMs('cpu');
@@ -157,6 +167,9 @@
     if (deviceStatusTimer !== null) {
       window.clearInterval(deviceStatusTimer);
       deviceStatusTimer = null;
+    }
+    if (isVideoFileInput || deviceState === 'connected') {
+      return;
     }
     deviceStatusTimer = window.setInterval(() => {
       void refreshDeviceStatus();
@@ -544,7 +557,7 @@
     }
     preparePending = true;
     try {
-      status = '録画準備中 (OBS起動＆仮想カメラ有効化)...';
+      _status = '録画準備中 (OBS起動＆仮想カメラ有効化)...';
       const response = await fetch('/api/recorder/prepare', {
         method: 'POST',
       });
@@ -556,15 +569,15 @@
       console.log('prepare_recording result:', result);
       if (result.success === true) {
         isPrepared = true;
-        status = '録画準備完了';
+        _status = '録画準備完了';
         console.log('録画準備完了 - isPrepared =', isPrepared);
       } else {
-        status = `録画準備エラー: ${result.error ?? '原因不明のエラー'}`;
+        _status = `録画準備エラー: ${result.error ?? '原因不明のエラー'}`;
         console.error('録画準備失敗:', result);
       }
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : '原因不明のエラー';
-      status = `録画準備エラー: ${message}`;
+      _status = `録画準備エラー: ${message}`;
       console.error('録画準備エラー:', error);
     } finally {
       preparePending = false;
@@ -582,7 +595,7 @@
     console.log('enableAutoRecording: 開始');
     startPending = true;
     try {
-      status = '自動録画機能 ON 準備中...';
+      _status = '自動録画機能 ON 準備中...';
       const response = await fetch('/api/recorder/enable-auto', {
         method: 'POST',
       });
@@ -593,17 +606,17 @@
       const result = (await response.json()) as StartRecordingResponse;
       console.log('enable_auto_recording result:', result);
       if (result.success) {
-        status = '自動録画機能 ON（バトル開始を検知中...）';
+        _status = '自動録画機能 ON（バトル開始を検知中...）';
         console.log('自動録画機能 ON 成功');
         // 録画準備完了の通知を表示
         await notifyRecordingReady();
       } else {
-        status = `エラー: ${result.error ?? '原因不明のエラー'}`;
+        _status = `エラー: ${result.error ?? '原因不明のエラー'}`;
         console.error('自動録画有効化失敗:', result.error);
       }
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : '原因不明のエラー';
-      status = `エラー: ${message}`;
+      _status = `エラー: ${message}`;
       console.error('自動録画有効化エラー:', error);
     } finally {
       startPending = false;
@@ -621,7 +634,7 @@
     console.log('startRecording: 開始');
     startPending = true;
     try {
-      status = '自動録画機能 ON 準備中...';
+      _status = '自動録画機能 ON 準備中...';
       const response = await fetch('/api/recorder/start', {
         method: 'POST',
       });
@@ -633,18 +646,55 @@
       console.log('start_recording result:', result);
       if (result.success) {
         isRecording = true;
-        status = '自動録画機能 ON';
+        _status = '自動録画機能 ON';
         console.log('自動録画機能 ON 成功');
       } else {
-        status = `エラー: ${result.error ?? '原因不明のエラー'}`;
+        _status = `エラー: ${result.error ?? '原因不明のエラー'}`;
         console.error('自動録画開始失敗:', result.error);
       }
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : '原因不明のエラー';
-      status = `エラー: ${message}`;
+      _status = `エラー: ${message}`;
       console.error('自動録画開始エラー:', error);
     } finally {
       startPending = false;
+    }
+  }
+
+  function canAutoRecover(): boolean {
+    return (
+      !isVideoFileInput && !isRecording && !startPending && !preparePending && !recoveryPending
+    );
+  }
+
+  async function attemptDeviceRecovery(
+    trigger: 'manual' | 'startup_auto' | 'idle_auto'
+  ): Promise<RecoverDeviceResponse | null> {
+    if (recoveryPending) {
+      return null;
+    }
+
+    recoveryPending = true;
+    try {
+      _status =
+        trigger === 'manual'
+          ? 'キャプチャーデバイスの復旧を試しています...'
+          : 'キャプチャーデバイスの自動復旧を試しています...';
+      const result = (await recoverCaptureDevice(trigger)) as RecoverDeviceResponse;
+      if (result.recovered) {
+        _status = 'キャプチャーデバイスを復旧しました。再確認中...';
+        await refreshDeviceStatus();
+      } else {
+        _status = `復旧できませんでした: ${result.message}`;
+      }
+      return result;
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : '原因不明のエラー';
+      _status = `復旧エラー: ${message}`;
+      console.error('キャプチャーデバイス復旧エラー:', error);
+      return null;
+    } finally {
+      recoveryPending = false;
     }
   }
 
@@ -675,9 +725,14 @@
 
   async function refreshPreviewMode(): Promise<void> {
     try {
-      isVideoFileInput = (await getRecorderPreviewMode()) === 'video_file';
+      const nextIsVideoFileInput = (await getRecorderPreviewMode()) === 'video_file';
+      const previewModeChanged = isVideoFileInput !== nextIsVideoFileInput;
+      isVideoFileInput = nextIsVideoFileInput;
       if (isVideoFileInput) {
         isCameraPermissionDialogOpen = false;
+      }
+      if (previewModeChanged) {
+        restartDeviceStatusPolling();
       }
     } catch (error) {
       console.error('Failed to refresh preview mode:', error);
@@ -706,23 +761,27 @@
 
   function updateDeviceState(nextState: PreviewState, message = ''): void {
     const previous = deviceState;
+    const wasRecording = isRecording;
+    const wasStartPending = startPending;
+    const wasPreparePending = preparePending;
     deviceState = nextState;
 
     if (nextState === 'error') {
       deviceErrorMessage = message;
       const details = message ? ` (${message})` : '';
-      status = `エラー: キャプチャーデバイスの状態を取得できません${details}`;
+      _status = `エラー: キャプチャーデバイスの状態を取得できません${details}`;
       return;
     }
 
     deviceErrorMessage = '';
 
     if (nextState === 'connected' && previous !== 'connected') {
-      console.log('デバイス接続を検出 - 録画準備を開始');
+      hasTriedIdleRecoveryForCurrentDisconnect = false;
       if (deviceStatusTimer !== null) {
         window.clearInterval(deviceStatusTimer);
         deviceStatusTimer = null;
       }
+      console.log('デバイス接続を検出 - 録画準備を開始');
       // デバイス接続時にカメラ許可ダイアログをチェック
       void checkAndShowCameraPermissionDialog();
       // デバイス接続後、録画準備を実行
@@ -742,23 +801,51 @@
     if (nextState === 'disconnected') {
       isRecording = false;
       isPrepared = false;
-      status = 'キャプチャーデバイスを接続してください';
+      _status = recoveryPending
+        ? 'キャプチャーデバイスを復旧しています...'
+        : 'キャプチャーデバイスを接続してください';
+      if (
+        previous === 'connected' &&
+        !hasTriedIdleRecoveryForCurrentDisconnect &&
+        !wasRecording &&
+        !wasStartPending &&
+        !wasPreparePending &&
+        canAutoRecover()
+      ) {
+        hasTriedIdleRecoveryForCurrentDisconnect = true;
+        void attemptDeviceRecovery('idle_auto');
+      }
       return;
     }
 
     if (nextState === 'checking' && !isRecording && !startPending && !preparePending) {
-      status = 'デバイス確認中...';
+      _status = 'デバイス確認中...';
     }
   }
 
   onMount(() => {
     void loadMetadataOptions();
-    void refreshPreviewMode();
-    void refreshDeviceStatus();
+    void (async () => {
+      await refreshPreviewMode();
+      await refreshDeviceStatus();
+      if (!hasTriedStartupRecovery && deviceState === 'disconnected' && canAutoRecover()) {
+        hasTriedStartupRecovery = true;
+        await attemptDeviceRecovery('startup_auto');
+      }
+    })();
     restartDeviceStatusPolling();
 
     // ドメインイベントを購読
     const domainEventSource = subscribeDomainEvents((event: DomainEvent) => {
+      if (
+        event.type === 'domain.recording.started' ||
+        event.type === 'domain.recording.resumed' ||
+        event.type === 'domain.recording.paused'
+      ) {
+        isRecording = true;
+        console.log('[DomainEvent] recording session active', event.type);
+        return;
+      }
       if (event.type === 'domain.recording.metadata_updated') {
         const payload = event.payload as { metadata?: MetadataEventPayload };
         if (payload?.metadata) {
@@ -770,6 +857,7 @@
         event.type === 'domain.recording.stopped' ||
         event.type === 'domain.recording.cancelled'
       ) {
+        isRecording = false;
         pendingMetadataSessionReset = true;
         return;
       }
@@ -832,6 +920,19 @@
     />
   {/if}
 
+  {#if deviceState === 'disconnected' || deviceState === 'error'}
+    <div class="recovery-actions">
+      <button
+        class="recovery-button glass-pill"
+        type="button"
+        onclick={() => void attemptDeviceRecovery('manual')}
+        disabled={recoveryPending}
+      >
+        {recoveryPending ? '復旧中...' : '復旧を試す'}
+      </button>
+    </div>
+  {/if}
+
   {#if deviceState === 'connected'}
     <MetadataOverlay bind:visible={isMetadataOpen} />
   {/if}
@@ -874,6 +975,42 @@
     flex-direction: column;
     align-items: flex-end;
     gap: 0.5rem;
+  }
+
+  .recovery-actions {
+    position: absolute;
+    right: 1rem;
+    bottom: 1rem;
+    z-index: 220;
+  }
+
+  .recovery-button {
+    border: 1px solid rgba(var(--theme-rgb-accent), 0.45);
+    background: linear-gradient(
+      135deg,
+      rgba(var(--theme-rgb-accent), 0.96) 0%,
+      rgba(var(--theme-rgb-accent-bright), 0.92) 100%
+    );
+    color: var(--theme-accent-ink-surface);
+    font-weight: 700;
+    padding: 0.7rem 1.05rem;
+    cursor: pointer;
+    transition:
+      transform 0.2s ease,
+      box-shadow 0.2s ease,
+      opacity 0.2s ease;
+  }
+
+  .recovery-button:hover:enabled {
+    transform: translateY(-1px);
+    box-shadow:
+      0 10px 22px rgba(var(--theme-rgb-accent), 0.28),
+      0 0 12px rgba(var(--theme-rgb-accent), 0.16);
+  }
+
+  .recovery-button:disabled {
+    cursor: wait;
+    opacity: 0.72;
   }
 
   .metadata-toggle-btn {

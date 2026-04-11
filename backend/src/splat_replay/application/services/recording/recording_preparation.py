@@ -14,7 +14,7 @@ from splat_replay.application.interfaces import (
 
 
 class OBSConfig(TypedDict):
-    """OBS設定データ (Application層のDTO)"""
+    """OBS settings DTO exposed to the web interface."""
 
     websocket_password: str
     capture_device_name: str
@@ -44,20 +44,20 @@ class RecordingPreparationService:
         self._recorder.update_settings(settings)
 
     def reload_obs_settings(self) -> None:
-        """設定ファイルからOBS設定を再読み込みして反映する。"""
+        """Reload OBS settings from the persisted configuration."""
         self.update_settings(self._config.get_obs_settings())
 
     def get_obs_config(self) -> OBSConfig:
-        """OBS設定を取得する。"""
+        """Return the OBS config needed by setup UI."""
         obs_settings = self._config.get_obs_settings()
         device_settings = self._config.get_capture_device_settings()
 
-        # SecretStrから実際の値を取得
         password = obs_settings.websocket_password
-        if hasattr(password, "get_secret_value"):
-            password_str = password.get_secret_value()
-        else:
-            password_str = str(password)
+        password_str = (
+            password.get_secret_value()
+            if hasattr(password, "get_secret_value")
+            else str(password)
+        )
 
         return OBSConfig(
             websocket_password=password_str,
@@ -65,19 +65,16 @@ class RecordingPreparationService:
         )
 
     def get_capture_device_settings(self) -> CaptureDeviceSettingsView:
-        """キャプチャデバイス設定を取得する。"""
+        """Return persisted capture-device settings."""
         return self._config.get_capture_device_settings()
 
     def save_obs_websocket_password(self, password: str) -> None:
-        """OBS WebSocketパスワードを保存する。"""
-        # 設定を読み込んで新しいパスワードで保存
-        # ConfigPortの実装側で保存を担保
+        """Persist the OBS WebSocket password and refresh recorder config."""
         self._config.save_obs_websocket_password(password)
         self.update_settings(self._config.get_obs_settings())
         self._logger.info("OBS WebSocket password saved")
 
     def save_capture_device(self, device_name: str) -> None:
-        """キャプチャデバイス名を保存する。"""
-        # 設定を読み込んで新しいデバイス名で保存
-        self._config.save_capture_device_name(device_name)
+        """Persist only the selected capture-device name."""
+        self._config.save_capture_device_binding(device_name)
         self._logger.info("Capture device saved", device=device_name)

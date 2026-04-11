@@ -1,7 +1,4 @@
-"""Setup-related schemas for Web API.
-
-セットアップ機能に関するリクエスト/レスポンス スキーマを定義する。
-"""
+"""Setup-related schemas for Web API."""
 
 from __future__ import annotations
 
@@ -9,24 +6,30 @@ from typing import Literal
 
 from pydantic import BaseModel
 
+CaptureDeviceBindingStatus = Literal["bound", "name_only"]
+CaptureDeviceRecoveryTrigger = Literal["manual", "startup_auto", "idle_auto"]
+
 __all__ = [
-    "InstallationStatusResponse",
-    "StepInfoResponse",
-    "SystemCheckResponse",
+    "CaptureDeviceDiagnosticsResponse",
+    "CaptureDeviceDescriptorResponse",
+    "CaptureDeviceRecoveryRequest",
+    "CaptureDeviceRecoveryResponse",
+    "CaptureDeviceRequest",
+    "CaptureDeviceSaveResponse",
     "ErrorResponse",
+    "InstallationStatusResponse",
     "MessageResponse",
+    "MicrophoneDeviceListResponse",
     "OBSConfigResponse",
     "OBSWebSocketPasswordRequest",
+    "StepInfoResponse",
+    "SystemCheckResponse",
     "VideoDeviceListResponse",
-    "MicrophoneDeviceListResponse",
-    "CaptureDeviceRequest",
     "YouTubePrivacyStatusRequest",
 ]
 
 
 class InstallationStatusResponse(BaseModel):
-    """セットアップ状態レスポンス"""
-
     is_completed: bool
     current_step: str
     completed_steps: list[str]
@@ -37,8 +40,6 @@ class InstallationStatusResponse(BaseModel):
 
 
 class StepInfoResponse(BaseModel):
-    """ステップ情報レスポンス"""
-
     step: str
     display_name: str
     is_completed: bool
@@ -46,8 +47,6 @@ class StepInfoResponse(BaseModel):
 
 
 class SystemCheckResponse(BaseModel):
-    """システムチェックレスポンス"""
-
     is_installed: bool
     version: str | None = None
     installation_path: str | None = None
@@ -55,8 +54,6 @@ class SystemCheckResponse(BaseModel):
 
 
 class ErrorResponse(BaseModel):
-    """エラーレスポンス"""
-
     error_code: str
     message: str
     user_message: str
@@ -65,46 +62,66 @@ class ErrorResponse(BaseModel):
 
 
 class MessageResponse(BaseModel):
-    """成功メッセージレスポンス"""
-
     message: str
 
 
 class OBSConfigResponse(BaseModel):
-    """OBS設定レスポンス"""
-
     websocket_password: str
     capture_device_name: str
 
 
 class OBSWebSocketPasswordRequest(BaseModel):
-    """OBS WebSocketパスワード設定リクエスト"""
-
     password: str
 
 
 class VideoDeviceListResponse(BaseModel):
-    """ビデオデバイスリストレスポンス"""
-
     devices: list[str]
 
 
 class MicrophoneDeviceListResponse(BaseModel):
-    """マイクデバイスリストレスポンス"""
-
     devices: list[str]
 
 
 class CaptureDeviceRequest(BaseModel):
-    """キャプチャデバイス設定リクエスト"""
-
     device_name: str
+
+
+class CaptureDeviceSaveResponse(MessageResponse):
+    binding_status: CaptureDeviceBindingStatus
+
+
+class CaptureDeviceRecoveryRequest(BaseModel):
+    trigger: CaptureDeviceRecoveryTrigger
+
+
+class CaptureDeviceRecoveryResponse(BaseModel):
+    attempted: bool
+    recovered: bool
+    message: str
+    action: str
+
+
+class CaptureDeviceDescriptorResponse(BaseModel):
+    name: str
+    alternative_name: str | None = None
+    pnp_instance_id: str | None = None
+    hardware_id: str | None = None
+    location_path: str | None = None
+    parent_instance_id: str | None = None
+
+
+class CaptureDeviceDiagnosticsResponse(BaseModel):
+    configured_device_name: str
+    configured_hardware_id: str | None = None
+    configured_location_path: str | None = None
+    configured_parent_instance_id: str | None = None
+    resolved_device: CaptureDeviceDescriptorResponse | None = None
+    available_devices: list[CaptureDeviceDescriptorResponse]
+    last_recovery: CaptureDeviceRecoveryResponse | None = None
 
 
 YouTubePrivacyStatus = Literal["private", "unlisted", "public"]
 
 
 class YouTubePrivacyStatusRequest(BaseModel):
-    """YouTube公開設定リクエスト"""
-
     privacy_status: YouTubePrivacyStatus
