@@ -229,6 +229,150 @@ describe('SettingsDialog.svelte', () => {
     });
   });
 
+  it('既存設定セクションを5つのタブに集約して表示する', async () => {
+    const user = userEvent.setup();
+    const mockSections: SettingsSection[] = [
+      {
+        id: 'behavior',
+        label: '動作',
+        fields: [
+          {
+            id: 'edit_after_power_off',
+            label: '電源オフ後に編集開始する',
+            description: '',
+            type: 'boolean',
+            recommended: false,
+            value: true,
+            user_editable: true,
+          },
+        ],
+      },
+      {
+        id: 'webview',
+        label: '表示',
+        fields: [
+          {
+            id: 'render_mode',
+            label: '描画モード',
+            description: '',
+            type: 'select',
+            recommended: false,
+            value: 'gpu',
+            choices: ['cpu', 'gpu'],
+            choice_labels: { cpu: 'CPU', gpu: 'GPU' },
+            user_editable: true,
+          },
+        ],
+      },
+      {
+        id: 'capture_device',
+        label: 'Capture device settings.',
+        fields: [
+          {
+            id: 'name',
+            label: 'キャプチャデバイス名',
+            description: '',
+            type: 'text',
+            recommended: true,
+            value: 'Capture Device',
+            user_editable: true,
+          },
+        ],
+      },
+      {
+        id: 'obs',
+        label: 'OBS 接続',
+        fields: [
+          {
+            id: 'websocket_host',
+            label: 'OBS WebSocket ホスト',
+            description: '',
+            type: 'text',
+            recommended: false,
+            value: 'localhost',
+            user_editable: true,
+          },
+        ],
+      },
+      {
+        id: 'speech_transcriber',
+        label: '文字起こし',
+        fields: [
+          {
+            id: 'enabled',
+            label: '文字起こしを有効にする',
+            description: '',
+            type: 'boolean',
+            recommended: true,
+            value: true,
+            user_editable: true,
+          },
+        ],
+      },
+      {
+        id: 'video_edit',
+        label: '動画編集',
+        fields: [
+          {
+            id: 'title_template',
+            label: 'タイトルテンプレート',
+            description: '',
+            type: 'text',
+            recommended: false,
+            value: '{BATTLE}',
+            user_editable: true,
+          },
+        ],
+      },
+      {
+        id: 'upload',
+        label: 'アップロード',
+        fields: [
+          {
+            id: 'privacy_status',
+            label: '公開範囲',
+            description: '',
+            type: 'select',
+            recommended: false,
+            value: 'private',
+            choices: ['public', 'unlisted', 'private'],
+            user_editable: true,
+          },
+        ],
+      },
+    ];
+
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ sections: mockSections }),
+    });
+
+    render(SettingsDialog, { props: { open: true } });
+
+    await waitFor(() => {
+      expect(screen.getByTestId('settings-section-behavior')).toHaveTextContent('動作');
+      expect(screen.getByTestId('settings-section-display')).toHaveTextContent('表示');
+      expect(screen.getByTestId('settings-section-recording')).toHaveTextContent('録画');
+      expect(screen.getByTestId('settings-section-edit')).toHaveTextContent('編集');
+      expect(screen.getByTestId('settings-section-upload')).toHaveTextContent('アップロード');
+    });
+
+    expect(screen.queryByTestId('settings-section-capture_device')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('settings-section-obs')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('settings-section-speech_transcriber')).not.toBeInTheDocument();
+
+    await user.click(screen.getByTestId('settings-section-recording'));
+
+    await waitFor(() => {
+      expect(screen.getByText('キャプチャデバイス')).toBeInTheDocument();
+      expect(screen.getByText('OBS 接続')).toBeInTheDocument();
+      expect(screen.getByText('文字起こし')).toBeInTheDocument();
+      expect(screen.getByText('キャプチャデバイス名')).toBeInTheDocument();
+      expect(screen.getByText('OBS WebSocket ホスト')).toBeInTheDocument();
+      expect(screen.getByText('文字起こしを有効にする')).toBeInTheDocument();
+    });
+  });
+
   it('セクションをクリックすると切り替わる', async () => {
     const user = userEvent.setup();
     const mockSections: SettingsSection[] = [

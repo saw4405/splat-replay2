@@ -27,7 +27,13 @@ export function normalizeRenderMode(value: unknown): RenderMode {
 
 export function resolveRenderModeFromSections(sections: SettingsSection[]): RenderMode | null {
   const webviewSection = sections.find((section) => section.id === 'webview');
-  const renderModeField = webviewSection?.fields.find((field) => field.id === 'render_mode');
+  const displaySection = sections.find((section) => section.id === 'display');
+  const renderModeField =
+    webviewSection?.fields.find((field) => field.id === 'render_mode') ??
+    displaySection?.fields.find((field) => field.id === 'render_mode') ??
+    displaySection?.fields
+      .find((field) => field.id === 'webview')
+      ?.children?.find((field) => field.id === 'render_mode');
 
   if (!renderModeField) {
     return null;

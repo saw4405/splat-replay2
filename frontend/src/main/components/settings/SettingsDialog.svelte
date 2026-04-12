@@ -3,7 +3,12 @@
   import BaseDialog from '../../../common/components/BaseDialog.svelte';
   import { resolveRenderModeFromSections, setRenderMode } from '../../renderMode';
   import FieldItem from './FieldItem.svelte';
-  import type { FieldValue, SettingField, SettingsResponse, SettingsSection } from './types';
+  import {
+    collectSettingsUpdateSections,
+    groupSettingsSections,
+    type SettingsUiSection,
+  } from './grouping';
+  import type { FieldValue, SettingField, SettingsResponse } from './types';
 
   interface Props {
     open?: boolean;
@@ -14,7 +19,7 @@
   // テストから component.open でアクセスできるように export
   export { open };
 
-  let sections = $state<SettingsSection[]>([]);
+  let sections = $state<SettingsUiSection[]>([]);
   let loading = $state(false);
   let saving = $state(false);
   let errorMessage = $state('');
@@ -64,32 +69,6 @@
     clearSuccessMessageTimer();
   }
 
-  function filterEditableFields(fields: SettingField[]): SettingField[] {
-    const result: SettingField[] = [];
-    for (const field of fields) {
-      if (field.type === 'group' && field.children) {
-        const children = filterEditableFields(field.children);
-        if (children.length > 0) {
-          result.push({ ...field, children });
-        }
-        continue;
-      }
-      if (field.user_editable) {
-        result.push(field);
-      }
-    }
-    return result;
-  }
-
-  function filterEditableSections(sectionsData: SettingsSection[]): SettingsSection[] {
-    return sectionsData
-      .map((section) => {
-        const fields = filterEditableFields(section.fields);
-        return { ...section, fields };
-      })
-      .filter((section) => section.fields.length > 0);
-  }
-
   async function loadSettings(): Promise<void> {
     loading = true;
     errorMessage = '';
@@ -106,7 +85,7 @@
         ...section,
         fields: section.fields.map((field) => ({ ...field })),
       }));
-      sections = filterEditableSections(sectionsClone);
+      sections = groupSettingsSections(sectionsClone);
       activeSectionId = sections[0]?.id ?? null;
     } catch (error: unknown) {
       errorMessage = error instanceof Error ? error.message : '設定の取得に失敗しました。';
@@ -150,41 +129,6 @@
     }));
   }
 
-  function collectSectionValues(section: SettingsSection): Record<string, FieldValue> {
-    const values: Record<string, FieldValue> = {};
-    for (const field of section.fields) {
-      values[field.id] = collectFieldValue(field);
-    }
-    return values;
-  }
-
-  function collectFieldValue(field: SettingField): FieldValue {
-    if (field.type === 'group' && field.children) {
-      return collectGroupValues(field.children);
-    }
-    if (field.type === 'list') {
-      return Array.isArray(field.value) ? field.value : [];
-    }
-    if (typeof field.value === 'undefined' || field.value === null) {
-      if (field.type === 'boolean') {
-        return false;
-      }
-      if (field.type === 'integer' || field.type === 'float') {
-        return 0;
-      }
-      return '';
-    }
-    return field.value;
-  }
-
-  function collectGroupValues(fields: SettingField[]): Record<string, FieldValue> {
-    const result: Record<string, FieldValue> = {};
-    for (const child of fields) {
-      result[child.id] = collectFieldValue(child);
-    }
-    return result;
-  }
-
   async function saveSettings(): Promise<void> {
     if (saving || loading) {
       return;
@@ -195,10 +139,7 @@
     clearSuccessMessageTimer();
     try {
       const payload = {
-        sections: sections.map((section) => ({
-          id: section.id,
-          values: collectSectionValues(section),
-        })),
+        sections: collectSettingsUpdateSections(sections),
       };
       const response = await fetch('/api/settings', {
         method: 'PUT',
@@ -316,7 +257,7 @@
     display: flex;
     flex-direction: column;
     gap: 0.5rem;
-    padding: 0rem 0.5rem;
+    padding: 0.25rem 0.5rem;
     overflow-y: auto;
     overflow-x: hidden;
     height: 100%;

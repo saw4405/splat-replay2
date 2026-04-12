@@ -299,8 +299,10 @@ describe('Settings フロー Integration', () => {
       const { component } = render(SettingsDialog, { props: { open: true } });
 
       await waitFor(() => {
+        expect(screen.getByTestId('settings-section-display')).toHaveTextContent('表示');
         expect(screen.queryByText('描画モード')).toBeInTheDocument();
       });
+      expect(screen.queryByTestId('settings-section-webview')).not.toBeInTheDocument();
 
       await fireEvent.click(screen.getByRole('combobox'));
 

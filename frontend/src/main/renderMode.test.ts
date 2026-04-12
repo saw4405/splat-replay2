@@ -57,6 +57,29 @@ describe('renderMode runtime', () => {
     expect(resolveRenderModeFromSettingsResponse(response)).toBe('gpu');
   });
 
+  it('UI grouping 済みの settings レスポンスから render_mode を解決する', () => {
+    const response: SettingsResponse = {
+      sections: [
+        {
+          id: 'display',
+          label: '表示',
+          fields: [
+            {
+              id: 'render_mode',
+              label: '描画モード',
+              description: '',
+              type: 'select',
+              recommended: false,
+              value: 'cpu',
+            },
+          ],
+        },
+      ],
+    };
+
+    expect(resolveRenderModeFromSettingsResponse(response)).toBe('cpu');
+  });
+
   it('setRenderMode が store と document dataset を更新する', () => {
     setRenderMode('cpu', document);
 
