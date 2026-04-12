@@ -878,8 +878,8 @@
     position: relative;
     height: 120px;
     background: rgba(var(--theme-rgb-gray-strong), 0.6);
-    backdrop-filter: blur(8px);
-    -webkit-backdrop-filter: blur(8px);
+    backdrop-filter: var(--glass-blur);
+    -webkit-backdrop-filter: var(--glass-blur);
     border: 1px solid rgba(var(--theme-rgb-white), 0.08);
     border-radius: 8px;
     cursor: crosshair;
@@ -950,8 +950,8 @@
     position: absolute;
     height: 60px;
     background: rgba(var(--theme-rgb-blue-alt), 0.5);
-    backdrop-filter: blur(8px);
-    -webkit-backdrop-filter: blur(8px);
+    backdrop-filter: var(--glass-blur);
+    -webkit-backdrop-filter: var(--glass-blur);
     border: 2px solid rgba(var(--theme-rgb-blue-alt), 0.8);
     border-radius: 8px;
     cursor: move;
@@ -969,8 +969,8 @@
 
   .subtitle-block.selected {
     background: rgba(var(--theme-rgb-gold), 0.5);
-    backdrop-filter: blur(10px);
-    -webkit-backdrop-filter: blur(10px);
+    backdrop-filter: var(--glass-blur);
+    -webkit-backdrop-filter: var(--glass-blur);
     border-color: rgba(var(--theme-rgb-gold), 1);
     box-shadow:
       0 4px 16px rgba(var(--theme-rgb-gold), 0.4),
@@ -984,8 +984,8 @@
     width: 8px;
     cursor: ew-resize;
     background: rgba(var(--theme-rgb-white), 0.25);
-    backdrop-filter: blur(4px);
-    -webkit-backdrop-filter: blur(4px);
+    backdrop-filter: var(--glass-blur);
+    -webkit-backdrop-filter: var(--glass-blur);
     transition: all 0.2s;
   }
 
@@ -1031,8 +1031,8 @@
   .popup-editor {
     position: absolute;
     background: rgba(var(--theme-rgb-dark-alt-2), 0.95);
-    backdrop-filter: blur(10px);
-    -webkit-backdrop-filter: blur(10px);
+    backdrop-filter: var(--glass-blur);
+    -webkit-backdrop-filter: var(--glass-blur);
     border: 2px solid rgba(var(--theme-rgb-gold), 0.8);
     border-radius: 12px;
     box-shadow:
@@ -1064,8 +1064,8 @@
     padding: 10px 12px;
     border-bottom: 1px solid rgba(var(--theme-rgb-white), 0.1);
     background: rgba(var(--theme-rgb-gold), 0.15);
-    backdrop-filter: blur(6px);
-    -webkit-backdrop-filter: blur(6px);
+    backdrop-filter: var(--glass-blur);
+    -webkit-backdrop-filter: var(--glass-blur);
   }
 
   .popup-title {
@@ -1093,8 +1093,8 @@
   .popup-close:hover {
     background: rgba(var(--theme-rgb-white), 0.15);
     color: rgba(var(--theme-rgb-white), 1);
-    backdrop-filter: blur(6px);
-    -webkit-backdrop-filter: blur(6px);
+    backdrop-filter: var(--glass-blur);
+    -webkit-backdrop-filter: var(--glass-blur);
   }
 
   .popup-body {
@@ -1127,8 +1127,8 @@
   .popup-row input,
   .popup-row textarea {
     background: rgba(var(--theme-rgb-gray-strong), 0.8);
-    backdrop-filter: blur(8px);
-    -webkit-backdrop-filter: blur(8px);
+    backdrop-filter: var(--glass-blur);
+    -webkit-backdrop-filter: var(--glass-blur);
     border: 1px solid rgba(var(--theme-rgb-white), 0.2);
     color: rgba(var(--theme-rgb-white), 0.9);
     padding: 6px 8px;
@@ -1172,8 +1172,8 @@
 
   .delete-button {
     background: rgba(var(--theme-rgb-danger), 0.9);
-    backdrop-filter: blur(6px);
-    -webkit-backdrop-filter: blur(6px);
+    backdrop-filter: var(--glass-blur);
+    -webkit-backdrop-filter: var(--glass-blur);
     border: 1px solid rgba(var(--theme-rgb-white), 0.2);
     color: var(--theme-color-white);
     padding: 6px 12px;
@@ -1197,8 +1197,8 @@
     width: 48px;
     height: 48px;
     background: rgba(var(--theme-rgb-success), 0.9);
-    backdrop-filter: blur(6px);
-    -webkit-backdrop-filter: blur(6px);
+    backdrop-filter: var(--glass-blur);
+    -webkit-backdrop-filter: var(--glass-blur);
     border: 2px solid rgba(var(--theme-rgb-white), 0.2);
     border-radius: 50%;
     display: flex;

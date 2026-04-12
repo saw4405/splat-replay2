@@ -72,6 +72,7 @@
 ## 参考（一次情報）
 
 - `README.md`（全体概要 / エンドユーザー向け情報）
+- `DESIGN.md`（UI デザイン仕様 / デザイントークン / コンポーネントルール）
 - `docs/DEVELOPMENT.md`（開発環境 / テスト実行 / 品質確認）
 - `docs/test_strategy.md`（テスト選定の SSOT）
 - `Taskfile.yml`（タスク定義）

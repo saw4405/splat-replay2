@@ -1,4 +1,4 @@
-﻿<script lang="ts">
+<script lang="ts">
   import { onDestroy, onMount, tick } from 'svelte';
 
   interface Props {
@@ -221,11 +221,7 @@
     align-items: center;
     justify-content: space-between;
     gap: 0.75rem;
-    background: linear-gradient(
-      135deg,
-      rgba(var(--theme-rgb-surface-muted), 0.78) 0%,
-      rgba(var(--theme-rgb-surface-chip), 0.62) 100%
-    );
+    background: rgba(var(--theme-rgb-black), 0.2);
     border: 1px solid rgba(var(--theme-rgb-white), 0.16);
     border-radius: 0.625rem;
     padding: 0.75rem 1rem;
@@ -257,7 +253,8 @@
     );
     box-shadow:
       0 0 0 0.1875rem rgba(var(--theme-rgb-accent), 0.14),
-      0 0.25rem 0.7rem rgba(var(--theme-rgb-accent), 0.16);
+      0 0.25rem 0.7rem rgba(var(--theme-rgb-accent), 0.16),
+      inset 0 0 0.5rem rgba(var(--theme-rgb-accent), 0.3);
     outline: none;
   }
 
@@ -299,8 +296,8 @@
     box-shadow:
       0 0.85rem 2rem rgba(var(--theme-rgb-black), 0.34),
       0 0 0 1px rgba(var(--theme-rgb-white), 0.08);
-    backdrop-filter: blur(10px) saturate(140%);
-    -webkit-backdrop-filter: blur(10px) saturate(140%);
+    backdrop-filter: var(--glass-blur);
+    -webkit-backdrop-filter: var(--glass-blur);
     max-height: 14rem;
     overflow-y: auto;
     outline: none;

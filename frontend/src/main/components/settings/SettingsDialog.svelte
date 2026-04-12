@@ -1,4 +1,4 @@
-﻿<script lang="ts">
+<script lang="ts">
   import { onDestroy, untrack } from 'svelte';
   import BaseDialog from '../../../common/components/BaseDialog.svelte';
   import { resolveRenderModeFromSections, setRenderMode } from '../../renderMode';
@@ -325,15 +325,8 @@
 
   .tabs button {
     border: none;
-    background: linear-gradient(
-      135deg,
-      rgba(var(--theme-rgb-surface-card), 0.78) 0%,
-      rgba(var(--theme-rgb-surface-card-dark), 0.74) 100%
-    );
-    backdrop-filter: blur(5px) saturate(130%);
-    -webkit-backdrop-filter: blur(5px) saturate(130%);
-    border: 1px solid rgba(var(--theme-rgb-white), 0.1);
-    color: rgba(var(--theme-rgb-white), 0.8);
+    background: transparent;
+    color: rgba(var(--theme-rgb-light-slate), 0.7);
     border-radius: 0.625rem;
     padding: 0.85rem 1.2rem;
     text-align: left;
@@ -341,37 +334,47 @@
     font-weight: 500;
     cursor: pointer;
     transition:
-      border-color 0.22s ease,
       color 0.22s ease,
       background 0.22s ease,
       box-shadow 0.22s ease;
     flex: 0 0 auto;
     width: 100%;
+    position: relative;
   }
 
   .tabs button:hover {
-    background: linear-gradient(
-      135deg,
-      rgba(var(--theme-rgb-accent), 0.12) 0%,
-      rgba(var(--theme-rgb-accent), 0.06) 100%
-    );
-    border-color: rgba(var(--theme-rgb-accent), 0.24);
-    color: var(--accent-color);
-    box-shadow: 0 0.3rem 0.9rem rgba(var(--theme-rgb-accent), 0.12);
+    background: rgba(var(--theme-rgb-accent), 0.06);
+    color: rgba(var(--theme-rgb-white), 0.95);
   }
 
   .tabs button.selected {
-    background: linear-gradient(
-      135deg,
-      rgba(var(--theme-rgb-accent), 0.21) 0%,
-      rgba(var(--theme-rgb-accent), 0.13) 100%
-    );
-    border-color: rgba(var(--theme-rgb-accent), 0.32);
-    color: var(--accent-color);
-    box-shadow:
-      0 0.22rem 0.65rem rgba(var(--theme-rgb-accent), 0.14),
-      inset 0 1px 0 rgba(var(--theme-rgb-white), 0.1);
+    background: rgba(var(--theme-rgb-accent), 0.15);
+    color: rgba(var(--theme-rgb-white), 0.95);
     font-weight: 600;
+  }
+
+  .tabs button.selected::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 20%;
+    bottom: 20%;
+    width: 3px;
+    background: var(--accent-color);
+    border-radius: 0 3px 3px 0;
+    box-shadow: 0 0 8px rgba(var(--theme-rgb-accent), 0.6);
+    animation: tab-indicator-glow 0.2s cubic-bezier(0.2, 0, 0, 1) forwards;
+  }
+
+  @keyframes tab-indicator-glow {
+    from {
+      transform: scaleY(0);
+      opacity: 0;
+    }
+    to {
+      transform: scaleY(1);
+      opacity: 1;
+    }
   }
 
   .fields {

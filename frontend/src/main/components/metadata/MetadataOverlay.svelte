@@ -291,7 +291,12 @@
     right: 8px;
     bottom: 8px;
     width: 320px;
-    background: var(--glass-bg-strong);
+    background: linear-gradient(
+      145deg,
+      rgba(var(--theme-rgb-surface-card), 0.96) 0%,
+      rgba(var(--theme-rgb-surface-card-strong), 0.94) 45%,
+      rgba(var(--theme-rgb-surface-card-deep), 0.98) 100%
+    );
     backdrop-filter: var(--glass-blur);
     -webkit-backdrop-filter: var(--glass-blur);
     z-index: 100;
@@ -330,11 +335,11 @@
     justify-content: flex-end;
     background: linear-gradient(
       180deg,
-      rgba(var(--theme-rgb-surface-card-dark-2), 0.82) 0%,
-      rgba(var(--theme-rgb-surface-card-dark), 0.72) 100%
+      rgba(var(--theme-rgb-surface-card-dark-2), 0.95) 0%,
+      rgba(var(--theme-rgb-surface-card-dark), 0.88) 100%
     );
-    backdrop-filter: blur(8px);
-    -webkit-backdrop-filter: blur(8px);
+    backdrop-filter: var(--glass-blur);
+    -webkit-backdrop-filter: var(--glass-blur);
     border-bottom-right-radius: calc(var(--glass-radius) + 6px);
   }
 

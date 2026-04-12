@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from fastapi.testclient import TestClient
 from splat_replay.bootstrap.web_app import build_web_api_server
 from splat_replay.infrastructure.di import configure_container
 from splat_replay.interface.web.app_factory import create_app
@@ -26,3 +27,27 @@ def test_create_app_allows_missing_frontend_assets_subdir(
     app = create_app(server, enable_lifespan=False)
 
     assert app is not None
+
+
+def test_frontend_index_disables_http_cache(tmp_path: Path) -> None:
+    """frontend の entry HTML は WebView にキャッシュさせない。"""
+    frontend_dist = tmp_path / "frontend" / "dist"
+    frontend_dist.mkdir(parents=True)
+    (frontend_dist / "index.html").write_text(
+        "<!doctype html><title>fresh</title>", encoding="utf-8"
+    )
+
+    container = configure_container()
+    server = build_web_api_server(container)
+    server.project_root = tmp_path
+
+    app = create_app(server, enable_lifespan=False)
+    client = TestClient(app)
+
+    response = client.get("/")
+
+    assert response.status_code == 200
+    assert response.headers["Cache-Control"] == (
+        "no-store, no-cache, must-revalidate, max-age=0"
+    )
+    assert response.headers["Pragma"] == "no-cache"

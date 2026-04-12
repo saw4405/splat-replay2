@@ -1,4 +1,4 @@
-﻿<script lang="ts">
+<script lang="ts">
   import { Check } from 'lucide-svelte';
   import type { ProgressInfo } from '../types';
 
@@ -40,8 +40,8 @@
     background: rgba(var(--theme-rgb-black), 0.2);
     border: 1px solid rgba(var(--theme-rgb-white), 0.08);
     border-radius: 12px;
-    backdrop-filter: blur(6px);
-    -webkit-backdrop-filter: blur(6px);
+    backdrop-filter: var(--glass-blur);
+    -webkit-backdrop-filter: var(--glass-blur);
   }
 
   .step-number {

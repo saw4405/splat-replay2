@@ -11,6 +11,7 @@ import sys
 import time
 import traceback
 from pathlib import Path
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 import structlog
 import uvicorn
@@ -47,6 +48,26 @@ def find_frontend_dist(project_root: Path) -> Path:
         )
 
     return dist
+
+
+def build_frontend_entry_url(backend_url: str, frontend_dist: Path) -> str:
+    """frontend の entry HTML 更新時に WebView の HTTP キャッシュを避ける。"""
+    index_html = frontend_dist / "index.html"
+    index_stat = index_html.stat()
+    frontend_version = f"{index_stat.st_mtime_ns}-{index_stat.st_size}"
+    parts = urlsplit(backend_url)
+    path = parts.path or "/"
+    if not path.endswith("/"):
+        path = f"{path}/"
+    query = urlencode(
+        [
+            *parse_qsl(parts.query, keep_blank_values=True),
+            ("frontend", frontend_version),
+        ]
+    )
+    return urlunsplit(
+        (parts.scheme, parts.netloc, path, query, parts.fragment)
+    )
 
 
 def start_backend_server(
@@ -235,9 +256,12 @@ class SplatReplayWebViewApp:
                 )
 
             # WebViewウィンドウ作成
+            frontend_url = build_frontend_entry_url(
+                self.backend_url, self.frontend_dist
+            )
             webview.create_window(
                 title=self.title,
-                url=self.backend_url,
+                url=frontend_url,
                 width=self.width,
                 height=self.height,
                 resizable=True,
@@ -262,4 +286,7 @@ class SplatReplayWebViewApp:
                 backend_process.kill()
 
 
-__all__ = ["SplatReplayWebViewApp"]
+__all__ = [
+    "SplatReplayWebViewApp",
+    "build_frontend_entry_url",
+]

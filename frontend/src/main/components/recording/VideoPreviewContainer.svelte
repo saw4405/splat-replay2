@@ -33,6 +33,7 @@
   const NOTIFICATION_DURATION_MS = 5000;
 
   let isRecording = $state(false);
+  let isPaused = $state(false);
   let startPending = $state(false);
   let preparePending = $state(false);
   let _status = $state('デバイス確認中...');
@@ -843,6 +844,7 @@
         event.type === 'domain.recording.paused'
       ) {
         isRecording = true;
+        isPaused = event.type === 'domain.recording.paused';
         console.log('[DomainEvent] recording session active', event.type);
         return;
       }
@@ -858,6 +860,7 @@
         event.type === 'domain.recording.cancelled'
       ) {
         isRecording = false;
+        isPaused = false;
         pendingMetadataSessionReset = true;
         return;
       }
@@ -877,6 +880,8 @@
 
 <div
   class="preview-container glass-surface"
+  class:is-recording={isRecording && !isPaused}
+  class:is-paused={isPaused}
   data-testid="preview-container"
   data-device-state={deviceState}
 >
@@ -944,10 +949,11 @@
   .preview-container {
     position: relative;
     width: 100%;
-    max-width: min(1280px, calc((100vh - 180px) * 16 / 9));
-    max-height: calc(100vh - 180px);
+    --preview-available-height: var(--main-preview-available-height, calc(100vh - 180px));
+    max-width: min(1280px, calc(var(--preview-available-height) * 16 / 9));
+    max-height: var(--main-preview-available-height, calc(100vh - 180px));
     aspect-ratio: 16 / 9;
-    margin: 2rem;
+    margin: 0;
     display: flex;
     align-items: stretch;
     overflow: hidden;
@@ -956,6 +962,24 @@
     box-shadow:
       var(--glass-shadow),
       inset 0 1px 0 rgba(var(--theme-rgb-white), 0.04);
+    transition: box-shadow 0.5s ease;
+  }
+
+  .preview-container.is-recording {
+    box-shadow:
+      var(--glass-shadow),
+      inset 0 1px 0 rgba(var(--theme-rgb-white), 0.04),
+      0 0 20px rgba(var(--theme-rgb-red-preview), 0.5),
+      0 0 44px rgba(var(--theme-rgb-red-preview), 0.3),
+      0 0 72px rgba(var(--theme-rgb-red-preview), 0.14);
+  }
+
+  .preview-container.is-paused {
+    box-shadow:
+      var(--glass-shadow),
+      inset 0 1px 0 rgba(var(--theme-rgb-white), 0.04),
+      0 0 18px rgba(var(--theme-rgb-amber-preview), 0.4),
+      0 0 40px rgba(var(--theme-rgb-amber-preview), 0.2);
   }
 
   .preview-container :global(.video-preview) {
@@ -1022,7 +1046,7 @@
     color: var(--text-primary);
     border-radius: 50%;
     border: 1px solid var(--glass-border);
-    background: var(--glass-bg);
+    background: rgba(var(--theme-rgb-surface-card-strong), 0.85);
     backdrop-filter: var(--glass-blur);
     -webkit-backdrop-filter: var(--glass-blur);
     box-shadow:
@@ -1043,8 +1067,8 @@
     border-color: rgba(var(--theme-rgb-accent), 0.45);
     background: linear-gradient(
       135deg,
-      rgba(var(--theme-rgb-white), 0.12) 0%,
-      rgba(var(--theme-rgb-white), 0.04) 100%
+      rgba(var(--theme-rgb-surface-card-strong), 0.95) 0%,
+      rgba(var(--theme-rgb-surface-card), 0.9) 100%
     );
     box-shadow:
       0 10px 22px rgba(var(--theme-rgb-black), 0.28),
@@ -1080,8 +1104,8 @@
       rgba(var(--theme-rgb-accent), 1) 0%,
       rgba(var(--theme-rgb-accent-bright), 0.98) 100%
     );
-    backdrop-filter: blur(8px) saturate(145%);
-    -webkit-backdrop-filter: blur(8px) saturate(145%);
+    backdrop-filter: var(--glass-blur);
+    -webkit-backdrop-filter: var(--glass-blur);
     border: 1px solid rgba(var(--theme-rgb-accent), 0.8);
     border-radius: 999px;
     padding: 0.55rem 1rem;

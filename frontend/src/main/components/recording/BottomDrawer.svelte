@@ -359,6 +359,13 @@
     showProgressDialog = true;
     startStatusPolling();
   }
+
+  /**
+   * 外部(MainAppなど)からドロワーの開閉を切り替えるための関数
+   */
+  export function toggle(): void {
+    toggleDrawer();
+  }
 </script>
 
 <!-- YouTube権限ダイアログ -->
@@ -422,9 +429,13 @@
           class:active={drawerState === 'full' && activeTab === 'recorded'}
           onclick={(e) => activateTab('recorded', e)}
           onkeydown={(e) => e.key === 'Enter' && activateTab('recorded', e)}
+          title="録画済 ({recordedCount}件)"
         >
           <div class="tab-glow"></div>
-          <span class="tab-icon">🎬</span>
+          <span class="tab-icon">
+            🎬
+            {#if recordedCount > 0}<span class="tab-badge">{recordedCount}</span>{/if}
+          </span>
           <div class="tab-info">
             <span class="tab-label">録画済</span>
             <span class="tab-count" data-testid="recorded-count">{recordedCount}</span>
@@ -437,9 +448,13 @@
           class:active={drawerState === 'full' && activeTab === 'edited'}
           onclick={(e) => activateTab('edited', e)}
           onkeydown={(e) => e.key === 'Enter' && activateTab('edited', e)}
+          title="編集済 ({editedCount}件)"
         >
           <div class="tab-glow"></div>
-          <span class="tab-icon">✨</span>
+          <span class="tab-icon">
+            ✨
+            {#if editedCount > 0}<span class="tab-badge">{editedCount}</span>{/if}
+          </span>
           <div class="tab-info">
             <span class="tab-label">編集済</span>
             <span class="tab-count">{editedCount}</span>
@@ -452,9 +467,13 @@
           class:active={drawerState === 'full' && activeTab === 'statistics'}
           onclick={(e) => activateTab('statistics', e)}
           onkeydown={(e) => e.key === 'Enter' && activateTab('statistics', e)}
+          title="戦績 ({battleCount}件)"
         >
           <div class="tab-glow"></div>
-          <span class="tab-icon">📊</span>
+          <span class="tab-icon">
+            📊
+            {#if battleCount > 0}<span class="tab-badge">{battleCount}</span>{/if}
+          </span>
           <div class="tab-info">
             <span class="tab-label">戦績</span>
             <span class="tab-count">{battleCount}</span>
@@ -605,6 +624,7 @@
 
 <style>
   .bottom-drawer {
+    --bottom-drawer-collapsed-height: 5.75rem;
     position: fixed;
     bottom: 0;
     left: 0;
@@ -618,22 +638,22 @@
       rgb(var(--theme-rgb-surface-card-dark)) 0%,
       rgb(var(--theme-rgb-surface-card)) 100%
     );
-    backdrop-filter: blur(8px) saturate(135%);
-    -webkit-backdrop-filter: blur(8px) saturate(135%);
-    border-top: 1px solid rgba(var(--theme-rgb-accent), 0.16);
+    backdrop-filter: var(--glass-blur);
+    -webkit-backdrop-filter: var(--glass-blur);
+    border-top: 1px solid rgba(var(--theme-rgb-white), 0.12);
+    border-top-left-radius: var(--glass-radius-lg, 18px);
+    border-top-right-radius: var(--glass-radius-lg, 18px);
     box-shadow:
-      0 -6px 22px rgba(var(--theme-rgb-black), 0.3),
-      0 -2px 6px rgba(var(--theme-rgb-accent), 0.08),
-      inset 0 1px 0 rgba(var(--theme-rgb-white), 0.05);
+      0 -4px 16px rgba(var(--theme-rgb-black), 0.2),
+      0 0 16px rgba(var(--theme-rgb-accent), 0.15);
     z-index: 300;
     transition: box-shadow 0.4s cubic-bezier(0.4, 0, 0.2, 1);
   }
 
   .bottom-drawer.full {
     box-shadow:
-      0 -8px 28px rgba(var(--theme-rgb-black), 0.34),
-      0 -3px 10px rgba(var(--theme-rgb-accent), 0.12),
-      inset 0 1px 0 rgba(var(--theme-rgb-white), 0.05);
+      0 -12px 32px rgba(var(--theme-rgb-black), 0.35),
+      0 0 24px rgba(var(--theme-rgb-accent), 0.2);
   }
 
   .drawer-header {
@@ -648,6 +668,8 @@
     position: relative;
     overflow: hidden;
     flex: 0 0 auto;
+    min-height: var(--bottom-drawer-collapsed-height);
+    box-sizing: border-box;
   }
 
   .drawer-header::before {
@@ -720,21 +742,17 @@
     align-items: center;
     gap: 0.75rem;
     padding: 0.65rem 1.25rem;
-    background: linear-gradient(
-      135deg,
-      rgba(var(--theme-rgb-white), 0.06) 0%,
-      rgba(var(--theme-rgb-white), 0.03) 100%
-    );
-    border: 1px solid rgba(var(--theme-rgb-white), 0.1);
+    background: transparent;
+    border: 1px solid transparent;
     border-radius: 12px;
     font-size: 0.95rem;
-    color: inherit;
+    color: var(--theme-color-light-slate, rgba(var(--theme-rgb-white), 0.7));
     cursor: pointer;
     transition:
       border-color 0.2s ease,
       background 0.2s ease,
+      color 0.2s ease,
       box-shadow 0.2s ease;
-    overflow: hidden;
   }
 
   .tab-glow {
@@ -757,12 +775,8 @@
   }
 
   .tab:hover {
-    border-color: rgba(var(--theme-rgb-accent), 0.3);
-    background: linear-gradient(
-      135deg,
-      rgba(var(--theme-rgb-white), 0.08) 0%,
-      rgba(var(--theme-rgb-white), 0.05) 100%
-    );
+    background: rgba(var(--theme-rgb-white), 0.04);
+    color: rgba(var(--theme-rgb-white), 0.9);
   }
 
   .tab.has-data {
@@ -770,33 +784,61 @@
   }
 
   .tab.active {
-    border-color: var(--accent-color);
-    background: linear-gradient(
-      135deg,
-      rgba(var(--theme-rgb-accent), 0.15) 0%,
-      rgba(var(--theme-rgb-accent), 0.05) 100%
-    );
-    box-shadow: 0 0 12px rgba(var(--theme-rgb-accent), 0.2);
+    background: transparent;
+    color: rgba(var(--theme-rgb-white), 0.95);
   }
 
   .tab.active::after {
     content: '';
     position: absolute;
-    bottom: -1px;
+    bottom: 0;
     left: 20%;
     right: 20%;
     height: 3px;
     background: var(--accent-color);
     border-radius: 3px 3px 0 0;
     box-shadow: 0 -2px 8px rgba(var(--theme-rgb-accent), 0.6);
+    animation: tab-indicator-in 0.2s cubic-bezier(0.2, 0, 0, 1) forwards;
+  }
+
+  @keyframes tab-indicator-in {
+    from {
+      transform: scaleX(0);
+      opacity: 0;
+    }
+    to {
+      transform: scaleX(1);
+      opacity: 1;
+    }
   }
 
   .tab-icon {
+    position: relative;
     width: 1.5rem;
     text-align: center;
     flex-shrink: 0;
     font-size: 1.3rem;
     filter: drop-shadow(0 2px 4px rgba(var(--theme-rgb-black), 0.3));
+  }
+
+  .tab-badge {
+    display: none;
+    position: absolute;
+    top: -0.4rem;
+    right: -0.55rem;
+    min-width: 1rem;
+    height: 1rem;
+    padding: 0 0.2rem;
+    background: var(--accent-color);
+    color: var(--theme-color-black);
+    font-size: 0.6rem;
+    font-weight: 700;
+    line-height: 1rem;
+    border-radius: 0.5rem;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 1px 4px rgba(var(--theme-rgb-black), 0.4);
+    pointer-events: none;
   }
 
   .tab-info {
@@ -844,7 +886,6 @@
       border-color 0.2s ease,
       box-shadow 0.2s ease,
       color 0.2s ease;
-    overflow: hidden;
   }
 
   .button-background {
@@ -1024,31 +1065,60 @@
     }
   }
 
+  /* 幅が狭い場合はタブを絵文字+バッジのみに縮小 */
   @media (max-width: 768px) {
-    .drawer-header {
-      display: grid;
-      grid-template-columns: minmax(0, 1fr) auto;
-      align-items: center;
-      column-gap: 1rem;
-      row-gap: 0.75rem;
+    .header-left {
+      gap: 0.75rem;
     }
 
-    .header-left {
-      gap: 1rem;
-      flex-wrap: wrap;
-      align-items: center;
-      min-width: 0;
+    /* 「詳細を表示」テキストと矢印を非表示 */
+    .expand-hint {
+      display: none;
     }
 
     .tabs {
-      flex-wrap: wrap;
-      column-gap: 0.75rem;
-      row-gap: 0.5rem;
+      gap: 0.5rem;
     }
 
-    .process-button {
-      justify-self: end;
+    /* タブを均等パディング・中央揃えに */
+    .tab {
+      padding: 0.5rem;
+      justify-content: center;
+    }
+
+    .tab-icon {
       width: auto;
+    }
+
+    .tab-info {
+      display: none;
+    }
+
+    .tab-badge {
+      display: flex;
+    }
+
+    /* 処理開始ボタンをアイコンのみに */
+    .process-button {
+      padding: 0.75rem;
+    }
+
+    .process-button span:not(.spinner) {
+      display: none;
+    }
+  }
+
+  /* 高さが低い場合はドロワーを画面外に隠し、フロートボタンで開閉 */
+  @media (max-height: 550px) {
+    .bottom-drawer {
+      transform: translateY(100%);
+      transition:
+        box-shadow 0.4s cubic-bezier(0.4, 0, 0.2, 1),
+        transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    .bottom-drawer.full {
+      transform: translateY(0);
     }
   }
 </style>

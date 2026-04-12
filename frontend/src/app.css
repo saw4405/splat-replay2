@@ -31,7 +31,11 @@
   -moz-osx-font-smoothing: grayscale;
 
   /* グラスモーフィズム用のカスタムプロパティ */
-  --glass-radius: 18px;
+  --glass-radius-sm: 8px;
+  --glass-radius-md: 12px;
+  --glass-radius-lg: 18px;
+  --glass-radius-full: 999px;
+  --glass-radius: var(--glass-radius-lg);
   --glass-blur: blur(12px) saturate(145%);
   --glass-bg: var(
     --theme-glass-bg,
@@ -138,12 +142,13 @@ button {
   color: var(--text-primary);
   cursor: pointer;
   transition:
-    box-shadow 0.25s ease,
-    border-color 0.25s ease,
-    background 0.25s ease;
-  backdrop-filter: blur(10px) saturate(135%);
-  -webkit-backdrop-filter: blur(10px) saturate(135%);
-  box-shadow: 0 8px 22px rgba(var(--theme-rgb-black), 0.22);
+    box-shadow 0.2s ease,
+    border-color 0.2s ease,
+    background 0.2s ease,
+    transform 0.2s cubic-bezier(0.2, 0, 0, 1);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  box-shadow: 0 4px 12px rgba(var(--theme-rgb-black), 0.2);
 }
 
 button.icon-button {
@@ -170,15 +175,19 @@ button.icon-button:active {
 }
 
 button:hover {
-  border-color: rgba(var(--theme-rgb-accent), 0.35);
+  border-color: rgba(var(--theme-rgb-accent), 0.5);
   background: linear-gradient(
     135deg,
     rgba(var(--theme-rgb-accent), 0.1) 0%,
     rgba(var(--theme-rgb-accent), 0.05) 100%
   );
-  box-shadow:
-    0 12px 24px rgba(var(--theme-rgb-black), 0.24),
-    0 0 12px rgba(var(--theme-rgb-accent), 0.16);
+  box-shadow: 0 0 16px rgba(var(--theme-rgb-accent), 0.3);
+  transform: translateY(-1px);
+}
+
+button:active {
+  transform: scale(0.97);
+  box-shadow: 0 0 8px rgba(var(--theme-rgb-accent), 0.4);
 }
 
 button:focus,
@@ -246,8 +255,54 @@ button:focus-visible {
 }
 
 /* ===========================
-   Glassmorphism utility set
+   Global Form Elements
    =========================== */
+
+input:not([type='checkbox']):not([type='radio']),
+select,
+textarea {
+  background: rgba(var(--theme-rgb-black), 0.2);
+  border: 1px solid rgba(var(--theme-rgb-white), 0.15);
+  border-radius: var(--glass-radius-sm, 8px);
+  padding: 0.65rem 0.9rem;
+  color: var(--theme-color-white);
+  font-size: 0.95rem;
+  font-family: inherit;
+  transition:
+    border-color 0.2s ease,
+    background 0.2s ease,
+    box-shadow 0.2s ease,
+    transform 0.2s ease;
+  width: 100%;
+  outline: none;
+}
+
+input:not([type='checkbox']):not([type='radio']):hover,
+select:hover,
+textarea:hover {
+  border-color: rgba(var(--theme-rgb-white), 0.3);
+  background: rgba(var(--theme-rgb-black), 0.3);
+}
+
+input:not([type='checkbox']):not([type='radio']):focus,
+select:focus,
+textarea:focus {
+  border-color: var(--accent-color);
+  background: rgba(var(--theme-rgb-accent), 0.04);
+  box-shadow:
+    0 0 0 3px rgba(var(--theme-rgb-accent), 0.1),
+    inset 0 0 10px rgba(var(--theme-rgb-accent), 0.3);
+}
+
+select {
+  cursor: pointer;
+  appearance: none;
+  background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
+  background-repeat: no-repeat;
+  background-position: right 0.8rem center;
+  background-size: 1.1rem;
+  padding-right: 2.6rem;
+}
 
 .glass-surface {
   background: var(--glass-bg-strong);
@@ -263,8 +318,8 @@ button:focus-visible {
   background: var(--glass-bg);
   border: 1px solid rgba(var(--theme-rgb-white), 0.08);
   border-radius: calc(var(--glass-radius) - 4px);
-  backdrop-filter: blur(10px) saturate(140%);
-  -webkit-backdrop-filter: blur(10px) saturate(140%);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
   box-shadow: var(--glass-shadow-soft);
 }
 
@@ -279,7 +334,6 @@ button:focus-visible {
     rgba(var(--theme-rgb-surface-card-dark), 0.9) 100%
   );
   border: 1px solid rgba(var(--theme-rgb-white), 0.05);
-  overflow: hidden;
 }
 
 .glass-card::before {
@@ -312,8 +366,8 @@ button:focus-visible {
     rgba(var(--theme-rgb-white), 0.18),
     rgba(var(--theme-rgb-white), 0.02) 60%
   );
-  backdrop-filter: blur(8px) saturate(140%);
-  -webkit-backdrop-filter: blur(8px) saturate(140%);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
   box-shadow:
     0 8px 20px rgba(var(--theme-rgb-black), 0.28),
     inset 0 1px 0 rgba(var(--theme-rgb-white), 0.25);
@@ -379,8 +433,8 @@ button:focus-visible {
   border: 1px solid rgba(var(--theme-rgb-white), 0.05);
   border-radius: calc(var(--glass-radius) - 8px);
   overflow: hidden;
-  backdrop-filter: blur(8px) saturate(135%);
-  -webkit-backdrop-filter: blur(8px) saturate(135%);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
 }
 
 .glass-table th,

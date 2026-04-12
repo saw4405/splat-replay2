@@ -3,7 +3,7 @@
   --theme-font-body:
     -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Fira Sans',
     'Droid Sans', 'Helvetica Neue', sans-serif;
-  --theme-font-heading: 'Segoe UI', 'Helvetica Neue', sans-serif;
+  --theme-font-heading: system-ui, -apple-system, 'Segoe UI', sans-serif;
 
   --theme-rgb-white: 245, 245, 255;
   --theme-rgb-black: 6, 8, 15;
@@ -121,8 +121,8 @@
   );
   --theme-glass-border: rgba(var(--theme-rgb-slate), 0.28);
   --theme-glass-border-strong: rgba(var(--theme-rgb-accent), 0.36);
-  --theme-glass-shadow: 0 20px 60px rgba(var(--theme-rgb-shadow-deep), 0.5);
-  --theme-glass-shadow-soft: 0 12px 32px rgba(var(--theme-rgb-black), 0.35);
+  --theme-glass-shadow: 0 12px 32px rgba(var(--theme-rgb-black), 0.35);
+  --theme-glass-shadow-soft: 0 4px 16px rgba(var(--theme-rgb-black), 0.25);
 
   --theme-accent-glow: rgba(var(--theme-rgb-accent), 0.38);
   --theme-text-primary: rgba(var(--theme-rgb-white), 0.95);

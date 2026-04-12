@@ -374,7 +374,7 @@
 
   input,
   select {
-    background: rgba(var(--theme-rgb-white), 0.05);
+    background: rgba(var(--theme-rgb-black), 0.2);
     border: 1px solid rgba(var(--theme-rgb-white), 0.15);
     border-radius: 6px;
     padding: 0.6rem 0.8rem;
@@ -394,8 +394,10 @@
   select:focus {
     outline: none;
     border-color: var(--accent-color);
-    background: rgba(var(--theme-rgb-white), 0.08);
-    box-shadow: 0 0 0 3px rgba(var(--theme-rgb-accent), 0.1);
+    background: rgba(var(--theme-rgb-accent), 0.05);
+    box-shadow:
+      0 0 0 3px rgba(var(--theme-rgb-accent), 0.1),
+      inset 0 0 0.5rem rgba(var(--theme-rgb-accent), 0.3);
   }
 
   input:hover,
@@ -506,11 +508,7 @@
     padding: 0.55rem 0.85rem;
     border-radius: calc(var(--glass-radius) - 8px);
     border: 1px solid rgba(var(--theme-rgb-white), 0.14);
-    background: linear-gradient(
-      145deg,
-      rgba(var(--theme-rgb-dark-alt), 0.75) 0%,
-      rgba(var(--theme-rgb-surface-muted-2), 0.68) 100%
-    );
+    background: rgba(var(--theme-rgb-black), 0.2);
     color: var(--text-primary);
     font-size: 0.875rem;
     box-shadow:
@@ -537,7 +535,7 @@
       0 0 0 2px rgba(var(--theme-rgb-ring-strong), 0.75),
       0 0 0 4px rgba(var(--theme-rgb-accent), 0.2),
       0 12px 24px rgba(var(--theme-rgb-accent), 0.18),
-      inset 0 1px 3px rgba(var(--theme-rgb-black), 0.12);
+      inset 0 0 0.5rem rgba(var(--theme-rgb-accent), 0.3);
   }
 
   .variant-overlay input:hover,

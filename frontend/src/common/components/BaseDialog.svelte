@@ -1,4 +1,4 @@
-﻿<script lang="ts">
+<script lang="ts">
   import type { Snippet } from 'svelte';
 
   interface Props {
@@ -176,13 +176,7 @@
   .dialog-overlay {
     position: fixed;
     inset: 0;
-    background: linear-gradient(
-      135deg,
-      rgba(var(--theme-rgb-surface-deep), 0.9) 0%,
-      rgba(var(--theme-rgb-surface-overlay), 0.94) 100%
-    );
-    backdrop-filter: blur(8px) saturate(125%);
-    -webkit-backdrop-filter: blur(8px) saturate(125%);
+    background: rgba(0, 0, 0, 0.75);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -203,20 +197,21 @@
   .dialog-container {
     background: linear-gradient(
       135deg,
-      rgba(var(--theme-rgb-surface-card), 0.96) 0%,
-      rgba(var(--theme-rgb-surface-card-dark), 0.92) 100%
+      rgba(var(--theme-rgb-surface-card), 1) 0%,
+      rgba(var(--theme-rgb-surface-card-dark), 0.98) 100%
     );
-    backdrop-filter: blur(10px) saturate(135%);
-    -webkit-backdrop-filter: blur(10px) saturate(135%);
+    backdrop-filter: var(--glass-blur);
+    -webkit-backdrop-filter: var(--glass-blur);
     border: 1px solid rgba(var(--theme-rgb-accent), 0.16);
-    border-radius: 1.25rem;
+    border-top: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: var(--glass-radius-lg, 18px);
     width: min(var(--max-width, 60rem), 100%);
     display: flex;
     flex-direction: column;
     box-shadow:
-      0 1.2rem 3rem rgba(var(--theme-rgb-black), 0.5),
-      0 0 0 1px rgba(var(--theme-rgb-white), 0.05) inset,
-      0 0 2rem rgba(var(--theme-rgb-accent), 0.08);
+      0 12px 32px rgba(var(--theme-rgb-black), 0.35),
+      0 0 0 1px rgba(var(--theme-rgb-white), 0.04) inset,
+      0 0 24px rgba(var(--theme-rgb-accent), 0.12);
     animation: dialog-scale-in 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   }
 

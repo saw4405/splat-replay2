@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import contextlib
+from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -22,6 +23,19 @@ from splat_replay.interface.web.routers import (
     create_setup_router,
 )
 from splat_replay.interface.web.server import WebAPIServer
+
+
+FRONTEND_ENTRY_HEADERS: dict[str, str] = {
+    "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+    "Pragma": "no-cache",
+}
+
+
+def _frontend_file_response(file_path: str | Path) -> FileResponse:
+    path = Path(file_path)
+    if path.name == "index.html":
+        return FileResponse(path, headers=FRONTEND_ENTRY_HEADERS)
+    return FileResponse(path)
 
 
 def create_app(server: WebAPIServer, enable_lifespan: bool = True) -> FastAPI:
@@ -183,10 +197,10 @@ def create_app(server: WebAPIServer, enable_lifespan: bool = True) -> FastAPI:
             # ファイルが存在する場合はそれを返す
             file_path = frontend_dist / full_path
             if file_path.is_file():
-                return FileResponse(file_path)
+                return _frontend_file_response(file_path)
 
             # それ以外はindex.htmlを返す (SPAルーティング)
-            return FileResponse(frontend_dist / "index.html")
+            return _frontend_file_response(frontend_dist / "index.html")
 
     return app
 

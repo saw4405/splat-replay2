@@ -1,5 +1,5 @@
-﻿<script lang="ts">
-  import { Settings } from 'lucide-svelte';
+<script lang="ts">
+  import { Settings, PanelBottom } from 'lucide-svelte';
   import SettingsDialog from './components/settings/SettingsDialog.svelte';
   import VideoPreviewContainer from './components/recording/VideoPreviewContainer.svelte';
   import BottomDrawer from './components/recording/BottomDrawer.svelte';
@@ -21,6 +21,10 @@
 
   function openSettings(): void {
     isSettingsOpen = true;
+  }
+
+  function toggleDrawer(): void {
+    bottomDrawerRef?.toggle();
   }
 
   onMount(() => {
@@ -59,6 +63,18 @@
 
 <main class="app-shell glass-surface">
   <div class="header">
+    <button
+      class="icon-button settings-button drawer-button"
+      type="button"
+      aria-label="データ一覧"
+      onclick={(e) => {
+        e.stopPropagation();
+        toggleDrawer();
+      }}
+      title="データ一覧"
+    >
+      <PanelBottom class="icon" aria-hidden="true" stroke-width={1.75} />
+    </button>
     <div class="header-spacer"></div>
     <h1>Splat Replay</h1>
     <button
@@ -112,13 +128,24 @@
 
 <style>
   .app-shell {
-    padding: 2rem;
-    padding-bottom: 7rem; /* BottomDrawerのヘッダー分を確保 */
+    --app-horizontal-padding: 2rem;
+    --app-top-padding: 1rem;
+    --app-title-row-height: 2.75rem;
+    --app-title-preview-gap: 1rem;
+    --preview-drawer-gap: 1rem;
+    --bottom-drawer-reserved-height: 5.75rem;
+    --main-preview-available-height: calc(
+      100vh - var(--app-top-padding) - var(--app-title-row-height) - var(--app-title-preview-gap) -
+        var(--bottom-drawer-reserved-height) - var(--preview-drawer-gap)
+    );
+    padding: var(--app-top-padding) var(--app-horizontal-padding)
+      calc(var(--bottom-drawer-reserved-height) + var(--preview-drawer-gap) + 8px);
     max-width: 1400px;
     margin: 0 auto;
     height: 100vh;
     display: flex;
     flex-direction: column;
+    gap: var(--app-title-preview-gap);
     overflow: hidden;
     box-sizing: border-box;
   }
@@ -128,7 +155,8 @@
     align-items: center;
     justify-content: space-between;
     gap: 1rem;
-    margin-bottom: 0.5rem;
+    min-height: var(--app-title-row-height);
+    margin-bottom: 0;
     flex-shrink: 0;
     position: relative;
   }
@@ -142,10 +170,13 @@
     color: var(--accent-color);
     font-size: 3em;
     font-weight: 700;
+    line-height: 1.1;
     margin: 0;
+    max-width: calc(100% - 7rem);
     position: absolute;
     left: 50%;
-    transform: translateX(-50%);
+    top: 35%;
+    transform: translateX(-50%) translateY(-50%);
     white-space: nowrap;
     text-shadow:
       0 0 10px rgba(var(--theme-rgb-accent), 0.8),
@@ -158,14 +189,12 @@
   }
 
   .preview-container {
-    flex: 1;
+    flex: 1 1 auto;
     display: flex;
     align-items: center;
     justify-content: center;
     min-height: 0;
-    padding: 2rem 0 1rem 0;
-    display: flex;
-    justify-content: center;
+    padding: 0;
   }
 
   .icon-button {
@@ -194,8 +223,8 @@
       rgba(var(--theme-rgb-surface-card-dark), 0.26) 100%
     );
     box-shadow: 0 5px 14px rgba(var(--theme-rgb-black), 0.16);
-    backdrop-filter: blur(6px) saturate(130%);
-    -webkit-backdrop-filter: blur(6px) saturate(130%);
+    backdrop-filter: var(--glass-blur);
+    -webkit-backdrop-filter: var(--glass-blur);
   }
 
   .settings-button:hover {
@@ -212,5 +241,43 @@
 
   .settings-button:active {
     box-shadow: 0 4px 10px rgba(var(--theme-rgb-black), 0.18);
+  }
+
+  /* ドロワーフロートボタン: デフォルト非表示、高さ不足時のみ表示 */
+  .drawer-button {
+    display: none;
+  }
+
+  @media (max-width: 768px) {
+    .app-shell {
+      --app-horizontal-padding: 1rem;
+    }
+
+    h1 {
+      font-size: 2.25rem;
+    }
+  }
+
+  /* 高さが不足する場合: ドロワー予約領域を解放してフロートボタン表示 */
+  @media (max-height: 550px) {
+    .app-shell {
+      --bottom-drawer-reserved-height: 0rem;
+      --preview-drawer-gap: 0rem;
+      --app-top-padding: 0.5rem;
+      --app-title-preview-gap: 0.5rem;
+      padding-bottom: 8px;
+    }
+
+    h1 {
+      font-size: 2.25rem;
+    }
+
+    .header-spacer {
+      display: none;
+    }
+
+    .drawer-button {
+      display: inline-flex;
+    }
   }
 </style>

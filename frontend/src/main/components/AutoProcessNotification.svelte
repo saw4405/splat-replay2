@@ -100,15 +100,15 @@
     left: 24px;
     width: 380px;
     background: rgba(var(--theme-rgb-space), 0.95);
-    backdrop-filter: blur(10px) saturate(135%);
-    -webkit-backdrop-filter: blur(10px) saturate(135%);
+    backdrop-filter: var(--glass-blur);
+    -webkit-backdrop-filter: var(--glass-blur);
     border: 1px solid rgba(var(--theme-rgb-white), 0.1);
     border-radius: 12px;
     box-shadow: 0 6px 20px rgba(var(--theme-rgb-black), 0.36);
     z-index: 9999;
     overflow: hidden;
     animation: slide-in 0.4s cubic-bezier(0.16, 1, 0.3, 1);
-    font-family: 'Inter', sans-serif;
+    font-family: inherit;
   }
 
   .content {

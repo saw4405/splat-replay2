@@ -690,9 +690,9 @@
     align-items: center;
     gap: 1rem;
     padding: 0.5rem;
-    background: rgba(var(--theme-rgb-black), 0.3);
-    backdrop-filter: blur(6px);
-    -webkit-backdrop-filter: blur(6px);
+    background: rgba(var(--theme-rgb-black), 0.65);
+    backdrop-filter: var(--glass-blur);
+    -webkit-backdrop-filter: var(--glass-blur);
     border-radius: 12px;
     border: 1px solid rgba(var(--theme-rgb-white), 0.05);
     z-index: 10;
@@ -725,7 +725,7 @@
     gap: 8px;
     max-width: 0;
     opacity: 0;
-    overflow: hidden;
+    overflow: visible;
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   }
 
@@ -843,8 +843,8 @@
     box-sizing: border-box;
     padding: 0.75rem 1.25rem;
     background: rgba(var(--theme-rgb-black), 0.75);
-    backdrop-filter: blur(8px);
-    -webkit-backdrop-filter: blur(8px);
+    backdrop-filter: var(--glass-blur);
+    -webkit-backdrop-filter: var(--glass-blur);
     border-radius: 12px;
     border: 1px solid rgba(var(--theme-rgb-white), 0.1);
     z-index: 15;

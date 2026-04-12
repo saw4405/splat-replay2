@@ -1,4 +1,4 @@
-﻿<script lang="ts">
+<script lang="ts">
   import { Eye, EyeOff } from 'lucide-svelte';
   import FieldItem from './FieldItem.svelte';
   import SelectField from './SelectField.svelte';
@@ -272,11 +272,7 @@
   input[type='number'],
   textarea {
     width: 100%;
-    background: linear-gradient(
-      135deg,
-      rgba(var(--theme-rgb-surface-muted), 0.78) 0%,
-      rgba(var(--theme-rgb-surface-chip), 0.62) 100%
-    );
+    background: rgba(var(--theme-rgb-black), 0.2);
     border: 1px solid rgba(var(--theme-rgb-white), 0.16);
     border-radius: 0.625rem;
     padding: 0.75rem 1rem;
@@ -304,7 +300,8 @@
     );
     box-shadow:
       0 0 0 0.1875rem rgba(var(--theme-rgb-accent), 0.14),
-      0 0.25rem 0.7rem rgba(var(--theme-rgb-accent), 0.16);
+      0 0.25rem 0.7rem rgba(var(--theme-rgb-accent), 0.16),
+      inset 0 0 0.5rem rgba(var(--theme-rgb-accent), 0.3);
   }
 
   input::placeholder,

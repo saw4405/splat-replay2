@@ -16,3 +16,14 @@ describe('BottomDrawer tab width styles', () => {
     expect(bottomDrawer).toMatch(/\.tab-info\s*\{[\s\S]*min-width:\s*3\.25rem;/i);
   });
 });
+
+describe('BottomDrawer reserved height styles', () => {
+  it('defines a stable collapsed header height for main preview spacing', () => {
+    const bottomDrawer = readBottomDrawer();
+
+    expect(bottomDrawer).toContain('--bottom-drawer-collapsed-height: 5.75rem;');
+    expect(bottomDrawer).toMatch(
+      /\.drawer-header\s*\{[\s\S]*min-height:\s*var\(--bottom-drawer-collapsed-height\);/i
+    );
+  });
+});
