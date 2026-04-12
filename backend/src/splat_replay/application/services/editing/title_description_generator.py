@@ -6,8 +6,10 @@
 from __future__ import annotations
 
 import datetime
+from dataclasses import dataclass
 from enum import Enum
-from typing import List, Tuple
+from string import Formatter
+from typing import Any, List, Literal, Tuple, cast
 
 from splat_replay.application.interfaces import (
     ConfigPort,
@@ -21,6 +23,27 @@ from splat_replay.domain.models import (
     SalmonResult,
     VideoAsset,
 )
+
+
+_TITLE_BRACKET_PAIRS: dict[str, str] = {
+    "(": ")",
+    "（": "）",
+    "[": "]",
+    "［": "］",
+    "【": "】",
+    "「": "」",
+    "『": "』",
+    "<": ">",
+    "〈": "〉",
+    "《": "》",
+}
+
+
+@dataclass
+class _TemplateChunk:
+    text: str
+    kind: Literal["literal", "field"]
+    empty_field: bool = False
 
 
 class TitleDescriptionGenerator:
@@ -204,7 +227,7 @@ class TitleDescriptionGenerator:
             "CHAPTERS": chapters,
         }
         title = (
-            self.settings.title_template.format(**tokens)
+            self._format_title_template(self.settings.title_template, tokens)
             if self.settings.title_template
             else ""
         )
@@ -226,6 +249,79 @@ class TitleDescriptionGenerator:
         hours, remainder = divmod(total_seconds, 3600)
         minutes, seconds = divmod(remainder, 60)
         return f"{hours:02}:{minutes:02}:{seconds:02}"
+
+    @staticmethod
+    def _format_title_template(
+        template: str,
+        tokens: dict[str, object],
+    ) -> str:
+        formatter = Formatter()
+        format_args: tuple[Any, ...] = ()
+        format_tokens = cast(dict[str, Any], tokens)
+        chunks: list[_TemplateChunk] = []
+
+        for (
+            literal_text,
+            field_name,
+            format_spec,
+            conversion,
+        ) in formatter.parse(template):
+            if literal_text:
+                chunks.append(_TemplateChunk(literal_text, "literal"))
+            if field_name is None:
+                continue
+
+            value, _ = formatter.get_field(
+                field_name,
+                format_args,
+                format_tokens,
+            )
+            converted = formatter.convert_field(value, conversion)
+            expanded_spec = formatter.vformat(
+                cast(str, format_spec),
+                format_args,
+                format_tokens,
+            )
+            formatted = formatter.format_field(converted, expanded_spec)
+            chunks.append(
+                _TemplateChunk(
+                    formatted,
+                    "field",
+                    value == "" or formatted.strip() == "",
+                )
+            )
+
+        TitleDescriptionGenerator._remove_empty_bracketed_fields(chunks)
+        return "".join(chunk.text for chunk in chunks)
+
+    @staticmethod
+    def _remove_empty_bracketed_fields(
+        chunks: list[_TemplateChunk],
+    ) -> None:
+        for index, chunk in enumerate(chunks):
+            if not chunk.empty_field:
+                continue
+            if index == 0 or index == len(chunks) - 1:
+                continue
+
+            previous_chunk = chunks[index - 1]
+            next_chunk = chunks[index + 1]
+            if (
+                previous_chunk.kind != "literal"
+                or next_chunk.kind != "literal"
+            ):
+                continue
+            if not previous_chunk.text or not next_chunk.text:
+                continue
+
+            opening = previous_chunk.text[-1]
+            closing = next_chunk.text[0]
+            if _TITLE_BRACKET_PAIRS.get(opening) != closing:
+                continue
+
+            previous_chunk.text = previous_chunk.text[:-1]
+            next_chunk.text = next_chunk.text[1:]
+            chunk.text = ""
 
     @staticmethod
     def _format_medals(gold: int, silver: int) -> str:
