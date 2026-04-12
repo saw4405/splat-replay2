@@ -15,7 +15,7 @@ describe('MainApp layout spacing', () => {
     expect(mainApp).toContain('--bottom-drawer-reserved-height: 5.75rem;');
     expect(mainApp).toContain('gap: var(--app-title-preview-gap);');
     expect(mainApp).toContain(
-      'calc(var(--bottom-drawer-reserved-height) + var(--preview-drawer-gap))'
+      'calc(var(--bottom-drawer-reserved-height) + var(--preview-drawer-gap) + 8px)'
     );
   });
 

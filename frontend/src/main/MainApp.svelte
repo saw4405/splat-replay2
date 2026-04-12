@@ -131,8 +131,8 @@
     --app-horizontal-padding: 2rem;
     --app-top-padding: 1rem;
     --app-title-row-height: 2.75rem;
-    --app-title-preview-gap: 1rem;
-    --preview-drawer-gap: 1rem;
+    --app-title-preview-gap: 1.5rem;
+    --preview-drawer-gap: 1.5rem;
     --bottom-drawer-reserved-height: 5.75rem;
     --main-preview-available-height: calc(
       100vh - var(--app-top-padding) - var(--app-title-row-height) - var(--app-title-preview-gap) -
