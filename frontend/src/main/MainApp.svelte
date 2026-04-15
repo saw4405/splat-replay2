@@ -18,6 +18,10 @@
   let autoProcessPayload = $state<AutoProcessPendingPayload | null>(null);
   let autoSleepPayload = $state<AutoSleepPendingPayload | null>(null);
   let bottomDrawerRef = $state<BottomDrawer | null>(null);
+  let recordedDataCount = $state(0);
+  const drawerButtonLabel = $derived(
+    recordedDataCount > 0 ? `データ一覧（録画 ${recordedDataCount}件）` : 'データ一覧'
+  );
 
   function openSettings(): void {
     isSettingsOpen = true;
@@ -25,6 +29,10 @@
 
   function toggleDrawer(): void {
     bottomDrawerRef?.toggle();
+  }
+
+  function updateRecordedDataCount(count: number): void {
+    recordedDataCount = count;
   }
 
   onMount(() => {
@@ -66,14 +74,25 @@
     <button
       class="icon-button settings-button drawer-button"
       type="button"
-      aria-label="データ一覧"
+      aria-label={drawerButtonLabel}
       onclick={(e) => {
         e.stopPropagation();
         toggleDrawer();
       }}
-      title="データ一覧"
+      title={drawerButtonLabel}
     >
-      <PanelBottom class="icon" aria-hidden="true" stroke-width={1.75} />
+      <span class="drawer-icon-wrapper">
+        <PanelBottom class="icon" aria-hidden="true" stroke-width={1.75} />
+        {#if recordedDataCount > 0}
+          <span
+            class="drawer-button-badge"
+            data-testid="drawer-button-recorded-count"
+            aria-hidden="true"
+          >
+            {recordedDataCount}
+          </span>
+        {/if}
+      </span>
     </button>
     <div class="header-spacer"></div>
     <h1>Splat Replay</h1>
@@ -93,7 +112,7 @@
     <VideoPreviewContainer />
   </div>
 
-  <BottomDrawer bind:this={bottomDrawerRef} />
+  <BottomDrawer bind:this={bottomDrawerRef} onRecordedCountChange={updateRecordedDataCount} />
 
   <SettingsDialog bind:open={isSettingsOpen} />
 
@@ -246,6 +265,34 @@
   /* ドロワーフロートボタン: デフォルト非表示、高さ不足時のみ表示 */
   .drawer-button {
     display: none;
+    position: relative;
+  }
+
+  .drawer-icon-wrapper {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .drawer-button-badge {
+    display: flex;
+    position: absolute;
+    top: -0.4rem;
+    right: -0.55rem;
+    min-width: 1rem;
+    height: 1rem;
+    padding: 0 0.2rem;
+    background: var(--accent-color);
+    color: var(--theme-color-black);
+    font-size: 0.6rem;
+    font-weight: 700;
+    line-height: 1rem;
+    border-radius: 0.5rem;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 1px 4px rgba(var(--theme-rgb-black), 0.4);
+    pointer-events: none;
   }
 
   @media (max-width: 768px) {

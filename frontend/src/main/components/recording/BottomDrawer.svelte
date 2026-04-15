@@ -26,6 +26,13 @@
 
   // 展開状態: "closed" | "full"
   type DrawerState = 'closed' | 'full';
+
+  interface Props {
+    onRecordedCountChange?: (count: number) => void;
+  }
+
+  let { onRecordedCountChange }: Props = $props();
+
   let drawerState = $state<DrawerState>('closed');
   let activeTab = $state<'recorded' | 'edited' | 'statistics'>('recorded');
   let isProcessing = $state(false);
@@ -53,6 +60,10 @@
   const recordedCount = $derived(recordedVideos.length);
   const editedCount = $derived(editedVideos.length);
   const battleCount = $derived(battleHistory.length);
+
+  $effect(() => {
+    onRecordedCountChange?.(recordedCount);
+  });
 
   $effect(() => {
     isProcessing = processStatus?.state === 'running';
