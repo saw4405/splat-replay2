@@ -293,7 +293,7 @@ copy_non_tracked_files() {
   fi
 }
 
-open_vscode_new_window() {
+add_worktree_to_vscode_workspace() {
   local worktree_path="$1"
   local windows_path="$worktree_path"
   
@@ -304,19 +304,19 @@ open_vscode_new_window() {
   
   # On WSL, prefer cmd.exe /C to avoid batch file parsing issues
   if command -v cmd.exe >/dev/null 2>&1 && cmd.exe /C where code.cmd >/dev/null 2>&1; then
-    log "opening worktree in new VS Code window: $worktree_path"
-    if ! run_cmd cmd.exe /C code.cmd --new-window "$windows_path"; then
-      warn "failed to open worktree in new VS Code window"
+    log "adding worktree to current VS Code workspace: $worktree_path"
+    if ! run_cmd cmd.exe /C code.cmd --add "$windows_path"; then
+      warn "failed to add worktree to current VS Code workspace"
       return 1
     fi
   elif command -v code.cmd >/dev/null 2>&1; then
-    log "opening worktree in new VS Code window: $worktree_path"
-    if ! run_cmd code.cmd --new-window "$windows_path"; then
-      warn "failed to open worktree in new VS Code window"
+    log "adding worktree to current VS Code workspace: $worktree_path"
+    if ! run_cmd code.cmd --add "$windows_path"; then
+      warn "failed to add worktree to current VS Code workspace"
       return 1
     fi
   else
-    warn "VS Code launcher (code.cmd) not found, skipped opening editor"
+    warn "VS Code launcher (code.cmd) not found, skipped adding workspace folder"
     return 1
   fi
   
@@ -451,7 +451,7 @@ main() {
     fi
   fi
 
-  open_vscode_new_window "$worktree_path" || true
+  add_worktree_to_vscode_workspace "$worktree_path" || true
   log "worktree ready: $worktree_path"
 }
 
