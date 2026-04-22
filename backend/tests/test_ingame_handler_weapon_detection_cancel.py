@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import time
+from dataclasses import replace
 from typing import Mapping, Optional, Set, cast
 
 import numpy as np
@@ -101,6 +102,10 @@ class _WeaponDetectionServiceSpy:
     def __init__(self) -> None:
         self.cancel_calls = 0
         self.process_calls = 0
+        self.complete_as_unknown_calls = 0
+        self.complete_as_unknown_context: RecordingContext | None = None
+        self.finalize_for_finish_calls = 0
+        self.finalize_for_finish_context: RecordingContext | None = None
 
     def request_cancel(self) -> None:
         self.cancel_calls += 1
@@ -112,6 +117,28 @@ class _WeaponDetectionServiceSpy:
         context: RecordingContext,
     ) -> RecordingContext:
         self.process_calls += 1
+        return context
+
+    def complete_as_unknown(
+        self,
+        *,
+        context: RecordingContext,
+    ) -> RecordingContext:
+        self.complete_as_unknown_calls += 1
+        if self.complete_as_unknown_context is not None:
+            return self.complete_as_unknown_context
+        return context
+
+    async def finalize_for_finish(
+        self,
+        *,
+        frame: np.ndarray,
+        context: RecordingContext,
+    ) -> RecordingContext:
+        _ = frame
+        self.finalize_for_finish_calls += 1
+        if self.finalize_for_finish_context is not None:
+            return self.finalize_for_finish_context
         return context
 
 
@@ -194,6 +221,36 @@ async def test_cancel_called_on_finish() -> None:
     assert command.action is RecordingAction.PAUSE_RECORDING
     assert weapon_service.cancel_calls == 1
     assert weapon_service.process_calls == 1
+
+
+@pytest.mark.asyncio
+async def test_finish_completes_unknown_without_weapon_detection_finalize() -> (
+    None
+):
+    analyzer = _AnalyzerStub(finish=True)
+    weapon_service = _WeaponDetectionServiceSpy()
+    handler = _build_handler(
+        analyzer=analyzer,
+        weapon_detection_service=weapon_service,
+    )
+    context = RecordingContext(battle_started_at=time.time() - 120.0)
+    weapon_service.finalize_for_finish_context = replace(
+        context,
+        weapon_detection_done=True,
+    )
+    weapon_service.complete_as_unknown_context = replace(
+        context,
+        weapon_detection_done=True,
+    )
+
+    command = await handler.handle(_frame(), context, RecordState.RECORDING)
+
+    assert command.action is RecordingAction.PAUSE_RECORDING
+    assert weapon_service.process_calls == 1
+    assert weapon_service.complete_as_unknown_calls == 1
+    assert weapon_service.finalize_for_finish_calls == 0
+    assert weapon_service.cancel_calls == 1
+    assert command.updated_context.weapon_detection_done is True
 
 
 @pytest.mark.asyncio

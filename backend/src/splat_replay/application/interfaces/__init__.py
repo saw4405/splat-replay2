@@ -101,6 +101,7 @@ from splat_replay.application.interfaces.video import (
 )
 from splat_replay.application.interfaces.weapon_detection import (
     WeaponCandidateScore,
+    WeaponDisplayDetectionResult,
     WeaponRecognitionPort,
     WeaponRecognitionResult,
     WeaponSlotResult,
@@ -158,6 +159,7 @@ __all__ = [
     "VideoAssetRepositoryPort",
     "VideoEditorPort",
     "WeaponCandidateScore",
+    "WeaponDisplayDetectionResult",
     "WeaponRecognitionPort",
     "WeaponRecognitionResult",
     "WeaponSlotResult",

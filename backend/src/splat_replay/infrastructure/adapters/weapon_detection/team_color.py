@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import math
+from collections.abc import Sequence
 from dataclasses import dataclass
+from itertools import combinations
 
 import cv2
 import numpy as np
@@ -33,6 +35,8 @@ SPLIT_MERGE_MAX_VERTICAL_GAP = 30
 SPLIT_MERGE_MAX_HORIZONTAL_GAP = 6
 SPLIT_MERGE_MAX_ABOVE_ANCHOR = 5
 
+_RgbColor = tuple[int, int, int]
+
 
 @dataclass(frozen=True)
 class TeamColorScreenMetrics:
@@ -41,9 +45,17 @@ class TeamColorScreenMetrics:
     allies_max_distance: float
     enemies_max_distance: float
     teams_min_distance: float
+    ally_reliable_slot_count: int = len(constants.ALLY_SLOTS)
+    enemy_reliable_slot_count: int = len(constants.ENEMY_SLOTS)
 
 
-def sample_slot_rgb(slot_image: np.ndarray) -> tuple[int, int, int]:
+@dataclass(frozen=True)
+class _ColorGroup:
+    colors: tuple[_RgbColor, ...]
+    max_distance: float
+
+
+def sample_slot_rgb(slot_image: np.ndarray) -> _RgbColor:
     """スロット画像のサンプル点RGBを返す。"""
     x, y = constants.TEAM_COLOR_SAMPLE_POINT
     bgr = slot_image[y, x]
@@ -61,22 +73,31 @@ def detect_weapon_display_screen(
         sample_slot_rgb(slot_images[slot]) for slot in constants.ENEMY_SLOTS
     ]
 
-    metrics = TeamColorScreenMetrics(
-        allies_max_distance=_max_pairwise_rgb_distance(ally_colors),
-        enemies_max_distance=_max_pairwise_rgb_distance(enemy_colors),
-        teams_min_distance=_min_pairwise_rgb_distance(
-            ally_colors, enemy_colors
-        ),
+    ally_reliable_groups = _find_reliable_color_groups(ally_colors)
+    enemy_reliable_groups = _find_reliable_color_groups(enemy_colors)
+    reliable_pair = _select_reliable_color_pair(
+        ally_reliable_groups,
+        enemy_reliable_groups,
     )
 
-    is_display = (
-        metrics.allies_max_distance <= constants.TEAM_COLOR_WITHIN_MAX_DISTANCE
-        and metrics.enemies_max_distance
-        <= constants.TEAM_COLOR_WITHIN_MAX_DISTANCE
-        and metrics.teams_min_distance
-        >= constants.TEAM_COLOR_BETWEEN_MIN_DISTANCE
+    if reliable_pair is not None:
+        ally_group, enemy_group, teams_min_distance = reliable_pair
+        return True, _build_screen_metrics(
+            ally_group=ally_group,
+            enemy_group=enemy_group,
+            teams_min_distance=teams_min_distance,
+        )
+
+    ally_group = _find_best_cohesive_color_group(ally_colors)
+    enemy_group = _find_best_cohesive_color_group(enemy_colors)
+    return False, _build_screen_metrics(
+        ally_group=ally_group,
+        enemy_group=enemy_group,
+        teams_min_distance=_min_pairwise_rgb_distance(
+            ally_group.colors,
+            enemy_group.colors,
+        ),
     )
-    return is_display, metrics
 
 
 def detect_slot_team_region(slot_bgr: np.ndarray) -> np.ndarray:
@@ -118,9 +139,7 @@ def detect_slot_team_region(slot_bgr: np.ndarray) -> np.ndarray:
     return (merged > 0).astype(np.uint8)
 
 
-def _rgb_distance(
-    rgb_a: tuple[int, int, int], rgb_b: tuple[int, int, int]
-) -> float:
+def _rgb_distance(rgb_a: _RgbColor, rgb_b: _RgbColor) -> float:
     return math.sqrt(
         (rgb_a[0] - rgb_b[0]) ** 2
         + (rgb_a[1] - rgb_b[1]) ** 2
@@ -128,7 +147,7 @@ def _rgb_distance(
     )
 
 
-def _max_pairwise_rgb_distance(colors: list[tuple[int, int, int]]) -> float:
+def _max_pairwise_rgb_distance(colors: Sequence[_RgbColor]) -> float:
     max_distance = 0.0
     for index, color_a in enumerate(colors):
         for color_b in colors[index + 1 :]:
@@ -137,14 +156,81 @@ def _max_pairwise_rgb_distance(colors: list[tuple[int, int, int]]) -> float:
 
 
 def _min_pairwise_rgb_distance(
-    colors_a: list[tuple[int, int, int]],
-    colors_b: list[tuple[int, int, int]],
+    colors_a: Sequence[_RgbColor],
+    colors_b: Sequence[_RgbColor],
 ) -> float:
     min_distance = float("inf")
     for color_a in colors_a:
         for color_b in colors_b:
             min_distance = min(min_distance, _rgb_distance(color_a, color_b))
     return min_distance
+
+
+def _find_reliable_color_groups(
+    colors: Sequence[_RgbColor],
+) -> list[_ColorGroup]:
+    return _find_cohesive_color_groups(
+        colors,
+        min_size=constants.TEAM_COLOR_MIN_RELIABLE_SLOTS,
+    )
+
+
+def _find_best_cohesive_color_group(
+    colors: Sequence[_RgbColor],
+) -> _ColorGroup:
+    groups = _find_cohesive_color_groups(colors, min_size=1)
+    return groups[0]
+
+
+def _find_cohesive_color_groups(
+    colors: Sequence[_RgbColor],
+    *,
+    min_size: int,
+) -> list[_ColorGroup]:
+    groups: list[_ColorGroup] = []
+    for size in range(len(colors), min_size - 1, -1):
+        for color_indexes in combinations(range(len(colors)), size):
+            group_colors = tuple(colors[index] for index in color_indexes)
+            max_distance = _max_pairwise_rgb_distance(group_colors)
+            if max_distance <= constants.TEAM_COLOR_WITHIN_MAX_DISTANCE:
+                groups.append(
+                    _ColorGroup(
+                        colors=group_colors,
+                        max_distance=max_distance,
+                    )
+                )
+    groups.sort(key=lambda group: (-len(group.colors), group.max_distance))
+    return groups
+
+
+def _select_reliable_color_pair(
+    ally_groups: Sequence[_ColorGroup],
+    enemy_groups: Sequence[_ColorGroup],
+) -> tuple[_ColorGroup, _ColorGroup, float] | None:
+    for ally_group in ally_groups:
+        for enemy_group in enemy_groups:
+            teams_min_distance = _min_pairwise_rgb_distance(
+                ally_group.colors,
+                enemy_group.colors,
+            )
+            if teams_min_distance >= constants.TEAM_COLOR_BETWEEN_MIN_DISTANCE:
+                return ally_group, enemy_group, teams_min_distance
+    return None
+
+
+def _build_screen_metrics(
+    *,
+    ally_group: _ColorGroup,
+    enemy_group: _ColorGroup,
+    teams_min_distance: float,
+) -> TeamColorScreenMetrics:
+    return TeamColorScreenMetrics(
+        allies_max_distance=ally_group.max_distance,
+        enemies_max_distance=enemy_group.max_distance,
+        teams_min_distance=teams_min_distance,
+        ally_reliable_slot_count=len(ally_group.colors),
+        enemy_reliable_slot_count=len(enemy_group.colors),
+    )
 
 
 def _hue_distance_degree(

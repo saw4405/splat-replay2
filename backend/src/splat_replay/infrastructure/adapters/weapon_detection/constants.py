@@ -34,11 +34,12 @@ QUERY_MATCH_MAX_SHIFT_PX: Final[int] = 8
 TEAM_COLOR_SAMPLE_POINT: Final[tuple[int, int]] = (45, 8)
 TEAM_COLOR_WITHIN_MAX_DISTANCE: Final[float] = 90.0
 TEAM_COLOR_BETWEEN_MIN_DISTANCE: Final[float] = 110.0
+TEAM_COLOR_MIN_RELIABLE_SLOTS: Final[int] = 3
 WEAPON_DISPLAY_OUTLINE_MIN_IOU: Final[float] = 0.40
 WEAPON_DISPLAY_OUTLINE_MIN_MATCHED_SLOTS: Final[int] = 4
 # 輪郭一致スロットで推定した「ブキ本体領域」の平均比率が低すぎる場合は
 # ブキ表示が薄い/欠落しているとみなし、表示あり判定を抑制する。
-WEAPON_DISPLAY_MIN_WEAPON_REGION_RATIO: Final[float] = 0.08
+WEAPON_DISPLAY_MIN_WEAPON_REGION_RATIO: Final[float] = 0.10
 # 輪郭一致スロットのチームカラー領域内エッジ密度が高すぎる場合は、
 # チームカラーが塗り切れていない段階の偽陽性とみなし、表示あり判定を抑制する。
 # 実測値: visible 最大=0.1484, 非表示 最小=0.1591（gap≒0.011）
