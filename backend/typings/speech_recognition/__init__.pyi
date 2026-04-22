@@ -12,6 +12,9 @@ class AudioData:
     def get_raw_data(
         self, convert_rate: int | None = None, convert_width: int | None = None
     ) -> bytes: ...
+    def get_wav_data(
+        self, convert_rate: int | None = None, convert_width: int | None = None
+    ) -> bytes: ...
 
 class Microphone:
     """マイクロフォン"""
@@ -34,6 +37,10 @@ class AudioFile:
 
 class Recognizer:
     """音声認識エンジン"""
+
+    energy_threshold: float
+    dynamic_energy_threshold: bool
+
     def __init__(self) -> None: ...
     def recognize_google(
         self,
@@ -54,7 +61,12 @@ class Recognizer:
         timeout: float | None = None,
         phrase_time_limit: float | None = None,
     ) -> AudioData: ...
-    def record(self, source: AudioFile) -> AudioData: ...
+    def record(
+        self,
+        source: AudioFile | Microphone,
+        duration: float | None = None,
+        offset: float | None = None,
+    ) -> AudioData: ...
     def adjust_for_ambient_noise(
         self,
         source: Microphone,

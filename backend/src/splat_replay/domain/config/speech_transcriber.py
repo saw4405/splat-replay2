@@ -84,6 +84,16 @@ class SpeechTranscriberSettings(BaseModel):
         le=1.0,
         recommended=False,
     )
+    no_speech_prob_threshold: float = Field(
+        default=0.6,
+        title="無音判定確率閾値",
+        description=(
+            "Groq Whisper の no_speech_prob がこの値以上のとき無音と判定します (0.0〜1.0)"
+        ),
+        ge=0.0,
+        le=1.0,
+        recommended=False,
+    )
 
     class Config:
         pass
