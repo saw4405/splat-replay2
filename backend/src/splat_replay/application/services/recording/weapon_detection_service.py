@@ -224,6 +224,18 @@ class WeaponDetectionService:
 
         return context
 
+    async def drain_completed(
+        self,
+        *,
+        context: RecordingContext,
+    ) -> RecordingContext:
+        """完了済みのブキ判別タスクだけを context に反映する。"""
+        if context.battle_started_at <= 0.0:
+            return context
+
+        self._cleanup_report_output_task()
+        return await self._drain_completed_task(context)
+
     async def finalize_for_finish(
         self,
         *,

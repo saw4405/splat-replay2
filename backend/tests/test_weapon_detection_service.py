@@ -1234,6 +1234,64 @@ async def test_process_is_non_blocking_when_recognition_inflight() -> None:
 
 
 @pytest.mark.asyncio
+async def test_drain_completed_returns_immediately_when_recognition_inflight() -> (
+    None
+):
+    recognizer = _BlockingRecognizer()
+    service = WeaponDetectionService(
+        cast(WeaponRecognitionPort, recognizer),
+        cast(LoggerPort, _SpyLogger()),
+        cast(EventBusPort, _SpyEventBus()),
+    )
+    context = _new_context(1.0)
+    frame = _frame(1)
+
+    context = await service.process(frame=frame, context=context)
+    await _wait_thread_event(recognizer.started, timeout=1.0)
+
+    try:
+        drained_context = await asyncio.wait_for(
+            service.drain_completed(context=context),
+            timeout=0.1,
+        )
+    finally:
+        recognizer.release.set()
+        service.request_cancel()
+
+    assert drained_context == context
+    assert drained_context.weapon_detection_attempts == 0
+
+
+@pytest.mark.asyncio
+async def test_drain_completed_applies_completed_recognition() -> None:
+    recognizer = _BlockingRecognizer()
+    service = WeaponDetectionService(
+        cast(WeaponRecognitionPort, recognizer),
+        cast(LoggerPort, _SpyLogger()),
+        cast(EventBusPort, _SpyEventBus()),
+    )
+    context = _new_context(1.0)
+    frame = _frame(1)
+
+    context = await service.process(frame=frame, context=context)
+    await _wait_thread_event(recognizer.started, timeout=1.0)
+    try:
+        recognizer.release.set()
+        for _ in range(20):
+            await asyncio.sleep(0.01)
+            context = await service.drain_completed(context=context)
+            if context.weapon_detection_attempts >= 1:
+                break
+    finally:
+        recognizer.release.set()
+        service.request_cancel()
+
+    assert context.weapon_detection_attempts >= 1
+    assert context.metadata.allies is not None
+    assert context.metadata.allies[0] == "認識結果"
+
+
+@pytest.mark.asyncio
 async def test_process_keeps_event_loop_responsive_when_recognition_is_cpu_bound() -> (
     None
 ):

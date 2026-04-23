@@ -22,6 +22,7 @@ from splat_replay.application.services.recording.weapon_detection_service import
     WeaponDetectionService,
 )
 from splat_replay.domain.events import DomainEvent
+from splat_replay.domain.models import RecordingMetadata
 from splat_replay.domain.services import FrameAnalyzer, RecordState
 
 
@@ -102,6 +103,7 @@ class _WeaponDetectionServiceSpy:
     def __init__(self) -> None:
         self.cancel_calls = 0
         self.process_calls = 0
+        self.process_context: RecordingContext | None = None
         self.complete_as_unknown_calls = 0
         self.complete_as_unknown_context: RecordingContext | None = None
         self.finalize_for_finish_calls = 0
@@ -117,6 +119,8 @@ class _WeaponDetectionServiceSpy:
         context: RecordingContext,
     ) -> RecordingContext:
         self.process_calls += 1
+        if self.process_context is not None:
+            return self.process_context
         return context
 
     def complete_as_unknown(
@@ -207,7 +211,7 @@ async def test_cancel_called_on_time_limit() -> None:
 
 
 @pytest.mark.asyncio
-async def test_cancel_called_on_finish() -> None:
+async def test_finish_does_not_cancel_weapon_detection() -> None:
     analyzer = _AnalyzerStub(finish=True)
     weapon_service = _WeaponDetectionServiceSpy()
     handler = _build_handler(
@@ -219,12 +223,12 @@ async def test_cancel_called_on_finish() -> None:
     command = await handler.handle(_frame(), context, RecordState.RECORDING)
 
     assert command.action is RecordingAction.PAUSE_RECORDING
-    assert weapon_service.cancel_calls == 1
+    assert weapon_service.cancel_calls == 0
     assert weapon_service.process_calls == 1
 
 
 @pytest.mark.asyncio
-async def test_finish_completes_unknown_without_weapon_detection_finalize() -> (
+async def test_finish_keeps_detected_weapons_without_unknown_completion() -> (
     None
 ):
     analyzer = _AnalyzerStub(finish=True)
@@ -234,23 +238,30 @@ async def test_finish_completes_unknown_without_weapon_detection_finalize() -> (
         weapon_detection_service=weapon_service,
     )
     context = RecordingContext(battle_started_at=time.time() - 120.0)
-    weapon_service.finalize_for_finish_context = replace(
+    detected_context = replace(
         context,
-        weapon_detection_done=True,
+        metadata=RecordingMetadata(
+            allies=("known_ally_1", "", "", ""),
+            enemies=("", "known_enemy_2", "", ""),
+        ),
     )
-    weapon_service.complete_as_unknown_context = replace(
-        context,
-        weapon_detection_done=True,
-    )
+    weapon_service.process_context = detected_context
 
     command = await handler.handle(_frame(), context, RecordState.RECORDING)
 
     assert command.action is RecordingAction.PAUSE_RECORDING
     assert weapon_service.process_calls == 1
-    assert weapon_service.complete_as_unknown_calls == 1
+    assert weapon_service.complete_as_unknown_calls == 0
     assert weapon_service.finalize_for_finish_calls == 0
-    assert weapon_service.cancel_calls == 1
-    assert command.updated_context.weapon_detection_done is True
+    assert weapon_service.cancel_calls == 0
+    assert (
+        command.updated_context.metadata.allies
+        == detected_context.metadata.allies
+    )
+    assert (
+        command.updated_context.metadata.enemies
+        == detected_context.metadata.enemies
+    )
 
 
 @pytest.mark.asyncio

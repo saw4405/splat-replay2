@@ -115,11 +115,6 @@ class InGamePhaseHandler:
 
         # バトル終了検出
         if await self.analyzer.detect_session_finish(frame, gm):
-            if self.weapon_detection_service is not None:
-                ctx = self.weapon_detection_service.complete_as_unknown(
-                    context=ctx,
-                )
-            self.cancel_background_tasks()
             duration = now - ctx.battle_started_at
             self.logger.info("バトル終了を検出、一時停止")
             self.event_bus.publish_domain_event(
