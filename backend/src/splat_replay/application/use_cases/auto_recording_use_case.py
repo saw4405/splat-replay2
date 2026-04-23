@@ -329,11 +329,34 @@ class AutoRecordingUseCase:
 
     async def _handle_stop_recording(self) -> None:
         """録画停止処理（result_frame を渡す必要がある）。"""
+        await self._drain_weapon_detection_before_stop()
 
         async def get_result_frame() -> Frame | None:
             return self._context.result_frame
 
-        await self._session.stop(get_result_frame)
+        try:
+            await self._session.stop(get_result_frame)
+        finally:
+            self._phase_handlers.cancel_background_tasks()
+
+    async def _drain_weapon_detection_before_stop(self) -> None:
+        base_context, revision = await self._snapshot_context()
+        updated_context = (
+            await self._phase_handlers.drain_weapon_detection_completed(
+                base_context
+            )
+        )
+        # result_frame には numpy.ndarray が入るため、値比較は行わない。
+        # no-op のときは同一インスタンスが返る前提で参照比較する。
+        if updated_context is base_context:
+            return
+
+        await self._apply_command_context(
+            base_context=base_context,
+            updated_context=updated_context,
+            base_revision=revision,
+        )
+        self._session.update_context(self._context)
 
     async def _snapshot_context(self) -> tuple[RecordingContext, int]:
         async with self._context_lock:
