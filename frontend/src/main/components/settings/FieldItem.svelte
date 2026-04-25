@@ -11,6 +11,7 @@
     updateField: (field: SettingField, value: FieldValue) => void;
     updateGroupField: (group: SettingField, child: SettingField, value: FieldValue) => void;
     parentGroup?: SettingField | null;
+    onCalibrateAudio?: () => void;
   }
 
   let {
@@ -20,6 +21,7 @@
     updateField,
     updateGroupField,
     parentGroup = null,
+    onCalibrateAudio,
   }: Props = $props();
 
   const pathTokens = $derived([...path, field.id]);
@@ -111,6 +113,7 @@
           {updateField}
           {updateGroupField}
           parentGroup={field}
+          {onCalibrateAudio}
         />
       {/each}
     </div>
@@ -141,14 +144,21 @@
         <span class="toggle-slider"></span>
       </label>
     {:else if field.type === 'integer'}
-      <input
-        id={elementId}
-        aria-describedby={field.description ? descriptionId : undefined}
-        type="number"
-        step="1"
-        value={typeof field.value === 'number' ? field.value : ''}
-        oninput={commitInteger}
-      />
+      <div class="integer-field-container">
+        <input
+          id={elementId}
+          aria-describedby={field.description ? descriptionId : undefined}
+          type="number"
+          step="1"
+          value={typeof field.value === 'number' ? field.value : ''}
+          oninput={commitInteger}
+        />
+        {#if field.id === 'energy_threshold'}
+          <button type="button" class="calibrate-button" onclick={onCalibrateAudio}>
+            自動調整を実行
+          </button>
+        {/if}
+      </div>
     {:else if field.type === 'float'}
       <input
         id={elementId}
@@ -457,6 +467,34 @@
 
   .field-group .field-description {
     margin-top: 0;
+  }
+
+  .integer-field-container {
+    display: flex;
+    gap: 0.75rem;
+    align-items: center;
+    width: 100%;
+  }
+
+  .calibrate-button {
+    background: rgba(var(--theme-rgb-white), 0.08);
+    border: 1px solid rgba(var(--theme-rgb-white), 0.2);
+    color: var(--theme-text-primary);
+    padding: 0.5rem 0.8rem;
+    border-radius: 0.4rem;
+    font-size: 0.85rem;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: all 0.2s ease;
+  }
+
+  .calibrate-button:hover {
+    background: rgba(var(--theme-rgb-white), 0.15);
+    border-color: rgba(var(--theme-rgb-white), 0.35);
+  }
+
+  .calibrate-button:active {
+    background: rgba(var(--theme-rgb-white), 0.1);
   }
 
   .password-field {

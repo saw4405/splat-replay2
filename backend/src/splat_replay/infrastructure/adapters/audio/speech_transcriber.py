@@ -61,6 +61,7 @@ class SpeechTranscriber(SpeechTranscriberPort):
         self._event_publisher = event_publisher
         self._stopwatch = StopWatch()
         self._recognizer: sr.Recognizer = sr.Recognizer()
+        self._recognizer.energy_threshold = settings.energy_threshold
         self._recognizer.dynamic_energy_threshold = False
         self._is_paused: bool = False
         self._segments: List[Segment] = []
@@ -134,9 +135,10 @@ class SpeechTranscriber(SpeechTranscriberPort):
 
     def _recording_loop(self) -> None:
         with sr.Microphone(device_index=self._microphone_index) as source:
-            before_energy_threshold = float(self._recognizer.energy_threshold)
-            self._recognizer.adjust_for_ambient_noise(source)
-            self._log_adjusted_energy_threshold(before_energy_threshold)
+            self._logger.info(
+                "マイク録音ループを開始しました",
+                energy_threshold=self._recognizer.energy_threshold,
+            )
             while not self._recording_event.is_set():
                 if self._is_paused:
                     time.sleep(0.1)

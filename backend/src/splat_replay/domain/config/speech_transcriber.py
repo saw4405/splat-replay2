@@ -59,6 +59,14 @@ class SpeechTranscriberSettings(BaseModel):
         recommended=True,
         user_editable=True,
     )
+    energy_threshold: int = Field(
+        default=300,
+        title="音声検出のしきい値",
+        description="マイクが音声を拾うための最低音量レベルです。自動調整で設定された値を使用してください。",
+        ge=0,
+        recommended=True,
+        user_editable=True,
+    )
     vad_aggressiveness: int = Field(
         default=3,
         title="VAD感度",

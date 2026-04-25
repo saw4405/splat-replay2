@@ -19,6 +19,7 @@ export type TranscriptionConfig = {
   groqApiKey: string;
   language: string;
   customDictionary: string[];
+  energyThreshold: number;
 };
 
 function getSectionFieldValue(
@@ -247,6 +248,10 @@ export async function getTranscriptionConfig(): Promise<TranscriptionConfig> {
       customDictionary: asStringList(
         getSectionFieldValue(data, 'speech_transcriber', 'custom_dictionary')
       ),
+      energyThreshold:
+        typeof getSectionFieldValue(data, 'speech_transcriber', 'energy_threshold') === 'number'
+          ? (getSectionFieldValue(data, 'speech_transcriber', 'energy_threshold') as number)
+          : 300,
     };
   } catch (err) {
     console.error('Failed to get transcription config:', err);
@@ -277,6 +282,7 @@ export async function saveTranscriptionConfig(config: TranscriptionConfig): Prom
             groq_api_key: config.groqApiKey,
             language: config.language,
             custom_dictionary: config.customDictionary,
+            energy_threshold: config.energyThreshold,
           },
         },
       ],
@@ -296,6 +302,38 @@ export async function saveTranscriptionConfig(config: TranscriptionConfig): Prom
     console.log('Transcription config saved:', result.status);
   } catch (err) {
     console.error('Failed to save transcription config:', err);
+    if (err instanceof Error) {
+      error.set({ error: err.message });
+    }
+    throw err;
+  } finally {
+    isLoading.set(false);
+  }
+}
+
+/**
+ * 環境音を自動調整して推奨しきい値を取得
+ */
+export async function calibrateAudio(micDeviceName: string): Promise<number> {
+  isLoading.set(true);
+  error.set(null);
+
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/settings/audio/calibrate`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ mic_device_name: micDeviceName }),
+    });
+    if (!response.ok) {
+      await handleApiError(response);
+    }
+
+    const result = await safeParseJson<{ energy_threshold: number }>(response);
+    return result.energy_threshold;
+  } catch (err) {
+    console.error('Failed to calibrate audio:', err);
     if (err instanceof Error) {
       error.set({ error: err.message });
     }

@@ -264,6 +264,56 @@ def create_settings_router(server: WebAPIServer) -> APIRouter:
                 detail="Failed to mark youtube permission dialog as shown",
             ) from exc
 
+    @router.post("/settings/audio/calibrate")
+    async def calibrate_audio(
+        request: dict[str, str],
+    ) -> JSONResponse:
+        import speech_recognition as sr
+
+        mic_device_name = request.get("mic_device_name")
+        if not mic_device_name:
+            raise HTTPException(
+                status_code=400, detail="mic_device_name is required"
+            )
+
+        def _calibrate() -> int:
+            microphone_index = None
+            for index, name in enumerate(
+                sr.Microphone.list_microphone_names()
+            ):
+                if mic_device_name.lower() in name.lower():
+                    microphone_index = index
+                    break
+
+            if microphone_index is None:
+                raise ValueError("マイクが見つかりません")
+
+            recognizer = sr.Recognizer()
+            with sr.Microphone(device_index=microphone_index) as source:
+                # 3秒間サンプリングする
+                recognizer.adjust_for_ambient_noise(source, duration=3.0)
+
+            # ノイズ誤検知を防ぐため、サンプリングした環境音の1.5倍を推奨値とする
+            return int(recognizer.energy_threshold * 1.5)
+
+        try:
+            threshold = await asyncio.wait_for(
+                asyncio.to_thread(_calibrate), timeout=5.0
+            )
+            return JSONResponse(content={"energy_threshold": threshold})
+        except asyncio.TimeoutError as exc:
+            server.logger.error("Audio calibration timed out")
+            raise HTTPException(
+                status_code=status.HTTP_504_GATEWAY_TIMEOUT,
+                detail="マイクの読み込みがタイムアウトしました。マイクが他の処理でブロックされている可能性があります。",
+            ) from exc
+        except Exception as exc:
+            server.logger.error("Failed to calibrate audio", error=str(exc))
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=str(exc),
+            ) from exc
+
     return router
 
 

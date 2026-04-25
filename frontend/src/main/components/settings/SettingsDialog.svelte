@@ -9,6 +9,7 @@
     type SettingsUiSection,
   } from './grouping';
   import type { FieldValue, SettingField, SettingsResponse } from './types';
+  import { calibrateAudio } from '../../../setup/stores/config';
 
   interface Props {
     open?: boolean;
@@ -129,6 +130,46 @@
     }));
   }
 
+  async function handleCalibrateAudio(field: SettingField): Promise<void> {
+    let micDeviceName = '';
+    const recordingSection = sections.find((s) => s.id === 'recording');
+    if (recordingSection) {
+      const stGroup = recordingSection.fields.find((f) => f.id === 'speech_transcriber');
+      const micField = stGroup?.children?.find((f) => f.id === 'mic_device_name');
+      micDeviceName = (micField?.value as string) || '';
+    } else {
+      const stSection = sections.find((s) => s.id === 'speech_transcriber');
+      const micField = stSection?.fields.find((f) => f.id === 'mic_device_name');
+      micDeviceName = (micField?.value as string) || '';
+    }
+
+    if (!micDeviceName) {
+      errorMessage = 'マイクデバイスが選択されていません。設定を保存してから再度お試しください。';
+      return;
+    }
+
+    try {
+      saving = true;
+      errorMessage = '';
+      successMessage =
+        'マイクの自動調整を実行中です。3秒間何も喋らず、環境音のみを測定してください...';
+      const threshold = await calibrateAudio(micDeviceName);
+
+      handleFieldValueChange(field, threshold);
+      successMessage = `自動調整が完了しました (しきい値: ${threshold})`;
+
+      clearSuccessMessageTimer();
+      successMessageTimer = setTimeout(() => {
+        successMessage = '';
+      }, 5000);
+    } catch (error: unknown) {
+      errorMessage = error instanceof Error ? error.message : '自動調整に失敗しました。';
+      successMessage = '';
+    } finally {
+      saving = false;
+    }
+  }
+
   async function saveSettings(): Promise<void> {
     if (saving || loading) {
       return;
@@ -222,6 +263,7 @@
                 updateField={handleFieldValueChange}
                 updateGroupField={handleGroupFieldValueChange}
                 parentGroup={null}
+                onCalibrateAudio={() => handleCalibrateAudio(field)}
               />
             {/each}
           </div>
