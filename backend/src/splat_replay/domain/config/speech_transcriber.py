@@ -60,7 +60,7 @@ class SpeechTranscriberSettings(BaseModel):
         user_editable=True,
     )
     vad_aggressiveness: int = Field(
-        default=2,
+        default=3,
         title="VAD感度",
         description=(
             "0〜3の値でVADの厳しさを指定します。値が大きいほど無音を厳しく判定します"
@@ -77,7 +77,7 @@ class SpeechTranscriberSettings(BaseModel):
         recommended=False,
     )
     vad_min_speech_ratio: float = Field(
-        default=0.1,
+        default=0.3,
         title="VAD最小検出比率",
         description="VADで音声ありと判定するために必要なフレーム比率 (0.0〜1.0)",
         ge=0.0,

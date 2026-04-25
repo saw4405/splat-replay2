@@ -61,6 +61,7 @@ class SpeechTranscriber(SpeechTranscriberPort):
         self._event_publisher = event_publisher
         self._stopwatch = StopWatch()
         self._recognizer: sr.Recognizer = sr.Recognizer()
+        self._recognizer.dynamic_energy_threshold = False
         self._is_paused: bool = False
         self._segments: List[Segment] = []
         self._audio_queue: queue.Queue[Tuple[sr.AudioData, float, float]] = (
@@ -147,6 +148,13 @@ class SpeechTranscriber(SpeechTranscriberPort):
 
                 elapsed_time = self._stopwatch.elapsed()
                 duration = self.get_audio_duration(audio)
+
+                if duration < 0.5:
+                    self._logger.debug(
+                        "録音時間が短すぎるため破棄します", duration=duration
+                    )
+                    continue
+
                 start = max(elapsed_time - duration, 0)
                 end = elapsed_time
 
