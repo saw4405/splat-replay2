@@ -90,7 +90,14 @@ export const progressInfo = derived(setupState, ($state): ProgressInfo | null =>
 export async function handleApiError(response: Response): Promise<never> {
   let errorData: ApiError;
   try {
-    errorData = await response.json();
+    const body = await response.json();
+    // FastAPI の HTTPException は {"detail": "..."} 形式で返す。
+    // 独自エラー形式 {"error": "..."} にも対応する。
+    const message: string =
+      (typeof body?.error === 'string' && body.error) ||
+      (typeof body?.detail === 'string' && body.detail) ||
+      `HTTP Error: ${response.status} ${response.statusText}`;
+    errorData = { error: message };
   } catch {
     errorData = {
       error: `HTTP Error: ${response.status} ${response.statusText}`,

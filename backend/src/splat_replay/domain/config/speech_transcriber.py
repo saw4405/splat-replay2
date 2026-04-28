@@ -20,6 +20,14 @@ class SpeechTranscriberSettings(BaseModel):
         recommended=True,
         user_editable=True,
     )
+    energy_threshold: int = Field(
+        default=300,
+        title="音声検出のしきい値",
+        description="マイクが音声を拾うための最低音量レベルです。自動調整で設定された値を使用してください。",
+        ge=0,
+        recommended=True,
+        user_editable=True,
+    )
     groq_api_key: SecretStr = Field(
         default=SecretStr(""),
         title="Groq API キー",
@@ -56,14 +64,6 @@ class SpeechTranscriberSettings(BaseModel):
         default=["ナイス", "キル", "デス"],
         title="カスタム辞書",
         description="音声認識の精度を向上させるための単語リスト",
-        recommended=True,
-        user_editable=True,
-    )
-    energy_threshold: int = Field(
-        default=300,
-        title="音声検出のしきい値",
-        description="マイクが音声を拾うための最低音量レベルです。自動調整で設定された値を使用してください。",
-        ge=0,
         recommended=True,
         user_editable=True,
     )

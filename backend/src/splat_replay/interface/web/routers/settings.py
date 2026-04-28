@@ -277,6 +277,9 @@ def create_settings_router(server: WebAPIServer) -> APIRouter:
             )
 
         def _calibrate() -> int:
+            import audioop
+            import time
+
             microphone_index = None
             for index, name in enumerate(
                 sr.Microphone.list_microphone_names()
@@ -288,17 +291,38 @@ def create_settings_router(server: WebAPIServer) -> APIRouter:
             if microphone_index is None:
                 raise ValueError("マイクが見つかりません")
 
-            recognizer = sr.Recognizer()
+            rms_values: list[int] = []
             with sr.Microphone(device_index=microphone_index) as source:
-                # 3秒間サンプリングする
-                recognizer.adjust_for_ambient_noise(source, duration=3.0)
+                # PyAudio ストリームが安定するまで最初の 0.5 秒を破棄する。
+                # オープン直後のフレームにはバッファ未充填によるゼロ値や
+                # ドライバ起動時のスパイクが含まれることがある。
+                warmup_end = time.monotonic() + 0.5
+                while time.monotonic() < warmup_end:
+                    source.stream.read(source.CHUNK)  # type: ignore[attr-defined]
 
-            # ノイズ誤検知を防ぐため、サンプリングした環境音の1.5倍を推奨値とする
-            return int(recognizer.energy_threshold * 1.5)
+                # フレーム数カウントでは PyAudio の内部バッファを一気に
+                # 読み切ってしまい実時間を下回ることがある。
+                # time.monotonic() で壁時計時間を基準に 3 秒間測定する。
+                measure_end = time.monotonic() + 3.0
+                while time.monotonic() < measure_end:
+                    buffer = source.stream.read(source.CHUNK)  # type: ignore[attr-defined]
+                    rms_values.append(audioop.rms(buffer, source.SAMPLE_WIDTH))  # type: ignore[attr-defined]
+
+            if not rms_values:
+                raise ValueError("音声サンプルを取得できませんでした")
+
+            rms_values.sort()
+            # 10 パーセンタイルを環境音フロアとして採用する。
+            # 中央値では測定中の偶発的な音に引きずられるため、
+            # 静かな瞬間を代表する低パーセンタイルが安定した基準値になる。
+            floor_rms = rms_values[max(0, len(rms_values) // 10)]
+
+            # ノイズ誤検知を防ぐため、フロアの 1.5 倍を推奨値とする
+            return max(50, int(floor_rms * 1.5))
 
         try:
             threshold = await asyncio.wait_for(
-                asyncio.to_thread(_calibrate), timeout=5.0
+                asyncio.to_thread(_calibrate), timeout=15.0
             )
             return JSONResponse(content={"energy_threshold": threshold})
         except asyncio.TimeoutError as exc:

@@ -11,7 +11,7 @@
     updateField: (field: SettingField, value: FieldValue) => void;
     updateGroupField: (group: SettingField, child: SettingField, value: FieldValue) => void;
     parentGroup?: SettingField | null;
-    onCalibrateAudio?: () => void;
+    onCalibrateAudio?: (field: SettingField, parentGroup: SettingField | null) => Promise<void>;
   }
 
   let {
@@ -31,6 +31,24 @@
 
   let showPassword = $state(false);
   let listText = $state('');
+  let calibrateMessage = $state('');
+  let calibrateIsError = $state(false);
+  let isCalibrating = $state(false);
+
+  async function runCalibrate(): Promise<void> {
+    isCalibrating = true;
+    calibrateMessage = '実行中です。3秒間何も喋らず、環境音のみを測定してください...';
+    calibrateIsError = false;
+    try {
+      await onCalibrateAudio?.(field, parentGroup ?? null);
+      calibrateMessage = '自動調整が完了しました。';
+    } catch (error) {
+      calibrateMessage = error instanceof Error ? error.message : '自動調整に失敗しました。';
+      calibrateIsError = true;
+    } finally {
+      isCalibrating = false;
+    }
+  }
 
   // field.value のみに依存するように最適化（field全体への依存を回避）
   $effect(() => {
@@ -153,12 +171,20 @@
           value={typeof field.value === 'number' ? field.value : ''}
           oninput={commitInteger}
         />
-        {#if field.id === 'energy_threshold'}
-          <button type="button" class="calibrate-button" onclick={onCalibrateAudio}>
-            自動調整を実行
+        {#if field.id === 'energy_threshold' && onCalibrateAudio}
+          <button
+            type="button"
+            class="calibrate-button"
+            disabled={isCalibrating}
+            onclick={runCalibrate}
+          >
+            {isCalibrating ? '調整中...' : '自動調整を実行'}
           </button>
         {/if}
       </div>
+      {#if field.id === 'energy_threshold' && calibrateMessage}
+        <p class="calibrate-message" class:error={calibrateIsError}>{calibrateMessage}</p>
+      {/if}
     {:else if field.type === 'float'}
       <input
         id={elementId}
@@ -495,6 +521,21 @@
 
   .calibrate-button:active {
     background: rgba(var(--theme-rgb-white), 0.1);
+  }
+
+  .calibrate-button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  .calibrate-message {
+    margin: 0;
+    font-size: 0.82rem;
+    color: rgba(var(--theme-rgb-light-slate), 0.75);
+  }
+
+  .calibrate-message.error {
+    color: var(--theme-status-danger-soft, #f87171);
   }
 
   .password-field {

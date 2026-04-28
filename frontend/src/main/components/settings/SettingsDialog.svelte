@@ -130,7 +130,10 @@
     }));
   }
 
-  async function handleCalibrateAudio(field: SettingField): Promise<void> {
+  async function handleCalibrateAudio(
+    field: SettingField,
+    parentGroup: SettingField | null = null
+  ): Promise<void> {
     let micDeviceName = '';
     const recordingSection = sections.find((s) => s.id === 'recording');
     if (recordingSection) {
@@ -144,27 +147,17 @@
     }
 
     if (!micDeviceName) {
-      errorMessage = 'マイクデバイスが選択されていません。設定を保存してから再度お試しください。';
-      return;
+      throw new Error('マイクデバイスが選択されていません。設定を保存してから再度お試しください。');
     }
 
+    saving = true;
     try {
-      saving = true;
-      errorMessage = '';
-      successMessage =
-        'マイクの自動調整を実行中です。3秒間何も喋らず、環境音のみを測定してください...';
       const threshold = await calibrateAudio(micDeviceName);
-
-      handleFieldValueChange(field, threshold);
-      successMessage = `自動調整が完了しました (しきい値: ${threshold})`;
-
-      clearSuccessMessageTimer();
-      successMessageTimer = setTimeout(() => {
-        successMessage = '';
-      }, 5000);
-    } catch (error: unknown) {
-      errorMessage = error instanceof Error ? error.message : '自動調整に失敗しました。';
-      successMessage = '';
+      if (parentGroup) {
+        handleGroupFieldValueChange(parentGroup, field, threshold);
+      } else {
+        handleFieldValueChange(field, threshold);
+      }
     } finally {
       saving = false;
     }
@@ -263,7 +256,7 @@
                 updateField={handleFieldValueChange}
                 updateGroupField={handleGroupFieldValueChange}
                 parentGroup={null}
-                onCalibrateAudio={() => handleCalibrateAudio(field)}
+                onCalibrateAudio={handleCalibrateAudio}
               />
             {/each}
           </div>
