@@ -9,12 +9,18 @@ import pytest
 from splat_replay.bootstrap.dev_server import (
     build_windows_dev_launch_specs,
     launch_windows_dev_servers,
+    start_dev_server,
 )
 
 
 class PopenCall(TypedDict):
     args: list[str]
     creationflags: int
+
+
+class InlinePopenCall(TypedDict):
+    args: list[str]
+    cwd: Path
 
 
 def test_build_windows_dev_launch_specs_include_reload() -> None:
@@ -98,3 +104,63 @@ def test_launch_windows_dev_servers_open_two_powershell_windows(
         backend_call["args"][4]
     )
     assert "--reload" in str(backend_call["args"][4])
+
+
+def test_start_dev_server_launches_inline_in_same_terminal(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """start_dev_server は同一ターミナル内で両プロセスを起動する。"""
+    # ディレクトリ構成を用意
+    frontend_dir = tmp_path / "frontend"
+    frontend_dir.mkdir()
+    (frontend_dir / "node_modules").mkdir()
+    backend_dir = tmp_path / "backend"
+    backend_dir.mkdir()
+
+    monkeypatch.setattr(
+        "splat_replay.bootstrap.dev_server._project_root",
+        lambda: tmp_path,
+    )
+
+    popen_calls: list[InlinePopenCall] = []
+    wait_called = 0
+    interrupted = False
+
+    class FakeProcess:
+        def __init__(self, args: list[str], *, cwd: Path) -> None:
+            popen_calls.append({"args": args, "cwd": cwd})
+
+        def wait(self, timeout: float | None = None) -> None:
+            nonlocal wait_called, interrupted
+            wait_called += 1
+            # 2つ目の wait で KeyboardInterrupt を1回だけ発生させて終了
+            if wait_called >= 2 and not interrupted:
+                interrupted = True
+                raise KeyboardInterrupt
+
+        def terminate(self) -> None:
+            pass
+
+        def kill(self) -> None:
+            pass
+
+    monkeypatch.setattr(
+        "splat_replay.bootstrap.dev_server.subprocess.Popen",
+        FakeProcess,
+    )
+    monkeypatch.setattr(
+        "splat_replay.bootstrap.dev_server.time.sleep",
+        lambda _: None,
+    )
+
+    start_dev_server()
+
+    assert len(popen_calls) == 2
+
+    frontend_call, backend_call = popen_calls
+
+    # 同一プロセス内で起動（CREATE_NEW_CONSOLE なし）
+    assert frontend_call["cwd"] == frontend_dir
+    assert backend_call["cwd"] == backend_dir
+    assert "--reload" in backend_call["args"]

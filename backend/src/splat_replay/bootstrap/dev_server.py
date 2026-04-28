@@ -130,14 +130,17 @@ def _ensure_frontend_dependencies(frontend_dir: Path) -> None:
         sys.exit(1)
 
 
-def _start_non_windows_dev_server(
+def _start_inline_dev_servers(
     frontend_dir: Path,
     backend_dir: Path,
+    *,
+    windows: bool,
 ) -> None:
+    """同一ターミナル内でフロント・バックエンドを起動し、Ctrl+C で一括停止する。"""
     print("フロントエンド開発サーバーを起動中...")
     try:
         frontend_process = subprocess.Popen(
-            _build_frontend_dev_command(windows=False),
+            _build_frontend_dev_command(windows=windows),
             cwd=frontend_dir,
         )
     except Exception as error:
@@ -202,11 +205,9 @@ def start_dev_server() -> None:
 
     _ensure_frontend_dependencies(frontend_dir)
 
-    if os.name == "nt":
-        launch_windows_dev_servers(repo_root)
-        return
-
-    _start_non_windows_dev_server(frontend_dir, backend_dir)
+    _start_inline_dev_servers(
+        frontend_dir, backend_dir, windows=(os.name == "nt")
+    )
 
 
 if __name__ == "__main__":
