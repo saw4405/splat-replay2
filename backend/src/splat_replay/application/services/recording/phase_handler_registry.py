@@ -64,6 +64,7 @@ class PhaseHandlerRegistry:
     ):
         # フェーズハンドラの初期化
         self._standby = StandbyPhaseHandler(analyzer, logger, event_bus)
+        self._weapon_detection_service = weapon_detection_service
         self._matching = MatchingPhaseHandler(analyzer, logger, event_bus)
         self._in_game = InGamePhaseHandler(
             analyzer,
@@ -115,3 +116,11 @@ class PhaseHandlerRegistry:
     def cancel_background_tasks(self) -> None:
         """バックグラウンドタスクを中断する。"""
         self._in_game.cancel_background_tasks()
+
+    async def drain_weapon_detection_completed(
+        self, context: RecordingContext
+    ) -> RecordingContext:
+        """完了済みのブキ判別結果だけを context に取り込む。"""
+        return await self._weapon_detection_service.drain_completed(
+            context=context,
+        )

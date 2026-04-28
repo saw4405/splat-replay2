@@ -14,6 +14,7 @@ import numpy as np
 from splat_replay.application.interfaces import (
     LoggerPort,
     WeaponCandidateScore,
+    WeaponDisplayDetectionResult,
     WeaponRecognitionPort,
     WeaponRecognitionResult,
     WeaponSlotResult,
@@ -115,6 +116,11 @@ class WeaponRecognitionAdapter(WeaponRecognitionPort):
             raise asyncio.CancelledError("weapon recognition cancelled")
 
     async def detect_weapon_display(self, frame: Frame) -> bool:
+        return (await self.detect_weapon_display_details(frame)).is_visible
+
+    async def detect_weapon_display_details(
+        self, frame: Frame
+    ) -> WeaponDisplayDetectionResult:
         cancel_generation = self._capture_cancel_generation()
         self._ensure_not_cancelled(cancel_generation)
         slot_images = crop_slot_images(frame)
@@ -127,6 +133,11 @@ class WeaponRecognitionAdapter(WeaponRecognitionPort):
         display_weapon_region_ratio: float | None = None
         matched_slot_team_edge_ratio: float | None = None
         matched_slot_weapon_region_gray_std: float | None = None
+        outline_matched_ally_slots = 0
+        outline_matched_enemy_slots = 0
+        matched_team_slots_reliable = False
+        team_color_uses_partial_slots = False
+        outline_team_slots_reliable = False
         outline_iou_by_slot = {slot: 0.0 for slot in constants.SLOT_ORDER}
         if color_visible:
             model_masks = self._get_outline_model_masks()
@@ -142,65 +153,11 @@ class WeaponRecognitionAdapter(WeaponRecognitionPort):
                 fast_processed_slots,
                 fast_weapon_region_ratio,
             ) = self._unpack_outline_count_result(fast_result)
-            # fast path が最小必要数に達していても、4 枠を超えて探索して
-            # ようやく成立した場合は片側だけの誤一致の可能性があるため、
-            # precise path で再検証する。
-            should_run_precise_validation = (
-                fast_processed_slots
-                > constants.WEAPON_DISPLAY_OUTLINE_MIN_MATCHED_SLOTS
-            )
-            if (
-                fast_matched_slots
-                >= constants.WEAPON_DISPLAY_OUTLINE_MIN_MATCHED_SLOTS
-                and not should_run_precise_validation
-            ):
-                outline_matched_slots = fast_matched_slots
-                outline_iou_by_slot = fast_iou_by_slot
-                processed_slots = fast_processed_slots
-                display_weapon_region_ratio = fast_weapon_region_ratio
-                aggregate_max_shift = constants.OUTLINE_ALIGN_FAST_MAX_SHIFT
-            else:
-                fallback_used = True
-                precise_result: (
-                    tuple[int, dict[str, float], int, float | None] | None
-                ) = None
-                if (
-                    fast_matched_slots
-                    >= constants.WEAPON_DISPLAY_OUTLINE_MIN_MATCHED_SLOTS
-                    and should_run_precise_validation
-                ):
-                    matched_fast_slots = self._extract_outline_matched_slots(
-                        fast_iou_by_slot
-                    )
-                    precise_result = self._count_outline_matched_slots(
-                        slot_images=slot_images,
-                        model_masks=model_masks,
-                        cancel_generation=cancel_generation,
-                        max_shift=constants.OUTLINE_ALIGN_MAX_SHIFT,
-                        slot_order=matched_fast_slots,
-                    )
-                    precise_matched_slots, _, _, _ = (
-                        self._unpack_outline_count_result(precise_result)
-                    )
-                    if (
-                        precise_matched_slots
-                        < constants.WEAPON_DISPLAY_OUTLINE_MIN_MATCHED_SLOTS
-                    ):
-                        precise_result = None
-                if precise_result is None:
-                    precise_result = self._count_outline_matched_slots(
-                        slot_images=slot_images,
-                        model_masks=model_masks,
-                        cancel_generation=cancel_generation,
-                        max_shift=constants.OUTLINE_ALIGN_MAX_SHIFT,
-                    )
-                (
-                    outline_matched_slots,
-                    outline_iou_by_slot,
-                    processed_slots,
-                    display_weapon_region_ratio,
-                ) = self._unpack_outline_count_result(precise_result)
-                aggregate_max_shift = constants.OUTLINE_ALIGN_MAX_SHIFT
+            outline_matched_slots = fast_matched_slots
+            outline_iou_by_slot = fast_iou_by_slot
+            processed_slots = fast_processed_slots
+            display_weapon_region_ratio = fast_weapon_region_ratio
+            aggregate_max_shift = constants.OUTLINE_ALIGN_FAST_MAX_SHIFT
         self._ensure_not_cancelled(cancel_generation)
 
         # 閾値成立後は全一致枠で再集計し、片側だけの薄い誤一致を抑制する。
@@ -237,6 +194,40 @@ class WeaponRecognitionAdapter(WeaponRecognitionPort):
             outline_matched_slots
             >= constants.WEAPON_DISPLAY_OUTLINE_MIN_MATCHED_SLOTS
         ):
+            outline_matched_ally_slots = (
+                self._count_outline_matched_slots_for_team(
+                    iou_by_slot=outline_iou_by_slot,
+                    slots=constants.ALLY_SLOTS,
+                )
+            )
+            outline_matched_enemy_slots = (
+                self._count_outline_matched_slots_for_team(
+                    iou_by_slot=outline_iou_by_slot,
+                    slots=constants.ENEMY_SLOTS,
+                )
+            )
+            outline_team_slots_reliable = (
+                outline_matched_ally_slots
+                >= constants.TEAM_COLOR_MIN_RELIABLE_SLOTS
+                and outline_matched_enemy_slots
+                >= constants.TEAM_COLOR_MIN_RELIABLE_SLOTS
+            )
+            team_color_uses_partial_slots = (
+                metrics.ally_reliable_slot_count < len(constants.ALLY_SLOTS)
+                or metrics.enemy_reliable_slot_count
+                < len(constants.ENEMY_SLOTS)
+            )
+            matched_team_slots_reliable = (
+                team_color_uses_partial_slots
+                and metrics.ally_reliable_slot_count
+                >= constants.TEAM_COLOR_MIN_RELIABLE_SLOTS
+                and metrics.enemy_reliable_slot_count
+                >= constants.TEAM_COLOR_MIN_RELIABLE_SLOTS
+                and outline_matched_ally_slots
+                >= constants.TEAM_COLOR_MIN_RELIABLE_SLOTS
+                and outline_matched_enemy_slots
+                >= constants.TEAM_COLOR_MIN_RELIABLE_SLOTS
+            )
             matched_slot_team_edge_ratio = (
                 self._calc_outline_matched_slot_team_edge_ratio(
                     slot_images=slot_images,
@@ -245,7 +236,8 @@ class WeaponRecognitionAdapter(WeaponRecognitionPort):
             )
         if matched_slot_team_edge_ratio is not None:
             team_edge_ratio_passed = (
-                matched_slot_team_edge_ratio
+                matched_team_slots_reliable
+                or matched_slot_team_edge_ratio
                 <= constants.WEAPON_DISPLAY_MAX_MATCHED_SLOT_TEAM_EDGE_RATIO
             )
         weapon_region_gray_std_passed = True
@@ -274,9 +266,25 @@ class WeaponRecognitionAdapter(WeaponRecognitionPort):
                 outline_matched_slots
                 >= constants.WEAPON_DISPLAY_OUTLINE_MIN_MATCHED_SLOTS
             )
+            and outline_team_slots_reliable
             and weapon_region_ratio_passed
             and team_edge_ratio_passed
             and weapon_region_gray_std_passed
+        )
+        should_recognize = is_visible or matched_team_slots_reliable
+        display_score = (
+            (min(outline_matched_slots, len(constants.SLOT_ORDER)) / 8.0)
+            + (metrics.ally_reliable_slot_count / len(constants.ALLY_SLOTS))
+            + (metrics.enemy_reliable_slot_count / len(constants.ENEMY_SLOTS))
+        ) / 3.0
+        display_reason = (
+            "visible"
+            if is_visible
+            else (
+                "partial_reliable_slots"
+                if matched_team_slots_reliable
+                else "not_visible"
+            )
         )
         self._logger.debug(
             "ブキ表示判定",
@@ -284,7 +292,14 @@ class WeaponRecognitionAdapter(WeaponRecognitionPort):
             allies_max_distance=metrics.allies_max_distance,
             enemies_max_distance=metrics.enemies_max_distance,
             teams_min_distance=metrics.teams_min_distance,
+            ally_reliable_slot_count=metrics.ally_reliable_slot_count,
+            enemy_reliable_slot_count=metrics.enemy_reliable_slot_count,
             outline_matched_slots=outline_matched_slots,
+            outline_matched_ally_slots=outline_matched_ally_slots,
+            outline_matched_enemy_slots=outline_matched_enemy_slots,
+            outline_team_slots_reliable=outline_team_slots_reliable,
+            team_color_uses_partial_slots=team_color_uses_partial_slots,
+            matched_team_slots_reliable=matched_team_slots_reliable,
             processed_slots=processed_slots,
             outline_required_slots=constants.WEAPON_DISPLAY_OUTLINE_MIN_MATCHED_SLOTS,
             outline_iou_threshold=constants.WEAPON_DISPLAY_OUTLINE_MIN_IOU,
@@ -337,7 +352,39 @@ class WeaponRecognitionAdapter(WeaponRecognitionPort):
                 for slot, iou in outline_iou_by_slot.items()
             },
         )
-        return is_visible
+        return WeaponDisplayDetectionResult(
+            is_visible=is_visible,
+            should_recognize=should_recognize,
+            score=display_score,
+            ally_reliable_slot_count=metrics.ally_reliable_slot_count,
+            enemy_reliable_slot_count=metrics.enemy_reliable_slot_count,
+            outline_matched_slots=outline_matched_slots,
+            outline_matched_ally_slots=outline_matched_ally_slots,
+            outline_matched_enemy_slots=outline_matched_enemy_slots,
+            outline_team_slots_reliable=outline_team_slots_reliable,
+            display_weapon_region_ratio=display_weapon_region_ratio,
+            display_weapon_region_ratio_passed=(
+                weapon_region_ratio_passed
+                if display_weapon_region_ratio is not None
+                else None
+            ),
+            matched_slot_team_edge_ratio=matched_slot_team_edge_ratio,
+            matched_slot_team_edge_ratio_passed=(
+                team_edge_ratio_passed
+                if matched_slot_team_edge_ratio is not None
+                else None
+            ),
+            matched_slot_weapon_region_gray_std=(
+                matched_slot_weapon_region_gray_std
+            ),
+            matched_slot_weapon_region_gray_std_passed=(
+                weapon_region_gray_std_passed
+                if matched_slot_weapon_region_gray_std is not None
+                else None
+            ),
+            fallback_used=fallback_used,
+            reason=display_reason,
+        )
 
     def _get_outline_model_masks(self) -> dict[str, np.ndarray]:
         if self._outline_model_masks is None:
@@ -446,6 +493,18 @@ class WeaponRecognitionAdapter(WeaponRecognitionPort):
         return tuple(
             slot
             for slot in constants.SLOT_ORDER
+            if iou_by_slot[slot] >= constants.WEAPON_DISPLAY_OUTLINE_MIN_IOU
+        )
+
+    @staticmethod
+    def _count_outline_matched_slots_for_team(
+        *,
+        iou_by_slot: dict[str, float],
+        slots: tuple[str, ...],
+    ) -> int:
+        return sum(
+            1
+            for slot in slots
             if iou_by_slot[slot] >= constants.WEAPON_DISPLAY_OUTLINE_MIN_IOU
         )
 
@@ -650,6 +709,84 @@ class WeaponRecognitionAdapter(WeaponRecognitionPort):
                 slot_results[slot] for slot in constants.SLOT_ORDER
             ),
             predict_weapons_output_dir=predict_weapons_output_dir,
+        )
+
+    async def save_predict_weapons_output(
+        self,
+        frame: Frame,
+        slot_results: tuple[WeaponSlotResult, ...],
+        battle_dir_name: str | None = None,
+    ) -> str | None:
+        """判別済みのスロット結果から追跡情報だけを保存する。"""
+        cancel_generation = self._capture_cancel_generation()
+        self._ensure_not_cancelled(cancel_generation)
+        if not predict_weapons_output.should_save_predict_weapons_output():
+            return None
+
+        slot_images = crop_slot_images(frame)
+        model_masks = outline_models.ensure_outline_models(
+            assets_dir=self._matching_assets_dir,
+            logger=self._logger,
+        )
+        self._ensure_not_cancelled(cancel_generation)
+        query_data_by_slot = build_query_slot_data(
+            slot_images=slot_images,
+            model_masks=model_masks,
+        )
+        slot_results_by_slot = self._complete_slot_results(slot_results)
+        slot_debug_candidates_by_slot = {
+            slot: self._to_slot_debug_candidates(slot_result)
+            for slot, slot_result in slot_results_by_slot.items()
+        }
+
+        self._ensure_not_cancelled(cancel_generation)
+        output_dir = predict_weapons_output.save_predict_weapons_output(
+            frame=frame,
+            query_data_by_slot=query_data_by_slot,
+            slot_results=slot_results_by_slot,
+            slot_debug_candidates_by_slot=slot_debug_candidates_by_slot,
+            battle_dir_name=battle_dir_name,
+            target_slots=set(),
+        )
+        if output_dir is not None:
+            self._logger.info(
+                "predict_weapons 出力を保存",
+                output_dir=output_dir,
+            )
+        return output_dir
+
+    @staticmethod
+    def _complete_slot_results(
+        slot_results: tuple[WeaponSlotResult, ...],
+    ) -> dict[str, WeaponSlotResult]:
+        supplied_results = {
+            slot_result.slot: slot_result for slot_result in slot_results
+        }
+        completed: dict[str, WeaponSlotResult] = {}
+        for slot in constants.SLOT_ORDER:
+            completed[slot] = supplied_results.get(
+                slot,
+                WeaponSlotResult(
+                    slot=slot,
+                    predicted_weapon=constants.UNKNOWN_WEAPON_LABEL,
+                    is_unmatched=True,
+                    top_candidates=(),
+                    detected_score=None,
+                ),
+            )
+        return completed
+
+    @staticmethod
+    def _to_slot_debug_candidates(
+        slot_result: WeaponSlotResult,
+    ) -> tuple[predict_weapons_output.SlotDebugCandidate, ...]:
+        return tuple(
+            predict_weapons_output.SlotDebugCandidate(
+                weapon=candidate.weapon,
+                score=candidate.score,
+                threshold=candidate.threshold,
+            )
+            for candidate in slot_result.top_candidates
         )
 
     async def _predict_slot(

@@ -8,6 +8,11 @@ import cv2
 import numpy as np
 import pytest
 
+from splat_replay.application.interfaces import (
+    WeaponCandidateScore,
+    WeaponDisplayDetectionResult,
+    WeaponSlotResult,
+)
 from splat_replay.domain.config import ImageMatchingSettings
 from splat_replay.infrastructure.adapters.weapon_detection import constants
 from splat_replay.infrastructure.adapters.weapon_detection.constants import (
@@ -20,6 +25,7 @@ from splat_replay.infrastructure.adapters.weapon_detection.recognizer import (
 )
 from splat_replay.infrastructure.adapters.weapon_detection.team_color import (
     TeamColorScreenMetrics,
+    detect_weapon_display_screen,
 )
 
 FIXTURE_DIR = Path(__file__).resolve().parent / "fixtures" / "weapon_detection"
@@ -226,6 +232,13 @@ def recognizer() -> WeaponRecognitionAdapter:
 def _load_image(path: Path) -> np.ndarray:
     image = cv2.imread(str(path))
     assert image is not None, f"failed to load: {path}"
+    return image
+
+
+def _slot_image_with_sample_rgb(rgb: tuple[int, int, int]) -> np.ndarray:
+    image = np.zeros((16, 64, 3), dtype=np.uint8)
+    sample_x, sample_y = constants.TEAM_COLOR_SAMPLE_POINT
+    image[sample_y, sample_x] = (rgb[2], rgb[1], rgb[0])
     return image
 
 
@@ -1159,13 +1172,68 @@ async def test_predict_slot_does_not_apply_confidence_rescue_when_signal_is_weak
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
     "filename",
-    [f"weapon_icons_visible_{index:02d}.png" for index in range(1, 17)],
+    [
+        *[f"weapon_icons_visible_{index:02d}.png" for index in range(1, 17)],
+        "weapon_icons_visible_20260417_231716.png",
+    ],
 )
 async def test_detect_weapon_display_true(
     recognizer: WeaponRecognitionAdapter, filename: str
 ) -> None:
     frame = _load_image(VISIBLE_FIXTURE_DIR / filename)
     assert await recognizer.detect_weapon_display(frame) is True
+
+
+def test_detect_weapon_display_screen_accepts_three_reliable_slots_per_team() -> (
+    None
+):
+    slot_images = {
+        "ally_1": _slot_image_with_sample_rgb((80, 170, 230)),
+        "ally_2": _slot_image_with_sample_rgb((85, 168, 225)),
+        "ally_3": _slot_image_with_sample_rgb((78, 174, 228)),
+        "ally_4": _slot_image_with_sample_rgb((30, 30, 30)),
+        "enemy_1": _slot_image_with_sample_rgb((230, 70, 90)),
+        "enemy_2": _slot_image_with_sample_rgb((225, 75, 95)),
+        "enemy_3": _slot_image_with_sample_rgb((232, 68, 88)),
+        "enemy_4": _slot_image_with_sample_rgb((30, 30, 30)),
+    }
+
+    is_display, metrics = detect_weapon_display_screen(slot_images)
+
+    assert is_display is True
+    assert metrics.ally_reliable_slot_count == 3
+    assert metrics.enemy_reliable_slot_count == 3
+    assert (
+        metrics.allies_max_distance <= constants.TEAM_COLOR_WITHIN_MAX_DISTANCE
+    )
+    assert (
+        metrics.enemies_max_distance
+        <= constants.TEAM_COLOR_WITHIN_MAX_DISTANCE
+    )
+    assert (
+        metrics.teams_min_distance >= constants.TEAM_COLOR_BETWEEN_MIN_DISTANCE
+    )
+
+
+def test_detect_weapon_display_screen_rejects_two_reliable_ally_slots() -> (
+    None
+):
+    slot_images = {
+        "ally_1": _slot_image_with_sample_rgb((80, 170, 230)),
+        "ally_2": _slot_image_with_sample_rgb((85, 168, 225)),
+        "ally_3": _slot_image_with_sample_rgb((30, 30, 30)),
+        "ally_4": _slot_image_with_sample_rgb((230, 30, 30)),
+        "enemy_1": _slot_image_with_sample_rgb((230, 70, 90)),
+        "enemy_2": _slot_image_with_sample_rgb((225, 75, 95)),
+        "enemy_3": _slot_image_with_sample_rgb((232, 68, 88)),
+        "enemy_4": _slot_image_with_sample_rgb((228, 72, 92)),
+    }
+
+    is_display, metrics = detect_weapon_display_screen(slot_images)
+
+    assert is_display is False
+    assert metrics.ally_reliable_slot_count == 2
+    assert metrics.enemy_reliable_slot_count == 4
 
 
 @pytest.mark.asyncio
@@ -1247,7 +1315,7 @@ async def test_detect_weapon_display_true_when_outline_matched_slots_is_four(
     )
     monkeypatch.setattr(recognizer, "_get_outline_model_masks", lambda: {})
     iou_by_slot = {slot: 0.0 for slot in constants.SLOT_ORDER}
-    for slot in constants.SLOT_ORDER[:4]:
+    for slot in (*constants.ALLY_SLOTS[:3], *constants.ENEMY_SLOTS[:3]):
         iou_by_slot[slot] = constants.WEAPON_DISPLAY_OUTLINE_MIN_IOU
     monkeypatch.setattr(
         recognizer,
@@ -1269,6 +1337,65 @@ async def test_detect_weapon_display_true_when_outline_matched_slots_is_four(
 
 
 @pytest.mark.asyncio
+async def test_detect_weapon_display_details_can_recommend_partial_recognition(
+    recognizer: WeaponRecognitionAdapter,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    frame = _load_image(VISIBLE_FIXTURE_DIR / "weapon_icons_visible_01.png")
+    metrics = TeamColorScreenMetrics(
+        allies_max_distance=0.0,
+        enemies_max_distance=0.0,
+        teams_min_distance=999.0,
+        ally_reliable_slot_count=3,
+        enemy_reliable_slot_count=3,
+    )
+    monkeypatch.setattr(
+        "splat_replay.infrastructure.adapters.weapon_detection.recognizer.detect_weapon_display_screen",
+        lambda _: (True, metrics),
+    )
+    monkeypatch.setattr(recognizer, "_get_outline_model_masks", lambda: {})
+    iou_by_slot = {slot: 0.0 for slot in constants.SLOT_ORDER}
+    for slot in (*constants.ALLY_SLOTS[:3], *constants.ENEMY_SLOTS[:3]):
+        iou_by_slot[slot] = constants.WEAPON_DISPLAY_OUTLINE_MIN_IOU
+    monkeypatch.setattr(
+        recognizer,
+        "_count_outline_matched_slots",
+        lambda *,
+        slot_images,
+        model_masks,
+        cancel_generation=None,
+        max_shift=None,
+        slot_order=None,
+        stop_at_threshold=True: (  # noqa: E501
+            6,
+            iou_by_slot,
+            6,
+            0.20,
+        ),
+    )
+    monkeypatch.setattr(
+        recognizer,
+        "_calc_outline_matched_slot_weapon_region_gray_std",
+        lambda *, slot_images, iou_by_slot, model_masks, max_shift: (
+            constants.WEAPON_DISPLAY_MIN_MATCHED_SLOT_WEAPON_REGION_GRAY_STD
+            - 0.01
+        ),
+    )
+
+    details = await recognizer.detect_weapon_display_details(frame)
+
+    assert isinstance(details, WeaponDisplayDetectionResult)
+    assert details.is_visible is False
+    assert details.should_recognize is True
+    assert details.ally_reliable_slot_count == 3
+    assert details.enemy_reliable_slot_count == 3
+    assert details.outline_matched_ally_slots == 3
+    assert details.outline_matched_enemy_slots == 3
+    assert details.outline_matched_slots == 6
+    assert await recognizer.detect_weapon_display(frame) is False
+
+
+@pytest.mark.asyncio
 async def test_detect_weapon_display_uses_fast_path_without_fallback_when_fast_passes(
     recognizer: WeaponRecognitionAdapter,
     monkeypatch: pytest.MonkeyPatch,
@@ -1287,7 +1414,7 @@ async def test_detect_weapon_display_uses_fast_path_without_fallback_when_fast_p
     )
     monkeypatch.setattr(recognizer, "_get_outline_model_masks", lambda: {})
     iou_by_slot = {slot: 0.0 for slot in constants.SLOT_ORDER}
-    for slot in constants.SLOT_ORDER[:4]:
+    for slot in (*constants.ALLY_SLOTS[:3], *constants.ENEMY_SLOTS[:3]):
         iou_by_slot[slot] = constants.WEAPON_DISPLAY_OUTLINE_MIN_IOU
 
     shifts: list[int | None] = []
@@ -1300,14 +1427,14 @@ async def test_detect_weapon_display_uses_fast_path_without_fallback_when_fast_p
         max_shift: int | None = None,
         slot_order: tuple[str, ...] | None = None,
         stop_at_threshold: bool = True,
-    ) -> tuple[int, dict[str, float], int]:
+    ) -> tuple[int, dict[str, float], int, float]:
         _ = slot_images
         _ = model_masks
         _ = cancel_generation
         _ = slot_order
         _ = stop_at_threshold
         shifts.append(max_shift)
-        return (4, iou_by_slot, 4)
+        return (6, iou_by_slot, 6, 0.20)
 
     monkeypatch.setattr(
         recognizer,
@@ -1323,12 +1450,12 @@ async def test_detect_weapon_display_uses_fast_path_without_fallback_when_fast_p
     assert spy_logger.debug_calls
     _, fields = spy_logger.debug_calls[-1]
     assert fields["fallback_used"] is False
-    assert fields["processed_slots"] == 4
+    assert fields["processed_slots"] == 6
     assert fields["fast_shift"] == constants.OUTLINE_ALIGN_FAST_MAX_SHIFT
 
 
 @pytest.mark.asyncio
-async def test_detect_weapon_display_runs_precise_fallback_when_fast_pass_fails(
+async def test_detect_weapon_display_does_not_run_precise_fallback_when_fast_pass_fails(
     recognizer: WeaponRecognitionAdapter,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -1349,10 +1476,6 @@ async def test_detect_weapon_display_runs_precise_fallback_when_fast_pass_fails(
     fast_iou = {slot: 0.0 for slot in constants.SLOT_ORDER}
     for slot in constants.SLOT_ORDER[:3]:
         fast_iou[slot] = constants.WEAPON_DISPLAY_OUTLINE_MIN_IOU
-    precise_iou = {slot: 0.0 for slot in constants.SLOT_ORDER}
-    for slot in constants.SLOT_ORDER[:4]:
-        precise_iou[slot] = constants.WEAPON_DISPLAY_OUTLINE_MIN_IOU
-
     shifts: list[int | None] = []
 
     def _count_outline_matched_slots(
@@ -1370,9 +1493,9 @@ async def test_detect_weapon_display_runs_precise_fallback_when_fast_pass_fails(
         _ = slot_order
         _ = stop_at_threshold
         shifts.append(max_shift)
-        if max_shift == constants.OUTLINE_ALIGN_FAST_MAX_SHIFT:
-            return (3, fast_iou, 8)
-        return (4, precise_iou, 5)
+        if max_shift != constants.OUTLINE_ALIGN_FAST_MAX_SHIFT:
+            raise AssertionError("表示判定で精密fallbackは実行しません")
+        return (3, fast_iou, 8)
 
     monkeypatch.setattr(
         recognizer,
@@ -1380,21 +1503,18 @@ async def test_detect_weapon_display_runs_precise_fallback_when_fast_pass_fails(
         _count_outline_matched_slots,
     )
 
-    assert await recognizer.detect_weapon_display(frame) is True
-    assert shifts == [
-        constants.OUTLINE_ALIGN_FAST_MAX_SHIFT,
-        constants.OUTLINE_ALIGN_MAX_SHIFT,
-        constants.OUTLINE_ALIGN_MAX_SHIFT,
-    ]
+    assert await recognizer.detect_weapon_display(frame) is False
+    assert shifts == [constants.OUTLINE_ALIGN_FAST_MAX_SHIFT]
     assert spy_logger.debug_calls
     _, fields = spy_logger.debug_calls[-1]
-    assert fields["fallback_used"] is True
-    assert fields["processed_slots"] == 5
+    assert fields["fallback_used"] is False
+    assert fields["processed_slots"] == 8
+    assert fields["outline_matched_slots"] == 3
     assert fields["fast_shift"] == constants.OUTLINE_ALIGN_FAST_MAX_SHIFT
 
 
 @pytest.mark.asyncio
-async def test_detect_weapon_display_runs_precise_fallback_when_fast_needs_extra_slots(
+async def test_detect_weapon_display_rejects_unbalanced_outline_slots_without_precise_fallback(
     recognizer: WeaponRecognitionAdapter,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -1415,8 +1535,8 @@ async def test_detect_weapon_display_runs_precise_fallback_when_fast_needs_extra
     fast_iou = {slot: 0.0 for slot in constants.SLOT_ORDER}
     for slot in constants.ENEMY_SLOTS:
         fast_iou[slot] = constants.WEAPON_DISPLAY_OUTLINE_MIN_IOU
-    precise_iou = dict(fast_iou)
     slot_orders: list[tuple[str, ...] | None] = []
+    shifts: list[int | None] = []
 
     def _count_outline_matched_slots(
         *,
@@ -1432,9 +1552,10 @@ async def test_detect_weapon_display_runs_precise_fallback_when_fast_needs_extra
         _ = cancel_generation
         _ = stop_at_threshold
         slot_orders.append(slot_order)
-        if max_shift == constants.OUTLINE_ALIGN_FAST_MAX_SHIFT:
-            return (4, fast_iou, 8, 0.081)
-        return (4, precise_iou, 4, 0.079)
+        shifts.append(max_shift)
+        if max_shift != constants.OUTLINE_ALIGN_FAST_MAX_SHIFT:
+            raise AssertionError("表示判定で精密fallbackは実行しません")
+        return (4, fast_iou, 8, 0.20)
 
     monkeypatch.setattr(
         recognizer,
@@ -1445,10 +1566,78 @@ async def test_detect_weapon_display_runs_precise_fallback_when_fast_needs_extra
     assert await recognizer.detect_weapon_display(frame) is False
     assert spy_logger.debug_calls
     _, fields = spy_logger.debug_calls[-1]
-    assert fields["fallback_used"] is True
-    assert fields["processed_slots"] == 4
+    assert fields["fallback_used"] is False
+    assert fields["processed_slots"] == 8
+    assert fields["outline_matched_ally_slots"] == 0
+    assert fields["outline_matched_enemy_slots"] == 4
+    assert fields["display_weapon_region_ratio_passed"] is True
+    assert shifts == [
+        constants.OUTLINE_ALIGN_FAST_MAX_SHIFT,
+        constants.OUTLINE_ALIGN_FAST_MAX_SHIFT,
+    ]
+    assert slot_orders == [None, None]
+
+
+@pytest.mark.asyncio
+async def test_detect_weapon_display_rejects_low_weapon_region_ratio_at_fast_path(
+    recognizer: WeaponRecognitionAdapter,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    frame = _load_image(VISIBLE_FIXTURE_DIR / "weapon_icons_visible_01.png")
+    metrics = TeamColorScreenMetrics(
+        allies_max_distance=0.0,
+        enemies_max_distance=0.0,
+        teams_min_distance=999.0,
+    )
+    spy_logger = _SpyLogger()
+    recognizer._logger = spy_logger
+    monkeypatch.setattr(
+        "splat_replay.infrastructure.adapters.weapon_detection.recognizer.detect_weapon_display_screen",
+        lambda _: (True, metrics),
+    )
+    monkeypatch.setattr(recognizer, "_get_outline_model_masks", lambda: {})
+    iou_by_slot = {slot: 0.0 for slot in constants.SLOT_ORDER}
+    for slot in (*constants.ALLY_SLOTS[:3], *constants.ENEMY_SLOTS[:3]):
+        iou_by_slot[slot] = constants.WEAPON_DISPLAY_OUTLINE_MIN_IOU
+
+    def _count_outline_matched_slots(
+        *,
+        slot_images: dict[str, np.ndarray],
+        model_masks: dict[str, np.ndarray],
+        cancel_generation: int | None = None,
+        max_shift: int | None = None,
+        slot_order: tuple[str, ...] | None = None,
+        stop_at_threshold: bool = True,
+    ) -> tuple[int, dict[str, float], int, float]:
+        _ = slot_images
+        _ = model_masks
+        _ = cancel_generation
+        _ = max_shift
+        _ = slot_order
+        _ = stop_at_threshold
+        return (6, iou_by_slot, 6, 0.09)
+
+    monkeypatch.setattr(
+        recognizer,
+        "_count_outline_matched_slots",
+        _count_outline_matched_slots,
+    )
+    monkeypatch.setattr(
+        recognizer,
+        "_calc_outline_matched_slot_team_edge_ratio",
+        lambda *, slot_images, iou_by_slot: 0.10,
+    )
+    monkeypatch.setattr(
+        recognizer,
+        "_calc_outline_matched_slot_weapon_region_gray_std",
+        lambda *, slot_images, iou_by_slot, model_masks, max_shift: 60.0,
+    )
+
+    assert await recognizer.detect_weapon_display(frame) is False
+    assert spy_logger.debug_calls
+    _, fields = spy_logger.debug_calls[-1]
+    assert fields["display_weapon_region_ratio"] == pytest.approx(0.09)
     assert fields["display_weapon_region_ratio_passed"] is False
-    assert slot_orders == [None, constants.ENEMY_SLOTS, None]
 
 
 @pytest.mark.asyncio
@@ -1470,7 +1659,7 @@ async def test_detect_weapon_display_true_when_matched_slot_team_edge_ratio_is_0
     )
     monkeypatch.setattr(recognizer, "_get_outline_model_masks", lambda: {})
     iou_by_slot = {slot: 0.0 for slot in constants.SLOT_ORDER}
-    for slot in constants.ALLY_SLOTS:
+    for slot in (*constants.ALLY_SLOTS[:3], *constants.ENEMY_SLOTS[:3]):
         iou_by_slot[slot] = constants.WEAPON_DISPLAY_OUTLINE_MIN_IOU
     monkeypatch.setattr(
         recognizer,
@@ -1482,9 +1671,9 @@ async def test_detect_weapon_display_true_when_matched_slot_team_edge_ratio_is_0
         max_shift=None,
         slot_order=None,
         stop_at_threshold=True: (  # noqa: E501
-            4,
+            6,
             iou_by_slot,
-            4,
+            6,
             0.20,
         ),
     )
@@ -1535,7 +1724,7 @@ async def test_detect_weapon_display_false_when_matched_slot_team_edge_ratio_is_
     )
     monkeypatch.setattr(recognizer, "_get_outline_model_masks", lambda: {})
     iou_by_slot = {slot: 0.0 for slot in constants.SLOT_ORDER}
-    for slot in constants.ALLY_SLOTS:
+    for slot in (*constants.ALLY_SLOTS[:3], *constants.ENEMY_SLOTS[:3]):
         iou_by_slot[slot] = constants.WEAPON_DISPLAY_OUTLINE_MIN_IOU
     monkeypatch.setattr(
         recognizer,
@@ -1547,9 +1736,9 @@ async def test_detect_weapon_display_false_when_matched_slot_team_edge_ratio_is_
         max_shift=None,
         slot_order=None,
         stop_at_threshold=True: (  # noqa: E501
-            4,
+            6,
             iou_by_slot,
-            4,
+            6,
             0.20,
         ),
     )
@@ -1600,7 +1789,7 @@ async def test_detect_weapon_display_false_when_weapon_region_gray_std_is_low(
     )
     monkeypatch.setattr(recognizer, "_get_outline_model_masks", lambda: {})
     iou_by_slot = {slot: 0.0 for slot in constants.SLOT_ORDER}
-    for slot in constants.ALLY_SLOTS:
+    for slot in (*constants.ALLY_SLOTS[:3], *constants.ENEMY_SLOTS[:3]):
         iou_by_slot[slot] = constants.WEAPON_DISPLAY_OUTLINE_MIN_IOU
     monkeypatch.setattr(
         recognizer,
@@ -1612,9 +1801,9 @@ async def test_detect_weapon_display_false_when_weapon_region_gray_std_is_low(
         max_shift=None,
         slot_order=None,
         stop_at_threshold=True: (  # noqa: E501
-            4,
+            6,
             iou_by_slot,
-            4,
+            6,
             0.20,
         ),
     )
@@ -2041,3 +2230,56 @@ async def test_recognize_weapons_partial_report_counts_only_target_slots(
     ally_1_row = next(r for r in summary["rows"] if r["slot"] == "ally_1")
     assert ally_1_row["predicted_weapon"] == UNKNOWN_WEAPON_LABEL
     assert ally_1_row["is_unmatched"] is True
+
+
+@pytest.mark.asyncio
+async def test_save_predict_weapons_output_uses_existing_results_without_predicting(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """判別済み結果の出力では、各スロットの判別を再実行しない。"""
+    output_root = tmp_path / "predict_weapons"
+    output_root.mkdir()
+    monkeypatch.setattr(constants, "PREDICT_WEAPONS_OUTPUT_DIR", output_root)
+    settings = ImageMatchingSettings.load_from_yaml(MATCHING_CONFIG_PATH)
+    recognizer = WeaponRecognitionAdapter(
+        settings=settings, logger=_TestLogger()
+    )
+
+    async def _unexpected_predict_slot(**kwargs: object) -> object:
+        _ = kwargs
+        raise AssertionError("判別済み結果の出力で _predict_slot は不要です")
+
+    monkeypatch.setattr(recognizer, "_predict_slot", _unexpected_predict_slot)
+
+    frame = _load_image(VISIBLE_FIXTURE_DIR / "weapon_icons_visible_16.png")
+    slot_results = tuple(
+        WeaponSlotResult(
+            slot=slot,
+            predicted_weapon=f"判別済み_{index}",
+            is_unmatched=False,
+            top_candidates=(
+                WeaponCandidateScore(
+                    weapon=f"判別済み_{index}",
+                    score=0.9,
+                    threshold=0.8,
+                ),
+            ),
+            detected_score=0.9,
+        )
+        for index, slot in enumerate(constants.SLOT_ORDER)
+    )
+
+    output_dir = await recognizer.save_predict_weapons_output(
+        frame,
+        slot_results,
+        battle_dir_name="20260412_224226",
+    )
+
+    assert output_dir is not None
+    summary_path = Path(output_dir) / "summary.json"
+    summary = json.loads(summary_path.read_text(encoding="utf-8"))
+    assert summary["unmatched_count"] == 0
+    assert [row["predicted_weapon"] for row in summary["rows"]] == [
+        f"判別済み_{index}" for index in range(len(constants.SLOT_ORDER))
+    ]

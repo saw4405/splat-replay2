@@ -10,6 +10,7 @@ from splat_replay.domain.models import Frame
 __all__ = [
     "WeaponRecognitionPort",
     "WeaponCandidateScore",
+    "WeaponDisplayDetectionResult",
     "WeaponSlotResult",
     "WeaponRecognitionResult",
 ]
@@ -22,6 +23,29 @@ class WeaponCandidateScore:
     weapon: str
     score: float
     threshold: float
+
+
+@dataclass(frozen=True)
+class WeaponDisplayDetectionResult:
+    """ブキ表示判定の詳細結果。"""
+
+    is_visible: bool
+    should_recognize: bool
+    score: float = 0.0
+    ally_reliable_slot_count: int = 0
+    enemy_reliable_slot_count: int = 0
+    outline_matched_slots: int = 0
+    outline_matched_ally_slots: int = 0
+    outline_matched_enemy_slots: int = 0
+    outline_team_slots_reliable: bool = False
+    display_weapon_region_ratio: float | None = None
+    display_weapon_region_ratio_passed: bool | None = None
+    matched_slot_team_edge_ratio: float | None = None
+    matched_slot_team_edge_ratio_passed: bool | None = None
+    matched_slot_weapon_region_gray_std: float | None = None
+    matched_slot_weapon_region_gray_std_passed: bool | None = None
+    fallback_used: bool = False
+    reason: str = ""
 
 
 @dataclass(frozen=True)
@@ -63,6 +87,12 @@ class WeaponRecognitionPort(Protocol):
         """ブキ表示画面かどうかを判定する。"""
         ...
 
+    async def detect_weapon_display_details(
+        self, frame: Frame
+    ) -> WeaponDisplayDetectionResult:
+        """ブキ表示判定の詳細結果を返す。"""
+        ...
+
     async def recognize_weapons(
         self,
         frame: Frame,
@@ -79,5 +109,17 @@ class WeaponRecognitionPort(Protocol):
             target_slots: 判別対象のスロットのセット。Noneの場合は全スロット。
             previous_results: 既存の判定結果。target_slotsに含まれないスロットはこの結果を使用。
             battle_dir_name: predict_weapons 保存時のバトルフォルダ名。
+        """
+        ...
+
+    async def save_predict_weapons_output(
+        self,
+        frame: Frame,
+        slot_results: tuple[WeaponSlotResult, ...],
+        battle_dir_name: str | None = None,
+    ) -> str | None:
+        """判別済みの結果から predict_weapons 出力だけを保存する。
+
+        ブキ判別は再実行しない。
         """
         ...
