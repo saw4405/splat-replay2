@@ -78,7 +78,6 @@ class _WeaponTaskResult:
     visible_frame: Frame | None = None
     display_check_completed: bool = False
     display_visible: bool = False
-    skipped_predict_weapons_output_no_visible_frame: bool = False
     saved_predict_weapons_output_from_diagnostic_frame: bool = False
     diagnostic_frame: Frame | None = None
     display_details: WeaponDisplayDetectionResult | None = None
@@ -551,45 +550,10 @@ class WeaponDetectionService:
                 result=result,
             )
         if result.kind == "finalized":
-            # _apply_finalized_result が _reset_detection_statistics() を呼ぶため、
-            # スキップログ用のカウントを事前に保存する。
-            display_check_count = self._display_check_count
-            visible_hit_count = self._visible_hit_count
-            context = self._apply_finalized_result(
+            return self._apply_finalized_result(
                 context=context,
                 result=result,
             )
-            # finalize 処理の後にスキップログを出すことで、
-            # 「ブキ検知結果を更新しました」より後に記録されるようにする。
-            if result.skipped_predict_weapons_output_no_visible_frame:
-                self._logger.info(
-                    "ブキ表示未検出のため predict_weapons 出力をスキップ",
-                    elapsed_seconds=result.elapsed_seconds,
-                    display_check_count=display_check_count,
-                    visible_hit_count=visible_hit_count,
-                )
-            elif result.saved_predict_weapons_output_from_diagnostic_frame:
-                self._logger.info(
-                    "ブキ表示診断メトリクス",
-                    elapsed_seconds=result.elapsed_seconds,
-                    display_check_count=display_check_count,
-                    visible_hit_count=visible_hit_count,
-                    **_display_details_log_fields(result.display_details),
-                )
-                self._logger.info(
-                    "表示未検出フレームの predict_weapons 出力を保存しました",
-                    elapsed_seconds=result.elapsed_seconds,
-                    display_check_count=display_check_count,
-                    visible_hit_count=visible_hit_count,
-                )
-            else:
-                self._logger.info(
-                    "ブキ判別ウィンドウ統計",
-                    display_check_count=display_check_count,
-                    visible_hit_count=visible_hit_count,
-                    elapsed_seconds=result.elapsed_seconds,
-                )
-            return context
         return context
 
     def _start_detection_task(
@@ -634,10 +598,6 @@ class WeaponDetectionService:
                 error_event="ブキ表示判定に失敗しました",
             )
         if not display_details.should_recognize:
-            self._logger.debug(
-                "ブキ表示なし",
-                elapsed_seconds=elapsed_seconds,
-            )
             return _WeaponTaskResult(
                 kind="display_ng",
                 generation=generation,
@@ -647,11 +607,6 @@ class WeaponDetectionService:
                 diagnostic_frame=frame.copy(),
                 display_details=display_details,
             )
-
-        self._logger.info(
-            "ブキ表示を検出",
-            elapsed_seconds=elapsed_seconds,
-        )
         current_labels = _normalize_weapon_labels(context.metadata)
         target_slots = _get_unknown_slot_names(current_labels)
 
@@ -724,21 +679,13 @@ class WeaponDetectionService:
         labels = _normalize_weapon_labels(context.metadata)
         best_scores = _normalize_best_scores(context.weapon_best_scores)
         finalize_warning: tuple[str, str] | None = None
-        skipped_predict_weapons_output_no_visible_frame = False
         saved_predict_weapons_output_from_diagnostic_frame = False
         report_frame: Frame | None = None
         report_slot_results: tuple[WeaponSlotResult, ...] | None = None
 
         candidate_frames = list(reversed(self._visible_candidates))
         fallback_frames = list(reversed(self._fallback_frames))
-        unknown_slots = _get_unknown_slot_names(labels)
-        self._logger.info(
-            "ブキ判別ファイナライズ開始",
-            candidate_frame_count=len(candidate_frames),
-            fallback_frame_count=len(fallback_frames),
-            unknown_slot_count=len(unknown_slots),
-            unknown_slots=sorted(unknown_slots),
-        )
+
         if candidate_frames:
             should_save_report = not self._predict_weapons_output_attempted
             previous_results = _build_previous_results(context)
@@ -789,7 +736,6 @@ class WeaponDetectionService:
             should_save_report = not self._predict_weapons_output_attempted
             previous_results = _build_previous_results(context)
 
-            fallback_frame_count = len(fallback_frames)
             for fallback_frame_index, queued_frame in enumerate(
                 fallback_frames,
                 start=1,
@@ -798,14 +744,6 @@ class WeaponDetectionService:
                 if not target_slots:
                     break
                 try:
-                    self._logger.info(
-                        "終了時fallbackブキ表示判定開始",
-                        fallback_frame_index=fallback_frame_index,
-                        fallback_frame_count=fallback_frame_count,
-                        frame_elapsed_seconds=queued_frame.elapsed_seconds,
-                        target_slot_count=len(target_slots),
-                        target_slots=sorted(target_slots),
-                    )
                     is_visible = await asyncio.wait_for(
                         self._run_recognizer_call(
                             lambda: self._recognizer.detect_weapon_display(
@@ -830,25 +768,10 @@ class WeaponDetectionService:
                     )
                     continue
 
-                self._logger.info(
-                    "終了時fallbackブキ表示判定完了",
-                    fallback_frame_index=fallback_frame_index,
-                    fallback_frame_count=fallback_frame_count,
-                    frame_elapsed_seconds=queued_frame.elapsed_seconds,
-                    display_visible=is_visible,
-                )
                 if not is_visible:
                     continue
 
                 try:
-                    self._logger.info(
-                        "終了時fallbackブキ判別開始",
-                        fallback_frame_index=fallback_frame_index,
-                        fallback_frame_count=fallback_frame_count,
-                        frame_elapsed_seconds=queued_frame.elapsed_seconds,
-                        target_slot_count=len(target_slots),
-                        target_slots=sorted(target_slots),
-                    )
                     final_result = await asyncio.wait_for(
                         self._run_recognizer_call(
                             lambda: self._recognizer.recognize_weapons(
@@ -877,7 +800,6 @@ class WeaponDetectionService:
                     )
                     continue
 
-                matched_slot_count = 0
                 for slot_result in final_result.slot_results:
                     index = SLOT_NAMES.index(slot_result.slot)
                     best_scores[index] = max(
@@ -886,16 +808,6 @@ class WeaponDetectionService:
                     previous_results[slot_result.slot] = slot_result
                     if not slot_result.is_unmatched:
                         labels[index] = slot_result.predicted_weapon
-                        if slot_result.slot in target_slots:
-                            matched_slot_count += 1
-                remaining_unknown_slots = _get_unknown_slot_names(labels)
-                self._logger.info(
-                    "終了時fallbackブキ判別完了",
-                    fallback_frame_index=fallback_frame_index,
-                    fallback_frame_count=fallback_frame_count,
-                    matched_slot_count=matched_slot_count,
-                    remaining_unknown_slot_count=len(remaining_unknown_slots),
-                )
                 if should_save_report:
                     report_frame = queued_frame.frame.copy()
                     report_slot_results = final_result.slot_results
@@ -988,8 +900,6 @@ class WeaponDetectionService:
                     report_frame = frame_for_output
                     report_slot_results = diagnostic_slot_results
                     saved_predict_weapons_output_from_diagnostic_frame = True
-            else:
-                skipped_predict_weapons_output_no_visible_frame = True
 
         for index in range(SLOT_COUNT):
             if labels[index]:
@@ -1013,9 +923,6 @@ class WeaponDetectionService:
             attempts=context.weapon_detection_attempts,
             error_event=warning_event,
             error=warning_error,
-            skipped_predict_weapons_output_no_visible_frame=(
-                skipped_predict_weapons_output_no_visible_frame
-            ),
             saved_predict_weapons_output_from_diagnostic_frame=(
                 saved_predict_weapons_output_from_diagnostic_frame
             ),
@@ -1112,14 +1019,6 @@ class WeaponDetectionService:
                 elapsed_seconds=result.elapsed_seconds,
                 attempts=attempts,
                 is_final=done,
-            )
-        if done:
-            self._logger.info(
-                "ブキ判別ウィンドウ内で全スロット判明",
-                display_check_count=self._display_check_count,
-                visible_hit_count=self._visible_hit_count,
-                elapsed_seconds=result.elapsed_seconds,
-                attempts=attempts,
             )
             self._reset_frame_buffers()
             self._reset_detection_statistics()
@@ -1321,37 +1220,6 @@ def _is_result_complete(result: WeaponRecognitionResult) -> bool:
     return all(
         not slot_result.is_unmatched for slot_result in result.slot_results
     )
-
-
-def _display_details_log_fields(
-    details: WeaponDisplayDetectionResult | None,
-) -> dict[str, object]:
-    if details is None:
-        return {}
-    fields: dict[str, object] = {
-        "display_reason": details.reason,
-        "display_score": details.score,
-        "ally_reliable_slot_count": details.ally_reliable_slot_count,
-        "enemy_reliable_slot_count": details.enemy_reliable_slot_count,
-        "outline_matched_slots": details.outline_matched_slots,
-        "outline_matched_ally_slots": details.outline_matched_ally_slots,
-        "outline_matched_enemy_slots": details.outline_matched_enemy_slots,
-    }
-    optional_field_names = (
-        "outline_team_slots_reliable",
-        "display_weapon_region_ratio",
-        "display_weapon_region_ratio_passed",
-        "matched_slot_team_edge_ratio",
-        "matched_slot_team_edge_ratio_passed",
-        "matched_slot_weapon_region_gray_std",
-        "matched_slot_weapon_region_gray_std_passed",
-        "fallback_used",
-    )
-    for field_name in optional_field_names:
-        value = getattr(details, field_name, None)
-        if value is not None:
-            fields[field_name] = value
-    return fields
 
 
 def _get_unknown_slot_names(labels: list[str]) -> set[str]:

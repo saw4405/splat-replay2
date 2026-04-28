@@ -2055,29 +2055,6 @@ async def test_complete_as_unknown_saves_last_display_ng_frame_with_metrics() ->
         for slot_result in recognizer.report_slot_results[0]
     )
 
-    metric_logs = [
-        fields
-        for _event, fields in logger.infos
-        if fields.get("display_reason") == "not_visible"
-    ]
-    assert metric_logs
-    metric_log = metric_logs[-1]
-    assert metric_log["display_check_count"] == 1
-    assert metric_log["visible_hit_count"] == 0
-    assert metric_log["display_score"] == 0.42
-    assert metric_log["ally_reliable_slot_count"] == 2
-    assert metric_log["enemy_reliable_slot_count"] == 3
-    assert metric_log["outline_matched_slots"] == 4
-    assert metric_log["outline_matched_ally_slots"] == 1
-    assert metric_log["outline_matched_enemy_slots"] == 3
-    assert metric_log["outline_team_slots_reliable"] is False
-    assert metric_log["display_weapon_region_ratio"] == 0.09
-    assert metric_log["display_weapon_region_ratio_passed"] is False
-    assert metric_log["matched_slot_team_edge_ratio"] == 0.015
-    assert metric_log["matched_slot_team_edge_ratio_passed"] is True
-    assert metric_log["matched_slot_weapon_region_gray_std"] == 2.5
-    assert metric_log["matched_slot_weapon_region_gray_std_passed"] is False
-
 
 @pytest.mark.asyncio
 async def test_finalize_tries_visible_candidates_from_newest_to_oldest() -> (
@@ -2238,85 +2215,6 @@ async def test_finalize_frame_history_saves_report_after_metadata_apply() -> (
         if isinstance(event, BattleWeaponsDetected) and event.is_final
     ]
     assert len(final_events) == 1
-
-
-@pytest.mark.asyncio
-async def test_finalize_logs_fallback_frame_stage_progress() -> None:
-    recognizer = _FinalizeFrameHistoryRecognizer(visible_markers={8})
-    logger = _SpyLogger()
-    service = WeaponDetectionService(
-        cast(WeaponRecognitionPort, recognizer),
-        cast(LoggerPort, logger),
-        cast(EventBusPort, _SpyEventBus()),
-    )
-    context = RecordingContext(battle_started_at=100.0)
-    service._fallback_frames.extend(
-        [
-            weapon_detection_service_module._QueuedFrame(
-                frame=_frame(8),
-                elapsed_seconds=8.0,
-            ),
-            weapon_detection_service_module._QueuedFrame(
-                frame=_frame(2),
-                elapsed_seconds=2.0,
-            ),
-        ]
-    )
-
-    finalize_result = await service._run_finalize_task(
-        context=context,
-        generation=service._generation,
-        battle_started_at=context.battle_started_at,
-        elapsed_seconds=35.0,
-        diagnostic_frame=None,
-    )
-    service._apply_task_result(context=context, result=finalize_result)
-
-    display_start_events = [
-        kw
-        for event, kw in logger.infos
-        if event == "終了時fallbackブキ表示判定開始"
-    ]
-    display_done_events = [
-        kw
-        for event, kw in logger.infos
-        if event == "終了時fallbackブキ表示判定完了"
-    ]
-    recognition_start_events = [
-        kw
-        for event, kw in logger.infos
-        if event == "終了時fallbackブキ判別開始"
-    ]
-    recognition_done_events = [
-        kw
-        for event, kw in logger.infos
-        if event == "終了時fallbackブキ判別完了"
-    ]
-
-    assert [
-        event["fallback_frame_index"] for event in display_start_events
-    ] == [1, 2]
-    assert [event["display_visible"] for event in display_done_events] == [
-        False,
-        True,
-    ]
-    assert recognition_start_events == [
-        {
-            "fallback_frame_index": 2,
-            "fallback_frame_count": 2,
-            "frame_elapsed_seconds": 8.0,
-            "target_slot_count": 8,
-            "target_slots": list(_SLOTS),
-        }
-    ]
-    assert recognition_done_events == [
-        {
-            "fallback_frame_index": 2,
-            "fallback_frame_count": 2,
-            "matched_slot_count": 8,
-            "remaining_unknown_slot_count": 0,
-        }
-    ]
 
 
 @pytest.mark.asyncio
