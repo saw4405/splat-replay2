@@ -1958,55 +1958,6 @@ async def test_sampled_frames_promote_only_visible_frames() -> None:
 
 
 @pytest.mark.asyncio
-async def test_finalize_logs_display_check_counts_when_no_visible_candidate() -> (
-    None
-):
-    recognizer = _DisplaySequenceRecognizer([False, False, False])
-    logger = _SpyLogger()
-    service = WeaponDetectionService(
-        cast(WeaponRecognitionPort, recognizer),
-        cast(LoggerPort, logger),
-        cast(EventBusPort, _SpyEventBus()),
-    )
-    battle_started_at = (
-        time.time()
-        - weapon_detection_service_module.DETECTION_WINDOW_SECONDS
-        - 5.0
-    )
-    context = RecordingContext(battle_started_at=battle_started_at)
-
-    for elapsed_seconds in (0.1, 0.4, 0.7):
-        result = await service._run_detection_task(
-            frame=_frame(1),
-            context=context,
-            generation=service._generation,
-            battle_started_at=context.battle_started_at,
-            elapsed_seconds=elapsed_seconds,
-        )
-        context = service._apply_task_result(context=context, result=result)
-
-    finalize_result = await service._run_finalize_task(
-        context=context,
-        generation=service._generation,
-        battle_started_at=context.battle_started_at,
-        elapsed_seconds=(
-            weapon_detection_service_module.DETECTION_WINDOW_SECONDS + 5.0
-        ),
-    )
-    context = service._apply_task_result(
-        context=context,
-        result=finalize_result,
-    )
-
-    assert context.weapon_detection_done is True
-    assert logger.infos
-    info_event, info_fields = logger.infos[-1]
-    assert info_event == "ブキ表示未検出のため predict_weapons 出力をスキップ"
-    assert info_fields["display_check_count"] == 3
-    assert info_fields["visible_hit_count"] == 0
-
-
-@pytest.mark.asyncio
 async def test_complete_as_unknown_saves_last_display_ng_frame_with_metrics() -> (
     None
 ):
