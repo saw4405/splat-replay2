@@ -580,7 +580,7 @@ class WeaponDetectionService:
                             labels[index] = slot_result.predicted_weapon
                 except asyncio.TimeoutError:
                     finalize_warning = (
-                        "最終 predict_weapons 出力の保存がタイムアウトしました",
+                        "最終ブキ判別がタイムアウトしました",
                         (
                             "最終ブキ判別タイムアウト"
                             f" timeout_seconds={FINALIZE_RECOGNITION_TIMEOUT_SECONDS}"
@@ -588,7 +588,7 @@ class WeaponDetectionService:
                     )
                 except Exception as exc:
                     finalize_warning = (
-                        "最終 predict_weapons 出力の保存に失敗しました",
+                        "最終ブキ判別に失敗しました",
                         str(exc),
                     )
                 finally:
@@ -700,7 +700,6 @@ class WeaponDetectionService:
                 attempts=attempts,
                 is_final=done,
             )
-        if done:
             self._reset_frame_buffers()
             self._reset_detection_statistics()
             self._window_closed = True

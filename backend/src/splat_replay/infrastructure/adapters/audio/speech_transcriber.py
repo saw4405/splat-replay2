@@ -75,7 +75,6 @@ class SpeechTranscriber(SpeechTranscriberPort):
     def _listen_for_audio(
         self, source: sr.Microphone
     ) -> Optional[sr.AudioData]:
-        before_energy_threshold = float(self._recognizer.energy_threshold)
         try:
             audio = self._recognizer.listen(
                 source,
@@ -89,49 +88,6 @@ class SpeechTranscriber(SpeechTranscriberPort):
         except Exception as e:
             self._logger.error("リスニングエラー", error=str(e))
             return None
-        finally:
-            self._log_dynamic_energy_threshold_change(before_energy_threshold)
-
-    @staticmethod
-    def _round_energy_threshold(value: float) -> float:
-        return round(value, 1)
-
-    def _energy_threshold_log_fields(
-        self, before_energy_threshold: float
-    ) -> dict[str, object]:
-        after_energy_threshold = float(self._recognizer.energy_threshold)
-        return {
-            "before_energy_threshold": self._round_energy_threshold(
-                before_energy_threshold
-            ),
-            "after_energy_threshold": self._round_energy_threshold(
-                after_energy_threshold
-            ),
-            "delta_energy_threshold": self._round_energy_threshold(
-                after_energy_threshold - before_energy_threshold
-            ),
-            "dynamic_energy_threshold": (
-                self._recognizer.dynamic_energy_threshold
-            ),
-        }
-
-    def _log_dynamic_energy_threshold_change(
-        self, before_energy_threshold: float
-    ) -> None:
-        after_energy_threshold = float(self._recognizer.energy_threshold)
-        if after_energy_threshold == before_energy_threshold:
-            return
-        self._logger.info(
-            "音声認識の energy_threshold が変化しました",
-            **self._energy_threshold_log_fields(before_energy_threshold),
-        )
-
-    def _log_adjusted_energy_threshold(
-        self, before_energy_threshold: float
-    ) -> None:
-        fields = self._energy_threshold_log_fields(before_energy_threshold)
-        fields["microphone_index"] = self._microphone_index
-        self._logger.info("音声認識の環境音調整完了", **fields)
 
     def _recording_loop(self) -> None:
         with sr.Microphone(device_index=self._microphone_index) as source:

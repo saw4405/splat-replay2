@@ -20,6 +20,7 @@ from splat_replay.application.services.common.settings_service import (
     UnknownSettingsSectionError,
 )
 from splat_replay.interface.web.schemas import (
+    AudioCalibrateRequest,
     CaptureDeviceDiagnosticsResponse,
     CaptureDeviceDescriptorResponse,
     CaptureDeviceRecoveryRequest,
@@ -266,20 +267,16 @@ def create_settings_router(server: WebAPIServer) -> APIRouter:
 
     @router.post("/settings/audio/calibrate")
     async def calibrate_audio(
-        request: dict[str, str],
+        request: AudioCalibrateRequest,
     ) -> JSONResponse:
+        import audioop
+        import time
+
         import speech_recognition as sr
 
-        mic_device_name = request.get("mic_device_name")
-        if not mic_device_name:
-            raise HTTPException(
-                status_code=400, detail="mic_device_name is required"
-            )
+        mic_device_name = request.mic_device_name
 
         def _calibrate() -> int:
-            import audioop
-            import time
-
             microphone_index = None
             for index, name in enumerate(
                 sr.Microphone.list_microphone_names()

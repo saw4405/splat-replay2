@@ -329,7 +329,7 @@ class _DisplaySequenceRecognizer:
         _ = previous_results
         _ = battle_dir_name
         self.recognize_calls += 1
-        return _build_full_recognition_result("再判定")
+        return _build_partial_recognition_result("再判定")
 
 
 class _PendingOverwriteRecognizer:
@@ -813,6 +813,10 @@ async def test_display_ng_finishes_task_and_next_frame_retries_detection() -> (
         + 0.02
     )
     context = await service.process(frame=frame_2, context=context)
+    # recognize_weapons の結果が反映されるまで待つ
+    context = await _drive_process(
+        service, context, frame_2, loops=4, delay_seconds=0.05
+    )
 
     assert recognizer.detect_calls >= 2
     assert recognizer.recognize_calls >= 1
@@ -1198,7 +1202,7 @@ async def test_finalize_continues_after_candidate_failure() -> None:
     assert recognizer.finalize_markers == [4, 3]
     assert context.weapon_detection_done is True
     warning_events = [event for event, _ in logger.warnings]
-    assert "最終 predict_weapons 出力の保存に失敗しました" in warning_events
+    assert "最終ブキ判別に失敗しました" in warning_events
 
 
 @pytest.mark.asyncio
@@ -1298,10 +1302,7 @@ async def test_finalize_timeout_marks_done_with_unknown(
     assert context.metadata.allies == _to_four([UNKNOWN_WEAPON_LABEL] * 4)
     assert context.metadata.enemies == _to_four([UNKNOWN_WEAPON_LABEL] * 4)
     warning_events = [event for event, _ in logger.warnings]
-    assert (
-        "最終 predict_weapons 出力の保存がタイムアウトしました"
-        in warning_events
-    )
+    assert "最終ブキ判別がタイムアウトしました" in warning_events
     final_events = [
         event
         for event in event_bus.domain_events

@@ -10,6 +10,7 @@ from typing import Any, Dict, List
 from pydantic import BaseModel
 
 __all__ = [
+    "AudioCalibrateRequest",
     "SettingsUpdateSection",
     "SettingsUpdateRequest",
 ]
@@ -26,3 +27,9 @@ class SettingsUpdateRequest(BaseModel):
     """設定更新リクエスト"""
 
     sections: List[SettingsUpdateSection]
+
+
+class AudioCalibrateRequest(BaseModel):
+    """音声キャリブレーションリクエスト"""
+
+    mic_device_name: str

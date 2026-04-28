@@ -36,6 +36,10 @@ function asString(value: unknown, fallback: string = ''): string {
   return typeof value === 'string' ? value : fallback;
 }
 
+function asNumber(value: unknown, fallback: number): number {
+  return typeof value === 'number' ? value : fallback;
+}
+
 function asStringList(value: unknown): string[] {
   if (!Array.isArray(value)) {
     return [];
@@ -248,10 +252,10 @@ export async function getTranscriptionConfig(): Promise<TranscriptionConfig> {
       customDictionary: asStringList(
         getSectionFieldValue(data, 'speech_transcriber', 'custom_dictionary')
       ),
-      energyThreshold:
-        typeof getSectionFieldValue(data, 'speech_transcriber', 'energy_threshold') === 'number'
-          ? (getSectionFieldValue(data, 'speech_transcriber', 'energy_threshold') as number)
-          : 300,
+      energyThreshold: asNumber(
+        getSectionFieldValue(data, 'speech_transcriber', 'energy_threshold'),
+        300
+      ),
     };
   } catch (err) {
     console.error('Failed to get transcription config:', err);
