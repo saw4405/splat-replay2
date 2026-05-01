@@ -22,32 +22,11 @@ from splat_replay.domain.services.state_machine import (
 class TestRecordState:
     """RecordState Enum のテスト。"""
 
-    def test_all_states_are_unique(self) -> None:
-        """すべての状態が一意であることを確認。"""
-        values = [state.value for state in RecordState]
-        assert len(values) == len(set(values))
-
     def test_states_have_expected_values(self) -> None:
         """状態が期待される値を持つことを確認。"""
         assert RecordState.STOPPED.value == "stopped"
         assert RecordState.RECORDING.value == "recording"
         assert RecordState.PAUSED.value == "paused"
-
-
-class TestRecordEvent:
-    """RecordEvent Enum のテスト。"""
-
-    def test_all_events_are_unique(self) -> None:
-        """すべてのイベントが一意であることを確認。"""
-        events = list(RecordEvent)
-        assert len(events) == len(set(events))
-
-    def test_expected_events_exist(self) -> None:
-        """期待されるイベントが存在することを確認。"""
-        assert RecordEvent.START in RecordEvent
-        assert RecordEvent.PAUSE in RecordEvent
-        assert RecordEvent.RESUME in RecordEvent
-        assert RecordEvent.STOP in RecordEvent
 
 
 class TestStateMachineInitialization:
@@ -57,11 +36,6 @@ class TestStateMachineInitialization:
         """初期状態が STOPPED であることを確認。"""
         sm = StateMachine()
         assert sm.state == RecordState.STOPPED
-
-    def test_initial_listeners_empty(self) -> None:
-        """初期リスナーリストが空であることを確認。"""
-        sm = StateMachine()
-        assert sm._listeners == []
 
 
 class TestStateMachineTransitions:

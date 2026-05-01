@@ -76,15 +76,9 @@ class TestUploadUseCaseHappyPath:
         """スリープ有効時は編集→アップロード→スリープの順で実行される。"""
         await use_case.execute()
 
-        # 呼び出し順序を検証
         mock_editor.execute.assert_awaited_once()
         mock_uploader.execute.assert_awaited_once()
         mock_power.sleep.assert_awaited_once()
-
-        # 呼び出し順序の詳細検証
-        assert mock_editor.execute.await_count == 1
-        assert mock_uploader.execute.await_count == 1
-        assert mock_power.sleep.await_count == 1
 
     @pytest.mark.asyncio
     async def test_execute_without_sleep(

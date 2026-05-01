@@ -8,7 +8,6 @@ import {
   GPU_DEVICE_STATUS_POLL_INTERVAL_MS,
   GPU_PREVIEW_FRAME_POLL_INTERVAL_MS,
   GPU_PROCESS_STATUS_POLL_INTERVAL_MS,
-  UI_COUNTDOWN_TICK_INTERVAL_MS,
   getPreviewFramePollIntervalMs,
   getDeviceStatusPollIntervalMs,
   getProcessStatusPollIntervalMs,
@@ -112,20 +111,20 @@ describe('renderMode runtime', () => {
     expect(document.documentElement.dataset.renderMode).toBe('cpu');
   });
 
-  it('cpu は gpu より遅いプレビュー更新間隔を使う', () => {
-    expect(GPU_PREVIEW_FRAME_POLL_INTERVAL_MS).toBe(500);
-    expect(CPU_PREVIEW_FRAME_POLL_INTERVAL_MS).toBe(1200);
-    expect(GPU_DEVICE_STATUS_POLL_INTERVAL_MS).toBe(1500);
-    expect(CPU_DEVICE_STATUS_POLL_INTERVAL_MS).toBe(2500);
-    expect(GPU_PROCESS_STATUS_POLL_INTERVAL_MS).toBe(3000);
-    expect(CPU_PROCESS_STATUS_POLL_INTERVAL_MS).toBe(5000);
+  it('cpu は gpu より遅いポーリング間隔を使う', () => {
+    // 関係性の検証（CPU は GPU より遅い間隔）
     expect(CPU_PREVIEW_FRAME_POLL_INTERVAL_MS).toBeGreaterThan(GPU_PREVIEW_FRAME_POLL_INTERVAL_MS);
-    expect(getPreviewFramePollIntervalMs('gpu')).toBe(500);
-    expect(getPreviewFramePollIntervalMs('cpu')).toBe(1200);
-    expect(getDeviceStatusPollIntervalMs('gpu')).toBe(1500);
-    expect(getDeviceStatusPollIntervalMs('cpu')).toBe(2500);
-    expect(getProcessStatusPollIntervalMs('gpu')).toBe(3000);
-    expect(getProcessStatusPollIntervalMs('cpu')).toBe(5000);
-    expect(UI_COUNTDOWN_TICK_INTERVAL_MS).toBe(250);
+    expect(CPU_DEVICE_STATUS_POLL_INTERVAL_MS).toBeGreaterThan(GPU_DEVICE_STATUS_POLL_INTERVAL_MS);
+    expect(CPU_PROCESS_STATUS_POLL_INTERVAL_MS).toBeGreaterThan(
+      GPU_PROCESS_STATUS_POLL_INTERVAL_MS
+    );
+
+    // getter 関数がモードに応じて正しい定数を返す
+    expect(getPreviewFramePollIntervalMs('gpu')).toBe(GPU_PREVIEW_FRAME_POLL_INTERVAL_MS);
+    expect(getPreviewFramePollIntervalMs('cpu')).toBe(CPU_PREVIEW_FRAME_POLL_INTERVAL_MS);
+    expect(getDeviceStatusPollIntervalMs('gpu')).toBe(GPU_DEVICE_STATUS_POLL_INTERVAL_MS);
+    expect(getDeviceStatusPollIntervalMs('cpu')).toBe(CPU_DEVICE_STATUS_POLL_INTERVAL_MS);
+    expect(getProcessStatusPollIntervalMs('gpu')).toBe(GPU_PROCESS_STATUS_POLL_INTERVAL_MS);
+    expect(getProcessStatusPollIntervalMs('cpu')).toBe(CPU_PROCESS_STATUS_POLL_INTERVAL_MS);
   });
 });

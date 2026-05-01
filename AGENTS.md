@@ -35,6 +35,7 @@
 
 > Windows 環境では、`task` ではなく `task.exe` を明示して実行する。
 
+- テストを新規作成・修正する際は、まず `docs/test_strategy.md` を読み、方針・分類・禁止事項を確認する。
 - `task.exe verify` は完了判定の**最低入口**とする。
 - `task.exe test` は backend + frontend unit の**基本テスト入口**とする。
 - 振る舞い変更時は、まず `task.exe test` を起点にし、`docs/test_strategy.md` に従って追加の意味ベース入口を選ぶ。

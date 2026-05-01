@@ -128,45 +128,18 @@ describe('process API', () => {
   // API 呼び出しエラーハンドリング
   // ========================================
 
-  describe('エラーハンドリング', () => {
-    it('HTTP 500 エラーをハンドリングする（start）', async () => {
-      fetchMock.mockResolvedValueOnce({
-        ok: false,
-        status: 500,
-        text: async () => 'Internal Server Error',
-      });
-
-      await expect(processApi.start()).rejects.toThrow('Internal Server Error');
+  it.each([
+    { method: 'start' as const, status: 500, body: 'Internal Server Error' },
+    { method: 'startSleep' as const, status: 500, body: 'Internal Server Error' },
+    { method: 'start' as const, status: 400, body: 'Bad Request' },
+    { method: 'startSleep' as const, status: 400, body: 'Bad Request' },
+  ])('HTTP $status エラーをハンドリングする（$method）', async ({ method, status, body }) => {
+    fetchMock.mockResolvedValueOnce({
+      ok: false,
+      status,
+      text: async () => body,
     });
 
-    it('HTTP 500 エラーをハンドリングする（startSleep）', async () => {
-      fetchMock.mockResolvedValueOnce({
-        ok: false,
-        status: 500,
-        text: async () => 'Internal Server Error',
-      });
-
-      await expect(processApi.startSleep()).rejects.toThrow('Internal Server Error');
-    });
-
-    it('HTTP 400 エラーをハンドリングする（start）', async () => {
-      fetchMock.mockResolvedValueOnce({
-        ok: false,
-        status: 400,
-        text: async () => 'Bad Request',
-      });
-
-      await expect(processApi.start()).rejects.toThrow('Bad Request');
-    });
-
-    it('HTTP 400 エラーをハンドリングする（startSleep）', async () => {
-      fetchMock.mockResolvedValueOnce({
-        ok: false,
-        status: 400,
-        text: async () => 'Bad Request',
-      });
-
-      await expect(processApi.startSleep()).rejects.toThrow('Bad Request');
-    });
+    await expect(processApi[method]()).rejects.toThrow(body);
   });
 });

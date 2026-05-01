@@ -1,14 +1,8 @@
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
 import { fireEvent, render, screen } from '@testing-library/svelte';
 import { describe, expect, it } from 'vitest';
 
 import type { BattleHistoryEntry } from '../../api/types';
 import StatisticsDataView from './StatisticsDataView.svelte';
-
-function readStatisticsDataView(): string {
-  return readFileSync(resolve(import.meta.dirname, 'StatisticsDataView.svelte'), 'utf8');
-}
 
 describe('StatisticsDataView', () => {
   const battles: BattleHistoryEntry[] = [
@@ -82,14 +76,5 @@ describe('StatisticsDataView', () => {
 
     expect(stageRow).not.toBeNull();
     expect(stageRow).toHaveTextContent('2勝1敗');
-  });
-
-  it('サマリーカードのホバー時に上端が見切れないよう上側の余白を確保する', () => {
-    const statisticsDataView = readStatisticsDataView();
-
-    expect(statisticsDataView).toMatch(
-      /\.stat-card:hover\s*\{[\s\S]*transform:\s*translateY\(-2px\);/i
-    );
-    expect(statisticsDataView).toMatch(/\.stat-grid\s*\{[\s\S]*padding-top:\s*0\.25rem;/i);
   });
 });

@@ -109,10 +109,18 @@ describe('MetadataForm.svelte', () => {
   });
 
   // ========================================
-  // テキスト入力テスト
+  // テキスト・数値入力テスト（同型パターンを it.each で統合）
   // ========================================
 
-  it('開始時間フィールドへの入力が反映される', async () => {
+  it.each([
+    { label: '開始時間', input: '2026-03-14 12:00:00' },
+    { label: 'レート', input: 'S+10' },
+    { label: 'キル数', input: '10' },
+    { label: 'デス数', input: '5' },
+    { label: 'スペシャル', input: '3' },
+    { label: '金表彰', input: '1' },
+    { label: '銀表彰', input: '2' },
+  ])('$label フィールドへの入力が反映される', async ({ label, input }) => {
     const user = userEvent.setup();
     const metadata: EditableMetadata = {
       gameMode: '',
@@ -133,46 +141,55 @@ describe('MetadataForm.svelte', () => {
 
     render(MetadataForm, { props: { metadata } });
 
-    const startedAtInput = screen.getByLabelText('開始時間') as HTMLInputElement;
-    await user.clear(startedAtInput);
-    await user.type(startedAtInput, '2026-03-14 12:00:00');
+    const field = screen.getByLabelText(label) as HTMLInputElement;
+    await user.clear(field);
+    await user.type(field, input);
 
-    expect(startedAtInput.value).toBe('2026-03-14 12:00:00');
-  });
-
-  it('レートフィールドへの入力が反映される', async () => {
-    const user = userEvent.setup();
-    const metadata: EditableMetadata = {
-      gameMode: '',
-      startedAt: '',
-      match: '',
-      rule: '',
-      stage: '',
-      rate: '',
-      judgement: '',
-      kill: 0,
-      death: 0,
-      special: 0,
-      goldMedals: 0,
-      silverMedals: 0,
-      allies: ['', '', '', ''],
-      enemies: ['', '', '', ''],
-    };
-
-    render(MetadataForm, { props: { metadata } });
-
-    const rateInput = screen.getByLabelText('レート') as HTMLInputElement;
-    await user.clear(rateInput);
-    await user.type(rateInput, 'S+10');
-
-    expect(rateInput.value).toBe('S+10');
+    expect(field.value).toBe(input);
   });
 
   // ========================================
-  // 数値入力テスト
+  // セレクト入力テスト（同型パターンを it.each で統合）
   // ========================================
 
-  it('キル数フィールドへの入力が反映される', async () => {
+  it.each([
+    {
+      label: 'マッチ',
+      propName: 'matchOptions' as const,
+      options: [
+        { key: 'regular', label: 'レギュラーマッチ' },
+        { key: 'anarchy', label: 'バンカラマッチ' },
+      ],
+      selectValue: 'regular',
+    },
+    {
+      label: 'ルール',
+      propName: 'ruleOptions' as const,
+      options: [
+        { key: 'turf_war', label: 'ナワバリ' },
+        { key: 'rainmaker', label: 'ガチホコ' },
+      ],
+      selectValue: 'turf_war',
+    },
+    {
+      label: 'ステージ',
+      propName: 'stageOptions' as const,
+      options: [
+        { key: 'scorch_gorge', label: 'ユノハナ大渓谷' },
+        { key: 'eeltail_alley', label: 'ゴンズイ地区' },
+      ],
+      selectValue: 'scorch_gorge',
+    },
+    {
+      label: '判定',
+      propName: 'judgementOptions' as const,
+      options: [
+        { key: 'WIN', label: '勝ち' },
+        { key: 'LOSE', label: '負け' },
+      ],
+      selectValue: 'WIN',
+    },
+  ])('$label ドロップダウンで選択できる', async ({ label, propName, options, selectValue }) => {
     const user = userEvent.setup();
     const metadata: EditableMetadata = {
       gameMode: '',
@@ -191,261 +208,12 @@ describe('MetadataForm.svelte', () => {
       enemies: ['', '', '', ''],
     };
 
-    render(MetadataForm, { props: { metadata } });
+    render(MetadataForm, { props: { metadata, [propName]: options } });
 
-    const killInput = screen.getByLabelText('キル数') as HTMLInputElement;
-    await user.clear(killInput);
-    await user.type(killInput, '10');
+    const select = screen.getByLabelText(label) as HTMLSelectElement;
+    await user.selectOptions(select, selectValue);
 
-    expect(killInput.value).toBe('10');
-  });
-
-  it('デス数フィールドへの入力が反映される', async () => {
-    const user = userEvent.setup();
-    const metadata: EditableMetadata = {
-      gameMode: '',
-      startedAt: '',
-      match: '',
-      rule: '',
-      stage: '',
-      rate: '',
-      judgement: '',
-      kill: 0,
-      death: 0,
-      special: 0,
-      goldMedals: 0,
-      silverMedals: 0,
-      allies: ['', '', '', ''],
-      enemies: ['', '', '', ''],
-    };
-
-    render(MetadataForm, { props: { metadata } });
-
-    const deathInput = screen.getByLabelText('デス数') as HTMLInputElement;
-    await user.clear(deathInput);
-    await user.type(deathInput, '5');
-
-    expect(deathInput.value).toBe('5');
-  });
-
-  it('スペシャル数フィールドへの入力が反映される', async () => {
-    const user = userEvent.setup();
-    const metadata: EditableMetadata = {
-      gameMode: '',
-      startedAt: '',
-      match: '',
-      rule: '',
-      stage: '',
-      rate: '',
-      judgement: '',
-      kill: 0,
-      death: 0,
-      special: 0,
-      goldMedals: 0,
-      silverMedals: 0,
-      allies: ['', '', '', ''],
-      enemies: ['', '', '', ''],
-    };
-
-    render(MetadataForm, { props: { metadata } });
-
-    const specialInput = screen.getByLabelText('スペシャル') as HTMLInputElement;
-    await user.clear(specialInput);
-    await user.type(specialInput, '3');
-
-    expect(specialInput.value).toBe('3');
-  });
-
-  // ========================================
-  // セレクト入力テスト
-  // ========================================
-
-  it('マッチドロップダウンで選択できる', async () => {
-    const user = userEvent.setup();
-    const metadata: EditableMetadata = {
-      gameMode: '',
-      startedAt: '',
-      match: '',
-      rule: '',
-      stage: '',
-      rate: '',
-      judgement: '',
-      kill: 0,
-      death: 0,
-      special: 0,
-      goldMedals: 0,
-      silverMedals: 0,
-      allies: ['', '', '', ''],
-      enemies: ['', '', '', ''],
-    };
-
-    const matchOptions = [
-      { key: 'regular', label: 'レギュラーマッチ' },
-      { key: 'anarchy', label: 'バンカラマッチ' },
-    ];
-
-    render(MetadataForm, { props: { metadata, matchOptions } });
-
-    const matchSelect = screen.getByLabelText('マッチ') as HTMLSelectElement;
-    await user.selectOptions(matchSelect, 'regular');
-
-    expect(matchSelect.value).toBe('regular');
-  });
-
-  it('ルールドロップダウンで選択できる', async () => {
-    const user = userEvent.setup();
-    const metadata: EditableMetadata = {
-      gameMode: '',
-      startedAt: '',
-      match: '',
-      rule: '',
-      stage: '',
-      rate: '',
-      judgement: '',
-      kill: 0,
-      death: 0,
-      special: 0,
-      goldMedals: 0,
-      silverMedals: 0,
-      allies: ['', '', '', ''],
-      enemies: ['', '', '', ''],
-    };
-
-    const ruleOptions = [
-      { key: 'turf_war', label: 'ナワバリ' },
-      { key: 'rainmaker', label: 'ガチホコ' },
-    ];
-
-    render(MetadataForm, { props: { metadata, ruleOptions } });
-
-    const ruleSelect = screen.getByLabelText('ルール') as HTMLSelectElement;
-    await user.selectOptions(ruleSelect, 'turf_war');
-
-    expect(ruleSelect.value).toBe('turf_war');
-  });
-
-  it('ステージドロップダウンで選択できる', async () => {
-    const user = userEvent.setup();
-    const metadata: EditableMetadata = {
-      gameMode: '',
-      startedAt: '',
-      match: '',
-      rule: '',
-      stage: '',
-      rate: '',
-      judgement: '',
-      kill: 0,
-      death: 0,
-      special: 0,
-      goldMedals: 0,
-      silverMedals: 0,
-      allies: ['', '', '', ''],
-      enemies: ['', '', '', ''],
-    };
-
-    const stageOptions = [
-      { key: 'scorch_gorge', label: 'ユノハナ大渓谷' },
-      { key: 'eeltail_alley', label: 'ゴンズイ地区' },
-    ];
-
-    render(MetadataForm, { props: { metadata, stageOptions } });
-
-    const stageSelect = screen.getByLabelText('ステージ') as HTMLSelectElement;
-    await user.selectOptions(stageSelect, 'scorch_gorge');
-
-    expect(stageSelect.value).toBe('scorch_gorge');
-  });
-
-  it('判定ドロップダウンで選択できる', async () => {
-    const user = userEvent.setup();
-    const metadata: EditableMetadata = {
-      gameMode: '',
-      startedAt: '',
-      match: '',
-      rule: '',
-      stage: '',
-      rate: '',
-      judgement: '',
-      kill: 0,
-      death: 0,
-      special: 0,
-      goldMedals: 0,
-      silverMedals: 0,
-      allies: ['', '', '', ''],
-      enemies: ['', '', '', ''],
-    };
-
-    const judgementOptions = [
-      { key: 'WIN', label: '勝ち' },
-      { key: 'LOSE', label: '負け' },
-    ];
-
-    render(MetadataForm, { props: { metadata, judgementOptions } });
-
-    const judgementSelect = screen.getByLabelText('判定') as HTMLSelectElement;
-    await user.selectOptions(judgementSelect, 'WIN');
-
-    expect(judgementSelect.value).toBe('WIN');
-  });
-
-  // ========================================
-  // メダル入力テスト
-  // ========================================
-
-  it('金表彰フィールドへの入力が反映される', async () => {
-    const user = userEvent.setup();
-    const metadata: EditableMetadata = {
-      gameMode: '',
-      startedAt: '',
-      match: '',
-      rule: '',
-      stage: '',
-      rate: '',
-      judgement: '',
-      kill: 0,
-      death: 0,
-      special: 0,
-      goldMedals: 0,
-      silverMedals: 0,
-      allies: ['', '', '', ''],
-      enemies: ['', '', '', ''],
-    };
-
-    render(MetadataForm, { props: { metadata } });
-
-    const goldMedalsInput = screen.getByLabelText('金表彰') as HTMLInputElement;
-    await user.clear(goldMedalsInput);
-    await user.type(goldMedalsInput, '1');
-
-    expect(goldMedalsInput.value).toBe('1');
-  });
-
-  it('銀表彰フィールドへの入力が反映される', async () => {
-    const user = userEvent.setup();
-    const metadata: EditableMetadata = {
-      gameMode: '',
-      startedAt: '',
-      match: '',
-      rule: '',
-      stage: '',
-      rate: '',
-      judgement: '',
-      kill: 0,
-      death: 0,
-      special: 0,
-      goldMedals: 0,
-      silverMedals: 0,
-      allies: ['', '', '', ''],
-      enemies: ['', '', '', ''],
-    };
-
-    render(MetadataForm, { props: { metadata } });
-
-    const silverMedalsInput = screen.getByLabelText('銀表彰') as HTMLInputElement;
-    await user.clear(silverMedalsInput);
-    await user.type(silverMedalsInput, '2');
-
-    expect(silverMedalsInput.value).toBe('2');
+    expect(select.value).toBe(selectValue);
   });
 
   // ========================================

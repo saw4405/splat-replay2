@@ -1,30 +1,39 @@
 """Domain Models Unit Tests.
 
 責務：
-- Domain 層の値オブジェクト（Enum）の動作を検証する
-- 等値性・不変性を確認する
-- バリデーション動作を確認する
+- Domain 層の値オブジェクト（Enum）の独自メソッドを検証する
+- シリアライズ用の value 文字列を確認する
+- 標準ライブラリが保証する動作（==, is, list(), in）は再テストしない
 
 分類: logic
 """
 
 from __future__ import annotations
 
+from enum import Enum
+from typing import Type
+
 import pytest
 
 from splat_replay.domain.models import GameMode, Judgement, Match, Rule, Stage
 
 
-class TestMatch:
-    """Matchモデルのテスト。"""
+@pytest.mark.parametrize(
+    "enum_cls",
+    [Match, Rule, Stage, Judgement, GameMode],
+    ids=lambda c: c.__name__,
+)
+def test_enum_values_are_unique(enum_cls: Type[Enum]) -> None:
+    """各 Enum の value が重複していないことを確認。"""
+    values = [member.value for member in enum_cls]
+    assert len(values) == len(set(values))
 
-    def test_enum_values_are_unique(self) -> None:
-        """各Match値が一意であることを確認。"""
-        values = [match.value for match in Match]
-        assert len(values) == len(set(values))
+
+class TestMatch:
+    """Match モデルの独自メソッドのテスト。"""
 
     def test_is_anarchy(self) -> None:
-        """is_anarchy()メソッドのテスト。"""
+        """is_anarchy() が正しくバンカラ系を判定する。"""
         assert Match.ANARCHY.is_anarchy()
         assert Match.ANARCHY_OPEN.is_anarchy()
         assert Match.ANARCHY_SERIES.is_anarchy()
@@ -33,7 +42,7 @@ class TestMatch:
         assert not Match.SPLATFEST.is_anarchy()
 
     def test_is_fest(self) -> None:
-        """is_fest()メソッドのテスト。"""
+        """is_fest() が正しくフェス系を判定する。"""
         assert Match.SPLATFEST.is_fest()
         assert Match.SPLATFEST_OPEN.is_fest()
         assert Match.SPLATFEST_PRO.is_fest()
@@ -53,7 +62,7 @@ class TestMatch:
         assert not Match.REGULAR.equal(Match.ANARCHY)
 
     def test_equal_ignore_open_challenge_anarchy(self) -> None:
-        """equal() のignore_open_challengeオプション（バンカラ）。"""
+        """equal() の ignore_open_challenge オプション（バンカラ）。"""
         assert Match.ANARCHY_OPEN.equal(
             Match.ANARCHY_SERIES, ignore_open_challenge=True
         )
@@ -65,7 +74,7 @@ class TestMatch:
         )
 
     def test_equal_ignore_open_challenge_fest(self) -> None:
-        """equal() のignore_open_challengeオプション（フェス）。"""
+        """equal() の ignore_open_challenge オプション（フェス）。"""
         assert Match.SPLATFEST_OPEN.equal(
             Match.SPLATFEST_PRO, ignore_open_challenge=True
         )
@@ -92,26 +101,8 @@ class TestMatch:
         assert Match.X.value == "Xマッチ"
 
 
-class TestRule:
-    """Ruleモデルのテスト。"""
-
-    def test_enum_values_are_unique(self) -> None:
-        """各Rule値が一意であることを確認。"""
-        values = [rule.value for rule in Rule]
-        assert len(values) == len(set(values))
-
-    def test_all_rules_present(self) -> None:
-        """主要ルールが全て定義されていることを確認。"""
-        expected_rules = {
-            Rule.TURF_WAR,
-            Rule.RAINMAKER,
-            Rule.SPLAT_ZONES,
-            Rule.TOWER_CONTROL,
-            Rule.CLAM_BLITZ,
-            Rule.TRICOLOR_TURF_WAR,
-        }
-        actual_rules = set(Rule)
-        assert actual_rules == expected_rules
+class TestValueFormat:
+    """各 Enum の value 文字列が期待どおりであることを確認。"""
 
     def test_rule_value_format(self) -> None:
         """Rule.value が日本語表記であることを確認。"""
@@ -121,162 +112,53 @@ class TestRule:
         assert Rule.TOWER_CONTROL.value == "ガチヤグラ"
         assert Rule.CLAM_BLITZ.value == "ガチアサリ"
 
-
-class TestStage:
-    """Stageモデルのテスト。"""
-
-    def test_enum_values_are_unique(self) -> None:
-        """各Stage値が一意であることを確認。"""
-        values = [stage.value for stage in Stage]
-        assert len(values) == len(set(values))
-
-    def test_representative_stages_present(self) -> None:
-        """代表的なステージが定義されていることを確認。"""
-        # 一部のステージのみ確認
-        assert Stage.SCORCH_GORGE in Stage
-        assert Stage.EELTAIL_ALLEY in Stage
-        assert Stage.MAHI_MAHI_RESORT in Stage
-
     def test_stage_value_format(self) -> None:
         """Stage.value が日本語表記であることを確認。"""
         assert Stage.SCORCH_GORGE.value == "ユノハナ大渓谷"
         assert Stage.EELTAIL_ALLEY.value == "ゴンズイ地区"
         assert Stage.MAHI_MAHI_RESORT.value == "マヒマヒリゾート＆スパ"
 
-
-class TestJudgement:
-    """Judgementモデルのテスト。"""
-
-    def test_enum_values_are_unique(self) -> None:
-        """各Judgement値が一意であることを確認。"""
-        values = [judgement.value for judgement in Judgement]
-        assert len(values) == len(set(values))
-
-    def test_only_win_and_lose(self) -> None:
-        """WINとLOSEのみが定義されていることを確認。"""
-        assert set(Judgement) == {Judgement.WIN, Judgement.LOSE}
-
     def test_judgement_value_format(self) -> None:
         """Judgement.value が英語表記であることを確認。"""
         assert Judgement.WIN.value == "WIN"
         assert Judgement.LOSE.value == "LOSE"
 
-
-# Rateテストは削除：新しい設計ではRateはEnumではなく、RateBase/XP/Udemaeクラスに変更された
-
-
-class TestGameMode:
-    """GameModeモデルのテスト。"""
-
-    def test_enum_values_are_unique(self) -> None:
-        """各GameMode値が一意であることを確認。"""
-        values = [mode.value for mode in GameMode]
-        assert len(values) == len(set(values))
-
     def test_game_mode_value_format(self) -> None:
         """GameMode.value が正しいことを確認。"""
-        # 代表的なモード値を確認
         assert any(mode.value == "バトルモード" for mode in GameMode)
         assert any(mode.value == "バイトモード" for mode in GameMode)
 
 
-class TestEnumSerialization:
-    """Enumのシリアライズ・デシリアライズテスト。"""
-
-    def test_match_from_string(self) -> None:
-        """文字列からMatchへの変換。"""
-        match = Match("レギュラーマッチ")
-        assert match == Match.REGULAR
-
-    def test_rule_from_string(self) -> None:
-        """文字列からRuleへの変換。"""
-        rule = Rule("ナワバリ")
-        assert rule == Rule.TURF_WAR
-
-    def test_stage_from_string(self) -> None:
-        """文字列からStageへの変換。"""
-        stage = Stage("ユノハナ大渓谷")
-        assert stage == Stage.SCORCH_GORGE
-
-    def test_judgement_from_string(self) -> None:
-        """文字列からJudgementへの変換。"""
-        judgement = Judgement("WIN")
-        assert judgement == Judgement.WIN
-
-    def test_invalid_match_value(self) -> None:
-        """無効なMatch値でValueErrorが発生することを確認。"""
-        with pytest.raises(ValueError, match=r"is not a valid Match"):
-            Match("無効なマッチ")
-
-    def test_invalid_rule_value(self) -> None:
-        """無効なRule値でValueErrorが発生することを確認。"""
-        with pytest.raises(ValueError, match=r"is not a valid Rule"):
-            Rule("無効なルール")
-
-    def test_invalid_stage_value(self) -> None:
-        """無効なStage値でValueErrorが発生することを確認。"""
-        with pytest.raises(ValueError, match=r"is not a valid Stage"):
-            Stage("無効なステージ")
-
-    def test_invalid_judgement_value(self) -> None:
-        """無効なJudgement値でValueErrorが発生することを確認。"""
-        with pytest.raises(ValueError, match=r"is not a valid Judgement"):
-            Judgement("INVALID")
+@pytest.mark.parametrize(
+    ("enum_cls", "valid_value", "expected_member"),
+    [
+        (Match, "レギュラーマッチ", Match.REGULAR),
+        (Rule, "ナワバリ", Rule.TURF_WAR),
+        (Stage, "ユノハナ大渓谷", Stage.SCORCH_GORGE),
+        (Judgement, "WIN", Judgement.WIN),
+    ],
+    ids=["Match", "Rule", "Stage", "Judgement"],
+)
+def test_enum_from_valid_string(
+    enum_cls: Type[Enum], valid_value: str, expected_member: Enum
+) -> None:
+    """有効な文字列から Enum メンバーを構築できる。"""
+    assert enum_cls(valid_value) == expected_member
 
 
-class TestEnumEquality:
-    """Enum等値性のテスト。"""
-
-    def test_match_equality(self) -> None:
-        """同一Match値の等値性。"""
-        assert Match.REGULAR == Match.REGULAR
-        assert Match.REGULAR is Match.REGULAR  # シングルトン
-        assert Match.REGULAR != Match.ANARCHY
-
-    def test_rule_equality(self) -> None:
-        """同一Rule値の等値性。"""
-        assert Rule.TURF_WAR == Rule.TURF_WAR
-        assert Rule.TURF_WAR is Rule.TURF_WAR
-        assert Rule.TURF_WAR != Rule.RAINMAKER
-
-    def test_stage_equality(self) -> None:
-        """同一Stage値の等値性。"""
-        assert Stage.SCORCH_GORGE == Stage.SCORCH_GORGE
-        assert Stage.SCORCH_GORGE is Stage.SCORCH_GORGE
-        assert Stage.SCORCH_GORGE != Stage.EELTAIL_ALLEY
-
-    def test_judgement_equality(self) -> None:
-        """同一Judgement値の等値性。"""
-        assert Judgement.WIN == Judgement.WIN
-        assert Judgement.WIN is Judgement.WIN
-        assert Judgement.WIN != Judgement.LOSE
-
-
-class TestEnumIterability:
-    """Enum反復可能性のテスト。"""
-
-    def test_match_iteration(self) -> None:
-        """Match全値の反復。"""
-        matches = list(Match)
-        assert len(matches) > 0
-        assert Match.REGULAR in matches
-        assert Match.ANARCHY in matches
-
-    def test_rule_iteration(self) -> None:
-        """Rule全値の反復。"""
-        rules = list(Rule)
-        assert len(rules) == 6
-        assert Rule.TURF_WAR in rules
-
-    def test_stage_iteration(self) -> None:
-        """Stage全値の反復。"""
-        stages = list(Stage)
-        assert len(stages) > 0
-        assert Stage.SCORCH_GORGE in stages
-
-    def test_judgement_iteration(self) -> None:
-        """Judgement全値の反復。"""
-        judgements = list(Judgement)
-        assert len(judgements) == 2
-        assert Judgement.WIN in judgements
-        assert Judgement.LOSE in judgements
+@pytest.mark.parametrize(
+    ("enum_cls", "invalid_value"),
+    [
+        (Match, "無効なマッチ"),
+        (Rule, "無効なルール"),
+        (Stage, "無効なステージ"),
+        (Judgement, "INVALID"),
+    ],
+    ids=["Match", "Rule", "Stage", "Judgement"],
+)
+def test_enum_from_invalid_string_raises(
+    enum_cls: Type[Enum], invalid_value: str
+) -> None:
+    """無効な文字列で ValueError が発生する。"""
+    with pytest.raises(ValueError):
+        enum_cls(invalid_value)

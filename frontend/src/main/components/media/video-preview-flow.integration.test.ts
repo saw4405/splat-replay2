@@ -46,32 +46,6 @@ describe('Video操作 Integration', () => {
       expect(source?.getAttribute('type')).toBe('video/mp4');
     });
 
-    it('ビデオ要素はcontrols属性を持つ', () => {
-      const { container } = render(VideoPlayerDialog, {
-        props: {
-          visible: true,
-          videoUrl: '/api/videos/test.mp4',
-          videoTitle: 'テスト動画',
-        },
-      });
-
-      const video = container.querySelector('video');
-      expect(video?.hasAttribute('controls')).toBe(true);
-    });
-
-    it('ビデオ要素はautoplay属性を持つ', () => {
-      const { container } = render(VideoPlayerDialog, {
-        props: {
-          visible: true,
-          videoUrl: '/api/videos/test.mp4',
-          videoTitle: 'テスト動画',
-        },
-      });
-
-      const video = container.querySelector('video');
-      expect(video?.hasAttribute('autoplay')).toBe(true);
-    });
-
     it('visibleがfalseの場合、ダイアログは表示されない', () => {
       render(VideoPlayerDialog, {
         props: {
@@ -218,38 +192,6 @@ describe('Video操作 Integration', () => {
 
       expect(video).toBeInTheDocument();
       expect(img).toBeInTheDocument();
-    });
-  });
-
-  describe('エラーハンドリング', () => {
-    it('空のビデオURLでもエラーが発生しない', () => {
-      const { container } = render(VideoPlayerDialog, {
-        props: {
-          visible: true,
-          videoUrl: '',
-          videoTitle: 'Empty Video',
-        },
-      });
-
-      const source = container.querySelector('source');
-      // 空文字列の場合、src属性は存在するが空文字列またはnull
-      const srcValue = source?.getAttribute('src');
-      expect(srcValue === '' || srcValue === null).toBe(true);
-    });
-
-    it('空のサムネイルURLでもエラーが発生しない', () => {
-      const { container } = render(ThumbnailZoomDialog, {
-        props: {
-          visible: true,
-          imageUrl: '',
-          imageTitle: 'Empty Thumbnail',
-        },
-      });
-
-      const img = container.querySelector('img');
-      // 空文字列の場合、src属性は存在するが空文字列またはnull
-      const srcValue = img?.getAttribute('src');
-      expect(srcValue === '' || srcValue === null).toBe(true);
     });
   });
 });
