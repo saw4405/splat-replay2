@@ -3,9 +3,9 @@ from __future__ import annotations
 from typing import Never, cast
 
 from splat_replay.application.interfaces import (
-    CaptureDeviceSettingsView,
     CaptureDeviceDescriptor,
     CaptureDeviceRecoveryResult,
+    CaptureDeviceSettingsView,
     CommandResult,
     LoggerPort,
 )
@@ -79,6 +79,9 @@ class _FakeCaptureDeviceEnumerator:
 class _FakeMicrophoneEnumerator:
     def list_microphones(self) -> list[str]:
         return []
+
+    def find_microphone_index(self, device_name: str) -> None:
+        return None
 
 
 class _FakeConfig:

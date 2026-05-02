@@ -97,6 +97,9 @@ def test_fetch_webview_render_mode_avoids_device_enumeration(
         def list_microphones(self) -> list[str]:
             raise AssertionError("microphone enumeration should not run")
 
+        def find_microphone_index(self, device_name: str) -> None:
+            raise AssertionError("microphone index search should not run")
+
     repository = TomlSettingsRepository(
         settings_path=tmp_path / "settings.toml",
         device_enumerator=_FailingVideoEnumerator(),
