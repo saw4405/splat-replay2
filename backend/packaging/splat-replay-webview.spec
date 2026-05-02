@@ -36,6 +36,15 @@ datas = [
     (certifi.where(), 'certifi'),
 ]
 
+# setuptools._vendor.jaraco.text が参照するデータファイル（pkg_resources runtime hook 用）
+_jaraco_text_dir = (
+    backend_root / '.venv' / 'Lib' / 'site-packages'
+    / 'setuptools' / '_vendor' / 'jaraco' / 'text'
+)
+_lorem_ipsum = _jaraco_text_dir / 'Lorem ipsum.txt'
+if _lorem_ipsum.exists():
+    datas.append((str(_lorem_ipsum), 'setuptools/_vendor/jaraco/text'))
+
 # pythonnet ランタイム依存ファイルを明示同梱（Python.Runtime.deps.json 欠落対策）
 _pythonnet_deps_json = pythonnet_runtime_dir / 'Python.Runtime.deps.json'
 if _pythonnet_deps_json.exists():
@@ -44,6 +53,13 @@ if _pythonnet_deps_json.exists():
 hiddenimports = [
     'splat_replay.bootstrap.web_app',
     'splat_replay.interface.web.server',
+    # DI コンテナ（直接 import だが frozen module で検出漏れするため明示）
+    'splat_replay.infrastructure.di',
+    'splat_replay.infrastructure.di.adapters',
+    'splat_replay.infrastructure.di.app_services',
+    'splat_replay.infrastructure.di.config',
+    'splat_replay.infrastructure.di.domain_services',
+    'splat_replay.infrastructure.di.use_cases',
     # uvicorn関連 - 本体を先にインポート
     'uvicorn',
     'uvicorn.config',

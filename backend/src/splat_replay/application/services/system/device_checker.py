@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import sys
 import time
+from typing import Optional
 
 from splat_replay.application.interfaces import (
     CaptureDeviceBindingResult,
@@ -207,6 +208,10 @@ class DeviceChecker:
         devices = self._microphone_enumerator.list_microphones()
         self.logger.info("Microphone devices listed", count=len(devices))
         return devices
+
+    def find_microphone_index(self, device_name: str) -> Optional[int]:
+        """表示名からマイクのデバイスインデックスを検索する。"""
+        return self._microphone_enumerator.find_microphone_index(device_name)
 
     def recover_device(
         self, trigger: CaptureDeviceRecoveryTrigger
