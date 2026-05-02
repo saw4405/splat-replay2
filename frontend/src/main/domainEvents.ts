@@ -19,6 +19,7 @@ export type DomainEventType =
   | 'domain.recording.stopped'
   | 'domain.recording.cancelled'
   | 'domain.recording.metadata_updated'
+  | 'domain.recording.audio_health_checked'
   | 'domain.asset.recorded.saved'
   | 'domain.asset.recorded.metadata_updated'
   | 'domain.asset.recorded.subtitle_updated'
@@ -69,6 +70,17 @@ export interface BattleWeaponsDetectedPayload {
 export interface RecordingPausedPayload {
   session_id?: string;
   reason?: string | null;
+  event_id?: string;
+  timestamp?: string;
+}
+
+export interface RecordingAudioHealthCheckedPayload {
+  input_name?: string;
+  status?: string;
+  healthy?: boolean;
+  short_message?: string;
+  details?: string;
+  peak_db?: number | null;
   event_id?: string;
   timestamp?: string;
 }

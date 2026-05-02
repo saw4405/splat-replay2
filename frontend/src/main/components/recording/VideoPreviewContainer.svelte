@@ -1,11 +1,15 @@
 <script lang="ts">
   import { onMount } from 'svelte';
-  import { Info, X } from 'lucide-svelte';
+  import { Info, VolumeX, X } from 'lucide-svelte';
   import VideoPreview from './VideoPreview.svelte';
   import VideoPreviewMessage from './VideoPreviewMessage.svelte';
   import MetadataOverlay from '../metadata/MetadataOverlay.svelte';
   import CameraPermissionDialog from '../permission/CameraPermissionDialog.svelte';
-  import { subscribeDomainEvents, type DomainEvent } from '../../domainEvents';
+  import {
+    subscribeDomainEvents,
+    type DomainEvent,
+    type RecordingAudioHealthCheckedPayload,
+  } from '../../domainEvents';
   import { buildMetadataOptionMap, getMetadataOptions } from '../../api/metadata';
   import { getRecorderPreviewMode, recoverCaptureDevice } from '../../api/recording';
   import { notifyRecordingReady } from '../../notification';
@@ -18,9 +22,26 @@
     error?: string;
   };
 
+  type AudioHealthWarningResponse = {
+    input_name?: string;
+    status?: string;
+    healthy?: boolean;
+    short_message?: string;
+    details?: string;
+    peak_db?: number | null;
+  };
+
   type PrepareRecordingResponse = {
     success: boolean;
     error?: string;
+    audio_health_warning?: AudioHealthWarningResponse | null;
+  };
+
+  type AudioHealthWarning = {
+    shortMessage: string;
+    details: string;
+    inputName?: string;
+    status?: string;
   };
 
   type RecoverDeviceResponse = {
@@ -31,6 +52,8 @@
   };
 
   const NOTIFICATION_DURATION_MS = 5000;
+  const DEFAULT_AUDIO_HEALTH_SHORT_MESSAGE = '音声注意';
+  const DEFAULT_AUDIO_HEALTH_DETAILS = 'OBS の音声入力状態を確認してください。録画は継続します。';
 
   let isRecording = $state(false);
   let isPaused = $state(false);
@@ -48,6 +71,7 @@
   let hasTriedIdleRecoveryForCurrentDisconnect = $state(false);
   let isCameraPermissionDialogOpen = $state(false);
   let isVideoFileInput = $state(false);
+  let audioHealthWarning = $state<AudioHealthWarning | null>(null);
   let deviceStatusPollIntervalMs = getDeviceStatusPollIntervalMs('cpu');
   type MetadataValue = string | number | string[] | null | undefined;
   type MetadataFieldKey =
@@ -227,6 +251,31 @@
       window.clearTimeout(notification.timer);
     });
     metadataNotifications = [];
+  }
+
+  function normalizeOptionalText(value: unknown): string | undefined {
+    if (typeof value !== 'string') {
+      return undefined;
+    }
+    const trimmed = value.trim();
+    return trimmed.length > 0 ? trimmed : undefined;
+  }
+
+  function applyAudioHealthResult(
+    payload: AudioHealthWarningResponse | RecordingAudioHealthCheckedPayload | null | undefined
+  ): void {
+    if (!payload || payload.healthy !== false) {
+      audioHealthWarning = null;
+      return;
+    }
+
+    audioHealthWarning = {
+      shortMessage:
+        normalizeOptionalText(payload.short_message) ?? DEFAULT_AUDIO_HEALTH_SHORT_MESSAGE,
+      details: normalizeOptionalText(payload.details) ?? DEFAULT_AUDIO_HEALTH_DETAILS,
+      inputName: normalizeOptionalText(payload.input_name),
+      status: normalizeOptionalText(payload.status),
+    };
   }
 
   function normalizeRawValue(value: MetadataValue): string | null {
@@ -570,6 +619,7 @@
       console.log('prepare_recording result:', result);
       if (result.success === true) {
         isPrepared = true;
+        applyAudioHealthResult(result.audio_health_warning);
         _status = '録画準備完了';
         console.log('録画準備完了 - isPrepared =', isPrepared);
       } else {
@@ -802,6 +852,7 @@
     if (nextState === 'disconnected') {
       isRecording = false;
       isPrepared = false;
+      audioHealthWarning = null;
       _status = recoveryPending
         ? 'キャプチャーデバイスを復旧しています...'
         : 'キャプチャーデバイスを接続してください';
@@ -855,12 +906,17 @@
         }
         return;
       }
+      if (event.type === 'domain.recording.audio_health_checked') {
+        applyAudioHealthResult(event.payload as RecordingAudioHealthCheckedPayload);
+        return;
+      }
       if (
         event.type === 'domain.recording.stopped' ||
         event.type === 'domain.recording.cancelled'
       ) {
         isRecording = false;
         isPaused = false;
+        audioHealthWarning = null;
         pendingMetadataSessionReset = true;
         return;
       }
@@ -911,6 +967,18 @@
         </div>
       {/if}
     </div>
+    {#if audioHealthWarning}
+      <div
+        class="audio-health-warning glass-pill"
+        data-testid="audio-health-warning"
+        role="status"
+        aria-label={`OBS音声警告: ${audioHealthWarning.details}`}
+        title={audioHealthWarning.details}
+      >
+        <VolumeX class="audio-health-icon" aria-hidden="true" stroke-width={2.2} />
+        <span class="audio-health-text">{audioHealthWarning.shortMessage}</span>
+      </div>
+    {/if}
   {/if}
 
   {#if deviceState === 'connected'}
@@ -999,6 +1067,49 @@
     flex-direction: column;
     align-items: flex-end;
     gap: 0.5rem;
+  }
+
+  .audio-health-warning {
+    position: absolute;
+    top: 1rem;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 210;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    max-width: min(14rem, calc(100% - 6rem));
+    min-height: 2.35rem;
+    padding: 0.52rem 0.82rem;
+    border: 1px solid rgba(var(--theme-rgb-red-preview), 0.72);
+    background: linear-gradient(
+      135deg,
+      rgba(var(--theme-rgb-red-preview), 0.96) 0%,
+      rgba(var(--theme-rgb-amber-preview), 0.92) 100%
+    );
+    color: var(--theme-accent-ink-surface);
+    font-size: 0.86rem;
+    font-weight: 800;
+    line-height: 1;
+    letter-spacing: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    box-shadow:
+      0 10px 22px rgba(var(--theme-rgb-red-preview), 0.34),
+      0 0 16px rgba(var(--theme-rgb-red-preview), 0.22),
+      inset 0 1px 0 rgba(var(--theme-rgb-white), 0.28);
+  }
+
+  .audio-health-warning :global(.audio-health-icon) {
+    width: 1.12rem;
+    height: 1.12rem;
+    flex: 0 0 auto;
+  }
+
+  .audio-health-text {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   .recovery-actions {

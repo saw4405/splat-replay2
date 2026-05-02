@@ -55,6 +55,7 @@ def client(
     実際のOBS録画を行わない。
     """
     # OBSRecorderControllerの録画メソッドをモックして実際の録画を防ぐ
+    from splat_replay.application.interfaces import AudioInputHealthCheckResult
     from splat_replay.infrastructure.adapters.obs.recorder_controller import (
         OBSRecorderController,
     )
@@ -83,6 +84,19 @@ def client(
         """モック: 録画終了処理（何もしない）"""
         pass
 
+    async def mock_check_audio_input_health(
+        self, input_name: str, *, sample_duration_seconds: float
+    ) -> AudioInputHealthCheckResult:
+        """モック: OBS 音声入力ヘルスチェック（正常扱い）"""
+        return AudioInputHealthCheckResult(
+            input_name=input_name,
+            status="ok",
+            healthy=True,
+            short_message="",
+            details="テストでは音声入力を正常扱いにします。",
+            peak_db=None,
+        )
+
     # MonkeyPatchでメソッドを差し替え
     monkeypatch.setattr(OBSRecorderController, "start", mock_start)
     monkeypatch.setattr(OBSRecorderController, "stop", mock_stop)
@@ -90,6 +104,11 @@ def client(
     monkeypatch.setattr(OBSRecorderController, "resume", mock_resume)
     monkeypatch.setattr(OBSRecorderController, "setup", mock_setup)
     monkeypatch.setattr(OBSRecorderController, "teardown", mock_teardown)
+    monkeypatch.setattr(
+        OBSRecorderController,
+        "check_audio_input_health",
+        mock_check_audio_input_health,
+    )
 
     test_settings_path = tmp_path / "config" / "settings.toml"
     settings = load_settings_from_toml(

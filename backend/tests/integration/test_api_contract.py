@@ -9,6 +9,11 @@ from __future__ import annotations
 import pytest
 from fastapi.testclient import TestClient
 
+from splat_replay.application.interfaces import AudioInputHealthCheckResult
+from splat_replay.infrastructure.adapters.obs.recorder_controller import (
+    OBSRecorderController,
+)
+
 pytestmark = pytest.mark.contract
 
 # Frontend が依存する全エンドポイントの契約
@@ -149,3 +154,62 @@ def test_openapi_schema_generation(client: TestClient) -> None:
     assert "/api/settings" in paths
     assert "/api/settings/webview-render-mode" in paths
     assert "/api/recorder/start" in paths
+
+
+def test_prepare_recording_response_has_no_audio_warning_when_healthy(
+    client: TestClient,
+) -> None:
+    """POST /api/recorder/prepare - 正常な音声入力では警告を返さない。"""
+    response = client.post("/api/recorder/prepare")
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "success": True,
+        "error": None,
+        "state": None,
+        "audio_health_warning": None,
+    }
+
+
+def test_prepare_recording_response_includes_audio_warning_contract(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """POST /api/recorder/prepare - 音声警告のレスポンス契約を保証する。"""
+
+    async def mock_check_audio_input_health(
+        self: OBSRecorderController,
+        input_name: str,
+        *,
+        sample_duration_seconds: float,
+    ) -> AudioInputHealthCheckResult:
+        return AudioInputHealthCheckResult(
+            input_name=input_name,
+            status="silent",
+            healthy=False,
+            short_message="音声入力なし",
+            details="OBS の入力で音量メーターが振れていません。",
+            peak_db=-72.5,
+        )
+
+    monkeypatch.setattr(
+        OBSRecorderController,
+        "check_audio_input_health",
+        mock_check_audio_input_health,
+    )
+
+    response = client.post("/api/recorder/prepare")
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "success": True,
+        "error": None,
+        "state": None,
+        "audio_health_warning": {
+            "input_name": "MiraBox Capture",
+            "status": "silent",
+            "healthy": False,
+            "short_message": "音声入力なし",
+            "details": "OBS の入力で音量メーターが振れていません。",
+            "peak_db": -72.5,
+        },
+    }

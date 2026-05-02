@@ -33,14 +33,6 @@ if TYPE_CHECKING:
 # ========================================
 
 
-class StandardResponse(BaseModel):
-    """標準レスポンススキーマ。"""
-
-    success: bool
-    error: str | None = None
-    state: str | None = None
-
-
 class RecorderStateResponse(BaseModel):
     """録画状態レスポンススキーマ。"""
 
@@ -51,6 +43,26 @@ class RecorderPreviewModeResponse(BaseModel):
     """プレビュー入力種別レスポンス。"""
 
     mode: Literal["live_capture", "video_file"]
+
+
+class AudioHealthWarningResponse(BaseModel):
+    """OBS 音声入力ヘルスチェック警告レスポンス。"""
+
+    input_name: str
+    status: str
+    healthy: bool
+    short_message: str
+    details: str
+    peak_db: float | None = None
+
+
+class StandardResponse(BaseModel):
+    """標準レスポンススキーマ。"""
+
+    success: bool
+    error: str | None = None
+    state: str | None = None
+    audio_health_warning: AudioHealthWarningResponse | None = None
 
 
 def _build_recording_metadata_response(
@@ -77,8 +89,25 @@ def create_recording_router(server: WebAPIServer) -> APIRouter:
     async def prepare_recording() -> StandardResponse:
         """録画準備（OBS起動・仮想カメラ有効化）。"""
         try:
-            await server.recording_preparation_service.prepare_recording()
-            return StandardResponse(success=True)
+            audio_health = (
+                await server.recording_preparation_service.prepare_recording()
+            )
+            warning = (
+                AudioHealthWarningResponse(
+                    input_name=audio_health.input_name,
+                    status=audio_health.status,
+                    healthy=audio_health.healthy,
+                    short_message=audio_health.short_message,
+                    details=audio_health.details,
+                    peak_db=audio_health.peak_db,
+                )
+                if not audio_health.healthy
+                else None
+            )
+            return StandardResponse(
+                success=True,
+                audio_health_warning=warning,
+            )
         except Exception as e:
             error_handler.handle_error(
                 e, context="録画準備", log_level="warning"

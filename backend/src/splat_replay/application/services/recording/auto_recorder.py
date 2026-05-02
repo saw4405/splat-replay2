@@ -4,6 +4,7 @@ from typing import Awaitable, Callable, Iterable
 from splat_replay.application.interfaces import (
     CapturePort,
     ClockPort,
+    ConfigPort,
     DomainEventPublisher,
     EventBusPort,
     EventPublisher,
@@ -83,6 +84,7 @@ class AutoRecorder:
         battle_history_service: BattleHistoryService,
         weapon_detection_window_seconds: float = DETECTION_WINDOW_SECONDS,
         clock: ClockPort | None = None,
+        config: ConfigPort | None = None,
     ):
         self.logger = logger
         self._stop_event = asyncio.Event()
@@ -120,6 +122,7 @@ class AutoRecorder:
             domain_publisher=domain_publisher,
             battle_history_service=battle_history_service,
             clock=clock,
+            config=config,
         )
 
         self._frame_processor = FrameProcessingService(

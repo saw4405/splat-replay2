@@ -32,6 +32,7 @@ from .process_events import (
 )
 from .recording_events import (
     PowerOffDetected,
+    RecordingAudioHealthChecked,
     RecordingCancelled,
     RecordingMetadataUpdated,
     RecordingPaused,
@@ -51,6 +52,7 @@ __all__ = [
     "RecordingStopped",
     "RecordingCancelled",
     "RecordingMetadataUpdated",
+    "RecordingAudioHealthChecked",
     "PowerOffDetected",
     # Asset events
     "AssetRecordedSaved",

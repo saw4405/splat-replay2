@@ -8,6 +8,7 @@ from uuid import uuid4
 from structlog.stdlib import BoundLogger
 
 from splat_replay.application.interfaces import (
+    AudioInputHealthCheckResult,
     OBSSettingsView,
     RecorderStatus,
     VideoRecorderPort,
@@ -81,6 +82,18 @@ class ReplayRecorderController(VideoRecorderPort):
 
     async def teardown(self) -> None:
         self._state = "stopped"
+
+    async def check_audio_input_health(
+        self, input_name: str, *, sample_duration_seconds: float
+    ) -> AudioInputHealthCheckResult:
+        return AudioInputHealthCheckResult(
+            input_name=input_name,
+            status="skipped",
+            healthy=True,
+            short_message="",
+            details="リプレイ入力では OBS 音声入力チェックをスキップしました。",
+            peak_db=None,
+        )
 
     async def _notify(self, status: RecorderStatus) -> None:
         for listener in list(self._status_listeners):

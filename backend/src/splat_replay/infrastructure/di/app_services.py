@@ -94,6 +94,7 @@ def register_app_services(container: Container) -> None:
         domain_publisher = container.resolve(DomainEventPublisher)
         battle_history_service = container.resolve(BattleHistoryService)
         clock = container.resolve(ClockPort)
+        config = container.resolve(ConfigPort)
 
         return AutoRecorder(
             state_machine=state_machine,
@@ -108,6 +109,7 @@ def register_app_services(container: Container) -> None:
             domain_publisher=domain_publisher,
             battle_history_service=battle_history_service,
             clock=clock,
+            config=config,
         )
 
     container.register(AutoRecorder, factory=auto_recorder_factory)

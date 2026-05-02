@@ -18,6 +18,7 @@ from splat_replay.domain.models import Frame
 if TYPE_CHECKING:
     from splat_replay.application.dto import ReplayBootstrapDTO
     from splat_replay.application.interfaces.data import (
+        AudioInputHealthCheckResult,
         CaptureDeviceDescriptor,
         CaptureDeviceSettingsView,
         OBSSettingsView,
@@ -74,6 +75,10 @@ class VideoRecorderPort(Protocol):
 
     async def teardown(self) -> None: ...
 
+    async def check_audio_input_health(
+        self, input_name: str, *, sample_duration_seconds: float
+    ) -> AudioInputHealthCheckResult: ...
+
     def add_status_listener(
         self, listener: Callable[[RecorderStatus], Awaitable[None]]
     ) -> None: ...
@@ -99,6 +104,10 @@ class RecorderWithTranscriptionPort(Protocol):
     async def cancel(self) -> None: ...
 
     async def teardown(self) -> None: ...
+
+    async def check_audio_input_health(
+        self, input_name: str, *, sample_duration_seconds: float
+    ) -> AudioInputHealthCheckResult: ...
 
     def add_status_listener(
         self, listener: Callable[[RecorderStatus], Awaitable[None]]

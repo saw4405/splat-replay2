@@ -5,6 +5,7 @@ from typing import Awaitable, Callable, List, Optional, Tuple
 from structlog.stdlib import BoundLogger
 
 from splat_replay.application.interfaces import (
+    AudioInputHealthCheckResult,
     RecorderStatus,
     RecorderWithTranscriptionPort,
     SpeechTranscriberPort,
@@ -109,6 +110,14 @@ class RecorderWithTranscription(RecorderWithTranscriptionPort):
     async def teardown(self) -> None:
         self.recorder.remove_status_listener(self._notify_status_change)
         await self.recorder.teardown()
+
+    async def check_audio_input_health(
+        self, input_name: str, *, sample_duration_seconds: float
+    ) -> AudioInputHealthCheckResult:
+        return await self.recorder.check_audio_input_health(
+            input_name,
+            sample_duration_seconds=sample_duration_seconds,
+        )
 
     async def _notify_status_change(self, status: RecorderStatus) -> None:
         """録画状態変化をリスナーに通知する。"""

@@ -6,6 +6,7 @@ from typing import Awaitable, Callable
 from structlog.stdlib import BoundLogger
 
 from splat_replay.application.interfaces import (
+    AudioInputHealthCheckResult,
     OBSSettingsView,
     RecorderStatus,
     VideoRecorderPort,
@@ -90,6 +91,15 @@ class AdaptiveVideoRecorder(VideoRecorderPort):
 
     async def teardown(self) -> None:
         await self._active_recorder.teardown()
+
+    async def check_audio_input_health(
+        self, input_name: str, *, sample_duration_seconds: float
+    ) -> AudioInputHealthCheckResult:
+        recorder = await self._select_recorder()
+        return await recorder.check_audio_input_health(
+            input_name,
+            sample_duration_seconds=sample_duration_seconds,
+        )
 
     async def _forward_status(self, status: RecorderStatus) -> None:
         for listener in list(self._status_listeners):

@@ -122,6 +122,17 @@ class SectionUpdate(TypedDict):
 
 CaptureDeviceBindingStatus = Literal["bound", "name_only"]
 CaptureDeviceRecoveryTrigger = Literal["manual", "startup_auto", "idle_auto"]
+AudioInputHealthStatus = Literal[
+    "ok",
+    "skipped",
+    "input_not_configured",
+    "input_not_found",
+    "input_inactive",
+    "muted",
+    "no_audio_tracks",
+    "silent",
+    "unknown",
+]
 
 
 @dataclass(frozen=True)
@@ -168,6 +179,18 @@ class CaptureDeviceDiagnostics:
     resolved_device: CaptureDeviceDescriptor | None
     available_devices: list[CaptureDeviceDescriptor]
     last_recovery: CaptureDeviceRecoveryResult | None
+
+
+@dataclass(frozen=True)
+class AudioInputHealthCheckResult:
+    """OBS audio-input health snapshot used before recording."""
+
+    input_name: str
+    status: AudioInputHealthStatus
+    healthy: bool
+    short_message: str
+    details: str
+    peak_db: float | None = None
 
 
 @dataclass(frozen=True)

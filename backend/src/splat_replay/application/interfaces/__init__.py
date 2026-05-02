@@ -33,6 +33,8 @@ from splat_replay.application.interfaces.history import (
     BattleHistoryRepositoryPort,
 )
 from splat_replay.application.interfaces.data import (
+    AudioInputHealthCheckResult,
+    AudioInputHealthStatus,
     BehaviorSettingsView,
     Caption,
     CaptureDeviceBindingResult,
@@ -120,6 +122,8 @@ __all__ = [
     "LoggerPort",
     "PathsPort",
     # Data
+    "AudioInputHealthCheckResult",
+    "AudioInputHealthStatus",
     "BehaviorSettingsView",
     "Caption",
     "CaptureDeviceBindingResult",

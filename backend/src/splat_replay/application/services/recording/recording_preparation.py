@@ -5,12 +5,15 @@ from __future__ import annotations
 from typing import TypedDict
 
 from splat_replay.application.interfaces import (
+    AudioInputHealthCheckResult,
     CaptureDeviceSettingsView,
     ConfigPort,
     LoggerPort,
     OBSSettingsView,
     VideoRecorderPort,
 )
+
+PREPARE_AUDIO_HEALTH_SAMPLE_SECONDS = 1.0
 
 
 class OBSConfig(TypedDict):
@@ -33,10 +36,23 @@ class RecordingPreparationService:
         self._config = config
         self._logger = logger
 
-    async def prepare_recording(self) -> None:
+    async def prepare_recording(self) -> AudioInputHealthCheckResult:
         """Launch OBS if necessary and ensure the virtual camera is active."""
         self._logger.info("Preparing OBS for recording session")
         await self._recorder.setup()
+        device_settings = self._config.get_capture_device_settings()
+        result = await self._recorder.check_audio_input_health(
+            device_settings.name,
+            sample_duration_seconds=PREPARE_AUDIO_HEALTH_SAMPLE_SECONDS,
+        )
+        if not result.healthy:
+            self._logger.warning(
+                "OBS audio health warning after preparation",
+                input_name=result.input_name,
+                status=result.status,
+                details=result.details,
+            )
+        return result
 
     def update_settings(self, settings: OBSSettingsView) -> None:
         """Update recorder settings without restarting the app."""

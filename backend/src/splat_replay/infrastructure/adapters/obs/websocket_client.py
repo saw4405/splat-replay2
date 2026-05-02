@@ -15,6 +15,7 @@ from typing import Any, Awaitable, Callable
 
 from obswsc.client import ObsWsClient
 from obswsc.data import Event, Request, Response1, Response2
+from obswsc.enums import EventSubscription
 from structlog.stdlib import BoundLogger
 
 from splat_replay.domain.exceptions import DeviceError
@@ -214,7 +215,10 @@ class OBSWebSocketClient:
                     backoff = min(max_backoff, backoff * 1.5)
 
     async def request(
-        self, request_type: str, idempotent: bool = False
+        self,
+        request_type: str,
+        idempotent: bool = False,
+        request_data: dict[str, object] | None = None,
     ) -> Response1:
         """リクエストを送信。
 
@@ -224,6 +228,7 @@ class OBSWebSocketClient:
         Args:
             request_type: リクエストタイプ（例: "StartRecord"）
             idempotent: 冪等性（True = 複数回実行しても安全）
+            request_data: OBS WebSocket に渡す requestData
 
         Returns:
             レスポンス
@@ -239,7 +244,10 @@ class OBSWebSocketClient:
                 await self.connect()
 
             try:
-                response = await self._client.request(Request(request_type))
+                data = request_data if request_data is not None else {}
+                response = await self._client.request(
+                    Request(request_type, data)
+                )
                 if isinstance(response, Response2):
                     return response.results[0]
                 return response
@@ -273,6 +281,59 @@ class OBSWebSocketClient:
             f"OBS リクエストが失敗しました: {request_type}",
             "OBS_REQUEST_FAILED",
         )
+
+    async def set_event_subscriptions(self, subscriptions: int) -> None:
+        """Update OBS event subscriptions for the active WebSocket session."""
+        if not self._is_connected:
+            await self.connect()
+        await self._client.subscribe(subscriptions)
+
+    async def subscribe_default_events(self) -> None:
+        """Restore the default non-high-volume OBS event subscription."""
+        await self.set_event_subscriptions(EventSubscription.All.value)
+
+    async def collect_input_volume_meter_events(
+        self, input_name: str, *, sample_duration_seconds: float
+    ) -> list[dict[str, Any]]:
+        """Collect volume meter events on a short-lived OBS connection.
+
+        High-volume meter events are intentionally isolated from the main OBS
+        control connection so recording state events keep their normal
+        subscription and request/response traffic is not disturbed.
+        """
+        events: list[dict[str, Any]] = []
+        meter_client = ObsWsClient(url=self._url, password=self._password)
+
+        async def _on_meter(event: Event) -> None:
+            inputs = (
+                event.event_data.get("inputs") if event.event_data else None
+            )
+            if not isinstance(inputs, list):
+                return
+            for item in inputs:
+                if not isinstance(item, dict):
+                    continue
+                if item.get("inputName") == input_name:
+                    events.append(item)
+
+        meter_client.reg_event_cb(_on_meter, "InputVolumeMeters")  # type: ignore[arg-type]
+        try:
+            connected = await meter_client.connect()
+            if not connected:
+                raise DeviceError(
+                    "OBS 音量メーター用 WebSocket 接続に失敗しました",
+                    "OBS_CONNECTION_FAILED",
+                )
+            await meter_client.subscribe(
+                EventSubscription.All.value
+                | EventSubscription.InputVolumeMeters.value
+            )
+            await asyncio.sleep(max(sample_duration_seconds, 0.1))
+            await asyncio.sleep(0)
+            return events
+        finally:
+            with suppress(Exception):
+                await meter_client.disconnect()
 
     async def get_data(self, request_type: str, key: str) -> Any:
         """リクエストを送信してデータを取得。

@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING, Literal
 
 from splat_replay.application.interfaces import (
     ClockPort,
+    ConfigPort,
     DomainEventPublisher,
     LoggerPort,
     RecorderWithTranscriptionPort,
@@ -27,6 +28,7 @@ from splat_replay.application.services.recording.recording_context import (
     RecordingContext,
 )
 from splat_replay.domain.events import (
+    RecordingAudioHealthChecked,
     RecordingCancelled,
     RecordingMetadataUpdated,
     RecordingPaused,
@@ -50,6 +52,9 @@ if TYPE_CHECKING:
 class _WallClock:
     def now(self) -> float:
         return time.time()
+
+
+PRE_START_AUDIO_HEALTH_SAMPLE_SECONDS = 0.35
 
 
 class RecordingSessionService:
@@ -78,6 +83,7 @@ class RecordingSessionService:
         domain_publisher: DomainEventPublisher | None = None,
         battle_history_service: BattleHistoryService | None = None,
         clock: ClockPort | None = None,
+        config: ConfigPort | None = None,
     ):
         self.sm = state_machine
         self.recorder = recorder
@@ -89,6 +95,7 @@ class RecordingSessionService:
         self._battle_history_service = battle_history_service
         self._pending_stop_reason: Literal["stop", "cancel"] | None = None
         self._clock = clock or _WallClock()
+        self._config = config
 
         # StateMachine のリスナーを登録
         self.sm.add_listener(self._on_state_change)
@@ -215,12 +222,39 @@ class RecordingSessionService:
         if self.sm.state is not RecordState.STOPPED:
             self.logger.warning("Recording already started")
             return
+        await self._check_audio_health_before_start()
         self._ctx = replace(
             self._ctx,
             battle_started_at=self._clock.now(),
         )
         await self.sm.handle(RecordEvent.START)
         await self.recorder.start()
+
+    async def _check_audio_health_before_start(self) -> None:
+        if self._config is None or self._domain_publisher is None:
+            return
+        device_settings = self._config.get_capture_device_settings()
+        result = await self.recorder.check_audio_input_health(
+            device_settings.name,
+            sample_duration_seconds=PRE_START_AUDIO_HEALTH_SAMPLE_SECONDS,
+        )
+        self._domain_publisher.publish_domain_event(
+            RecordingAudioHealthChecked(
+                input_name=result.input_name,
+                status=result.status,
+                healthy=result.healthy,
+                short_message=result.short_message,
+                details=result.details,
+                peak_db=result.peak_db,
+            )
+        )
+        if not result.healthy:
+            self.logger.warning(
+                "OBS audio health warning before recording start",
+                input_name=result.input_name,
+                status=result.status,
+                details=result.details,
+            )
 
     async def pause(self) -> None:
         """録画を一時停止する。"""

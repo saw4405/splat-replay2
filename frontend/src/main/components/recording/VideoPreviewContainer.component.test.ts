@@ -334,4 +334,89 @@ describe('VideoPreviewContainer.svelte', () => {
     );
     expect(deviceStatusCalls).toHaveLength(1);
   });
+
+  it('音声ヘルス警告は短い文言で表示し、詳細をツールチップに載せる', async () => {
+    fetchMock.mockImplementation(async (input: string | URL | Request) => {
+      const url = input.toString();
+      if (url.includes('/api/device/status')) {
+        return jsonResponse(true);
+      }
+      if (url.includes('/api/settings/camera-permission-dialog')) {
+        return jsonResponse({ shown: true });
+      }
+      if (url.includes('/api/recorder/prepare')) {
+        return jsonResponse({ success: true });
+      }
+      if (url.includes('/api/recorder/enable-auto')) {
+        return jsonResponse({ success: true });
+      }
+      throw new Error(`Unexpected fetch: ${url}`);
+    });
+
+    render(VideoPreviewContainer);
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        '/api/recorder/enable-auto',
+        expect.objectContaining({ method: 'POST' })
+      );
+    });
+
+    emitDomainEvent({
+      type: 'domain.recording.audio_health_checked',
+      payload: {
+        healthy: false,
+        input_name: 'MiraBox Capture',
+        status: 'silent',
+        short_message: '音声入力なし',
+        details: 'OBS の入力「MiraBox Capture」の音量メーターが振れていません。録画は継続します。',
+      },
+    });
+
+    const warning = await screen.findByTestId('audio-health-warning');
+    expect(warning).toHaveTextContent('音声入力なし');
+    expect(warning).not.toHaveTextContent('音量メーターが振れていません');
+    expect(warning).toHaveAttribute(
+      'title',
+      'OBS の入力「MiraBox Capture」の音量メーターが振れていません。録画は継続します。'
+    );
+  });
+
+  it('prepare response の音声ヘルス警告も短い文言で表示する', async () => {
+    fetchMock.mockImplementation(async (input: string | URL | Request) => {
+      const url = input.toString();
+      if (url.includes('/api/device/status')) {
+        return jsonResponse(true);
+      }
+      if (url.includes('/api/settings/camera-permission-dialog')) {
+        return jsonResponse({ shown: true });
+      }
+      if (url.includes('/api/recorder/prepare')) {
+        return jsonResponse({
+          success: true,
+          audio_health_warning: {
+            healthy: false,
+            input_name: 'MiraBox Capture',
+            status: 'silent',
+            short_message: '音声入力なし',
+            details: 'OBS の入力「MiraBox Capture」の音量メーターが振れていません。',
+          },
+        });
+      }
+      if (url.includes('/api/recorder/enable-auto')) {
+        return jsonResponse({ success: true });
+      }
+      throw new Error(`Unexpected fetch: ${url}`);
+    });
+
+    render(VideoPreviewContainer);
+
+    const warning = await screen.findByTestId('audio-health-warning');
+    expect(warning).toHaveTextContent('音声入力なし');
+    expect(warning).not.toHaveTextContent('音量メーターが振れていません');
+    expect(warning).toHaveAttribute(
+      'title',
+      'OBS の入力「MiraBox Capture」の音量メーターが振れていません。'
+    );
+  });
 });

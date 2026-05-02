@@ -74,6 +74,20 @@ class RecordingMetadataUpdated(DomainEvent):
 
 
 @dataclass(frozen=True)
+class RecordingAudioHealthChecked(DomainEvent):
+    """OBS audio-input health has been checked before recording."""
+
+    EVENT_TYPE: ClassVar[str] = "domain.recording.audio_health_checked"
+
+    input_name: str = ""
+    status: str = "unknown"
+    healthy: bool = False
+    short_message: str = ""
+    details: str = ""
+    peak_db: float | None = None
+
+
+@dataclass(frozen=True)
 class PowerOffDetected(DomainEvent):
     """Switch power off has been detected."""
 
@@ -91,5 +105,6 @@ __all__ = [
     "RecordingStopped",
     "RecordingCancelled",
     "RecordingMetadataUpdated",
+    "RecordingAudioHealthChecked",
     "PowerOffDetected",
 ]
