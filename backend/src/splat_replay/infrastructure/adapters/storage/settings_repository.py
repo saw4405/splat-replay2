@@ -45,6 +45,17 @@ class TomlSettingsRepository(SettingsRepositoryPort):
         self._device_enumerator = device_enumerator
         self._microphone_enumerator = microphone_enumerator
 
+    def invalidate_device_caches(self) -> None:
+        """デバイス列挙のキャッシュを無効化する。"""
+        if self._device_enumerator is not None and hasattr(
+            self._device_enumerator, "invalidate_cache"
+        ):
+            self._device_enumerator.invalidate_cache()  # type: ignore[attr-defined]
+        if self._microphone_enumerator is not None and hasattr(
+            self._microphone_enumerator, "invalidate_cache"
+        ):
+            self._microphone_enumerator.invalidate_cache()  # type: ignore[attr-defined]
+
     def fetch_sections(self) -> List[SettingSectionData]:
         settings = load_settings_from_toml(self._settings_path)
         structure = get_setting_structure()

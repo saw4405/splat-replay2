@@ -63,8 +63,12 @@ def create_settings_router(server: WebAPIServer) -> APIRouter:
     router = APIRouter(prefix="/api", tags=["settings"])
 
     @router.get("/settings")
-    async def get_settings() -> JSONResponse:
-        sections = server.settings_service.fetch_sections()
+    async def get_settings(refresh: bool = False) -> JSONResponse:
+        if refresh:
+            server.settings_service.invalidate_device_caches()
+        sections = await asyncio.to_thread(
+            server.settings_service.fetch_sections
+        )
         return JSONResponse(content={"sections": sections})
 
     @router.get("/settings/webview-render-mode")

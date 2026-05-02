@@ -6,6 +6,7 @@ import json
 import re
 import subprocess
 import sys
+import threading
 from typing import Any
 
 from structlog.stdlib import BoundLogger
@@ -308,6 +309,13 @@ class CaptureDeviceEnumerator(CaptureDeviceEnumeratorPort):
 
     def __init__(self, logger: BoundLogger) -> None:
         self.logger = logger
+        self._cache_lock = threading.Lock()
+        self._cached_descriptors: list[CaptureDeviceDescriptor] | None = None
+
+    def invalidate_cache(self) -> None:
+        """キャッシュを無効化する。次回呼び出し時に再取得される。"""
+        with self._cache_lock:
+            self._cached_descriptors = None
 
     def list_video_devices(self) -> list[str]:
         if sys.platform != "win32":
@@ -330,9 +338,15 @@ class CaptureDeviceEnumerator(CaptureDeviceEnumeratorPort):
             self.logger.warning("Device enumeration skipped (not Windows)")
             return []
 
+        with self._cache_lock:
+            if self._cached_descriptors is not None:
+                return list(self._cached_descriptors)
+
         descriptors = _get_video_device_descriptors_from_ffmpeg(self.logger)
         self.logger.info(
             "Video device descriptors enumerated",
             count=len(descriptors),
         )
+        with self._cache_lock:
+            self._cached_descriptors = descriptors
         return descriptors

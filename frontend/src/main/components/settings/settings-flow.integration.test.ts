@@ -341,6 +341,10 @@ describe('Settings フロー Integration', () => {
       fetchMock.mockResolvedValueOnce(
         new Response(JSON.stringify(mockSettingsResponse), { status: 200 })
       );
+      // デバイス選択肢リフレッシュのモック
+      fetchMock.mockResolvedValueOnce(
+        new Response(JSON.stringify(mockSettingsResponse), { status: 200 })
+      );
       fetchMock.mockResolvedValueOnce(new Response('{}', { status: 500 }));
 
       render(SettingsDialog, { props: { open: true } });
@@ -379,9 +383,9 @@ describe('Settings フロー Integration', () => {
     it('ダイアログを閉じて再度開くと設定が再読み込みされる', async () => {
       const { rerender } = render(SettingsDialog, { props: { open: true } });
 
-      // 初回の読み込みを待つ
+      // 初回の読み込み + デバイス選択肢リフレッシュを待つ
       await waitFor(() => {
-        expect(fetchMock).toHaveBeenCalledTimes(1);
+        expect(fetchMock).toHaveBeenCalledTimes(2);
       });
 
       await waitFor(() => {
@@ -391,17 +395,12 @@ describe('Settings フロー Integration', () => {
       // 閉じる（resetStateが実行され、sectionsが空になる）
       await rerender({ open: false });
 
-      // fetchMockに追加のレスポンスを設定
-      fetchMock.mockResolvedValueOnce(
-        new Response(JSON.stringify(mockSettingsResponse), { status: 200 })
-      );
-
       // 再度開く（sections.length === 0なので再読み込みされるはず）
       await rerender({ open: true });
 
-      // 2回目の読み込みを待つ
+      // 2回目の読み込み + リフレッシュを待つ
       await waitFor(() => {
-        expect(fetchMock).toHaveBeenCalledTimes(2);
+        expect(fetchMock).toHaveBeenCalledTimes(4);
       });
     });
   });

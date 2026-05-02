@@ -446,11 +446,7 @@
     }
 
     .actions {
-      flex-direction: column-reverse;
-    }
-
-    .action-button {
-      width: 100%;
+      flex-wrap: nowrap;
     }
   }
 </style>

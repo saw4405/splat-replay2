@@ -544,6 +544,12 @@ describe('SettingsDialog.svelte', () => {
       json: async () => ({ sections: mockSections }),
     });
 
+    // デバイス選択肢リフレッシュのモック
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ sections: mockSections }),
+    });
+
     // 設定保存のモック（失敗）
     fetchMock.mockResolvedValueOnce({
       ok: false,
@@ -587,6 +593,12 @@ describe('SettingsDialog.svelte', () => {
     ];
 
     // 設定取得のモック
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ sections: mockSections }),
+    });
+
+    // デバイス選択肢リフレッシュのモック
     fetchMock.mockResolvedValueOnce({
       ok: true,
       json: async () => ({ sections: mockSections }),
@@ -653,6 +665,12 @@ describe('SettingsDialog.svelte', () => {
     ];
 
     // 設定取得のモック
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ sections: mockSections }),
+    });
+
+    // デバイス選択肢リフレッシュのモック
     fetchMock.mockResolvedValueOnce({
       ok: true,
       json: async () => ({ sections: mockSections }),

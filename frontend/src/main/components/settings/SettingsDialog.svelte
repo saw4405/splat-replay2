@@ -98,6 +98,92 @@
     } finally {
       loading = false;
     }
+
+    // キャッシュなしで最新のデバイス選択肢を取得し、表示中の選択肢を更新する
+    void refreshDeviceChoices();
+  }
+
+  async function refreshDeviceChoices(): Promise<void> {
+    try {
+      const response = await fetch('/api/settings?refresh=true', { cache: 'no-store' });
+      if (!response.ok) {
+        return;
+      }
+      const data = (await response.json()) as SettingsResponse;
+      const freshClone = data.sections.map((section) => ({
+        ...section,
+        fields: section.fields.map((field) => ({ ...field })),
+      }));
+      const freshSections = groupSettingsSections(freshClone);
+      sections = mergeDeviceChoices(sections, freshSections);
+    } catch {
+      // デバイス選択肢の更新失敗は無視する（初回データで表示を継続）
+    }
+  }
+
+  function mergeDeviceChoices(
+    current: SettingsUiSection[],
+    fresh: SettingsUiSection[]
+  ): SettingsUiSection[] {
+    const freshMap = new Map(fresh.map((s) => [s.id, s]));
+    let changed = false;
+
+    const merged = current.map((section) => {
+      const freshSection = freshMap.get(section.id);
+      if (!freshSection) {
+        return section;
+      }
+      const mergedFields = mergeFieldChoices(section.fields, freshSection.fields);
+      if (mergedFields !== section.fields) {
+        changed = true;
+        return { ...section, fields: mergedFields };
+      }
+      return section;
+    });
+
+    return changed ? merged : current;
+  }
+
+  function mergeFieldChoices(
+    currentFields: SettingField[],
+    freshFields: SettingField[]
+  ): SettingField[] {
+    const freshMap = new Map(freshFields.map((f) => [f.id, f]));
+    let changed = false;
+
+    const merged = currentFields.map((field) => {
+      const freshField = freshMap.get(field.id);
+      if (!freshField) {
+        return field;
+      }
+
+      // 子フィールドがあるグループ型の場合は再帰
+      if (field.children && freshField.children) {
+        const mergedChildren = mergeFieldChoices(field.children, freshField.children);
+        if (mergedChildren !== field.children) {
+          changed = true;
+          return { ...field, children: mergedChildren };
+        }
+        return field;
+      }
+
+      // choices が変わった場合のみ更新する
+      if (freshField.choices && !arraysEqual(field.choices, freshField.choices)) {
+        changed = true;
+        return { ...field, choices: freshField.choices };
+      }
+
+      return field;
+    });
+
+    return changed ? merged : currentFields;
+  }
+
+  function arraysEqual(a: string[] | null | undefined, b: string[] | null | undefined): boolean {
+    if (a === b) return true;
+    if (!a || !b) return false;
+    if (a.length !== b.length) return false;
+    return a.every((val, i) => val === b[i]);
   }
 
   function selectSection(sectionId: string): void {
@@ -483,8 +569,9 @@
     }
 
     .tabs button {
-      flex: 1 0 auto;
+      flex: 1 1 0;
       text-align: center;
+      white-space: nowrap;
     }
   }
 </style>

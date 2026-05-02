@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import sys
+import threading
 from typing import Any, List, Optional, Protocol, cast
 
 from splat_replay.application.interfaces.audio import MicrophoneEnumeratorPort
@@ -14,9 +15,20 @@ class MicrophoneEnumerator(MicrophoneEnumeratorPort):
 
     def __init__(self, logger: BoundLogger) -> None:
         self._logger = logger
+        self._cache_lock = threading.Lock()
+        self._cached_devices: List[str] | None = None
+
+    def invalidate_cache(self) -> None:
+        """キャッシュを無効化する。次回呼び出し時に再取得される。"""
+        with self._cache_lock:
+            self._cached_devices = None
 
     def list_microphones(self) -> List[str]:
         """マイクデバイス一覧を取得する。"""
+        with self._cache_lock:
+            if self._cached_devices is not None:
+                return list(self._cached_devices)
+
         try:
             if sys.platform == "win32":
                 devices = self._list_windows_microphones()
@@ -25,17 +37,24 @@ class MicrophoneEnumerator(MicrophoneEnumeratorPort):
                         "Windows のマイク一覧を取得しました",
                         count=len(devices),
                     )
+                    self._update_cache(devices)
                     return devices
             import speech_recognition as sr
 
             devices = sr.Microphone.list_microphone_names()
             self._logger.info("マイク一覧を取得しました", count=len(devices))
-            return list(devices)
+            result = list(devices)
+            self._update_cache(result)
+            return result
         except Exception as exc:  # noqa: BLE001
             self._logger.error(
                 "マイク一覧の取得に失敗しました", error=str(exc)
             )
             return []
+
+    def _update_cache(self, devices: List[str]) -> None:
+        with self._cache_lock:
+            self._cached_devices = devices
 
     def _list_windows_microphones(self) -> List[str]:
         """Windows で入力デバイスだけを列挙する。"""

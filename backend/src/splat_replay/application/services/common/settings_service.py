@@ -50,6 +50,10 @@ class SettingsService:
             return
         self._repository.update_sections(updates)
 
+    def invalidate_device_caches(self) -> None:
+        """デバイス列挙のキャッシュを無効化する。"""
+        self._repository.invalidate_device_caches()
+
 
 __all__ = [
     "SettingsService",
