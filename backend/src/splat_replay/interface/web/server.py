@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import AsyncGenerator, Callable
 from pathlib import Path
-from typing import Literal
+from typing import Any, Dict, Literal, Optional
 
 from splat_replay.application.interfaces import EventBusPort, FrameSource
 from splat_replay.application.services import (
@@ -35,13 +35,13 @@ from splat_replay.application.use_cases.assets import (
     ListRecordedVideosUseCase,
     StartEditUploadUseCase,
 )
+from splat_replay.application.use_cases.history.list_battle_history import (
+    ListBattleHistoryUseCase,
+)
 from splat_replay.application.use_cases.metadata import (
     GetRecordedSubtitleStructuredUseCase,
     UpdateRecordedMetadataUseCase,
     UpdateRecordedSubtitleStructuredUseCase,
-)
-from splat_replay.application.use_cases.history.list_battle_history import (
-    ListBattleHistoryUseCase,
 )
 from splat_replay.interface.web.error_handler import WebErrorHandler
 from structlog.stdlib import BoundLogger
@@ -96,6 +96,11 @@ class WebAPIServer:
     # History Use Cases
     list_battle_history_uc: ListBattleHistoryUseCase
 
+    # Speech test
+    speech_test_fn: Optional[
+        Callable[..., AsyncGenerator[Dict[str, Any], None]]
+    ]
+
     def __init__(
         self,
         settings_service: SettingsService,
@@ -133,6 +138,10 @@ class WebAPIServer:
         update_recorded_subtitle_structured_uc: UpdateRecordedSubtitleStructuredUseCase,
         # History Use Cases
         list_battle_history_uc: ListBattleHistoryUseCase,
+        # Speech test
+        speech_test_fn: Optional[
+            Callable[..., AsyncGenerator[Dict[str, Any], None]]
+        ] = None,
     ) -> None:
         """初期化。
 
@@ -209,6 +218,9 @@ class WebAPIServer:
 
         # History Use Cases
         self.list_battle_history_uc = list_battle_history_uc
+
+        # Speech test
+        self.speech_test_fn = speech_test_fn
 
 
 __all__ = ["WebAPIServer"]

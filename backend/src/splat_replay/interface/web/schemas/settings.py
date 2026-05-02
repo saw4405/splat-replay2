@@ -13,6 +13,7 @@ __all__ = [
     "AudioCalibrateRequest",
     "SettingsUpdateSection",
     "SettingsUpdateRequest",
+    "SpeechTestRequest",
 ]
 
 
@@ -33,3 +34,10 @@ class AudioCalibrateRequest(BaseModel):
     """音声キャリブレーションリクエスト"""
 
     mic_device_name: str
+
+
+class SpeechTestRequest(BaseModel):
+    """音声認識テストリクエスト"""
+
+    mic_device_name: str
+    overrides: Dict[str, Any] | None = None

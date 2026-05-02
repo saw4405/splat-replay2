@@ -12,6 +12,7 @@
     updateGroupField: (group: SettingField, child: SettingField, value: FieldValue) => void;
     parentGroup?: SettingField | null;
     onCalibrateAudio?: (field: SettingField, parentGroup: SettingField | null) => Promise<void>;
+    onTestSpeech?: () => void;
   }
 
   let {
@@ -22,6 +23,7 @@
     updateGroupField,
     parentGroup = null,
     onCalibrateAudio,
+    onTestSpeech,
   }: Props = $props();
 
   const pathTokens = $derived([...path, field.id]);
@@ -36,11 +38,14 @@
   let isCalibrating = $state(false);
 
   async function runCalibrate(): Promise<void> {
+    if (!onCalibrateAudio) {
+      return;
+    }
     isCalibrating = true;
-    calibrateMessage = '実行中です。3秒間何も喋らず、環境音のみを測定してください...';
+    calibrateMessage = '実行中です。10秒間何も喋らず、環境音のみを測定してください...';
     calibrateIsError = false;
     try {
-      await onCalibrateAudio?.(field, parentGroup ?? null);
+      await onCalibrateAudio(field, parentGroup ?? null);
       calibrateMessage = '自動調整が完了しました。';
     } catch (error) {
       calibrateMessage = error instanceof Error ? error.message : '自動調整に失敗しました。';
@@ -132,9 +137,20 @@
           {updateGroupField}
           parentGroup={field}
           {onCalibrateAudio}
+          {onTestSpeech}
         />
       {/each}
     </div>
+    {#if field.id === 'speech_transcriber' && onTestSpeech}
+      <button
+        type="button"
+        class="speech-test-button"
+        data-testid="speech-test-open-button"
+        onclick={onTestSpeech}
+      >
+        音声認識をテスト
+      </button>
+    {/if}
   </fieldset>
 {:else}
   <div
@@ -571,5 +587,27 @@
   .password-toggle:focus {
     outline: none;
     color: rgba(var(--theme-rgb-accent), 0.9);
+  }
+
+  .speech-test-button {
+    align-self: flex-start;
+    background: rgba(var(--theme-rgb-accent), 0.12);
+    border: 1px solid rgba(var(--theme-rgb-accent), 0.3);
+    color: rgba(var(--theme-rgb-white), 0.9);
+    padding: 0.6rem 1.2rem;
+    border-radius: 0.5rem;
+    font-size: 0.88rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+
+  .speech-test-button:hover {
+    background: rgba(var(--theme-rgb-accent), 0.22);
+    border-color: rgba(var(--theme-rgb-accent), 0.5);
+  }
+
+  .speech-test-button:active {
+    background: rgba(var(--theme-rgb-accent), 0.16);
   }
 </style>

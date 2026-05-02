@@ -10,6 +10,7 @@
   } from './grouping';
   import type { FieldValue, SettingField, SettingsResponse } from './types';
   import { calibrateAudio } from '../../../setup/stores/config';
+  import SpeechTestDialog from './SpeechTestDialog.svelte';
 
   interface Props {
     open?: boolean;
@@ -27,6 +28,7 @@
   let successMessage = $state('');
   let activeSectionId = $state<string | null>(null);
   let successMessageTimer: ReturnType<typeof setTimeout> | null = null;
+  let speechTestOpen = $state(false);
 
   const activeSection = $derived(
     sections.find((section) => section.id === activeSectionId) ?? null
@@ -67,6 +69,7 @@
     errorMessage = '';
     successMessage = '';
     activeSectionId = null;
+    speechTestOpen = false;
     clearSuccessMessageTimer();
   }
 
@@ -163,6 +166,39 @@
     }
   }
 
+  function getSpeechTranscriberSettings(): Record<string, unknown> {
+    const recordingSection = sections.find((s) => s.id === 'recording');
+    if (recordingSection) {
+      const stGroup = recordingSection.fields.find((f) => f.id === 'speech_transcriber');
+      if (stGroup?.children) {
+        const values: Record<string, unknown> = {};
+        for (const child of stGroup.children) {
+          if (child.value !== undefined && child.value !== null) {
+            values[child.id] = child.value;
+          }
+        }
+        return values;
+      }
+    }
+    const stSection = sections.find((s) => s.id === 'speech_transcriber');
+    if (stSection) {
+      const values: Record<string, unknown> = {};
+      for (const field of stSection.fields) {
+        if (field.value !== undefined && field.value !== null) {
+          values[field.id] = field.value;
+        }
+      }
+      return values;
+    }
+    return {};
+  }
+
+  function handleTestSpeech(): void {
+    speechTestOpen = true;
+  }
+
+  const speechTestSettings = $derived(getSpeechTranscriberSettings());
+
   async function saveSettings(): Promise<void> {
     if (saving || loading) {
       return;
@@ -257,6 +293,7 @@
                 updateGroupField={handleGroupFieldValueChange}
                 parentGroup={null}
                 onCalibrateAudio={handleCalibrateAudio}
+                onTestSpeech={handleTestSpeech}
               />
             {/each}
           </div>
@@ -275,6 +312,8 @@
     {/if}
   {/snippet}
 </BaseDialog>
+
+<SpeechTestDialog bind:open={speechTestOpen} speechSettings={speechTestSettings} />
 
 <style>
   .dialog-content {

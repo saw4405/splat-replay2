@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Literal
+from typing import Any, AsyncGenerator, Dict, Literal
 
 import punq
 from fastapi import FastAPI
@@ -35,13 +35,13 @@ from splat_replay.application.use_cases.assets import (
     ListRecordedVideosUseCase,
     StartEditUploadUseCase,
 )
+from splat_replay.application.use_cases.history.list_battle_history import (
+    ListBattleHistoryUseCase,
+)
 from splat_replay.application.use_cases.metadata import (
     GetRecordedSubtitleStructuredUseCase,
     UpdateRecordedMetadataUseCase,
     UpdateRecordedSubtitleStructuredUseCase,
-)
-from splat_replay.application.use_cases.history.list_battle_history import (
-    ListBattleHistoryUseCase,
 )
 from splat_replay.domain.config import AppSettings
 from splat_replay.infrastructure.adapters.system.gui_runtime_port_adapter import (
@@ -112,6 +112,92 @@ def build_web_api_server(container: punq.Container) -> WebAPIServer:
             else "live_capture"
         )
 
+    async def speech_test_fn(
+        mic_device_name: str,
+        *,
+        overrides: Dict[str, Any] | None = None,
+    ) -> AsyncGenerator[Dict[str, Any], None]:
+        import asyncio
+        import queue as queue_module
+
+        from splat_replay.domain.events import (
+            DomainEvent,
+            SpeechRecognized,
+            SpeechRecognizerListening,
+        )
+        from splat_replay.infrastructure.adapters.audio.integrated_speech_recognition import (
+            IntegratedSpeechRecognizer,
+        )
+        from splat_replay.infrastructure.adapters.audio.speech_transcriber import (
+            SpeechTranscriber,
+        )
+        from splat_replay.infrastructure.config import load_settings_from_toml
+
+        settings = load_settings_from_toml()
+        speech_settings = settings.speech_transcriber
+
+        if not speech_settings.groq_api_key.get_secret_value().strip():
+            raise ValueError(
+                "Groq API キーが設定されていません。設定を保存してから再度お試しください。"
+            )
+
+        # バトル中と全く同じパイプラインでテストする
+        # 設定フォームの保存前の値で上書きする
+        speech_settings.mic_device_name = mic_device_name
+        if overrides:
+            # enabled 以外の全フィールドを上書き対象とする
+            allowed_fields = set(
+                type(speech_settings).__annotations__.keys()
+            ) - {"enabled"}
+            for key, value in overrides.items():
+                if key in allowed_fields and hasattr(speech_settings, key):
+                    if key == "groq_api_key":
+                        from pydantic import SecretStr
+
+                        setattr(
+                            speech_settings,
+                            key,
+                            SecretStr(str(value)),
+                        )
+                    else:
+                        setattr(speech_settings, key, value)
+
+        event_queue: queue_module.Queue[DomainEvent] = queue_module.Queue()
+
+        class _TestEventPublisher:
+            def publish_domain_event(self, event: DomainEvent) -> None:
+                event_queue.put(event)
+
+        speech_recognizer = IntegratedSpeechRecognizer(speech_settings, logger)
+        transcriber = SpeechTranscriber(
+            speech_settings,
+            speech_recognizer,
+            logger,
+            event_publisher=_TestEventPublisher(),
+        )
+
+        transcriber.start()
+        try:
+            while True:
+                events: list[DomainEvent] = []
+                while not event_queue.empty():
+                    try:
+                        events.append(event_queue.get_nowait())
+                    except queue_module.Empty:
+                        break
+                for event in events:
+                    if isinstance(event, SpeechRecognized):
+                        yield {
+                            "type": "recognized",
+                            "text": event.text,
+                        }
+                    elif isinstance(event, SpeechRecognizerListening):
+                        yield {"type": "listening"}
+                if not events:
+                    await asyncio.sleep(0.3)
+        finally:
+            transcriber.stop()
+
     return WebAPIServer(
         settings_service=settings_service,
         setup_service=setup_service,
@@ -146,6 +232,8 @@ def build_web_api_server(container: punq.Container) -> WebAPIServer:
         update_recorded_subtitle_structured_uc=update_recorded_subtitle_structured_uc,
         # History Use Cases
         list_battle_history_uc=list_battle_history_uc,
+        # Speech test
+        speech_test_fn=speech_test_fn,
     )
 
 

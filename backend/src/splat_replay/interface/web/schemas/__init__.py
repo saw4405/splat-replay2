@@ -33,6 +33,7 @@ from splat_replay.interface.web.schemas.settings import (
     AudioCalibrateRequest,
     SettingsUpdateRequest,
     SettingsUpdateSection,
+    SpeechTestRequest,
 )
 from splat_replay.interface.web.schemas.setup import (
     CaptureDeviceDiagnosticsResponse,
@@ -74,6 +75,7 @@ __all__ = [
     "AudioCalibrateRequest",
     "SettingsUpdateRequest",
     "SettingsUpdateSection",
+    "SpeechTestRequest",
     # Setup
     "CaptureDeviceDiagnosticsResponse",
     "CaptureDeviceDescriptorResponse",
