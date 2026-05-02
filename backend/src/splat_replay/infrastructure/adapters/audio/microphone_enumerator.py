@@ -2,12 +2,11 @@
 
 from __future__ import annotations
 
-from typing import Any, List, Protocol, cast
 import sys
-
-from structlog.stdlib import BoundLogger
+from typing import Any, List, Optional, Protocol, cast
 
 from splat_replay.application.interfaces.audio import MicrophoneEnumeratorPort
+from structlog.stdlib import BoundLogger
 
 
 class MicrophoneEnumerator(MicrophoneEnumeratorPort):
@@ -74,6 +73,89 @@ class MicrophoneEnumerator(MicrophoneEnumeratorPort):
         finally:
             audio.terminate()
 
+    def find_microphone_index(self, device_name: str) -> Optional[int]:
+        """表示名からデバイスインデックスを検索する。
+
+        list_microphones が返した名前と同じ方式（WASAPI 優先）で
+        PyAudio のデバイスインデックスを返す。
+        """
+        if not device_name.strip():
+            return None
+
+        if sys.platform == "win32":
+            result = self._find_windows_microphone_index(device_name)
+            if result is not None:
+                return result
+
+        # フォールバック: sr.Microphone.list_microphone_names()
+        try:
+            import speech_recognition as sr
+
+            for index, name in enumerate(
+                sr.Microphone.list_microphone_names()
+            ):
+                if device_name.lower() in name.lower():
+                    return index
+        except Exception as exc:  # noqa: BLE001
+            self._logger.warning(
+                "フォールバックのマイク検索に失敗しました", error=str(exc)
+            )
+        return None
+
+    def _find_windows_microphone_index(
+        self, device_name: str
+    ) -> Optional[int]:
+        """正規化名でマッチし、MME のデバイスインデックスを返す。
+
+        一覧表示は WASAPI で行うが、sr.Microphone はデフォルトの
+        MME ホストAPI を使うため、MME 側のインデックスを返す必要がある。
+        WASAPI の正規化名で照合し、対応する MME デバイスを探す。
+        """
+        try:
+            import pyaudio
+        except Exception:  # noqa: BLE001
+            return None
+
+        audio = cast(_PyAudioLike, pyaudio.PyAudio())
+        try:
+            # まず WASAPI の正規化名でマッチするデバイスの raw_name を取得する
+            preferred_host_apis = self._find_preferred_host_apis(audio)
+            matched_raw_name: Optional[str] = None
+            for index in range(audio.get_device_count()):
+                info = audio.get_device_info_by_index(index)
+                if info.get("maxInputChannels", 0) <= 0:
+                    continue
+                if (
+                    preferred_host_apis
+                    and info.get("hostApi") not in preferred_host_apis
+                ):
+                    continue
+                raw_name = str(info.get("name", "")).strip()
+                if not raw_name:
+                    continue
+                name = self._normalize_device_name(raw_name)
+                if device_name.lower() in name.lower():
+                    matched_raw_name = raw_name
+                    break
+
+            if matched_raw_name is None:
+                return None
+
+            # MME (hostApi=0) から同名デバイスのインデックスを返す
+            for index in range(audio.get_device_count()):
+                info = audio.get_device_info_by_index(index)
+                if info.get("hostApi") != 0:
+                    continue
+                if info.get("maxInputChannels", 0) <= 0:
+                    continue
+                mme_name = str(info.get("name", "")).strip()
+                # MME では名前が切り詰められるため、部分一致で照合する
+                if mme_name and mme_name.lower() in matched_raw_name.lower():
+                    return index
+            return None
+        finally:
+            audio.terminate()
+
     def _find_preferred_host_apis(self, audio: "_PyAudioLike") -> List[int]:
         """Windows の既定に近いホストAPIを優先する。"""
         preferred: List[int] = []
@@ -91,12 +173,12 @@ class MicrophoneEnumerator(MicrophoneEnumeratorPort):
         return extracted.strip()
 
     def _extract_parenthetical_name(self, name: str) -> str:
-        """括弧内の名称があればそれを優先する。"""
+        """最も外側の括弧内の名称があればそれを優先する。"""
         open_index = name.find("(")
         if open_index == -1:
             return name
-        close_index = name.find(")", open_index + 1)
-        if close_index == -1:
+        close_index = name.rfind(")")
+        if close_index == -1 or close_index <= open_index:
             return name
         candidate = name[open_index + 1 : close_index].strip()
         return candidate if candidate else name
@@ -128,7 +210,6 @@ class MicrophoneEnumerator(MicrophoneEnumeratorPort):
             "speaker",
             "speakers",
             "headphones",
-            "headset",
             "output",
             "stereo mix",
         )
@@ -141,7 +222,6 @@ class MicrophoneEnumerator(MicrophoneEnumeratorPort):
             "プライマリ サウンド",
             "スピーカー",
             "ヘッドホン",
-            "ヘッドセット",
             "ステレオ ミキサー",
         )
         for token in blocked_jp:

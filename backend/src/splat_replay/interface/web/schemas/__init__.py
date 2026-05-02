@@ -30,8 +30,10 @@ from splat_replay.interface.web.schemas.history import (
     BattleHistoryResponse,
 )
 from splat_replay.interface.web.schemas.settings import (
+    AudioCalibrateRequest,
     SettingsUpdateRequest,
     SettingsUpdateSection,
+    SpeechTestRequest,
 )
 from splat_replay.interface.web.schemas.setup import (
     CaptureDeviceDiagnosticsResponse,
@@ -70,8 +72,10 @@ __all__ = [
     "SubtitleBlock",
     "SubtitleData",
     # Settings
+    "AudioCalibrateRequest",
     "SettingsUpdateRequest",
     "SettingsUpdateSection",
+    "SpeechTestRequest",
     # Setup
     "CaptureDeviceDiagnosticsResponse",
     "CaptureDeviceDescriptorResponse",

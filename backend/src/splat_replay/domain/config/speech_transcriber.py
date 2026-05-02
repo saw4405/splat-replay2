@@ -20,6 +20,14 @@ class SpeechTranscriberSettings(BaseModel):
         recommended=True,
         user_editable=True,
     )
+    energy_threshold: int = Field(
+        default=300,
+        title="音声検出のしきい値",
+        description="マイクが音声を拾うための最低音量レベルです。自動調整で設定された値を使用してください。",
+        ge=0,
+        recommended=True,
+        user_editable=True,
+    )
     groq_api_key: SecretStr = Field(
         default=SecretStr(""),
         title="Groq API キー",
@@ -60,7 +68,7 @@ class SpeechTranscriberSettings(BaseModel):
         user_editable=True,
     )
     vad_aggressiveness: int = Field(
-        default=2,
+        default=3,
         title="VAD感度",
         description=(
             "0〜3の値でVADの厳しさを指定します。値が大きいほど無音を厳しく判定します"
@@ -77,9 +85,19 @@ class SpeechTranscriberSettings(BaseModel):
         recommended=False,
     )
     vad_min_speech_ratio: float = Field(
-        default=0.1,
+        default=0.3,
         title="VAD最小検出比率",
         description="VADで音声ありと判定するために必要なフレーム比率 (0.0〜1.0)",
+        ge=0.0,
+        le=1.0,
+        recommended=False,
+    )
+    no_speech_prob_threshold: float = Field(
+        default=0.9,
+        title="無音判定確率閾値",
+        description=(
+            "Groq Whisper の no_speech_prob がこの値以上のとき無音と判定します (0.0〜1.0)"
+        ),
         ge=0.0,
         le=1.0,
         recommended=False,

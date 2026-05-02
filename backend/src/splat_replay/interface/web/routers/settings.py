@@ -3,12 +3,12 @@
 from __future__ import annotations
 
 import asyncio
-from typing import TYPE_CHECKING, List
+import json
+from typing import TYPE_CHECKING, AsyncGenerator, List
 
 from fastapi import APIRouter, HTTPException, status
 from fastapi.responses import JSONResponse
 from pydantic import ValidationError
-
 from splat_replay.application.interfaces import (
     CaptureDeviceDescriptor,
     CaptureDeviceRecoveryResult,
@@ -20,12 +20,15 @@ from splat_replay.application.services.common.settings_service import (
     UnknownSettingsSectionError,
 )
 from splat_replay.interface.web.schemas import (
-    CaptureDeviceDiagnosticsResponse,
+    AudioCalibrateRequest,
     CaptureDeviceDescriptorResponse,
+    CaptureDeviceDiagnosticsResponse,
     CaptureDeviceRecoveryRequest,
     CaptureDeviceRecoveryResponse,
     SettingsUpdateRequest,
+    SpeechTestRequest,
 )
+from starlette.responses import StreamingResponse
 
 if TYPE_CHECKING:
     from splat_replay.interface.web.server import WebAPIServer
@@ -263,6 +266,147 @@ def create_settings_router(server: WebAPIServer) -> APIRouter:
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail="Failed to mark youtube permission dialog as shown",
             ) from exc
+
+    @router.post("/settings/audio/calibrate")
+    async def calibrate_audio(
+        request: AudioCalibrateRequest,
+    ) -> JSONResponse:
+        import audioop
+        import time
+
+        import speech_recognition as sr
+
+        mic_device_name = request.mic_device_name
+        server.logger.info(
+            "Audio calibration started",
+            mic_device_name=mic_device_name,
+        )
+
+        def _calibrate() -> int:
+            microphone_index = server.device_checker.find_microphone_index(
+                mic_device_name
+            )
+
+            if microphone_index is None:
+                raise ValueError("マイクが見つかりません")
+
+            rms_values: list[int] = []
+            with sr.Microphone(device_index=microphone_index) as source:
+                # Realtek 等のドライバは AGC（自動ゲイン調整）を内蔵
+                # しており、マイクを開いた直後は高ゲイン → 数秒で安定化
+                # する。実際の SpeechTranscriber もマイクを開き続けるため、
+                # AGC 安定後の値が実運用に合った閾値になる。
+                # 5 秒のウォームアップで AGC を安定させてから測定する。
+                warmup_end = time.monotonic() + 5.0
+                while time.monotonic() < warmup_end:
+                    source.stream.read(source.CHUNK)  # type: ignore[attr-defined]
+
+                measure_end = time.monotonic() + 3.0
+                while time.monotonic() < measure_end:
+                    buffer = source.stream.read(source.CHUNK)  # type: ignore[attr-defined]
+                    rms_values.append(audioop.rms(buffer, source.SAMPLE_WIDTH))  # type: ignore[attr-defined]
+
+            if not rms_values:
+                raise ValueError("音声サンプルを取得できませんでした")
+
+            rms_values.sort()
+            count = len(rms_values)
+            # Q1（25 パーセンタイル）を環境音フロアの推定値とする。
+            # Q1 は最も静かな 25% の代表値であり、測定中に偶発的な
+            # 音声や衝撃音が混入しても影響を受けにくい。
+            # p95 等の上位パーセンタイルは測定中のわずかな音で
+            # 数十倍に跳ね上がり、再現性がない。
+            #
+            # listen() は energy > energy_threshold で発話開始を判定する。
+            # dynamic_energy_threshold=False（固定閾値）の場合、閾値は
+            # ノイズのピークを確実に超える必要がある。
+            # Q1 × 10 は環境音の最大値の約 3〜5 倍に相当し、
+            # 音声処理で信頼性のある検出に必要とされる約 20 dB の
+            # SNR（信号対雑音比）を確保する。
+            q1 = rms_values[count // 4]
+            threshold = max(100, q1 * 10)
+
+            server.logger.info(
+                "Audio calibration result",
+                sample_count=count,
+                min_rms=rms_values[0],
+                q1_rms=q1,
+                max_rms=rms_values[-1],
+                threshold=threshold,
+            )
+
+            return threshold
+
+        try:
+            threshold = await asyncio.wait_for(
+                asyncio.to_thread(_calibrate), timeout=15.0
+            )
+            return JSONResponse(content={"energy_threshold": threshold})
+        except asyncio.TimeoutError as exc:
+            server.logger.error("Audio calibration timed out")
+            raise HTTPException(
+                status_code=status.HTTP_504_GATEWAY_TIMEOUT,
+                detail="マイクの読み込みがタイムアウトしました。マイクが他の処理でブロックされている可能性があります。",
+            ) from exc
+        except Exception as exc:
+            server.logger.error("Failed to calibrate audio", error=str(exc))
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=str(exc),
+            ) from exc
+
+    @router.post("/settings/speech/test")
+    async def test_speech_recognition(
+        request: SpeechTestRequest,
+    ) -> StreamingResponse:
+        """音声認識テスト。マイクから録音してリアルタイムに認識結果をストリーム配信する。"""
+        if server.speech_test_fn is None:
+            raise HTTPException(
+                status_code=status.HTTP_501_NOT_IMPLEMENTED,
+                detail="音声認識テスト機能は利用できません。",
+            ) from None
+
+        server.logger.info(
+            "音声認識テストを開始します",
+            mic_device_name=request.mic_device_name,
+        )
+
+        speech_test = server.speech_test_fn
+
+        async def event_stream() -> AsyncGenerator[str, None]:
+            gen = speech_test(
+                request.mic_device_name,
+                overrides=request.overrides,
+            )
+            try:
+                async for event in gen:
+                    yield json.dumps(event, ensure_ascii=False) + "\n"
+            except ValueError as exc:
+                yield (
+                    json.dumps(
+                        {"type": "error", "detail": str(exc)},
+                        ensure_ascii=False,
+                    )
+                    + "\n"
+                )
+            except Exception as exc:
+                server.logger.error(
+                    "音声認識テストに失敗しました", error=str(exc)
+                )
+                yield (
+                    json.dumps(
+                        {"type": "error", "detail": str(exc)},
+                        ensure_ascii=False,
+                    )
+                    + "\n"
+                )
+            finally:
+                await gen.aclose()
+
+        return StreamingResponse(
+            event_stream(),
+            media_type="application/x-ndjson",
+        )
 
     return router
 

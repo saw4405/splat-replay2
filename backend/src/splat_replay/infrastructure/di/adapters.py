@@ -25,18 +25,18 @@ from splat_replay.application.interfaces import (
     ImageSelector,
     MicrophoneEnumeratorPort,
     PowerPort,
-    ReplayBootstrapResolverPort,
     RecorderWithTranscriptionPort,
+    ReplayBootstrapResolverPort,
     SettingsRepositoryPort,
     SpeechTranscriberPort,
     SubtitleEditorPort,
     SystemCommandPort,
-    WeaponRecognitionPort,
     TextToSpeechPort,
     UploadPort,
     VideoAssetRepositoryPort,
     VideoEditorPort,
     VideoRecorderPort,
+    WeaponRecognitionPort,
 )
 from splat_replay.domain.config import VideoEditSettings, VideoStorageSettings
 from splat_replay.domain.models import Frame
@@ -75,13 +75,13 @@ from splat_replay.infrastructure import (
     WeaponRecognitionAdapter,
     YouTubeClient,
 )
+from splat_replay.infrastructure.adapters.system.capture_clock import (
+    CaptureClock,
+)
 from splat_replay.infrastructure.adapters.upload import NoOpUploadPort
 from splat_replay.infrastructure.config import load_settings_from_toml
 from splat_replay.infrastructure.filesystem import paths
 from splat_replay.infrastructure.runtime import AppRuntime
-from splat_replay.infrastructure.adapters.system.capture_clock import (
-    CaptureClock,
-)
 from splat_replay.infrastructure.test_input import (
     ConfiguredReplayBootstrapResolver,
 )
@@ -279,9 +279,13 @@ def register_adapters(container: punq.Container) -> None:
                 "language": speech_settings.language,
                 "custom_dictionary": speech_settings.custom_dictionary,
                 "vad_aggressiveness": speech_settings.vad_aggressiveness,
+                "vad_min_speech_frames": speech_settings.vad_min_speech_frames,
+                "vad_min_speech_ratio": speech_settings.vad_min_speech_ratio,
                 "groq_model": speech_settings.groq_model,
                 "integrator_model": speech_settings.integrator_model,
                 "phrase_time_limit": speech_settings.phrase_time_limit,
+                "energy_threshold": speech_settings.energy_threshold,
+                "no_speech_prob_threshold": speech_settings.no_speech_prob_threshold,
             },
             ensure_ascii=True,
             sort_keys=True,

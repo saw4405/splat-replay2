@@ -9,6 +9,8 @@
     type SettingsUiSection,
   } from './grouping';
   import type { FieldValue, SettingField, SettingsResponse } from './types';
+  import { calibrateAudio } from '../../../setup/stores/config';
+  import SpeechTestDialog from './SpeechTestDialog.svelte';
 
   interface Props {
     open?: boolean;
@@ -26,6 +28,7 @@
   let successMessage = $state('');
   let activeSectionId = $state<string | null>(null);
   let successMessageTimer: ReturnType<typeof setTimeout> | null = null;
+  let speechTestOpen = $state(false);
 
   const activeSection = $derived(
     sections.find((section) => section.id === activeSectionId) ?? null
@@ -66,6 +69,7 @@
     errorMessage = '';
     successMessage = '';
     activeSectionId = null;
+    speechTestOpen = false;
     clearSuccessMessageTimer();
   }
 
@@ -128,6 +132,72 @@
       })),
     }));
   }
+
+  async function handleCalibrateAudio(
+    field: SettingField,
+    parentGroup: SettingField | null = null
+  ): Promise<void> {
+    let micDeviceName = '';
+    const recordingSection = sections.find((s) => s.id === 'recording');
+    if (recordingSection) {
+      const stGroup = recordingSection.fields.find((f) => f.id === 'speech_transcriber');
+      const micField = stGroup?.children?.find((f) => f.id === 'mic_device_name');
+      micDeviceName = (micField?.value as string) || '';
+    } else {
+      const stSection = sections.find((s) => s.id === 'speech_transcriber');
+      const micField = stSection?.fields.find((f) => f.id === 'mic_device_name');
+      micDeviceName = (micField?.value as string) || '';
+    }
+
+    if (!micDeviceName) {
+      throw new Error('マイクデバイスが選択されていません。設定を保存してから再度お試しください。');
+    }
+
+    saving = true;
+    try {
+      const threshold = await calibrateAudio(micDeviceName);
+      if (parentGroup) {
+        handleGroupFieldValueChange(parentGroup, field, threshold);
+      } else {
+        handleFieldValueChange(field, threshold);
+      }
+    } finally {
+      saving = false;
+    }
+  }
+
+  function getSpeechTranscriberSettings(): Record<string, unknown> {
+    const recordingSection = sections.find((s) => s.id === 'recording');
+    if (recordingSection) {
+      const stGroup = recordingSection.fields.find((f) => f.id === 'speech_transcriber');
+      if (stGroup?.children) {
+        const values: Record<string, unknown> = {};
+        for (const child of stGroup.children) {
+          if (child.value !== undefined && child.value !== null) {
+            values[child.id] = child.value;
+          }
+        }
+        return values;
+      }
+    }
+    const stSection = sections.find((s) => s.id === 'speech_transcriber');
+    if (stSection) {
+      const values: Record<string, unknown> = {};
+      for (const field of stSection.fields) {
+        if (field.value !== undefined && field.value !== null) {
+          values[field.id] = field.value;
+        }
+      }
+      return values;
+    }
+    return {};
+  }
+
+  function handleTestSpeech(): void {
+    speechTestOpen = true;
+  }
+
+  const speechTestSettings = $derived(getSpeechTranscriberSettings());
 
   async function saveSettings(): Promise<void> {
     if (saving || loading) {
@@ -222,6 +292,8 @@
                 updateField={handleFieldValueChange}
                 updateGroupField={handleGroupFieldValueChange}
                 parentGroup={null}
+                onCalibrateAudio={handleCalibrateAudio}
+                onTestSpeech={handleTestSpeech}
               />
             {/each}
           </div>
@@ -240,6 +312,8 @@
     {/if}
   {/snippet}
 </BaseDialog>
+
+<SpeechTestDialog bind:open={speechTestOpen} speechSettings={speechTestSettings} />
 
 <style>
   .dialog-content {

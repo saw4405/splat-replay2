@@ -261,6 +261,7 @@
         groqApiKey: groqApiKey.trim(),
         language: language.trim(),
         customDictionary: parseDictionary(customDictionaryText),
+        energyThreshold: 300,
       };
     }
     return {
@@ -269,6 +270,7 @@
       groqApiKey: groqApiKey.trim(),
       language: language.trim(),
       customDictionary: parseDictionary(customDictionaryText),
+      energyThreshold: 300,
     };
   }
 

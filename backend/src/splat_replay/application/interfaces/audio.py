@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Protocol
+from typing import Optional, Protocol
 
 from splat_replay.application.interfaces.data import (
     SpeechSynthesisRequest,
@@ -45,4 +45,8 @@ class MicrophoneEnumeratorPort(Protocol):
 
     def list_microphones(self) -> list[str]:
         """List available microphone devices."""
+        ...
+
+    def find_microphone_index(self, device_name: str) -> Optional[int]:
+        """表示名からデバイスインデックスを検索する。"""
         ...

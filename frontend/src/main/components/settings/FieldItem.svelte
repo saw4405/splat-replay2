@@ -11,6 +11,8 @@
     updateField: (field: SettingField, value: FieldValue) => void;
     updateGroupField: (group: SettingField, child: SettingField, value: FieldValue) => void;
     parentGroup?: SettingField | null;
+    onCalibrateAudio?: (field: SettingField, parentGroup: SettingField | null) => Promise<void>;
+    onTestSpeech?: () => void;
   }
 
   let {
@@ -20,6 +22,8 @@
     updateField,
     updateGroupField,
     parentGroup = null,
+    onCalibrateAudio,
+    onTestSpeech,
   }: Props = $props();
 
   const pathTokens = $derived([...path, field.id]);
@@ -29,6 +33,27 @@
 
   let showPassword = $state(false);
   let listText = $state('');
+  let calibrateMessage = $state('');
+  let calibrateIsError = $state(false);
+  let isCalibrating = $state(false);
+
+  async function runCalibrate(): Promise<void> {
+    if (!onCalibrateAudio) {
+      return;
+    }
+    isCalibrating = true;
+    calibrateMessage = '実行中です。10秒間何も喋らず、環境音のみを測定してください...';
+    calibrateIsError = false;
+    try {
+      await onCalibrateAudio(field, parentGroup ?? null);
+      calibrateMessage = '自動調整が完了しました。';
+    } catch (error) {
+      calibrateMessage = error instanceof Error ? error.message : '自動調整に失敗しました。';
+      calibrateIsError = true;
+    } finally {
+      isCalibrating = false;
+    }
+  }
 
   // field.value のみに依存するように最適化（field全体への依存を回避）
   $effect(() => {
@@ -111,9 +136,21 @@
           {updateField}
           {updateGroupField}
           parentGroup={field}
+          {onCalibrateAudio}
+          {onTestSpeech}
         />
       {/each}
     </div>
+    {#if field.id === 'speech_transcriber' && onTestSpeech}
+      <button
+        type="button"
+        class="speech-test-button"
+        data-testid="speech-test-open-button"
+        onclick={onTestSpeech}
+      >
+        音声認識をテスト
+      </button>
+    {/if}
   </fieldset>
 {:else}
   <div
@@ -141,14 +178,29 @@
         <span class="toggle-slider"></span>
       </label>
     {:else if field.type === 'integer'}
-      <input
-        id={elementId}
-        aria-describedby={field.description ? descriptionId : undefined}
-        type="number"
-        step="1"
-        value={typeof field.value === 'number' ? field.value : ''}
-        oninput={commitInteger}
-      />
+      <div class="integer-field-container">
+        <input
+          id={elementId}
+          aria-describedby={field.description ? descriptionId : undefined}
+          type="number"
+          step="1"
+          value={typeof field.value === 'number' ? field.value : ''}
+          oninput={commitInteger}
+        />
+        {#if field.id === 'energy_threshold' && onCalibrateAudio}
+          <button
+            type="button"
+            class="calibrate-button"
+            disabled={isCalibrating}
+            onclick={runCalibrate}
+          >
+            {isCalibrating ? '調整中...' : '自動調整を実行'}
+          </button>
+        {/if}
+      </div>
+      {#if field.id === 'energy_threshold' && calibrateMessage}
+        <p class="calibrate-message" class:error={calibrateIsError}>{calibrateMessage}</p>
+      {/if}
     {:else if field.type === 'float'}
       <input
         id={elementId}
@@ -459,6 +511,49 @@
     margin-top: 0;
   }
 
+  .integer-field-container {
+    display: flex;
+    gap: 0.75rem;
+    align-items: center;
+    width: 100%;
+  }
+
+  .calibrate-button {
+    background: rgba(var(--theme-rgb-white), 0.08);
+    border: 1px solid rgba(var(--theme-rgb-white), 0.2);
+    color: var(--theme-text-primary);
+    padding: 0.5rem 0.8rem;
+    border-radius: 0.4rem;
+    font-size: 0.85rem;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: all 0.2s ease;
+  }
+
+  .calibrate-button:hover {
+    background: rgba(var(--theme-rgb-white), 0.15);
+    border-color: rgba(var(--theme-rgb-white), 0.35);
+  }
+
+  .calibrate-button:active {
+    background: rgba(var(--theme-rgb-white), 0.1);
+  }
+
+  .calibrate-button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  .calibrate-message {
+    margin: 0;
+    font-size: 0.82rem;
+    color: rgba(var(--theme-rgb-light-slate), 0.75);
+  }
+
+  .calibrate-message.error {
+    color: var(--theme-status-danger-soft, #f87171);
+  }
+
   .password-field {
     position: relative;
     display: flex;
@@ -492,5 +587,27 @@
   .password-toggle:focus {
     outline: none;
     color: rgba(var(--theme-rgb-accent), 0.9);
+  }
+
+  .speech-test-button {
+    align-self: flex-start;
+    background: rgba(var(--theme-rgb-accent), 0.12);
+    border: 1px solid rgba(var(--theme-rgb-accent), 0.3);
+    color: rgba(var(--theme-rgb-white), 0.9);
+    padding: 0.6rem 1.2rem;
+    border-radius: 0.5rem;
+    font-size: 0.88rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+
+  .speech-test-button:hover {
+    background: rgba(var(--theme-rgb-accent), 0.22);
+    border-color: rgba(var(--theme-rgb-accent), 0.5);
+  }
+
+  .speech-test-button:active {
+    background: rgba(var(--theme-rgb-accent), 0.16);
   }
 </style>

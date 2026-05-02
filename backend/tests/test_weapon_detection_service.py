@@ -357,7 +357,7 @@ class _DisplaySequenceRecognizer:
         _ = previous_results
         _ = battle_dir_name
         self.recognize_calls += 1
-        return _build_full_recognition_result("再判定")
+        return _build_partial_recognition_result("再判定")
 
 
 class _PartialDisplayDetailsRecognizer:
@@ -1434,6 +1434,10 @@ async def test_display_ng_finishes_task_and_next_frame_retries_detection() -> (
         + 0.02
     )
     context = await service.process(frame=frame_2, context=context)
+    # recognize_weapons の結果が反映されるまで待つ
+    context = await _drive_process(
+        service, context, frame_2, loops=4, delay_seconds=0.05
+    )
 
     assert recognizer.detect_calls >= 2
     assert recognizer.recognize_calls >= 1
