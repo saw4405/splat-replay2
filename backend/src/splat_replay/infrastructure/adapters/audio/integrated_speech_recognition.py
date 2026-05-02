@@ -8,9 +8,8 @@ import speech_recognition as sr
 import webrtcvad
 from groq import AsyncGroq
 from pydantic import BaseModel
-from structlog.stdlib import BoundLogger
-
 from splat_replay.domain.config import SpeechTranscriberSettings
+from structlog.stdlib import BoundLogger
 
 
 class RecognitionResult(BaseModel):
@@ -87,8 +86,13 @@ class IntegratedSpeechRecognizer:
         if speech_frames >= required_frames:
             return True
 
-        self._logger.debug(
-            "VADが音声活動を検出しなかったため無音と判定しました"
+        self._logger.info(
+            "VADが音声活動を検出しなかったため無音と判定しました",
+            speech_frames=speech_frames,
+            required_frames=required_frames,
+            total_frames=total_frames,
+            vad_min_speech_frames=self._vad_min_speech_frames,
+            vad_min_speech_ratio=self._vad_min_speech_ratio,
         )
         return False
 
@@ -176,6 +180,7 @@ class IntegratedSpeechRecognizer:
                 self._logger.info(
                     "Groq: no_speech_prob が閾値以上のため無音と判定",
                     avg_no_speech_prob=avg_no_speech_prob,
+                    no_speech_prob_threshold=self._no_speech_prob_threshold,
                 )
                 return None
         else:

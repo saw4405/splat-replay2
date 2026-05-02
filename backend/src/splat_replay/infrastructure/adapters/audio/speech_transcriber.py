@@ -9,8 +9,6 @@ import time
 from typing import List, Optional, Tuple
 
 import speech_recognition as sr
-from structlog.stdlib import BoundLogger
-
 from splat_replay.application.interfaces import (
     DomainEventPublisher,
     SpeechTranscriberPort,
@@ -25,6 +23,7 @@ from splat_replay.infrastructure.adapters.audio.integrated_speech_recognition im
 )
 from splat_replay.infrastructure.adapters.audio.segment import Segment
 from splat_replay.infrastructure.adapters.audio.stopwatch import StopWatch
+from structlog.stdlib import BoundLogger
 
 
 class SpeechTranscriber(SpeechTranscriberPort):
@@ -36,6 +35,17 @@ class SpeechTranscriber(SpeechTranscriberPort):
     def find_microphone(device_name: str) -> Optional[int]:
         if not device_name.strip():
             return None
+        # WASAPI で列挙したインデックスを優先する
+        import structlog
+        from splat_replay.infrastructure.adapters.audio.microphone_enumerator import (
+            MicrophoneEnumerator,
+        )
+
+        enumerator = MicrophoneEnumerator(structlog.get_logger())
+        result = enumerator.find_microphone_index(device_name)
+        if result is not None:
+            return result
+        # フォールバック: デフォルトホスト API
         for index, name in enumerate(sr.Microphone.list_microphone_names()):
             if device_name.lower() in name.lower():
                 return index
@@ -90,33 +100,43 @@ class SpeechTranscriber(SpeechTranscriberPort):
             return None
 
     def _recording_loop(self) -> None:
-        with sr.Microphone(device_index=self._microphone_index) as source:
-            self._logger.info(
-                "マイク録音ループを開始しました",
-                energy_threshold=self._recognizer.energy_threshold,
-            )
-            while not self._recording_event.is_set():
-                if self._is_paused:
-                    time.sleep(0.1)
-                    continue
+        try:
+            with sr.Microphone(device_index=self._microphone_index) as source:
+                self._logger.info(
+                    "マイク録音ループを開始しました",
+                    energy_threshold=self._recognizer.energy_threshold,
+                )
+                while not self._recording_event.is_set():
+                    if self._is_paused:
+                        time.sleep(0.1)
+                        continue
 
-                audio = self._listen_for_audio(source)
-                if audio is None:
-                    continue
+                    audio = self._listen_for_audio(source)
+                    if audio is None:
+                        continue
 
-                elapsed_time = self._stopwatch.elapsed()
-                duration = self.get_audio_duration(audio)
+                    elapsed_time = self._stopwatch.elapsed()
+                    duration = self.get_audio_duration(audio)
 
-                if duration < 0.5:
-                    self._logger.debug(
-                        "録音時間が短すぎるため破棄します", duration=duration
-                    )
-                    continue
+                    if duration < 0.5:
+                        self._logger.debug(
+                            "録音時間が短すぎるため破棄します",
+                            duration=duration,
+                        )
+                        continue
 
-                start = max(elapsed_time - duration, 0)
-                end = elapsed_time
+                    start = max(elapsed_time - duration, 0)
+                    end = elapsed_time
 
-                self._audio_queue.put((audio, start, end))
+                    self._audio_queue.put((audio, start, end))
+        except AttributeError as e:
+            if "'NoneType'" in str(e) and "close" in str(e):
+                self._logger.error(
+                    "マイクデバイスを開けませんでした",
+                    device_index=self._microphone_index,
+                )
+            else:
+                raise
 
     def _recognition_loop(self) -> None:
         while not self._recording_event.is_set():
