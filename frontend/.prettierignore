@@ -9,6 +9,7 @@ build/
 .pytest_cache/
 test-results/
 coverage/
+tests/fixtures/e2e/**/*.mkv
 
 # Generated files
 src/generated/
