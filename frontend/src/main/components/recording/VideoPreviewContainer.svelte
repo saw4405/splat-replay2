@@ -1017,9 +1017,14 @@
   .preview-container {
     position: relative;
     width: 100%;
-    --preview-available-height: var(--main-preview-available-height, calc(100vh - 180px));
+    --preview-fallback-height: calc(100vh - 180px);
+    --preview-fallback-height: calc(100dvh - 180px);
+    --preview-available-height: var(
+      --main-preview-available-height,
+      var(--preview-fallback-height)
+    );
     max-width: min(1280px, calc(var(--preview-available-height) * 16 / 9));
-    max-height: var(--main-preview-available-height, calc(100vh - 180px));
+    max-height: var(--preview-available-height);
     aspect-ratio: 16 / 9;
     margin: 0;
     display: flex;

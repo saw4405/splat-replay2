@@ -69,7 +69,7 @@
   });
 </script>
 
-<main class="app-shell glass-surface">
+<main class="app-shell glass-surface" data-testid="main-app-shell">
   <div class="header">
     <button
       class="icon-button settings-button drawer-button"
@@ -80,6 +80,7 @@
         toggleDrawer();
       }}
       title={drawerButtonLabel}
+      data-testid="main-drawer-button"
     >
       <span class="drawer-icon-wrapper">
         <PanelBottom class="icon" aria-hidden="true" stroke-width={1.75} />
@@ -157,11 +158,16 @@
       100vh - var(--app-top-padding) - var(--app-title-row-height) - var(--app-title-preview-gap) -
         var(--bottom-drawer-reserved-height) - var(--preview-drawer-gap)
     );
+    --main-preview-available-height: calc(
+      100dvh - var(--app-top-padding) - var(--app-title-row-height) - var(--app-title-preview-gap) -
+        var(--bottom-drawer-reserved-height) - var(--preview-drawer-gap)
+    );
     padding: var(--app-top-padding) var(--app-horizontal-padding)
       calc(var(--bottom-drawer-reserved-height) + var(--preview-drawer-gap) + 8px);
     max-width: 1400px;
     margin: 0 auto;
     height: 100vh;
+    height: 100dvh;
     display: flex;
     flex-direction: column;
     gap: var(--app-title-preview-gap);
@@ -305,8 +311,41 @@
     }
   }
 
-  /* 高さが不足する場合: ドロワー予約領域を解放してフロートボタン表示 */
-  @media (max-height: 550px) {
+  @media (max-width: 650px) {
+    .app-shell {
+      --bottom-drawer-reserved-height: 4.5rem;
+    }
+  }
+
+  @media (max-width: 480px) {
+    .app-shell {
+      --app-horizontal-padding: 0.5rem;
+      --app-top-padding: 0.5rem;
+      --app-title-preview-gap: 0.75rem;
+    }
+
+    h1 {
+      font-size: 1.75rem;
+    }
+
+    .icon-button {
+      height: 2.25rem;
+      width: 2.25rem;
+    }
+
+    .header-spacer {
+      width: 2.25rem;
+    }
+  }
+
+  @media (max-width: 360px) {
+    h1 {
+      font-size: 1.5rem;
+    }
+  }
+
+  /* Landscapeモード: スマホ横持ち等ではドロワー予約領域を解放する */
+  @media (min-aspect-ratio: 3/2) and (max-height: 500px) {
     .app-shell {
       --bottom-drawer-reserved-height: 0rem;
       --preview-drawer-gap: 0rem;
@@ -316,7 +355,7 @@
     }
 
     h1 {
-      font-size: 2.25rem;
+      font-size: 1.75rem;
     }
 
     .header-spacer {

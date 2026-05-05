@@ -396,7 +396,12 @@
   onClose={() => (showAlertDialog = false)}
 />
 
-<div class="bottom-drawer" class:full={drawerState === 'full'} bind:this={drawerElement}>
+<div
+  class="bottom-drawer"
+  class:full={drawerState === 'full'}
+  bind:this={drawerElement}
+  data-testid="bottom-drawer-root"
+>
   <!-- ヘッダーバー (常時表示) -->
   <div
     class="drawer-header"
@@ -433,7 +438,7 @@
           {/if}
         </span>
       </div>
-      <div class="tabs">
+      <div class="tabs" data-testid="drawer-tabs">
         <button
           class="tab recorded"
           class:has-data={recordedCount > 0}
@@ -499,11 +504,13 @@
         class:processing={isProcessing}
         class:ready={recordedCount > 0 || editedCount > 0}
         disabled={isProcessing || (recordedCount === 0 && editedCount === 0)}
+        aria-label="録画データの編集とYouTubeアップロードを開始"
         onclick={(e) => {
           e.stopPropagation();
           startProcessing();
         }}
         title="録画データの編集とYouTubeへのアップロードを開始します"
+        data-testid="drawer-process-button"
       >
         <div class="button-background"></div>
         <div class="button-content">
@@ -642,6 +649,7 @@
     right: 0;
     height: auto;
     max-height: 100vh;
+    max-height: 100dvh;
     display: flex;
     flex-direction: column;
     background: linear-gradient(
@@ -714,6 +722,7 @@
     align-items: center;
     gap: 2rem;
     flex: 1;
+    min-width: 0;
   }
 
   .expand-hint {
@@ -745,6 +754,7 @@
   .tabs {
     display: flex;
     gap: 1rem;
+    min-width: 0;
   }
 
   .tab {
@@ -881,6 +891,7 @@
     display: flex;
     align-items: center;
     gap: 1rem;
+    flex-shrink: 0;
   }
 
   .process-button {
@@ -892,6 +903,7 @@
     border-radius: 12px;
     font-size: 1rem;
     font-weight: 600;
+    white-space: nowrap;
     cursor: pointer;
     transition:
       border-color 0.2s ease,
@@ -974,6 +986,7 @@
 
   .drawer-content {
     height: calc(100vh - 84px);
+    height: calc(100dvh - 84px);
     overflow-y: auto;
     padding: 1.5rem;
     display: flex;
@@ -1061,37 +1074,54 @@
     background: rgba(var(--theme-rgb-accent), 0.5);
   }
 
-  /* レスポンシブ対応 */
-  @media (max-width: 1024px) {
-    .tab-content {
-      gap: 1.5rem;
-    }
-
-    .data-section {
-      height: 100%;
-    }
-
-    .list-container {
-      min-height: 0;
-    }
-  }
-
-  /* 幅が狭い場合はタブを絵文字+バッジのみに縮小 */
+  /* タブレット以下: 情報量を維持しながら密度を上げる */
   @media (max-width: 768px) {
     .header-left {
-      gap: 0.75rem;
+      gap: 1rem;
     }
 
-    /* 「詳細を表示」テキストと矢印を非表示 */
-    .expand-hint {
-      display: none;
+    .drawer-header {
+      gap: 1rem;
+      padding: 0.75rem 1rem;
     }
 
     .tabs {
       gap: 0.5rem;
     }
 
-    /* タブを均等パディング・中央揃えに */
+    .tab {
+      padding: 0.5rem 0.75rem;
+      gap: 0.5rem;
+    }
+
+    .process-button {
+      padding: 0.75rem 1.5rem;
+    }
+  }
+
+  /* スマホ幅: ドロワーヘッダーをアイコン中心に圧縮する */
+  @media (max-width: 650px) {
+    .bottom-drawer {
+      --bottom-drawer-collapsed-height: 4.5rem;
+    }
+
+    .drawer-header {
+      gap: 0.5rem;
+      padding: 0.5rem 0.75rem;
+    }
+
+    .header-left {
+      gap: 0.5rem;
+    }
+
+    .expand-hint {
+      display: none;
+    }
+
+    .tabs {
+      gap: 0.35rem;
+    }
+
     .tab {
       padding: 0.5rem;
       justify-content: center;
@@ -1109,9 +1139,8 @@
       display: flex;
     }
 
-    /* 処理開始ボタンをアイコンのみに */
     .process-button {
-      padding: 0.75rem;
+      padding: 0.65rem;
     }
 
     .process-button span:not(.spinner) {
@@ -1119,10 +1148,31 @@
     }
   }
 
-  /* 高さが低い場合はドロワーを画面外に隠し、フロートボタンで開閉 */
-  @media (max-height: 550px) {
+  /* 極小幅: タブ群は押し出さず、横スワイプで操作可能にする */
+  @media (max-width: 360px) {
+    .tabs {
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+      scrollbar-width: none;
+      flex-shrink: 1;
+      min-width: 0;
+    }
+
+    .tabs::-webkit-scrollbar {
+      display: none;
+    }
+
+    .tab {
+      flex: 0 0 auto;
+    }
+  }
+
+  /* Landscapeモード: ドロワーを画面外に隠し、フロートボタンで開閉 */
+  @media (min-aspect-ratio: 3/2) and (max-height: 500px) {
     .bottom-drawer {
       transform: translateY(100%);
+      max-height: 100vh;
+      max-height: 100dvh;
       transition:
         box-shadow 0.4s cubic-bezier(0.4, 0, 0.2, 1),
         transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
