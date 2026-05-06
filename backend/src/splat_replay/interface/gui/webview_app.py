@@ -70,6 +70,13 @@ def build_frontend_entry_url(backend_url: str, frontend_dist: Path) -> str:
     )
 
 
+def resolve_backend_hosts(remote_access_enabled: bool) -> tuple[str, str]:
+    """Return backend bind host and WebView URL host."""
+    if remote_access_enabled:
+        return "0.0.0.0", "127.0.0.1"
+    return "127.0.0.1", "127.0.0.1"
+
+
 def start_backend_server(
     app_import_path: str, host: str = "127.0.0.1", port: int = 8000
 ) -> None:
@@ -83,6 +90,8 @@ def start_backend_server(
     logger = structlog.get_logger()
 
     try:
+        os.environ["SPLAT_REPLAY_BACKEND_BIND_HOST"] = host
+        os.environ["SPLAT_REPLAY_BACKEND_PORT"] = str(port)
         logger.info(
             "Starting FastAPI backend",
             host=host,
@@ -175,6 +184,8 @@ class SplatReplayWebViewApp:
         width: int = 1200,
         height: int = 900,
         backend_host: str = "127.0.0.1",
+        backend_bind_host: str | None = None,
+        backend_url_host: str | None = None,
         backend_port: int = 8000,
     ) -> None:
         """初期化。
@@ -197,9 +208,10 @@ class SplatReplayWebViewApp:
         self.title = title
         self.width = width
         self.height = height
-        self.backend_host = backend_host
+        self.backend_host = backend_bind_host or backend_host
+        self.backend_url_host = backend_url_host or backend_host
         self.backend_port = backend_port
-        self.backend_url = f"http://{backend_host}:{backend_port}"
+        self.backend_url = f"http://{self.backend_url_host}:{backend_port}"
 
         # フロントエンドパスを検索
         try:
@@ -289,4 +301,5 @@ class SplatReplayWebViewApp:
 __all__ = [
     "SplatReplayWebViewApp",
     "build_frontend_entry_url",
+    "resolve_backend_hosts",
 ]

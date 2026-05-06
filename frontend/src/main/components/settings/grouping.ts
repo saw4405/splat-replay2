@@ -19,7 +19,7 @@ type SettingsGroupDefinition = {
 
 const SETTINGS_GROUPS: SettingsGroupDefinition[] = [
   { id: 'behavior', label: '動作', sourceSectionIds: ['behavior'], grouped: false },
-  { id: 'display', label: '表示', sourceSectionIds: ['webview'], grouped: false },
+  { id: 'display', label: '表示', sourceSectionIds: ['webview', 'remote_access'], grouped: true },
   {
     id: 'recording',
     label: '録画',
@@ -31,6 +31,8 @@ const SETTINGS_GROUPS: SettingsGroupDefinition[] = [
 ];
 
 const SOURCE_SECTION_LABELS: Record<string, string> = {
+  webview: '表示',
+  remote_access: 'LAN 公開',
   capture_device: 'キャプチャデバイス',
   obs: 'OBS 接続',
   record: '録画',

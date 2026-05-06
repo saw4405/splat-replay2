@@ -19,6 +19,16 @@ def test_load_settings_defaults_webview_render_mode_to_gpu(
     assert settings.webview.render_mode == "gpu"
 
 
+def test_load_settings_defaults_remote_access_to_disabled(
+    tmp_path: Path,
+) -> None:
+    settings_path = tmp_path / "settings.toml"
+
+    settings = load_settings_from_toml(settings_path, create_if_missing=False)
+
+    assert settings.remote_access.enabled is False
+
+
 def test_invalid_webview_render_mode_falls_back_to_gpu(
     tmp_path: Path,
 ) -> None:
@@ -79,6 +89,42 @@ def test_update_sections_persists_webview_render_mode(
     settings = load_settings_from_toml(settings_path, create_if_missing=False)
 
     assert settings.webview.render_mode == "gpu"
+
+
+def test_fetch_sections_exposes_remote_access_toggle(
+    tmp_path: Path,
+) -> None:
+    repository = TomlSettingsRepository(
+        settings_path=tmp_path / "settings.toml"
+    )
+
+    sections = repository.fetch_sections()
+    remote_section = next(
+        section for section in sections if section["id"] == "remote_access"
+    )
+    enabled = next(
+        field for field in remote_section["fields"] if field["id"] == "enabled"
+    )
+
+    assert enabled["type"] == "boolean"
+    assert enabled["value"] is False
+    assert enabled["user_editable"] is True
+    assert "LAN" in enabled["description"]
+
+
+def test_update_sections_persists_remote_access_enabled(
+    tmp_path: Path,
+) -> None:
+    settings_path = tmp_path / "settings.toml"
+    repository = TomlSettingsRepository(settings_path=settings_path)
+
+    repository.update_sections(
+        [{"id": "remote_access", "values": {"enabled": True}}]
+    )
+
+    settings = load_settings_from_toml(settings_path, create_if_missing=False)
+
+    assert settings.remote_access.enabled is True
 
 
 def test_fetch_webview_render_mode_avoids_device_enumeration(

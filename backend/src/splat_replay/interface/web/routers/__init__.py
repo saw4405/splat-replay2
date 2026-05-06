@@ -7,6 +7,7 @@ from .metadata import create_metadata_router
 from .notifications import create_notifications_router
 from .process import create_process_router
 from .recording import create_recording_router
+from .remote_access import create_remote_access_router
 from .settings import create_settings_router
 from .setup import create_setup_router
 
@@ -18,6 +19,7 @@ __all__ = [
     "create_metadata_router",
     "create_notifications_router",
     "create_recording_router",
+    "create_remote_access_router",
     "create_settings_router",
     "create_setup_router",
     "create_process_router",

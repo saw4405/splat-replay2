@@ -44,6 +44,10 @@ class SettingsService:
         """Return the lightweight webview render mode setting."""
         return self._repository.fetch_webview_render_mode()
 
+    def fetch_remote_access_enabled(self) -> bool:
+        """Return whether LAN remote access is enabled in persisted settings."""
+        return self._repository.fetch_remote_access_enabled()
+
     def update_sections(self, updates: List[SectionUpdate]) -> None:
         """Persist provided settings section updates to the TOML settings file."""
         if not updates:

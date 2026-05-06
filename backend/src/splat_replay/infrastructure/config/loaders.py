@@ -88,6 +88,9 @@ def convert_to_serializable_dict(settings: AppSettings) -> Dict[str, object]:
     )
     toml_data["obs"] = _convert_for_toml(settings.obs.dict())
     toml_data["record"] = _convert_for_toml(settings.record.dict())
+    toml_data["remote_access"] = _convert_for_toml(
+        settings.remote_access.dict()
+    )
     toml_data["speech_transcriber"] = _convert_for_toml(
         settings.speech_transcriber.dict()
     )

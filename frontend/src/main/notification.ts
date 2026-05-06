@@ -6,6 +6,8 @@
  * バックエンドのAPI経由でWindows通知を送信する。
  */
 
+import { shouldUseDesktopNotifications } from './clientEnvironment';
+
 const API_BASE_URL = 'http://127.0.0.1:8000';
 
 /**
@@ -20,6 +22,11 @@ async function sendNotificationViaBackend(
   body: string,
   icon: 'info' | 'success' | 'warning' | 'error' = 'info'
 ): Promise<boolean> {
+  if (!shouldUseDesktopNotifications()) {
+    console.log('[Notification] LAN client, skipping desktop notification');
+    return false;
+  }
+
   try {
     const response = await fetch(`${API_BASE_URL}/api/notifications/send`, {
       method: 'POST',

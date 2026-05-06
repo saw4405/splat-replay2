@@ -109,6 +109,7 @@ ignore_imports = [
     "splat_replay.domain.config.image_matching -> pydantic",
     "splat_replay.domain.config.obs -> pydantic",
     "splat_replay.domain.config.record -> pydantic",
+    "splat_replay.domain.config.remote_access -> pydantic",
     "splat_replay.domain.config.speech_transcriber -> pydantic",
     "splat_replay.domain.config.upload -> pydantic",
     "splat_replay.domain.config.video_edit -> pydantic",

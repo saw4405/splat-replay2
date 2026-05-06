@@ -9,6 +9,9 @@ name = "Capture Device"
 [webview]
 render_mode = "gpu"
 
+[remote_access]
+enabled = false
+
 [obs]
 websocket_host = "localhost"
 websocket_port = 4455

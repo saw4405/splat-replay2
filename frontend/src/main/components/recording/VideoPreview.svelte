@@ -8,6 +8,7 @@
   } from '../../domainEvents';
   import { getRecorderPreviewMode } from '../../api/recording';
   import { getPreviewFramePollIntervalMs, renderMode } from '../../renderMode';
+  import { shouldUseBackendPreviewFrame } from '../../clientEnvironment';
 
   let eventSource: EventSource | null = null;
   let videoEl = $state<HTMLVideoElement | null>(null);
@@ -17,7 +18,7 @@
   let recorderState = $state<string>('STOPPED'); // STOPPED, RECORDING, PAUSED
   let isHovered = $state(false);
   let cameraStartInFlight = $state<boolean>(false);
-  let isVideoFileInput = $state(false);
+  let usesBackendPreviewFrame = $state(false);
   let previewImageUrl = $state<string | null>(null);
   let previewImageObjectUrl: string | null = null;
   let previewFramePollTimer: number | null = null;
@@ -59,7 +60,7 @@
   }
 
   async function refreshPreviewFrame(): Promise<void> {
-    if (!isVideoFileInput || previewFrameFetchInFlight) {
+    if (!usesBackendPreviewFrame || previewFrameFetchInFlight) {
       return;
     }
 
@@ -104,7 +105,7 @@
   }
 
   function startPreviewFramePolling(): void {
-    if (previewFramePollTimer || !isVideoFileInput) {
+    if (previewFramePollTimer || !usesBackendPreviewFrame) {
       return;
     }
 
@@ -378,8 +379,9 @@
   }
 
   async function syncPreviewConfiguration(): Promise<void> {
-    isVideoFileInput = (await getRecorderPreviewMode()) === 'video_file';
-    if (isVideoFileInput) {
+    const previewMode = await getRecorderPreviewMode();
+    usesBackendPreviewFrame = shouldUseBackendPreviewFrame(previewMode);
+    if (usesBackendPreviewFrame) {
       selectedDeviceId = null;
       stopCamera();
       startPreviewFramePolling();
@@ -452,7 +454,7 @@
     const next = getPreviewFramePollIntervalMs($renderMode);
     if (previewFramePollIntervalMs !== next) {
       previewFramePollIntervalMs = next;
-      if (isVideoFileInput) {
+      if (usesBackendPreviewFrame) {
         stopPreviewFramePolling();
         startPreviewFramePolling();
       }
@@ -460,7 +462,7 @@
   });
 
   $effect(() => {
-    if (!isVideoFileInput) {
+    if (!usesBackendPreviewFrame) {
       if (!mediaStream) {
         if (selectedDeviceId) {
           void ensureCameraStream(selectedDeviceId);
@@ -482,10 +484,10 @@
   });
 
   $effect(() => {
-    if (isVideoFileInput) {
+    if (usesBackendPreviewFrame) {
       startPreviewFramePolling();
     } else {
-      stopPreviewFramePolling(!isVideoFileInput);
+      stopPreviewFramePolling(!usesBackendPreviewFrame);
     }
   });
 
@@ -623,7 +625,7 @@
     </div>
   </div>
 
-  {#if !isVideoFileInput}
+  {#if !usesBackendPreviewFrame}
     <video bind:this={videoEl} class="preview-canvas" playsinline muted></video>
   {:else}
     <div class="video-file-preview-surface">

@@ -19,6 +19,7 @@ from splat_replay.interface.web.routers import (
     create_notifications_router,
     create_process_router,
     create_recording_router,
+    create_remote_access_router,
     create_settings_router,
     create_setup_router,
 )
@@ -151,6 +152,9 @@ def create_app(server: WebAPIServer, enable_lifespan: bool = True) -> FastAPI:
 
     settings_router = create_settings_router(server)
     app.include_router(settings_router)
+
+    remote_access_router = create_remote_access_router(server)
+    app.include_router(remote_access_router)
 
     process_router = create_process_router(server)
     app.include_router(process_router)

@@ -53,6 +53,8 @@ FRONTEND_API_CONTRACT: list[tuple[str, str, int | list[int] | None]] = [
     ("GET", "/api/settings", 200),
     ("GET", "/api/settings/webview-render-mode", 200),
     ("PUT", "/api/settings", None),
+    # Remote access
+    ("GET", "/api/remote-access/status", 200),
     # Device status
     ("GET", "/api/device/status", 200),
     # Recording control - /api/recorder/*
@@ -153,6 +155,7 @@ def test_openapi_schema_generation(client: TestClient) -> None:
     assert "/api/health" in paths
     assert "/api/settings" in paths
     assert "/api/settings/webview-render-mode" in paths
+    assert "/api/remote-access/status" in paths
     assert "/api/recorder/start" in paths
 
 
