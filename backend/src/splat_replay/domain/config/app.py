@@ -6,6 +6,7 @@ from splat_replay.domain.config.behavior import BehaviorSettings
 from splat_replay.domain.config.capture_device import CaptureDeviceSettings
 from splat_replay.domain.config.obs import OBSSettings
 from splat_replay.domain.config.record import RecordSettings
+from splat_replay.domain.config.remote_access import RemoteAccessSettings
 from splat_replay.domain.config.speech_transcriber import (
     SpeechTranscriberSettings,
 )
@@ -19,6 +20,7 @@ SECTION_CLASSES = {
     "capture_device": CaptureDeviceSettings,
     "obs": OBSSettings,
     "record": RecordSettings,
+    "remote_access": RemoteAccessSettings,
     "speech_transcriber": SpeechTranscriberSettings,
     "storage": VideoStorageSettings,
     "video_edit": VideoEditSettings,
@@ -34,6 +36,7 @@ class AppSettings(BaseModel):
     capture_device: CaptureDeviceSettings = CaptureDeviceSettings()
     obs: OBSSettings = OBSSettings()
     record: RecordSettings = RecordSettings()
+    remote_access: RemoteAccessSettings = RemoteAccessSettings()
     speech_transcriber: SpeechTranscriberSettings = SpeechTranscriberSettings()
     storage: VideoStorageSettings = VideoStorageSettings()
     video_edit: VideoEditSettings = VideoEditSettings()

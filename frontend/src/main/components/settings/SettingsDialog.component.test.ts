@@ -11,7 +11,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, waitFor, cleanup } from '@testing-library/svelte';
+import { render, screen, waitFor, cleanup, within } from '@testing-library/svelte';
 import userEvent from '@testing-library/user-event';
 import SettingsDialog from './SettingsDialog.svelte';
 import type { SettingsSection } from './types';
@@ -29,6 +29,7 @@ describe('SettingsDialog.svelte', () => {
   afterEach(() => {
     cleanup();
     vi.clearAllTimers();
+    vi.useRealTimers();
     vi.restoreAllMocks();
     delete document.documentElement.dataset.renderMode;
   });
@@ -134,6 +135,238 @@ describe('SettingsDialog.svelte', () => {
     await waitFor(() => {
       expect(screen.getByTestId('settings-section-general')).toBeInTheDocument();
     });
+  });
+
+  it('LAN 公開が有効でも未反映の場合はURL候補を開けるものとして表示しない', async () => {
+    const mockSections: SettingsSection[] = [
+      {
+        id: 'webview',
+        label: '表示',
+        fields: [
+          {
+            id: 'render_mode',
+            label: '描画モード',
+            description: '',
+            type: 'select',
+            recommended: false,
+            value: 'gpu',
+            choices: ['cpu', 'gpu'],
+            user_editable: true,
+          },
+        ],
+      },
+      {
+        id: 'remote_access',
+        label: 'LAN アクセス',
+        fields: [
+          {
+            id: 'enabled',
+            label: 'LAN 公開',
+            description: '家庭内LANからスマホで同じ画面を開けます。',
+            type: 'boolean',
+            recommended: false,
+            value: true,
+            user_editable: true,
+          },
+        ],
+      },
+    ];
+
+    fetchMock.mockImplementation((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url === '/api/remote-access/status') {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({
+            enabled: true,
+            active: false,
+            bind_host: '127.0.0.1',
+            port: 8000,
+            restart_required: true,
+            access_urls: ['http://192.168.1.20:8000/'],
+          }),
+        });
+      }
+      return Promise.resolve({
+        ok: true,
+        json: async () => ({ sections: mockSections }),
+      });
+    });
+
+    render(SettingsDialog, { props: { open: true } });
+
+    let summary: HTMLElement | null = null;
+    await waitFor(() => {
+      summary = screen.getByTestId('remote-access-summary');
+      expect(summary).toBeInTheDocument();
+    });
+    const summaryQueries = within(summary as HTMLElement);
+    expect(summaryQueries.getByText('LAN 公開')).toBeInTheDocument();
+    expect(summaryQueries.getByText('有効')).toBeInTheDocument();
+    expect(summaryQueries.queryByText('http://192.168.1.20:8000/')).not.toBeInTheDocument();
+    expect(summaryQueries.getByText('変更はアプリ再起動後に反映されます。')).toBeInTheDocument();
+  });
+
+  it('LAN 公開がOFFの場合はLAN公開サマリーと手順を表示しない', async () => {
+    const mockSections: SettingsSection[] = [
+      {
+        id: 'remote_access',
+        label: 'LAN アクセス',
+        fields: [
+          {
+            id: 'enabled',
+            label: 'LAN 公開',
+            description: '家庭内LANからスマホで同じ画面を開けます。',
+            type: 'boolean',
+            recommended: false,
+            value: false,
+            user_editable: true,
+          },
+        ],
+      },
+    ];
+
+    fetchMock.mockResolvedValue({
+      ok: true,
+      json: async () => ({ sections: mockSections }),
+    });
+
+    render(SettingsDialog, { props: { open: true } });
+
+    await waitFor(() => {
+      expect(
+        screen.getByTestId('settings-field-display-display-remote_access')
+      ).toBeInTheDocument();
+    });
+    expect(screen.queryByTestId('remote-access-summary')).not.toBeInTheDocument();
+    expect(
+      screen.queryByText('Wi-Fiをプライベートネットワークに設定してください。')
+    ).not.toBeInTheDocument();
+    expect(fetchMock).not.toHaveBeenCalledWith('/api/remote-access/status', {
+      cache: 'no-store',
+    });
+  });
+
+  it('LAN 公開が反映済みの場合はLAN公開グループ内にスマホ用URL候補と接続準備を表示する', async () => {
+    const mockSections: SettingsSection[] = [
+      {
+        id: 'remote_access',
+        label: 'LAN アクセス',
+        fields: [
+          {
+            id: 'enabled',
+            label: 'LAN 公開',
+            description: '家庭内LANからスマホで同じ画面を開けます。',
+            type: 'boolean',
+            recommended: false,
+            value: true,
+            user_editable: true,
+          },
+        ],
+      },
+    ];
+
+    fetchMock.mockImplementation((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url === '/api/remote-access/status') {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({
+            enabled: true,
+            active: true,
+            bind_host: '0.0.0.0',
+            port: 8000,
+            restart_required: false,
+            access_urls: ['http://192.168.1.20:8000/'],
+          }),
+        });
+      }
+      return Promise.resolve({
+        ok: true,
+        json: async () => ({ sections: mockSections }),
+      });
+    });
+
+    render(SettingsDialog, { props: { open: true } });
+
+    let summary: HTMLElement | null = null;
+    await waitFor(() => {
+      const remoteAccessGroup = screen.getByTestId('settings-field-display-display-remote_access');
+      summary = within(remoteAccessGroup).getByTestId('remote-access-summary');
+      expect(summary).toBeInTheDocument();
+    });
+    const summaryQueries = within(summary as HTMLElement);
+    expect(summaryQueries.getByText('http://192.168.1.20:8000/')).toBeInTheDocument();
+    expect(summaryQueries.getByText('現在、家庭内LANから接続できます。')).toBeInTheDocument();
+    expect(
+      summaryQueries.getByText('Wi-Fiをプライベートネットワークに設定してください。')
+    ).toBeInTheDocument();
+    expect(
+      summaryQueries.getByText('Wi-Fiをプライベートネットワークに設定してください。').parentElement
+    ).toHaveStyle({ textAlign: 'left' });
+    expect(
+      summaryQueries.getByText((text) => {
+        return (
+          text.includes('New-NetFirewallRule') &&
+          text.includes('-LocalPort 5173') &&
+          text.includes('-RemoteAddress LocalSubnet')
+        );
+      })
+    ).toBeInTheDocument();
+  });
+
+  it('LAN 公開が反映済みでも到達可能URLがない場合は接続可能とは表示しない', async () => {
+    const mockSections: SettingsSection[] = [
+      {
+        id: 'remote_access',
+        label: 'LAN アクセス',
+        fields: [
+          {
+            id: 'enabled',
+            label: 'LAN 公開',
+            description: '家庭内LANからスマホで同じ画面を開けます。',
+            type: 'boolean',
+            recommended: false,
+            value: true,
+            user_editable: true,
+          },
+        ],
+      },
+    ];
+
+    fetchMock.mockImplementation((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url === '/api/remote-access/status') {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({
+            enabled: true,
+            active: true,
+            bind_host: '0.0.0.0',
+            port: 5173,
+            restart_required: false,
+            access_urls: [],
+          }),
+        });
+      }
+      return Promise.resolve({
+        ok: true,
+        json: async () => ({ sections: mockSections }),
+      });
+    });
+
+    render(SettingsDialog, { props: { open: true } });
+
+    let summary: HTMLElement | null = null;
+    await waitFor(() => {
+      summary = screen.getByTestId('remote-access-summary');
+      expect(summary).toBeInTheDocument();
+    });
+    const summaryQueries = within(summary as HTMLElement);
+    expect(summaryQueries.queryByText('現在、家庭内LANから接続できます。')).not.toBeInTheDocument();
+    expect(
+      summaryQueries.getByText('スマホから接続できるLAN URLを確認できません。')
+    ).toBeInTheDocument();
   });
 
   it('choice_labels がある select は表示ラベルを使う', async () => {

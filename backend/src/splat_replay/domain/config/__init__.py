@@ -11,6 +11,7 @@ from splat_replay.domain.config.image_matching import (
 )
 from splat_replay.domain.config.obs import OBSSettings
 from splat_replay.domain.config.record import RecordSettings
+from splat_replay.domain.config.remote_access import RemoteAccessSettings
 from splat_replay.domain.config.speech_transcriber import (
     SpeechTranscriberSettings,
 )
@@ -30,6 +31,7 @@ __all__ = [
     "MatcherConfig",
     "OBSSettings",
     "RecordSettings",
+    "RemoteAccessSettings",
     "SpeechTranscriberSettings",
     "UploadSettings",
     "VideoEditSettings",

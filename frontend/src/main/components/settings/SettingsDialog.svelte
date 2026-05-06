@@ -10,7 +10,20 @@
   } from './grouping';
   import type { FieldValue, SettingField, SettingsResponse } from './types';
   import { calibrateAudio } from '../../../setup/stores/config';
+  import { fetchRemoteAccessStatus, type RemoteAccessStatus } from '../../api/remoteAccess';
   import SpeechTestDialog from './SpeechTestDialog.svelte';
+
+  const REMOTE_ACCESS_STATUS_REFRESH_INTERVAL_MS = 5000;
+  const REMOTE_ACCESS_FALLBACK_PORT = 5173;
+  const REMOTE_ACCESS_FIREWALL_COMMAND = [
+    'New-NetFirewallRule `',
+    '  -DisplayName "Allow TCP 5173 Inbound from LocalSubnet" `',
+    '  -Direction Inbound `',
+    '  -Action Allow `',
+    '  -Protocol TCP `',
+    '  -LocalPort 5173 `',
+    '  -RemoteAddress LocalSubnet',
+  ].join('\n');
 
   interface Props {
     open?: boolean;
@@ -29,9 +42,26 @@
   let activeSectionId = $state<string | null>(null);
   let successMessageTimer: ReturnType<typeof setTimeout> | null = null;
   let speechTestOpen = $state(false);
+  let remoteAccessStatus = $state<RemoteAccessStatus | null>(null);
 
   const activeSection = $derived(
     sections.find((section) => section.id === activeSectionId) ?? null
+  );
+  const remoteAccessEnabledDraft = $derived(resolveRemoteAccessEnabled(sections));
+  const showRemoteAccessSummary = $derived(
+    Boolean(activeSection?.sourceSectionIds.includes('remote_access')) &&
+      remoteAccessEnabledDraft === true
+  );
+  const remoteAccessEnabledForSummary = $derived(
+    remoteAccessEnabledDraft ?? remoteAccessStatus?.enabled ?? false
+  );
+  const remoteAccessRestartRequired = $derived(
+    remoteAccessStatus
+      ? remoteAccessEnabledForSummary !== isRemoteAccessLanBound(remoteAccessStatus.bind_host)
+      : false
+  );
+  const remoteAccessFallbackUrl = $derived(
+    `http://<PCのIP>:${remoteAccessStatus?.port ?? REMOTE_ACCESS_FALLBACK_PORT}/`
   );
 
   // open の変化を監視し、ダイアログの開閉に応じて履歴を呼び出す
@@ -45,6 +75,20 @@
     } else {
       handleDialogClose();
     }
+  });
+
+  $effect(() => {
+    if (!open || !showRemoteAccessSummary || !remoteAccessEnabledForSummary) {
+      return;
+    }
+
+    const intervalId = setInterval(() => {
+      void loadRemoteAccessStatus();
+    }, REMOTE_ACCESS_STATUS_REFRESH_INTERVAL_MS);
+
+    return () => {
+      clearInterval(intervalId);
+    };
   });
 
   onDestroy(() => {
@@ -70,13 +114,47 @@
     successMessage = '';
     activeSectionId = null;
     speechTestOpen = false;
+    remoteAccessStatus = null;
     clearSuccessMessageTimer();
+  }
+
+  function resolveRemoteAccessEnabled(sourceSections: SettingsUiSection[]): boolean | null {
+    for (const section of sourceSections) {
+      if (!section.sourceSectionIds.includes('remote_access')) {
+        continue;
+      }
+      for (const field of section.fields) {
+        if (field.id === 'enabled' && typeof field.value === 'boolean') {
+          return field.value;
+        }
+        if (field.id === 'remote_access' && field.children) {
+          const enabledField = field.children.find((child) => child.id === 'enabled');
+          if (typeof enabledField?.value === 'boolean') {
+            return enabledField.value;
+          }
+        }
+      }
+    }
+    return null;
+  }
+
+  async function loadRemoteAccessStatus(): Promise<void> {
+    try {
+      remoteAccessStatus = await fetchRemoteAccessStatus();
+    } catch {
+      remoteAccessStatus = null;
+    }
+  }
+
+  function isRemoteAccessLanBound(bindHost: string): boolean {
+    return ['0.0.0.0', '::', '::0'].includes(bindHost.trim().toLowerCase());
   }
 
   async function loadSettings(): Promise<void> {
     loading = true;
     errorMessage = '';
     successMessage = '';
+    remoteAccessStatus = null;
     clearSuccessMessageTimer();
     try {
       const response = await fetch('/api/settings', { cache: 'no-store' });
@@ -91,6 +169,9 @@
       }));
       sections = groupSettingsSections(sectionsClone);
       activeSectionId = sections[0]?.id ?? null;
+      if (resolveRemoteAccessEnabled(sections) === true) {
+        void loadRemoteAccessStatus();
+      }
     } catch (error: unknown) {
       errorMessage = error instanceof Error ? error.message : '設定の取得に失敗しました。';
       sections = [];
@@ -335,6 +416,48 @@
   }
 </script>
 
+{#snippet remoteAccessGroupAddon(field: SettingField)}
+  {#if field.id === 'remote_access' && showRemoteAccessSummary}
+    <div class="remote-access-summary" data-testid="remote-access-summary">
+      <div class="remote-access-row">
+        <span>LAN 公開</span>
+        <strong>{remoteAccessEnabledForSummary ? '有効' : '無効'}</strong>
+      </div>
+      {#if remoteAccessRestartRequired}
+        <p>変更はアプリ再起動後に反映されます。</p>
+      {:else if remoteAccessStatus?.active && remoteAccessStatus.access_urls.length}
+        <p>現在、家庭内LANから接続できます。</p>
+      {:else if remoteAccessStatus?.active}
+        <p>スマホから接続できるLAN URLを確認できません。</p>
+      {:else}
+        <p>初期状態ではPC内からのみ接続できます。</p>
+      {/if}
+      {#if remoteAccessStatus?.active && remoteAccessStatus.access_urls.length}
+        <div class="remote-access-urls" aria-label="スマホで開くURL候補">
+          {#each remoteAccessStatus.access_urls as url}
+            <code>{url}</code>
+          {/each}
+        </div>
+      {:else if remoteAccessRestartRequired}
+        <p>再起動後、LAN公開が反映されるとURL候補を表示します。</p>
+      {:else if remoteAccessStatus?.active}
+        <p>Windows Firewallやネットワーク設定を確認してください。</p>
+      {:else}
+        <p>
+          有効化後、PCのIPアドレスで <code class="remote-access-inline-code"
+            >{remoteAccessFallbackUrl}</code
+          > を開きます。
+        </p>
+      {/if}
+      <div class="remote-access-help" style="text-align: left">
+        <p>Wi-Fiをプライベートネットワークに設定してください。</p>
+        <p>ファイアウォールは管理者権限のPowerShellで以下を実行してください。</p>
+        <pre class="remote-access-command"><code>{REMOTE_ACCESS_FIREWALL_COMMAND}</code></pre>
+      </div>
+    </div>
+  {/if}
+{/snippet}
+
 <BaseDialog
   bind:open
   title="設定"
@@ -380,6 +503,7 @@
                 parentGroup={null}
                 onCalibrateAudio={handleCalibrateAudio}
                 onTestSpeech={handleTestSpeech}
+                groupAddon={remoteAccessGroupAddon}
               />
             {/each}
           </div>
@@ -511,6 +635,86 @@
     flex: 1 1 auto;
     height: 100%;
     min-height: 0;
+  }
+
+  .remote-access-summary {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    text-align: left;
+    padding: 1rem 1.125rem;
+    border-left: 3px solid var(--accent-color);
+    background: rgba(var(--theme-rgb-accent), 0.08);
+    color: rgba(var(--theme-rgb-white), 0.86);
+    font-size: 0.9rem;
+    line-height: 1.55;
+  }
+
+  .remote-access-summary p {
+    margin: 0;
+  }
+
+  .remote-access-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+  }
+
+  .remote-access-row strong {
+    color: rgba(var(--theme-rgb-white), 0.96);
+    font-weight: 700;
+    white-space: nowrap;
+  }
+
+  .remote-access-urls {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+  }
+
+  .remote-access-urls code {
+    width: fit-content;
+    max-width: 100%;
+    overflow-wrap: anywhere;
+    color: rgba(var(--theme-rgb-white), 0.94);
+    background: rgba(var(--theme-rgb-black), 0.3);
+    padding: 0.35rem 0.5rem;
+    border-radius: 0.375rem;
+  }
+
+  .remote-access-inline-code {
+    overflow-wrap: anywhere;
+    color: rgba(var(--theme-rgb-white), 0.94);
+    background: rgba(var(--theme-rgb-black), 0.3);
+    padding: 0.16rem 0.35rem;
+    border-radius: 0.3rem;
+  }
+
+  .remote-access-help {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.45rem;
+    text-align: left;
+  }
+
+  .remote-access-command {
+    margin: 0;
+    max-width: 100%;
+    text-align: left;
+    overflow-x: auto;
+    padding: 0.75rem;
+    border-radius: 0.5rem;
+    background: rgba(var(--theme-rgb-black), 0.32);
+    border: 1px solid rgba(var(--theme-rgb-white), 0.1);
+  }
+
+  .remote-access-command code {
+    color: rgba(var(--theme-rgb-white), 0.94);
+    font-size: 0.82rem;
+    line-height: 1.5;
+    white-space: pre;
   }
 
   .fields-scroll::-webkit-scrollbar {

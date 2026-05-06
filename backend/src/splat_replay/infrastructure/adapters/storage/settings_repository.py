@@ -87,6 +87,10 @@ class TomlSettingsRepository(SettingsRepositoryPort):
         settings = load_settings_from_toml(self._settings_path)
         return settings.webview.render_mode
 
+    def fetch_remote_access_enabled(self) -> bool:
+        settings = load_settings_from_toml(self._settings_path)
+        return settings.remote_access.enabled
+
     def update_sections(self, updates: List[SectionUpdate]) -> None:
         if not updates:
             return

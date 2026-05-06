@@ -24,6 +24,7 @@ from splat_replay.domain.config import (
     ImageMatchingSettings,
     OBSSettings,
     RecordSettings,
+    RemoteAccessSettings,
     SpeechTranscriberSettings,
     UploadSettings,
     VideoEditSettings,
@@ -45,6 +46,7 @@ def register_config(container: punq.Container) -> AppSettings:
     container.register(OBSSettings, instance=settings.obs)
     container.register(OBSSettingsView, instance=settings.obs)
     container.register(RecordSettings, instance=settings.record)
+    container.register(RemoteAccessSettings, instance=settings.remote_access)
     container.register(
         SpeechTranscriberSettings, instance=settings.speech_transcriber
     )

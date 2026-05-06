@@ -94,6 +94,29 @@ class TestSettingsEndpoints:
         }
         assert render_mode["value"] in {"cpu", "gpu"}
 
+    def test_get_settings_includes_remote_access_toggle(
+        self, client: TestClient
+    ) -> None:
+        """GET /api/settings - remote_access.enabled が取得できる。"""
+        response = client.get("/api/settings")
+        assert response.status_code == status.HTTP_200_OK
+
+        sections = response.json()["sections"]
+        assert isinstance(sections, list)
+
+        remote_section = next(
+            section for section in sections if section["id"] == "remote_access"
+        )
+        enabled = next(
+            field
+            for field in remote_section["fields"]
+            if field["id"] == "enabled"
+        )
+
+        assert enabled["type"] == "boolean"
+        assert isinstance(enabled["value"], bool)
+        assert enabled["user_editable"] is True
+
     def test_get_webview_render_mode(self, client: TestClient) -> None:
         """GET /api/settings/webview-render-mode - 描画モードだけを軽量取得できる。"""
         response = client.get("/api/settings/webview-render-mode")
@@ -226,6 +249,37 @@ class TestSettingsEndpoints:
         )
 
         assert render_mode["value"] == "gpu"
+
+    def test_update_settings_roundtrip_remote_access_enabled(
+        self, client: TestClient
+    ) -> None:
+        """PUT /api/settings - remote_access.enabled を更新して再取得できる。"""
+        response = client.put(
+            "/api/settings",
+            json={
+                "sections": [
+                    {"id": "remote_access", "values": {"enabled": True}}
+                ]
+            },
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+
+        after = client.get("/api/settings")
+        assert after.status_code == status.HTTP_200_OK
+        sections = after.json()["sections"]
+        assert isinstance(sections, list)
+
+        remote_section = next(
+            section for section in sections if section["id"] == "remote_access"
+        )
+        enabled = next(
+            field
+            for field in remote_section["fields"]
+            if field["id"] == "enabled"
+        )
+
+        assert enabled["value"] is True
 
 
 class TestDeviceStatusEndpoints:

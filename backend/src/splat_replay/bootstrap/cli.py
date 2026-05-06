@@ -57,15 +57,24 @@ class _LazyResources:
     def webview_app(self) -> "SplatReplayWebViewApp":
         from splat_replay.interface.gui.webview_app import (
             SplatReplayWebViewApp,
+            resolve_backend_hosts,
         )
 
         settings = load_settings_from_toml()
+        backend_bind_host, backend_url_host = resolve_backend_hosts(
+            settings.remote_access.enabled
+        )
         return SplatReplayWebViewApp(
             project_root=PROJECT_ROOT,
             logger=self.logger(),
             backend_app_module="splat_replay.bootstrap.web_app:app",
             render_mode=settings.webview.render_mode,
+            backend_bind_host=backend_bind_host,
+            backend_url_host=backend_url_host,
         )
+
+    def remote_access_enabled(self) -> bool:
+        return load_settings_from_toml().remote_access.enabled
 
     def start_dev_server(self) -> None:
         from splat_replay.bootstrap.dev_server import start_dev_server
@@ -82,6 +91,7 @@ dependencies = CliDependencies(
     web_app=_resources.web_app,
     webview_app=_resources.webview_app,
     start_dev_server=_resources.start_dev_server,
+    remote_access_enabled=_resources.remote_access_enabled,
 )
 
 app = build_app(dependencies)

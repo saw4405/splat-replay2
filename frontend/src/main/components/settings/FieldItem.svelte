@@ -1,4 +1,5 @@
 <script lang="ts">
+  import type { Snippet } from 'svelte';
   import { Eye, EyeOff } from 'lucide-svelte';
   import FieldItem from './FieldItem.svelte';
   import SelectField from './SelectField.svelte';
@@ -13,6 +14,7 @@
     parentGroup?: SettingField | null;
     onCalibrateAudio?: (field: SettingField, parentGroup: SettingField | null) => Promise<void>;
     onTestSpeech?: () => void;
+    groupAddon?: Snippet<[SettingField]>;
   }
 
   let {
@@ -24,6 +26,7 @@
     parentGroup = null,
     onCalibrateAudio,
     onTestSpeech,
+    groupAddon,
   }: Props = $props();
 
   const pathTokens = $derived([...path, field.id]);
@@ -138,9 +141,13 @@
           parentGroup={field}
           {onCalibrateAudio}
           {onTestSpeech}
+          {groupAddon}
         />
       {/each}
     </div>
+    {#if groupAddon}
+      {@render groupAddon(field)}
+    {/if}
     {#if field.id === 'speech_transcriber' && onTestSpeech}
       <button
         type="button"

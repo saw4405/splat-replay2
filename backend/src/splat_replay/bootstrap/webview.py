@@ -9,7 +9,10 @@ import traceback
 from splat_replay.infrastructure.config import load_settings_from_toml
 from splat_replay.infrastructure.filesystem import PROJECT_ROOT
 from splat_replay.infrastructure.logging import get_logger
-from splat_replay.interface.gui.webview_app import SplatReplayWebViewApp
+from splat_replay.interface.gui.webview_app import (
+    SplatReplayWebViewApp,
+    resolve_backend_hosts,
+)
 
 
 def main() -> None:
@@ -27,11 +30,16 @@ def main() -> None:
             multiprocessing.freeze_support()
 
         settings = load_settings_from_toml()
+        backend_bind_host, backend_url_host = resolve_backend_hosts(
+            settings.remote_access.enabled
+        )
         app_instance = SplatReplayWebViewApp(
             project_root=PROJECT_ROOT,
             logger=logger,
             backend_app_module="splat_replay.bootstrap.web_app:app",
             render_mode=settings.webview.render_mode,
+            backend_bind_host=backend_bind_host,
+            backend_url_host=backend_url_host,
         )
         app_instance.run()
 

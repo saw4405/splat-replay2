@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import os
 import threading
 import time
 from collections.abc import Callable
@@ -31,6 +32,16 @@ class CliDependencies:
     web_app: Callable[[], FastAPI]
     webview_app: Callable[[], WebViewApp]
     start_dev_server: Callable[[], None]
+    remote_access_enabled: Callable[[], bool]
+
+
+def resolve_web_bind_host(
+    requested_host: str | None,
+    remote_access_enabled: bool,
+) -> str:
+    if requested_host:
+        return requested_host
+    return "0.0.0.0" if remote_access_enabled else "127.0.0.1"
 
 
 def build_app(deps: CliDependencies) -> typer.Typer:
@@ -100,7 +111,10 @@ def build_app(deps: CliDependencies) -> typer.Typer:
 
     @app.command()
     def web(
-        host: str = typer.Option("127.0.0.1", help="Webサーバーのホスト"),
+        host: str | None = typer.Option(
+            None,
+            help="Webサーバーのホスト（未指定ならLAN公開設定に従う）",
+        ),
         port: int = typer.Option(8000, help="Webサーバーのポート"),
         dev: bool = typer.Option(
             False, help="開発モード (フロントエンド同時起動)"
@@ -112,12 +126,18 @@ def build_app(deps: CliDependencies) -> typer.Typer:
             return
 
         logger = deps.logger()
-        logger.info("Web GUI アプリケーション開始", host=host, port=port)
+        bind_host = resolve_web_bind_host(
+            requested_host=host,
+            remote_access_enabled=deps.remote_access_enabled(),
+        )
+        logger.info("Web GUI アプリケーション開始", host=bind_host, port=port)
 
         try:
             import uvicorn
 
-            uvicorn.run(deps.web_app(), host=host, port=port)
+            os.environ["SPLAT_REPLAY_BACKEND_BIND_HOST"] = bind_host
+            os.environ["SPLAT_REPLAY_BACKEND_PORT"] = str(port)
+            uvicorn.run(deps.web_app(), host=bind_host, port=port)
         except ImportError as e:
             logger.error("Web GUI の依存関係が不足しています", error=str(e))
             typer.echo("Web GUI を使用するには追加の依存関係が必要です。")
@@ -163,4 +183,4 @@ def build_app(deps: CliDependencies) -> typer.Typer:
     return app
 
 
-__all__ = ["CliDependencies", "build_app"]
+__all__ = ["CliDependencies", "build_app", "resolve_web_bind_host"]
