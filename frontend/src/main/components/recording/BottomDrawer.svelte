@@ -51,6 +51,7 @@
   let statusPollingInterval: number | null = null;
   let assetEventSource: EventSource | null = null;
   let assetEventRetryTimer: number | null = null;
+  let isSyncingProcessStatus = false;
   let isLoadingData = $state(false);
   let pendingDataReload = $state(false);
   let drawerElement = $state<HTMLDivElement | null>(null);
@@ -83,6 +84,7 @@
     // 初回データ取得
     void loadData();
     connectAssetEventStream();
+    void syncProcessStatusFromServer();
     // グローバルクリックイベントリスナーを追加
     document.addEventListener('click', handleOutsideClick);
   });
@@ -175,6 +177,11 @@
     if (event.type === 'domain.process.edit_upload_completed') {
       const payload = event.payload as unknown as EditUploadCompletedPayload;
       handleEditUploadCompleted(payload);
+      return;
+    }
+
+    if (event.type === 'domain.process.started') {
+      void syncProcessStatusFromServer();
       return;
     }
 
@@ -295,6 +302,9 @@
         // 処理状態のポーリング開始
         startStatusPolling();
         await loadData(); // データを即座に再取得
+      } else if (response.status.state === 'running') {
+        applyRunningProcessStatus(response.status);
+        await loadData();
       } else {
         alertMessage = response.message || '処理を開始できませんでした(既に実行中の可能性)';
         alertVariant = 'warning';
@@ -367,8 +377,7 @@
    * 外部(MainAppなど)から進捗表示を開始するための関数
    */
   export function openProgress(): void {
-    showProgressDialog = true;
-    startStatusPolling();
+    void syncProcessStatusFromServer();
   }
 
   /**
@@ -376,6 +385,29 @@
    */
   export function toggle(): void {
     toggleDrawer();
+  }
+
+  function applyRunningProcessStatus(status: EditUploadStatus): void {
+    processStatus = status;
+    showProgressDialog = true;
+    startStatusPolling();
+  }
+
+  async function syncProcessStatusFromServer(): Promise<void> {
+    if (isSyncingProcessStatus) {
+      return;
+    }
+    isSyncingProcessStatus = true;
+    try {
+      const status = await fetchEditUploadStatus();
+      if (status.state === 'running') {
+        applyRunningProcessStatus(status);
+      }
+    } catch (error) {
+      console.error('迥ｶ豕∝叙蠕励お繝ｩ繝ｼ:', error);
+    } finally {
+      isSyncingProcessStatus = false;
+    }
   }
 </script>
 

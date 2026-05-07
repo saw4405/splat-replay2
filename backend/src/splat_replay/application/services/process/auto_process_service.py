@@ -20,7 +20,6 @@ from splat_replay.application.use_cases.assets.start_edit_upload import (
 )
 from splat_replay.domain.events import (
     AutoProcessPending,
-    AutoProcessStarted,
     AutoSleepCancelled,
     AutoSleepPending,
     AutoSleepStarted,
@@ -168,7 +167,6 @@ class AutoProcessService:
             raise
 
         self.logger.info("自動編集・アップロードを開始します。")
-        self.event_bus.publish_domain_event(AutoProcessStarted())
 
     def on_new_execution(self) -> None:
         """新規プロセス開始時にユーザーキャンセルフラグをリセットする。"""

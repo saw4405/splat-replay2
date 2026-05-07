@@ -11,7 +11,11 @@ from splat_replay.application.interfaces import (
     EventBusPort,
     LoggerPort,
 )
-from splat_replay.domain.events import AutoSleepPending, EditUploadCompleted
+from splat_replay.domain.events import (
+    AutoProcessStarted,
+    AutoSleepPending,
+    EditUploadCompleted,
+)
 
 if TYPE_CHECKING:
     from splat_replay.application.services import AutoEditor, AutoUploader
@@ -61,6 +65,7 @@ class StartEditUploadUseCase:
         self._state = "running"
         self._message = "編集・アップロード処理を開始しました"
         # バックグラウンドタスクとして起動
+        self._event_bus.publish_domain_event(AutoProcessStarted())
         self._task = asyncio.create_task(self._run_edit_upload(trigger))
         self._logger.info("編集・アップロード処理を開始しました")
 

@@ -37,6 +37,23 @@ def mock_event_bus():
     return MagicMock()
 
 
+def _published_events(mock_event_bus: MagicMock) -> list[object]:
+    return [
+        call[0][0]
+        for call in mock_event_bus.publish_domain_event.call_args_list
+    ]
+
+
+def _count_started_events(mock_event_bus: MagicMock) -> int:
+    from splat_replay.domain.events import AutoProcessStarted
+
+    return sum(
+        1
+        for event in _published_events(mock_event_bus)
+        if isinstance(event, AutoProcessStarted)
+    )
+
+
 @pytest.fixture
 def mock_config():
     """ConfigPortのモック。"""
@@ -215,6 +232,49 @@ class TestStartEditUploadEventPublishing:
     """イベント発行のテスト。"""
 
     @pytest.mark.asyncio
+    async def test_publish_started_event_on_manual_start(
+        self, use_case, mock_event_bus
+    ):
+        """manual 開始時に AutoProcessStarted が 1 回発行される。"""
+        await use_case.execute(trigger="manual")
+
+        from splat_replay.domain.events import AutoProcessStarted
+
+        events = _published_events(mock_event_bus)
+        started_events = [
+            event for event in events if isinstance(event, AutoProcessStarted)
+        ]
+        assert len(started_events) == 1
+
+    @pytest.mark.asyncio
+    async def test_publish_started_event_on_auto_start(
+        self, use_case, mock_event_bus
+    ):
+        """auto 開始時に AutoProcessStarted が 1 回発行される。"""
+        await use_case.execute(trigger="auto")
+
+        from splat_replay.domain.events import AutoProcessStarted
+
+        events = _published_events(mock_event_bus)
+        started_events = [
+            event for event in events if isinstance(event, AutoProcessStarted)
+        ]
+        assert len(started_events) == 1
+
+    @pytest.mark.asyncio
+    async def test_duplicate_start_does_not_publish_started_event(
+        self, use_case, mock_event_bus
+    ):
+        """重複起動拒否時は AutoProcessStarted が追加発行されない。"""
+        await use_case.execute()
+        assert _count_started_events(mock_event_bus) == 1
+
+        with pytest.raises(RuntimeError, match="既に実行中"):
+            await use_case.execute()
+
+        assert _count_started_events(mock_event_bus) == 1
+
+    @pytest.mark.asyncio
     async def test_publish_success_event(self, use_case, mock_event_bus):
         """成功時はEditUploadCompletedイベントが発行される。"""
         await use_case.execute()
@@ -226,10 +286,7 @@ class TestStartEditUploadEventPublishing:
         # EditUploadCompletedイベントを探す
         from splat_replay.domain.events import EditUploadCompleted
 
-        events = [
-            call[0][0]
-            for call in mock_event_bus.publish_domain_event.call_args_list
-        ]
+        events = _published_events(mock_event_bus)
         completed_events = [
             e for e in events if isinstance(e, EditUploadCompleted)
         ]
@@ -255,10 +312,7 @@ class TestStartEditUploadEventPublishing:
         # EditUploadCompletedイベントを探す
         from splat_replay.domain.events import EditUploadCompleted
 
-        events = [
-            call[0][0]
-            for call in mock_event_bus.publish_domain_event.call_args_list
-        ]
+        events = _published_events(mock_event_bus)
         completed_events = [
             e for e in events if isinstance(e, EditUploadCompleted)
         ]
