@@ -676,7 +676,7 @@ simple_matchers:
     type: "hsv"
     mask_path: "assets/matching/battle_result_background_mask.png"
     lower_bound: [0, 0, 25]
-    upper_bound: [179, 30, 40]
+    upper_bound: [179, 60, 40]
     threshold: 0.9
     description: "バトルリザルト背景の色域"
 

@@ -486,6 +486,7 @@ async def test_detect_loading_end(
     [
         ("battle_result_1.png", True),
         ("battle_result_2.png", True),
+        ("battle_result_20.png", True),
         ("battle_result_3.png", False),
         ("battle_result_4.png", False),
     ],
