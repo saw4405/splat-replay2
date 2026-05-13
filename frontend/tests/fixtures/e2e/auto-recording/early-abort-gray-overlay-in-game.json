@@ -1,0 +1,9 @@
+{
+  "scenario": {
+    "expected_recorded_count": 0,
+    "replay_bootstrap": {
+      "phase": "in_game",
+      "game_mode": "battle"
+    }
+  }
+}

@@ -514,7 +514,7 @@ simple_matchers:
       width: 300
       height: 80
     lower_bound: [0, 0, 25]
-    upper_bound: [0, 0, 35]
+    upper_bound: [179, 50, 45]
     threshold: 0.9
     description: "バトル中止を素早く検出する"
 

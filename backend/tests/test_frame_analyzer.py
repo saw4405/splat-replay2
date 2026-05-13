@@ -301,6 +301,7 @@ async def test_detect_battle_start(
     "filename, expected",
     [
         ("battle_abort_1.png", True),
+        ("battle_abort_gray_overlay_1.png", True),
         ("battle_result_1.png", False),
     ],
 )
