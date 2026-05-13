@@ -30,14 +30,21 @@ class FrameCaptureProducer:
         self._queue_put_timeout = queue_put_timeout
         self._thread: Optional[threading.Thread] = None
         self._running = threading.Event()
+        self._generation_lock = threading.Lock()
+        self._generation = 0
 
     # Public API ----------------------------------------------------
     def start(self) -> None:
         if self._thread and self._thread.is_alive():
             return
+        self._drain_queue()
         self._running.set()
+        generation = self._next_generation()
         self._thread = threading.Thread(
-            target=self._loop, name="capture-producer", daemon=True
+            target=self._loop,
+            args=(generation,),
+            name="capture-producer",
+            daemon=True,
         )
         self._thread.start()
 
@@ -45,8 +52,10 @@ class FrameCaptureProducer:
         if not self._thread:
             return
         self._running.clear()
+        self._next_generation()
         self._thread.join(timeout=1.5)
         self._thread = None
+        self._drain_queue()
 
     def get_frame(self, timeout: float) -> Frame | None:
         try:
@@ -66,11 +75,34 @@ class FrameCaptureProducer:
                 break
         return last
 
+    def _drain_queue(self) -> None:
+        while True:
+            try:
+                self._queue.get_nowait()
+            except queue.Empty:
+                return
+
+    def _next_generation(self) -> int:
+        with self._generation_lock:
+            self._generation += 1
+            return self._generation
+
+    def _is_current_generation(self, generation: int) -> bool:
+        with self._generation_lock:
+            return generation == self._generation
+
     # Internal ------------------------------------------------------
-    def _loop(self) -> None:
-        while self._running.is_set():
+    def _loop(self, generation: int) -> None:
+        while self._running.is_set() and self._is_current_generation(
+            generation
+        ):
             try:
                 frame = self._capture.capture()
+                if (
+                    not self._running.is_set()
+                    or not self._is_current_generation(generation)
+                ):
+                    break
                 if frame is None:
                     time.sleep(self._device_retry_sleep)
                     continue

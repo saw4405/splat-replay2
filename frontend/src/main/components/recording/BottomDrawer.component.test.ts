@@ -33,7 +33,7 @@ vi.mock('../assets/StatisticsDataView.svelte', async () => {
 });
 
 vi.mock('../../../common/components/NotificationDialog.svelte', async () => {
-  const module = await import('../../../test-utils/StubComponent.svelte');
+  const module = await import('../../../test-utils/NotificationDialogStub.svelte');
   return { default: module.default };
 });
 
@@ -80,15 +80,17 @@ describe('BottomDrawer.svelte', () => {
     setIntervalSpy = vi.spyOn(window, 'setInterval');
 
     subscribeDomainEventsMock.mockReset();
-    subscribeDomainEventsMock.mockImplementation((onEvent: (event: CapturedDomainEvent) => void) => {
-      domainEventHandler = onEvent;
-      return {
-        close: vi.fn(),
-        readyState: 1,
-        onerror: null,
-        onopen: null,
-      };
-    });
+    subscribeDomainEventsMock.mockImplementation(
+      (onEvent: (event: CapturedDomainEvent) => void) => {
+        domainEventHandler = onEvent;
+        return {
+          close: vi.fn(),
+          readyState: 1,
+          onerror: null,
+          onopen: null,
+        };
+      }
+    );
   });
 
   afterEach(() => {
@@ -306,5 +308,77 @@ describe('BottomDrawer.svelte', () => {
     });
 
     expect(setIntervalSpy).toHaveBeenCalled();
+  });
+
+  it('編集アップロード成功ダイアログを閉じると自動録画の再有効化を要求する', async () => {
+    installDefaultResponses([
+      {
+        state: 'idle',
+        started_at: null,
+        finished_at: null,
+        error: null,
+        sleep_after_upload_default: false,
+        sleep_after_upload_effective: false,
+        sleep_after_upload_overridden: false,
+      },
+    ]);
+    const onAutoRecordingRearmRequest = vi.fn();
+
+    render(BottomDrawer, { props: { onAutoRecordingRearmRequest } });
+
+    await waitFor(() => {
+      expect(domainEventHandler).not.toBeNull();
+    });
+
+    emitDomainEvent({
+      type: 'domain.process.edit_upload_completed',
+      payload: {
+        success: true,
+        message: '編集・アップロード処理が完了しました',
+        sleep_after_upload: false,
+        trigger: 'auto',
+      },
+    });
+
+    await screen.findByTestId('notification-dialog-stub');
+    await screen.getByTestId('notification-dialog-close').click();
+
+    expect(onAutoRecordingRearmRequest).toHaveBeenCalledTimes(1);
+  });
+
+  it('編集アップロード失敗ダイアログを閉じても自動録画の再有効化を要求しない', async () => {
+    installDefaultResponses([
+      {
+        state: 'idle',
+        started_at: null,
+        finished_at: null,
+        error: null,
+        sleep_after_upload_default: false,
+        sleep_after_upload_effective: false,
+        sleep_after_upload_overridden: false,
+      },
+    ]);
+    const onAutoRecordingRearmRequest = vi.fn();
+
+    render(BottomDrawer, { props: { onAutoRecordingRearmRequest } });
+
+    await waitFor(() => {
+      expect(domainEventHandler).not.toBeNull();
+    });
+
+    emitDomainEvent({
+      type: 'domain.process.edit_upload_completed',
+      payload: {
+        success: false,
+        message: 'upload failed',
+        sleep_after_upload: false,
+        trigger: 'auto',
+      },
+    });
+
+    await screen.findByTestId('notification-dialog-stub');
+    await screen.getByTestId('notification-dialog-close').click();
+
+    expect(onAutoRecordingRearmRequest).not.toHaveBeenCalled();
   });
 });

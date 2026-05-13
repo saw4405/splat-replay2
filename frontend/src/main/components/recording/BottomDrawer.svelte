@@ -29,9 +29,10 @@
 
   interface Props {
     onRecordedCountChange?: (count: number) => void;
+    onAutoRecordingRearmRequest?: () => void;
   }
 
-  let { onRecordedCountChange }: Props = $props();
+  let { onRecordedCountChange, onAutoRecordingRearmRequest }: Props = $props();
 
   let drawerState = $state<DrawerState>('closed');
   let activeTab = $state<'recorded' | 'edited' | 'statistics'>('recorded');
@@ -42,6 +43,7 @@
   let alertMessage = $state(''); // アラートメッセージ
   let alertVariant = $state<'info' | 'success' | 'warning' | 'error'>('info');
   let showYouTubePermissionDialog = $state(false); // YouTube権限ダイアログ表示フラグ
+  let rearmAutoRecordingOnAlertClose = $state(false);
 
   let recordedVideos = $state<RecordedVideo[]>([]);
   let editedVideos = $state<EditedVideo[]>([]);
@@ -222,6 +224,7 @@
     };
 
     showProgressDialog = false;
+    rearmAutoRecordingOnAlertClose = payload.success;
 
     if (payload.success) {
       alertMessage = payload.message || '編集・アップロード処理が完了しました!';
@@ -288,6 +291,7 @@
       console.error('処理開始エラー:', error);
       alertMessage = `処理開始に失敗しました: ${error}`;
       alertVariant = 'error';
+      rearmAutoRecordingOnAlertClose = false;
       showAlertDialog = true;
     }
   }
@@ -308,12 +312,14 @@
       } else {
         alertMessage = response.message || '処理を開始できませんでした(既に実行中の可能性)';
         alertVariant = 'warning';
+        rearmAutoRecordingOnAlertClose = false;
         showAlertDialog = true;
       }
     } catch (error) {
       console.error('処理開始エラー:', error);
       alertMessage = `処理開始に失敗しました: ${error}`;
       alertVariant = 'error';
+      rearmAutoRecordingOnAlertClose = false;
       showAlertDialog = true;
     }
   }
@@ -360,10 +366,12 @@
           if (status.state === 'succeeded') {
             alertMessage = '編集・アップロード処理が完了しました!';
             alertVariant = 'success';
+            rearmAutoRecordingOnAlertClose = true;
             showAlertDialog = true;
           } else if (status.state === 'failed') {
             alertMessage = `編集・アップロード処理が失敗しました: ${status.error || '不明なエラー'}`;
             alertVariant = 'error';
+            rearmAutoRecordingOnAlertClose = false;
             showAlertDialog = true;
           }
         }
@@ -409,6 +417,15 @@
       isSyncingProcessStatus = false;
     }
   }
+
+  function handleAlertDialogClose(): void {
+    const shouldRearm = rearmAutoRecordingOnAlertClose;
+    showAlertDialog = false;
+    rearmAutoRecordingOnAlertClose = false;
+    if (shouldRearm) {
+      onAutoRecordingRearmRequest?.();
+    }
+  }
 </script>
 
 <!-- YouTube権限ダイアログ -->
@@ -425,7 +442,7 @@
   isOpen={showAlertDialog}
   variant={alertVariant}
   message={alertMessage}
-  onClose={() => (showAlertDialog = false)}
+  onClose={handleAlertDialogClose}
 />
 
 <div

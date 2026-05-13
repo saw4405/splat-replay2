@@ -27,7 +27,7 @@ class NDICapture(CapturePort):
 
     def on_finder_change(self) -> None:
         names = self.finder.get_source_names()
-        if names and self.source is None:
+        if names and (self.source is None or not self.receiver.is_connected()):
             self.source = self.finder.get_source(names[0])
             self.receiver.set_source(self.source)
 
@@ -35,6 +35,7 @@ class NDICapture(CapturePort):
         import time
 
         self.finder.open()
+        self.on_finder_change()
 
         # ソースが見つかって接続されるまで待機
         max_wait = 10.0  # 最大10秒待機
@@ -42,12 +43,15 @@ class NDICapture(CapturePort):
         elapsed = 0.0
 
         while elapsed < max_wait:
+            self.on_finder_change()
             if self.source is not None and self.receiver.is_connected():
                 break
             time.sleep(wait_interval)
             elapsed += wait_interval
 
     def capture(self) -> Optional[Frame]:
+        if not self.receiver.is_connected():
+            self.on_finder_change()
         if self.receiver.is_connected():
             self.receiver.frame_sync.capture_video()  # 同期キャプチャ（安定）
             if min(self.video_frame.xres, self.video_frame.yres) != 0:
@@ -67,3 +71,4 @@ class NDICapture(CapturePort):
         if self.receiver.is_connected():
             self.receiver.disconnect()
         self.finder.close()
+        self.source = None

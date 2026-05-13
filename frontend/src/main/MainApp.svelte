@@ -19,6 +19,7 @@
   let autoSleepPayload = $state<AutoSleepPendingPayload | null>(null);
   let bottomDrawerRef = $state<BottomDrawer | null>(null);
   let recordedDataCount = $state(0);
+  let autoRecordingRearmRequest = $state(0);
   const drawerButtonLabel = $derived(
     recordedDataCount > 0 ? `データ一覧（録画 ${recordedDataCount}件）` : 'データ一覧'
   );
@@ -110,10 +111,16 @@
   </div>
 
   <div class="preview-container">
-    <VideoPreviewContainer />
+    <VideoPreviewContainer rearmAutoRecordingRequest={autoRecordingRearmRequest} />
   </div>
 
-  <BottomDrawer bind:this={bottomDrawerRef} onRecordedCountChange={updateRecordedDataCount} />
+  <BottomDrawer
+    bind:this={bottomDrawerRef}
+    onRecordedCountChange={updateRecordedDataCount}
+    onAutoRecordingRearmRequest={() => {
+      autoRecordingRearmRequest += 1;
+    }}
+  />
 
   <SettingsDialog bind:open={isSettingsOpen} />
 

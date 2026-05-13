@@ -55,6 +55,12 @@
   const DEFAULT_AUDIO_HEALTH_SHORT_MESSAGE = '音声注意';
   const DEFAULT_AUDIO_HEALTH_DETAILS = 'OBS の音声入力状態を確認してください。録画は継続します。';
 
+  interface Props {
+    rearmAutoRecordingRequest?: number;
+  }
+
+  let { rearmAutoRecordingRequest = 0 }: Props = $props();
+
   let isRecording = $state(false);
   let isPaused = $state(false);
   let startPending = $state(false);
@@ -73,6 +79,7 @@
   let isVideoFileInput = $state(false);
   let audioHealthWarning = $state<AudioHealthWarning | null>(null);
   let deviceStatusPollIntervalMs = getDeviceStatusPollIntervalMs('cpu');
+  let handledAutoRecordingRearmRequest = 0;
   type MetadataValue = string | number | string[] | null | undefined;
   type MetadataFieldKey =
     | 'game_mode'
@@ -186,6 +193,17 @@
       deviceStatusPollIntervalMs = next;
       restartDeviceStatusPolling();
     }
+  });
+
+  $effect(() => {
+    if (
+      rearmAutoRecordingRequest <= 0 ||
+      rearmAutoRecordingRequest === handledAutoRecordingRearmRequest
+    ) {
+      return;
+    }
+    handledAutoRecordingRearmRequest = rearmAutoRecordingRequest;
+    void rearmAutoRecording();
   });
 
   function restartDeviceStatusPolling(): void {
@@ -601,8 +619,9 @@
     });
   }
 
-  async function prepareRecording(): Promise<void> {
-    if (preparePending || isPrepared) {
+  async function prepareRecording(options: { force?: boolean } = {}): Promise<void> {
+    const force = options.force ?? false;
+    if (preparePending || (!force && isPrepared)) {
       return;
     }
     preparePending = true;
@@ -671,6 +690,34 @@
       console.error('自動録画有効化エラー:', error);
     } finally {
       startPending = false;
+    }
+  }
+
+  async function rearmAutoRecording(): Promise<void> {
+    if (isRecording || startPending || preparePending) {
+      console.log('rearmAutoRecording: 録画中または準備中のためスキップ', {
+        isRecording,
+        startPending,
+        preparePending,
+      });
+      return;
+    }
+
+    console.log('rearmAutoRecording: 自動録画を再有効化します');
+    await refreshPreviewMode();
+    await refreshDeviceStatus();
+    if (deviceState !== 'connected') {
+      console.warn('rearmAutoRecording: デバイス未接続のため自動録画を有効化できません', {
+        deviceState,
+      });
+      return;
+    }
+
+    await prepareRecording({ force: true });
+    if (isPrepared) {
+      await enableAutoRecording();
+    } else {
+      console.warn('rearmAutoRecording: 録画準備が完了していないため自動録画を有効化できません');
     }
   }
 

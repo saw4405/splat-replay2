@@ -419,4 +419,54 @@ describe('VideoPreviewContainer.svelte', () => {
       'OBS の入力「MiraBox Capture」の音量メーターが振れていません。'
     );
   });
+
+  it('再有効化リクエストを受けたら準備済みでも prepare してから enable-auto を呼ぶ', async () => {
+    fetchMock.mockImplementation(async (input: string | URL | Request) => {
+      const url = input.toString();
+      if (url.includes('/api/device/status')) {
+        return jsonResponse(true);
+      }
+      if (url.includes('/api/settings/camera-permission-dialog')) {
+        return jsonResponse({ shown: true });
+      }
+      if (url.includes('/api/recorder/prepare')) {
+        return jsonResponse({ success: true });
+      }
+      if (url.includes('/api/recorder/enable-auto')) {
+        return jsonResponse({ success: true });
+      }
+      throw new Error(`Unexpected fetch: ${url}`);
+    });
+
+    const { rerender } = render(VideoPreviewContainer, {
+      props: { rearmAutoRecordingRequest: 0 },
+    });
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        '/api/recorder/enable-auto',
+        expect.objectContaining({ method: 'POST' })
+      );
+    });
+    await waitFor(() => {
+      expect(notifyRecordingReadyMock).toHaveBeenCalled();
+    });
+
+    fetchMock.mockClear();
+    notifyRecordingReadyMock.mockClear();
+
+    await rerender({ rearmAutoRecordingRequest: 1 });
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        '/api/recorder/prepare',
+        expect.objectContaining({ method: 'POST' })
+      );
+      expect(fetchMock).toHaveBeenCalledWith(
+        '/api/recorder/enable-auto',
+        expect.objectContaining({ method: 'POST' })
+      );
+    });
+    expect(notifyRecordingReadyMock).toHaveBeenCalledTimes(1);
+  });
 });
