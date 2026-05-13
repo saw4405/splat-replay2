@@ -231,6 +231,7 @@ class BattleFrameAnalyzer(AnalyzerPlugin):
         records: Dict[str, int] = {}
         ocr_tasks: List[asyncio.Task[Optional[str]]] = []
         names: List[str] = []
+        fragmented_stat_names: set[str] = set()
         for name, position in record_positions.items():
             raw = frame[
                 position["y1"] : position["y2"],
@@ -249,59 +250,16 @@ class BattleFrameAnalyzer(AnalyzerPlugin):
             if name == "kill":
                 editor = editor.erode((2, 2), 2)
             proc0 = editor.invert().image
-            # death/special にもクラスタリング処理を適用
             if name in ("death", "special"):
                 try:
-                    arr = np.asarray(proc0)
-                    col_active = (arr < 128).sum(axis=0) > 0
-                    idx = np.where(col_active)[0]
-                    if idx.size > 0:
-                        ds_runs: List[Tuple[int, int]] = []
-                        s = int(idx[0])
-                        e = int(idx[0])
-                        for p in map(int, idx[1:]):
-                            if p == e + 1:
-                                e = p
-                            else:
-                                ds_runs.append((s, e))
-                                s = p
-                                e = p
-                        ds_runs.append((s, e))
-
-                        if len(ds_runs) >= 2:
-                            # 複数のクラスタがある場合、最大幅との比率でノイズを除外
-                            widths = [
-                                run_e - run_s + 1 for run_s, run_e in ds_runs
-                            ]
-                            max_width = max(widths)
-
-                            ds_valid_runs: List[Tuple[int, int]] = []
-                            for (run_s, run_e), w in zip(ds_runs, widths):
-                                # ノイズ判定: 最大幅の40%未満かつ絶対幅が12未満は細いノイズ
-                                width_ratio = (
-                                    w / max_width if max_width > 0 else 0
-                                )
-                                is_noise = width_ratio < 0.40 and w < 12
-
-                                if is_noise:
-                                    continue
-                                ds_valid_runs.append((run_s, run_e))
-
-                            if len(ds_valid_runs) == 0:
-                                # 全てノイズだった場合は元のまま
-                                proc = proc0
-                            elif len(ds_valid_runs) == 1:
-                                # 有効なクラスタが1つだけ
-                                rs, re_idx = ds_valid_runs[0]
-                                proc = proc0[:, rs : re_idx + 1]
-                            else:
-                                # 複数の有効クラスタがある場合、全体の範囲を使用
-                                rs = ds_valid_runs[0][0]
-                                re_idx = ds_valid_runs[-1][1]
-                                proc = proc0[:, rs : re_idx + 1]
-                        else:
-                            rs, re_idx = ds_runs[-1]
-                            proc = proc0[:, rs : re_idx + 1]
+                    ds_runs = self._active_column_runs(proc0)
+                    if ds_runs and not self._looks_like_separate_digit_runs(
+                        ds_runs
+                    ):
+                        rs = ds_runs[0][0]
+                        re_idx = ds_runs[-1][1]
+                        proc = proc0[:, rs : re_idx + 1]
+                        fragmented_stat_names.add(name)
                     else:
                         proc = proc0
                 except Exception:
@@ -309,22 +267,8 @@ class BattleFrameAnalyzer(AnalyzerPlugin):
             # For kill, crop to the right-most digit cluster when a thin left noise exists
             elif name == "kill":
                 try:
-                    arr = np.asarray(proc0)
-                    col_active = (arr < 128).sum(axis=0) > 0
-                    idx = np.where(col_active)[0]
-                    if idx.size > 0:
-                        k_runs: List[Tuple[int, int]] = []
-                        s = int(idx[0])
-                        e = int(idx[0])
-                        for p in map(int, idx[1:]):
-                            if p == e + 1:
-                                e = p
-                            else:
-                                k_runs.append((s, e))
-                                s = p
-                                e = p
-                        k_runs.append((s, e))
-
+                    k_runs = self._active_column_runs(proc0)
+                    if k_runs:
                         if len(k_runs) >= 2:
                             # 複数のクラスタがある場合、最大幅との比率でノイズを除外
                             widths = [
@@ -454,7 +398,10 @@ class BattleFrameAnalyzer(AnalyzerPlugin):
                 or not isinstance(result, str)
             ):
                 return None
-            parsed = self._parse_numeric_ocr_result(result)
+            if name in fragmented_stat_names:
+                parsed = self._parse_fragmented_stat_ocr_result(result)
+            else:
+                parsed = self._parse_numeric_ocr_result(result)
             if parsed is None:
                 return None
             records[name] = parsed
@@ -462,6 +409,41 @@ class BattleFrameAnalyzer(AnalyzerPlugin):
         if len(records) != 3:
             return None
         return records["kill"], records["death"], records["special"]
+
+    @staticmethod
+    def _active_column_runs(image: np.ndarray) -> List[Tuple[int, int]]:
+        arr = np.asarray(image)
+        col_active = (arr < 128).sum(axis=0) > 0
+        idx = np.where(col_active)[0]
+        if idx.size == 0:
+            return []
+
+        runs: List[Tuple[int, int]] = []
+        start = int(idx[0])
+        end = int(idx[0])
+        for point in map(int, idx[1:]):
+            if point == end + 1:
+                end = point
+            else:
+                runs.append((start, end))
+                start = point
+                end = point
+        runs.append((start, end))
+        return runs
+
+    @staticmethod
+    def _looks_like_separate_digit_runs(runs: List[Tuple[int, int]]) -> bool:
+        if len(runs) < 2:
+            return False
+
+        widths = [end - start + 1 for start, end in runs]
+        gaps = [
+            runs[index + 1][0] - runs[index][1] - 1
+            for index in range(len(runs) - 1)
+        ]
+        max_width = max(widths)
+        max_gap = max(gaps)
+        return max_gap > max_width * 0.75 and max_width <= 24
 
     @staticmethod
     def _parse_numeric_ocr_result(text: Optional[str]) -> Optional[int]:
@@ -483,6 +465,23 @@ class BattleFrameAnalyzer(AnalyzerPlugin):
             return int(digits)
         except ValueError:
             return None
+
+    @staticmethod
+    def _parse_fragmented_stat_ocr_result(
+        text: Optional[str],
+    ) -> Optional[int]:
+        if text is None:
+            return None
+        stripped = text.strip()
+        if not stripped:
+            return None
+        match = re.search(r"(\d+)\D*$", stripped)
+        digits = match.group(1) if match else ""
+        if not digits:
+            return None
+        if len(digits) >= 2 and digits.startswith("0"):
+            digits = digits[-1]
+        return BattleFrameAnalyzer._parse_numeric_ocr_result(digits)
 
     async def _extract_battle_kill_record_fast(
         self, frame: Frame, record_positions: Dict[str, Dict[str, int]]

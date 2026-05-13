@@ -507,6 +507,31 @@ async def test_detect_battle_result(
 @pytest.mark.parametrize(
     "filename, expected",
     [
+        ("battle_result_kill_record_7k_5d_3d.png", (7, 5, 3)),
+        ("battle_result_kill_record_8k_5d_3s.png", (8, 5, 3)),
+        ("battle_result_kill_record_12k_11d_3s.png", (12, 11, 3)),
+    ],
+)
+async def test_extract_battle_kill_record_from_result_screens(
+    analyzer: FrameAnalyzer,
+    load_image: Callable[[str], np.ndarray],
+    filename: str,
+    expected: tuple[int, int, int],
+) -> None:
+    """結果画面からキル/デス/スペシャルを抽出する。"""
+    frame = load_image(filename)
+    battle = analyzer.plugins[GameMode.BATTLE]
+    assert isinstance(battle, BattleFrameAnalyzer)
+
+    result = await battle.extract_battle_kill_record(frame, Match.X)
+
+    assert result == expected
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "filename, expected",
+    [
         (
             "battle_result_1.png",
             BattleResult(
