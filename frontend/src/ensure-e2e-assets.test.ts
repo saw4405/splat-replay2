@@ -52,6 +52,30 @@ describe('ensure e2e assets', () => {
     ]);
   });
 
+  it('fails when bundled e2e asset directory is missing', async () => {
+    const { repoRoot } = createTempRepo();
+    tempDirs.push(repoRoot);
+    rmSync(join(repoRoot, 'frontend'), { recursive: true, force: true });
+
+    const { checkE2EAssetsAvailable } = await import('../scripts/ensure-e2e-assets.js');
+
+    await expect(checkE2EAssetsAvailable({ repoRoot })).rejects.toThrow(
+      'E2E replay asset directory was not found'
+    );
+  });
+
+  it('fails when bundled e2e asset directory contains no mkv files', async () => {
+    const { repoRoot, e2eAssetDir } = createTempRepo();
+    tempDirs.push(repoRoot);
+    writeFileSync(join(e2eAssetDir, 'sidecar.json'), '{}', 'utf-8');
+
+    const { checkE2EAssetsAvailable } = await import('../scripts/ensure-e2e-assets.js');
+
+    await expect(checkE2EAssetsAvailable({ repoRoot })).rejects.toThrow(
+      'No E2E replay .mkv assets were found'
+    );
+  });
+
   it('runs git lfs pull when bundled assets are still pointers', async () => {
     const { repoRoot, e2eAssetDir } = createTempRepo();
     tempDirs.push(repoRoot);
@@ -74,6 +98,22 @@ describe('ensure e2e assets', () => {
     expect(result).toEqual({
       fetched: true,
       fetchedFiles: ['frontend/tests/fixtures/e2e/auto-recording/pointer-video.mkv'],
+    });
+  });
+
+  it('reports pointer files without fetching in check-only mode', async () => {
+    const { repoRoot, e2eAssetDir } = createTempRepo();
+    tempDirs.push(repoRoot);
+    writeFileSync(join(e2eAssetDir, 'pointer-video.mkv'), GIT_LFS_POINTER, 'utf-8');
+    const execFile = vi.fn();
+
+    const { checkE2EAssetsAvailable } = await import('../scripts/ensure-e2e-assets.js');
+    const result = await checkE2EAssetsAvailable({ repoRoot, execFile });
+
+    expect(execFile).not.toHaveBeenCalled();
+    expect(result).toEqual({
+      available: false,
+      pointerFiles: ['frontend/tests/fixtures/e2e/auto-recording/pointer-video.mkv'],
     });
   });
 

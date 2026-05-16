@@ -437,8 +437,7 @@ main() {
       elif command -v task >/dev/null 2>&1; then
         install_cmd="task install"
       else
-        warn "task command not found, skipped install step"
-        install_cmd=""
+        die "task command not found; use --skip-install only when you intentionally defer setup"
       fi
     fi
 
@@ -452,7 +451,7 @@ main() {
   fi
 
   add_worktree_to_vscode_workspace "$worktree_path" || true
-  log "worktree ready: $worktree_path"
+  log "worktree created: $worktree_path"
 }
 
 main "$@"

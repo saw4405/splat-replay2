@@ -12,13 +12,26 @@ const temporaryRoots: string[] = [];
 function bootstrapTestEnvironment(): E2EEnvironment {
   const rootDir = mkdtempSync(join(tmpdir(), 'splat-replay-recorded-seed-'));
   const settingsFile = join(rootDir, 'config', 'settings.toml');
+  const storageDir = join(rootDir, 'videos');
   temporaryRoots.push(rootDir);
 
   vi.stubEnv('SPLAT_REPLAY_E2E_ROOT', rootDir);
   vi.stubEnv('SPLAT_REPLAY_SETTINGS_FILE', settingsFile);
-  vi.stubEnv('SPLAT_REPLAY_E2E_MODE', 'smoke');
+  vi.stubEnv('SPLAT_REPLAY_E2E_STORAGE_DIR', storageDir);
+  vi.stubEnv('SPLAT_REPLAY_E2E_MODE', 'full');
+  vi.stubEnv('SPLAT_REPLAY_E2E_BOOTSTRAPPED', '');
 
   return bootstrapE2EEnvironment(true);
+}
+
+function selectRecordedSeedAsset(environment: E2EEnvironment) {
+  const asset = environment.replayAssets.find(
+    (candidate) => candidate.id === 'regular-turf-war-mincemeat-win'
+  );
+  if (!asset) {
+    throw new Error('regular-turf-war-mincemeat-win replay asset was not found.');
+  }
+  return asset;
 }
 
 describe('recordedSeed', () => {
@@ -36,7 +49,7 @@ describe('recordedSeed', () => {
 
   it('recorded 配下へ動画と metadata を作成し scenario を除外する', () => {
     const environment = bootstrapTestEnvironment();
-    const asset = environment.replayAssets[0];
+    const asset = selectRecordedSeedAsset(environment);
 
     const [seeded] = seedRecordedVideos(environment, [{ asset }]);
     const metadata = JSON.parse(readFileSync(seeded.metadataPath, 'utf-8')) as Record<
@@ -59,7 +72,7 @@ describe('recordedSeed', () => {
 
   it('fileStem と metadataOverride を適用して同一 asset を複数 seed できる', () => {
     const environment = bootstrapTestEnvironment();
-    const asset = environment.replayAssets[0];
+    const asset = selectRecordedSeedAsset(environment);
 
     const seeded = seedRecordedVideos(environment, [
       {

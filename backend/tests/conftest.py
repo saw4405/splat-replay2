@@ -9,6 +9,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from splat_replay.bootstrap.web_app import create_app
+from splat_replay.domain.config import CaptureDeviceSettings
 from splat_replay.infrastructure.config import (
     load_settings_from_toml,
     save_settings_to_toml,
@@ -114,6 +115,7 @@ def client(
     settings = load_settings_from_toml(
         paths.SETTINGS_FILE, create_if_missing=False
     )
+    settings.capture_device = CaptureDeviceSettings(name="Test Capture Device")
     settings.speech_transcriber.enabled = False
     save_settings_to_toml(settings, test_settings_path)
     monkeypatch.setenv("SPLAT_REPLAY_SETTINGS_FILE", str(test_settings_path))

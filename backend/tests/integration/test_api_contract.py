@@ -208,7 +208,7 @@ def test_prepare_recording_response_includes_audio_warning_contract(
         "error": None,
         "state": None,
         "audio_health_warning": {
-            "input_name": "MiraBox Capture",
+            "input_name": "Test Capture Device",
             "status": "silent",
             "healthy": False,
             "short_message": "音声入力なし",

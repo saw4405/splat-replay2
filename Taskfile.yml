@@ -5,6 +5,12 @@ version: "3"
 vars:
   BACKEND_DIR: backend
   FRONTEND_DIR: frontend
+  UV_CACHE_DIR: "{{.ROOT_DIR}}/.uv-cache"
+  UV_PYTHON_INSTALL_DIR: "{{.ROOT_DIR}}/.uv-python"
+  NPM_CACHE_DIR: "{{.ROOT_DIR}}/.npm-cache"
+  PRE_COMMIT_HOME: "{{.ROOT_DIR}}/.pre-commit-cache"
+  VIRTUALENV_APP_DATA: "{{.ROOT_DIR}}/.pre-commit-cache/virtualenv-app-data"
+  LOCAL_TEMP_DIR: "{{.ROOT_DIR}}/.tmp"
   DIST_ROOT: dist
   DIST_DIR: dist/SplatReplay
   BUILD_DIR: backend/build
@@ -13,6 +19,13 @@ vars:
   VENV_PYTHON: .venv/Scripts/python.exe
   VENV_PYINSTALLER: .venv/Scripts/pyinstaller.exe
   WEAPON_TEMPLATE_SYNC_SCRIPT: backend/scripts/sync_weapon_templates.py
+
+env:
+  UV_CACHE_DIR: "{{.UV_CACHE_DIR}}"
+  UV_PYTHON_INSTALL_DIR: "{{.UV_PYTHON_INSTALL_DIR}}"
+  NPM_CONFIG_CACHE: "{{.NPM_CACHE_DIR}}"
+  PRE_COMMIT_HOME: "{{.PRE_COMMIT_HOME}}"
+  VIRTUALENV_OVERRIDE_APP_DATA: "{{.VIRTUALENV_APP_DATA}}"
 
 tasks:
   # ========================================
@@ -26,11 +39,9 @@ tasks:
       - task: install:hooks
         vars:
           SKIP_HOOKS: '{{default "" .SKIP_HOOKS}}'
-        ignore_error: true
       - task: install:lfs
         vars:
           SKIP_LFS: '{{default "" .SKIP_LFS}}'
-        ignore_error: true
 
   install:backend:
     desc: Install backend dependencies
@@ -41,22 +52,40 @@ tasks:
   install:frontend:
     desc: Install frontend dependencies
     dir: "{{.FRONTEND_DIR}}"
+    deps:
+      - prepare:runtime-dirs
     cmds:
-      - npm install
+      - npm ci --prefer-offline --no-audit
 
   install:hooks:
-    desc: Install recommended Git hooks (pre-commit + pre-push)
+    desc: Install required Git hooks (pre-commit + pre-push)
     vars:
       SKIP_HOOKS_VALUE: '{{default "" .SKIP_HOOKS}}'
     cmds:
-      - cmd: 'powershell -NoProfile -Command "if (''{{.SKIP_HOOKS_VALUE}}'' -eq ''1'') { Write-Host ''WARNING: SKIP_HOOKS=1 のため Git hooks 設定をスキップしました。必要になったら task.exe install:hooks を実行してください。'' -ForegroundColor Yellow; exit 0 }; uv --directory {{.BACKEND_DIR}} run pre-commit install --install-hooks --hook-type pre-commit --hook-type pre-push; if ((Get-Variable LASTEXITCODE -ValueOnly) -ne 0) { Write-Host ''WARNING: Git hooks の自動設定に失敗しました。必要になったら task.exe install:hooks を再実行してください。'' -ForegroundColor Yellow; exit (Get-Variable LASTEXITCODE -ValueOnly) }"'
+      - powershell -NoProfile -ExecutionPolicy Bypass -File scripts/install-hooks.ps1 -SkipHooks "{{.SKIP_HOOKS_VALUE}}"
 
   install:lfs:
-    desc: Initialize Git LFS for replay-based workflow tests
+    desc: Initialize Git LFS and materialize replay assets for workflow tests
     vars:
       SKIP_LFS_VALUE: '{{default "" .SKIP_LFS}}'
     cmds:
-      - cmd: 'powershell -NoProfile -Command "if (''{{.SKIP_LFS_VALUE}}'' -eq ''1'') { Write-Host ''WARNING: SKIP_LFS=1 のため Git LFS 初期化をスキップしました。必要になったら task.exe install:lfs を実行してください。'' -ForegroundColor Yellow; exit 0 }; if (-not (Get-Command git -ErrorAction SilentlyContinue)) { Write-Host ''WARNING: git コマンドが見つからないため Git LFS 初期化をスキップしました。必要になったら task.exe install:lfs を実行してください。'' -ForegroundColor Yellow; exit 0 }; git lfs version; if ((Get-Variable LASTEXITCODE -ValueOnly) -ne 0) { Write-Host ''WARNING: Git LFS が未導入のため初期化をスキップしました。E2E を使う場合は Git LFS を導入した後で task.exe install:lfs を実行してください。'' -ForegroundColor Yellow; exit 0 }; git lfs install --skip-repo; if ((Get-Variable LASTEXITCODE -ValueOnly) -ne 0) { Write-Host ''WARNING: Git LFS の初期化に失敗しました。必要になったら task.exe install:lfs を再実行してください。'' -ForegroundColor Yellow; exit (Get-Variable LASTEXITCODE -ValueOnly) }"'
+      - cmd: 'powershell -NoProfile -Command "if (''{{.SKIP_LFS_VALUE}}'' -eq ''1'') { Write-Host ''WARNING: SKIP_LFS=1 のため Git LFS 初期化をスキップしました。workflow E2E の通常フローには戻してから進めてください。'' -ForegroundColor Yellow; exit 0 }; if (-not (Get-Command git -ErrorAction SilentlyContinue)) { Write-Host ''ERROR: git コマンドが見つかりません。'' -ForegroundColor Red; exit 1 }; git lfs version; if ((Get-Variable LASTEXITCODE -ValueOnly) -ne 0) { Write-Host ''ERROR: Git LFS が未導入です。Git LFS を導入した後で task.exe install:lfs を再実行してください。'' -ForegroundColor Red; exit (Get-Variable LASTEXITCODE -ValueOnly) }; git lfs install --skip-repo; if ((Get-Variable LASTEXITCODE -ValueOnly) -ne 0) { Write-Host ''ERROR: Git LFS の初期化に失敗しました。'' -ForegroundColor Red; exit (Get-Variable LASTEXITCODE -ValueOnly) }; node .\frontend\scripts\ensure-e2e-assets.js; if ((Get-Variable LASTEXITCODE -ValueOnly) -ne 0) { Write-Host ''ERROR: E2E replay asset の実体化に失敗しました。'' -ForegroundColor Red; exit (Get-Variable LASTEXITCODE -ValueOnly) }"'
+
+  doctor:
+    desc: Diagnose checkout prerequisites without modifying tracked files
+    cmds:
+      - node scripts/dev-doctor.mjs
+
+  doctor:json:
+    desc: Diagnose checkout prerequisites and print JSON
+    cmds:
+      - node scripts/dev-doctor.mjs --json
+
+  prepare:runtime-dirs:
+    desc: Prepare repo-local runtime directories for quality gates
+    internal: true
+    cmds:
+      - powershell -NoProfile -Command "New-Item -ItemType Directory -Force -Path '{{.LOCAL_TEMP_DIR}}', '{{.NPM_CACHE_DIR}}', '{{.PRE_COMMIT_HOME}}', '{{.VIRTUALENV_APP_DATA}}' | Out-Null"
 
   # ========================================
   # OpenAPI 型生成
@@ -373,6 +402,12 @@ tasks:
   test:backend:
     desc: Run backend tests
     dir: "{{.BACKEND_DIR}}"
+    deps:
+      - prepare:runtime-dirs
+    env:
+      TMP: "{{.LOCAL_TEMP_DIR}}"
+      TEMP: "{{.LOCAL_TEMP_DIR}}"
+      TMPDIR: "{{.LOCAL_TEMP_DIR}}"
     cmds:
       - uv run pytest -q
 
@@ -418,6 +453,11 @@ tasks:
     dir: "{{.BACKEND_DIR}}"
     deps:
       - install:backend
+      - prepare:runtime-dirs
+    env:
+      TMP: "{{.LOCAL_TEMP_DIR}}"
+      TEMP: "{{.LOCAL_TEMP_DIR}}"
+      TMPDIR: "{{.LOCAL_TEMP_DIR}}"
     cmds:
       - uv run pytest -q -m "contract and not perf"
 
@@ -449,6 +489,11 @@ tasks:
     dir: "{{.BACKEND_DIR}}"
     deps:
       - install:backend
+      - prepare:runtime-dirs
+    env:
+      TMP: "{{.LOCAL_TEMP_DIR}}"
+      TEMP: "{{.LOCAL_TEMP_DIR}}"
+      TMPDIR: "{{.LOCAL_TEMP_DIR}}"
     cmds:
       - uv run pytest -q -m perf
 
@@ -538,6 +583,12 @@ tasks:
   test:backend:verbose:
     desc: Run backend tests with verbose output
     dir: "{{.BACKEND_DIR}}"
+    deps:
+      - prepare:runtime-dirs
+    env:
+      TMP: "{{.LOCAL_TEMP_DIR}}"
+      TEMP: "{{.LOCAL_TEMP_DIR}}"
+      TMPDIR: "{{.LOCAL_TEMP_DIR}}"
     cmds:
       - uv run pytest -v
 
@@ -555,6 +606,11 @@ tasks:
     dir: "{{.BACKEND_DIR}}"
     deps:
       - install:backend
+      - prepare:runtime-dirs
+    env:
+      TMP: "{{.LOCAL_TEMP_DIR}}"
+      TEMP: "{{.LOCAL_TEMP_DIR}}"
+      TMPDIR: "{{.LOCAL_TEMP_DIR}}"
     cmds:
       - uv run pytest --cov=splat_replay --cov-report=term --cov-report=html tests/
       - cmd: 'powershell -NoProfile -Command "Write-Host ''''; Write-Host ''カバレッジレポート生成完了:'' -ForegroundColor Green; Write-Host ''  {{.BACKEND_DIR}}/htmlcov/index.html'' -ForegroundColor Yellow; Write-Host ''''"'

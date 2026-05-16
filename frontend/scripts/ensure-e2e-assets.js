@@ -69,10 +69,14 @@ export async function findGitLfsPointerMkvFiles(options = {}) {
   const assetDir = options.assetDir ?? E2E_ASSET_DIR;
   const absoluteAssetDir = resolve(repoRoot, assetDir);
   if (!existsSync(absoluteAssetDir)) {
-    return [];
+    throw new Error(`E2E replay asset directory was not found: ${assetDir}`);
   }
 
   const mkvFiles = await listMkvFiles(absoluteAssetDir);
+  if (mkvFiles.length === 0) {
+    throw new Error(`No E2E replay .mkv assets were found in: ${assetDir}`);
+  }
+
   const pointerFiles = [];
   for (const mkvFile of mkvFiles) {
     const prefix = await readFilePrefix(mkvFile);
@@ -137,6 +141,25 @@ export async function ensureE2EAssetsAvailable(options = {}) {
 }
 
 /**
+ * @param {{
+ *   repoRoot?: string;
+ *   assetDir?: string;
+ *   execFile?: (
+ *     file: string,
+ *     args: string[],
+ *     options: { cwd: string }
+ *   ) => Promise<{ stdout?: string; stderr?: string }>;
+ * }} [options]
+ * @returns {Promise<{ available: boolean; pointerFiles: string[] }>}
+ */
+export async function checkE2EAssetsAvailable(options = {}) {
+  const repoRoot = resolve(options.repoRoot ?? defaultRepoRoot());
+  const assetDir = options.assetDir ?? E2E_ASSET_DIR;
+  const pointerFiles = await findGitLfsPointerMkvFiles({ repoRoot, assetDir });
+  return { available: pointerFiles.length === 0, pointerFiles };
+}
+
+/**
  * @returns {string}
  */
 function defaultRepoRoot() {
@@ -144,6 +167,19 @@ function defaultRepoRoot() {
 }
 
 async function main() {
+  if (process.argv.includes('--check')) {
+    const result = await checkE2EAssetsAvailable();
+    if (!result.available) {
+      console.error(
+        `E2E 用 replay 動画が Git LFS pointer のままです: ${result.pointerFiles.join(', ')}`
+      );
+      process.exitCode = 1;
+      return;
+    }
+    console.log('E2E 用 replay 動画は実体化済みです。');
+    return;
+  }
+
   const result = await ensureE2EAssetsAvailable();
   if (result.fetched) {
     console.log(`E2E 用 replay 動画を取得しました: ${result.fetchedFiles.join(', ')}`);

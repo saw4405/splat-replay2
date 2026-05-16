@@ -1,0 +1,14 @@
+#!/usr/bin/env sh
+set -eu
+
+repo_root="$(git rev-parse --show-toplevel)"
+cd "$repo_root"
+
+export PRE_COMMIT_HOME="${PRE_COMMIT_HOME:-$repo_root/.pre-commit-cache}"
+export VIRTUALENV_OVERRIDE_APP_DATA="${VIRTUALENV_OVERRIDE_APP_DATA:-$repo_root/.pre-commit-cache/virtualenv-app-data}"
+
+exec backend/.venv/Scripts/python.exe -m pre_commit hook-impl \
+  --config=.pre-commit-config.yaml \
+  --hook-type=pre-commit \
+  --hook-dir "$repo_root/.githooks" \
+  -- "$@"

@@ -26,13 +26,13 @@
 
 ## 3. テスト分類
 
-| 分類          | 守るもの                                   | 現在の主な実装                                                                                                                                   | 備考                                                                                                                                   |
-| ------------- | ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------- |
-| `static`      | 形式、型、依存方向                         | `task.exe format`, `task.exe lint`, `task.exe type-check`, `task.exe verify` 内の `import-lint`                                                  | 実装言語や runner が変わっても分類は維持する                                                                                           |
-| `logic`       | 純粋関数、変換、軽量 adapter、内部ロジック | backend の通常 `pytest`、frontend の Vitest logic テスト                                                                                         | 高速反復の主力                                                                                                                         |
-| `contract`    | API、schema、境界契約                      | `backend/tests/integration/test_api_contract.py`、`backend/tests/test_metadata_contracts.py`、`backend/tests/test_recording_preview_api.py` など | 破壊的変更の早期検知に使う                                                                                                             |
-| `workflow`    | UI を含む主要フロー回帰                    | Playwright replay E2E                                                                                                                            | replay を使う主要導線 guard。frontend の component / integration はこの層を補完し、smoke は replay を加速し、full は全フレームで回す   |
-| `performance` | 閾値付き性能回帰                           | `pytest -m perf`                                                                                                                                 | 常時ではなく影響変更時とリリース前に使う                                                                                               |
+| 分類          | 守るもの                                   | 現在の主な実装                                                                                                                                   | 備考                                                                                                                                 |
+| ------------- | ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------ |
+| `static`      | 形式、型、依存方向                         | `task.exe format`, `task.exe lint`, `task.exe type-check`, `task.exe verify` 内の `import-lint`                                                  | 実装言語や runner が変わっても分類は維持する                                                                                         |
+| `logic`       | 純粋関数、変換、軽量 adapter、内部ロジック | backend の通常 `pytest`、frontend の Vitest logic テスト                                                                                         | 高速反復の主力                                                                                                                       |
+| `contract`    | API、schema、境界契約                      | `backend/tests/integration/test_api_contract.py`、`backend/tests/test_metadata_contracts.py`、`backend/tests/test_recording_preview_api.py` など | 破壊的変更の早期検知に使う                                                                                                           |
+| `workflow`    | UI を含む主要フロー回帰                    | Playwright replay E2E                                                                                                                            | replay を使う主要導線 guard。frontend の component / integration はこの層を補完し、smoke は replay を加速し、full は全フレームで回す |
+| `performance` | 閾値付き性能回帰                           | `pytest -m perf`                                                                                                                                 | 常時ではなく影響変更時とリリース前に使う                                                                                             |
 
 ### 3.1. frontend のテスト層
 
@@ -94,6 +94,11 @@ frontend は **Vitest + @testing-library/svelte** に統一し、以下の 4 層
 
 これらの名前は、内部実装が変わっても維持する前提です。
 runner や対象ファイルが変わる場合は、Task の中身だけを差し替えます。
+
+補足: `task.exe doctor` / `task.exe doctor:json` は、親 repo と同じ通常フローに入る前提を
+checkout 単位で診断する入口です。依存関係、Git hooks、Git LFS、replay asset、主要ツールの
+状態を確認しますが、テスト分類そのものではありません。変更内容の保証は引き続き上記の
+意味ベース入口で選びます。
 
 ## 5. 変更分類ごとの選定ルール
 

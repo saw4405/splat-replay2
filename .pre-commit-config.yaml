@@ -2,6 +2,9 @@ default_install_hook_types:
   - pre-commit
   - pre-push
 
+default_language_version:
+  python: python3.13
+
 repos:
   - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: v0.14.6
@@ -18,7 +21,7 @@ repos:
     hooks:
       - id: ty
         name: ty check
-        entry: uv --directory backend run ty check . --ignore unresolved-import
+        entry: powershell -NoProfile -Command "Set-Location backend; .\.venv\Scripts\ty.exe check . --ignore unresolved-import"
         language: system
         files: ^backend/src/|^backend/tests/
         pass_filenames: false
@@ -39,20 +42,17 @@ repos:
         name: frontend type check
         entry: npm run type-check --prefix frontend
         language: system
-        files: ^frontend/
         pass_filenames: false
         stages: [pre-push]
       - id: frontend-svelte-check
         name: frontend svelte check
         entry: npm run check --prefix frontend
         language: system
-        files: ^frontend/
         pass_filenames: false
         stages: [pre-push]
       - id: backend-import-lint
         name: backend import lint
-        entry: uv --directory backend run lint-imports --no-cache
+        entry: backend/.venv/Scripts/lint-imports.exe --config backend/pyproject.toml --no-cache
         language: system
-        files: ^backend/
         pass_filenames: false
         stages: [pre-push]
