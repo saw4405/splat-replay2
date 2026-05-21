@@ -309,11 +309,14 @@ class BattleFrameAnalyzer(AnalyzerPlugin):
                             else:
                                 # 複数の有効クラスタがある場合
                                 # まず全体範囲を設定(デフォルト)
-                                proc = proc0[
-                                    :,
-                                    k_valid_runs[0][0] : k_valid_runs[-1][1]
-                                    + 1,
-                                ]
+                                left = k_valid_runs[0][0]
+                                right = k_valid_runs[-1][1]
+                                if self._looks_like_separate_digit_runs(
+                                    k_valid_runs
+                                ):
+                                    proc = proc0
+                                else:
+                                    proc = proc0[:, left : right + 1]
 
                                 # killフィールドでは各クラスタを個別にOCRして結合を試みる
                                 if name == "kill" and len(k_valid_runs) == 2:

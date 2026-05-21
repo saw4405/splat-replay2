@@ -510,6 +510,7 @@ async def test_detect_battle_result(
     [
         ("battle_result_kill_record_7k_5d_3d.png", (7, 5, 3)),
         ("battle_result_kill_record_8k_5d_3s.png", (8, 5, 3)),
+        ("battle_result_kill_record_11k_6d_3s.png", (11, 6, 3)),
         ("battle_result_kill_record_12k_11d_3s.png", (12, 11, 3)),
     ],
 )
