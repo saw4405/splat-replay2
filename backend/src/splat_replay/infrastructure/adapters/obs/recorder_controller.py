@@ -9,9 +9,21 @@
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Iterable, Mapping
+from collections.abc import AsyncIterator, Iterable, Mapping
+from contextlib import asynccontextmanager
+from functools import wraps
 from pathlib import Path
-from typing import Awaitable, Callable, Dict, cast
+from typing import (
+    Any,
+    Awaitable,
+    Callable,
+    Concatenate,
+    Coroutine,
+    Dict,
+    ParamSpec,
+    TypeVar,
+    cast,
+)
 
 from obswsc.data import Event
 from structlog.stdlib import BoundLogger
@@ -32,6 +44,8 @@ from splat_replay.infrastructure.adapters.obs.websocket_client import (
 )
 
 StatusListener = Callable[[RecorderStatus], Awaitable[None]]
+OperationParams = ParamSpec("OperationParams")
+OperationResult = TypeVar("OperationResult")
 DEFAULT_AUDIO_SAMPLE_SECONDS = 1.0
 SILENCE_PEAK_MUL_THRESHOLD = 0.001
 SILENCE_PEAK_DB_THRESHOLD = -60.0
@@ -134,6 +148,27 @@ def _contains_device_name(value: object, device_name: str) -> bool:
     return False
 
 
+def _guard_obs_operation(
+    method: Callable[
+        Concatenate[OBSRecorderController, OperationParams],
+        Coroutine[Any, Any, OperationResult],
+    ],
+) -> Callable[
+    Concatenate[OBSRecorderController, OperationParams],
+    Coroutine[Any, Any, OperationResult],
+]:
+    @wraps(method)
+    async def wrapper(
+        self: OBSRecorderController,
+        *args: OperationParams.args,
+        **kwargs: OperationParams.kwargs,
+    ) -> OperationResult:
+        async with self._operation_guard():
+            return await method(self, *args, **kwargs)
+
+    return wrapper
+
+
 class OBSRecorderController(VideoRecorderPort):
     """OBS Studio録画制御。
 
@@ -156,6 +191,9 @@ class OBSRecorderController(VideoRecorderPort):
         self._logger = logger
         self._status_listeners: list[StatusListener] = []
         self._audio_meter_lock = asyncio.Lock()
+        self._operation_lock = asyncio.Lock()
+        self._operation_owner: asyncio.Task[Any] | None = None
+        self._operation_depth = 0
 
         # プロセス管理とWebSocket通信を委譲
         self._process_manager = OBSProcessManager(
@@ -173,6 +211,26 @@ class OBSRecorderController(VideoRecorderPort):
         self._ws_client.register_event_callback(
             "RecordStateChanged", self._on_record_state_changed
         )
+
+    @asynccontextmanager
+    async def _operation_guard(self) -> AsyncIterator[None]:
+        task = asyncio.current_task()
+        if task is not None and self._operation_owner is task:
+            self._operation_depth += 1
+            try:
+                yield
+            finally:
+                self._operation_depth -= 1
+            return
+
+        async with self._operation_lock:
+            self._operation_owner = task
+            self._operation_depth = 1
+            try:
+                yield
+            finally:
+                self._operation_depth = 0
+                self._operation_owner = None
 
     async def _handle_ws_reconnect(self) -> None:
         """OBS再接続時に初期セットアップを再実行する。"""
@@ -203,6 +261,7 @@ class OBSRecorderController(VideoRecorderPort):
         """
         return await self._process_manager.is_running()
 
+    @_guard_obs_operation
     async def launch(self) -> None:
         """OBSを起動。
 
@@ -211,6 +270,7 @@ class OBSRecorderController(VideoRecorderPort):
         """
         await self._process_manager.launch()
 
+    @_guard_obs_operation
     async def teardown(self) -> None:
         """OBSを終了。
 
@@ -237,6 +297,7 @@ class OBSRecorderController(VideoRecorderPort):
         await self._process_manager.teardown()
         self._logger.info("OBS 終了完了")
 
+    @_guard_obs_operation
     async def check_audio_input_health(
         self,
         input_name: str,
@@ -458,6 +519,7 @@ class OBSRecorderController(VideoRecorderPort):
             peak_db_value = max(peaks_db) if peaks_db else None
             return peak_mul_value, peak_db_value
 
+    @_guard_obs_operation
     async def connect(self) -> None:
         """WebSocketに接続。
 
@@ -469,6 +531,7 @@ class OBSRecorderController(VideoRecorderPort):
 
         await self._ws_client.connect()
 
+    @_guard_obs_operation
     async def setup(self) -> None:
         """OBSのセットアップ。
 
@@ -488,6 +551,7 @@ class OBSRecorderController(VideoRecorderPort):
     # ------------------------------------------------------------------
     # 仮想カメラ制御
     # ------------------------------------------------------------------
+    @_guard_obs_operation
     async def is_virtual_camera_active(self) -> bool:
         """仮想カメラが有効かどうかを確認。
 
@@ -499,6 +563,7 @@ class OBSRecorderController(VideoRecorderPort):
         )
         return bool(active) if active is not None else False
 
+    @_guard_obs_operation
     async def start_virtual_camera(self) -> None:
         """仮想カメラを開始。"""
         self._logger.info("仮想カメラ開始要求")
@@ -508,6 +573,7 @@ class OBSRecorderController(VideoRecorderPort):
         await self._ws_client.request("StartVirtualCam")
         self._logger.info("仮想カメラ開始完了")
 
+    @_guard_obs_operation
     async def stop_virtual_camera(self) -> None:
         """仮想カメラを停止。"""
         self._logger.info("仮想カメラ停止要求")
@@ -520,6 +586,7 @@ class OBSRecorderController(VideoRecorderPort):
     # ------------------------------------------------------------------
     # 録画制御
     # ------------------------------------------------------------------
+    @_guard_obs_operation
     async def _get_record_status(self) -> tuple[bool, bool]:
         """録画状態を取得。
 
@@ -536,6 +603,7 @@ class OBSRecorderController(VideoRecorderPort):
         paused = bool(response.res_data.get("outputPaused", False))
         return active, paused
 
+    @_guard_obs_operation
     async def start(self) -> None:
         """録画を開始。"""
         self._logger.info("録画開始要求")
@@ -546,6 +614,7 @@ class OBSRecorderController(VideoRecorderPort):
         await self._ws_client.request("StartRecord")
         self._logger.info("録画開始完了")
 
+    @_guard_obs_operation
     async def stop(self) -> Path | None:
         """録画を停止。
 
@@ -572,6 +641,7 @@ class OBSRecorderController(VideoRecorderPort):
         self._logger.info("録画停止完了", output_path=str(output_path))
         return output_path
 
+    @_guard_obs_operation
     async def pause(self) -> None:
         """録画を一時停止。"""
         self._logger.info("録画一時停止要求")
@@ -585,6 +655,7 @@ class OBSRecorderController(VideoRecorderPort):
         await self._ws_client.request("PauseRecord")
         self._logger.info("録画一時停止完了")
 
+    @_guard_obs_operation
     async def resume(self) -> None:
         """録画を再開。"""
         self._logger.info("録画再開要求")

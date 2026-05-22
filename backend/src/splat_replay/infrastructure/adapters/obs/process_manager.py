@@ -11,9 +11,10 @@ from __future__ import annotations
 import asyncio
 import re
 import subprocess
+import time
 from pathlib import Path
 from types import ModuleType
-from typing import List, Optional
+from typing import Any, List, Optional, cast
 
 import psutil
 from structlog.stdlib import BoundLogger
@@ -22,22 +23,34 @@ from splat_replay.domain.exceptions import DeviceError
 
 # Windows APIのオプショナルインポート
 win32api: ModuleType | None = None
+win32com_client: ModuleType | None = None
 win32con: ModuleType | None = None
 win32gui: ModuleType | None = None
 win32process: ModuleType | None = None
 
 try:
     import win32api as _win32api
+    import win32com.client as _win32com_client
     import win32con as _win32con
     import win32gui as _win32gui
     import win32process as _win32process
 
     win32api = _win32api
+    win32com_client = _win32com_client
     win32con = _win32con
     win32gui = _win32gui
     win32process = _win32process
 except Exception:
     pass
+
+UIA_TREE_SCOPE_CHILDREN = 0x2
+UIA_TREE_SCOPE_DESCENDANTS = 0x4
+UIA_INVOKE_PATTERN_ID = 10000
+UIA_PROCESS_ID_PROPERTY_ID = 30002
+UIA_CONTROL_TYPE_PROPERTY_ID = 30003
+UIA_BUTTON_CONTROL_TYPE_ID = 50000
+
+ManagedOBSProcess = subprocess.Popen[bytes] | psutil.Process
 
 
 class OBSProcessManager:
@@ -59,6 +72,62 @@ class OBSProcessManager:
         self._executable_path = executable_path
         self._logger = logger
         self._process: subprocess.Popen[bytes] | None = None
+        self._lifecycle_lock = asyncio.Lock()
+
+    def _has_owned_live_process(self) -> bool:
+        return self._process is not None and self._process.poll() is None
+
+    async def _find_existing_obs_process(self) -> psutil.Process | None:
+        file_name = self._executable_path.name.lower()
+
+        def _impl() -> psutil.Process | None:
+            for proc in psutil.process_iter(["name", "exe"]):
+                try:
+                    name_obj = proc.info.get("name")
+                    if not (
+                        isinstance(name_obj, str)
+                        and name_obj.lower() == file_name
+                    ):
+                        continue
+                    exe_obj = proc.info.get("exe")
+                    if isinstance(exe_obj, str) and exe_obj:
+                        try:
+                            if (
+                                Path(exe_obj).resolve()
+                                != self._executable_path.resolve()
+                            ):
+                                continue
+                        except OSError:
+                            continue
+                    return proc
+                except (psutil.NoSuchProcess, psutil.AccessDenied):
+                    continue
+            return None
+
+        return await asyncio.to_thread(_impl)
+
+    def _is_managed_process_alive(self, process: ManagedOBSProcess) -> bool:
+        if hasattr(process, "poll"):
+            return cast(Any, process).poll() is None
+        try:
+            return (
+                process.is_running()
+                and process.status() != psutil.STATUS_ZOMBIE
+            )
+        except (psutil.NoSuchProcess, psutil.AccessDenied):
+            return False
+
+    async def _wait_managed_process(self, process: ManagedOBSProcess) -> None:
+        try:
+            await asyncio.to_thread(process.wait)
+        except psutil.NoSuchProcess:
+            return
+
+    def _terminate_managed_process(self, process: ManagedOBSProcess) -> None:
+        try:
+            process.terminate()
+        except psutil.NoSuchProcess:
+            return
 
     async def is_running(self) -> bool:
         """OBSが実行中かどうかを確認。
@@ -149,9 +218,20 @@ class OBSProcessManager:
         Raises:
             DeviceError: 起動失敗時
         """
+        async with self._lifecycle_lock:
+            await self._launch_locked()
+
+    async def _launch_locked(self) -> None:
+        """OBSプロセスを起動。呼び出し元で lifecycle lock を保持する。"""
         self._logger.info("OBS 起動要求")
         if await self.is_running():
             self._logger.info("OBS は既に実行中")
+            return
+        if self._has_owned_live_process():
+            self._logger.info(
+                "OBS は起動処理中またはメインウィンドウ待機中です",
+                pid=self._process.pid if self._process is not None else None,
+            )
             return
 
         try:
@@ -190,8 +270,7 @@ class OBSProcessManager:
                     f"ワーキングディレクトリが見つかりません: {working_dir}"
                 )
 
-            # OBS起動引数: クラッシュダイアログをスキップ
-            args = [str(self._executable_path), "--disable-shutdown-check"]
+            args = [str(self._executable_path)]
 
             def _launch_process() -> subprocess.Popen[bytes]:
                 """別スレッドでプロセスを起動"""
@@ -239,6 +318,8 @@ class OBSProcessManager:
             if is_running:
                 self._logger.info("OBS 起動確認完了（プロセス＋ウィンドウ）")
                 return
+            if self._process is not None and self._process.poll() is None:
+                self._handle_launch_dialogs(self._process.pid)
             await asyncio.sleep(1)
             if i % 5 == 0:
                 self._logger.debug(
@@ -248,6 +329,14 @@ class OBSProcessManager:
         self._logger.error(
             "OBS 起動タイムアウト（ウィンドウが表示されませんでした）"
         )
+        if self._has_owned_live_process() and self._process is not None:
+            self._logger.warning(
+                "OBS 起動タイムアウト後の残留プロセスを終了します",
+                pid=self._process.pid,
+            )
+            self._terminate_managed_process(self._process)
+            await self._wait_managed_process(self._process)
+            self._process = None
         raise DeviceError(
             "OBS 起動がタイムアウトしました", "OBS_LAUNCH_TIMEOUT"
         )
@@ -290,47 +379,331 @@ class OBSProcessManager:
         win32gui.EnumWindows(callback, None)
         return result
 
+    def _get_window_text(self, hwnd: int) -> str:
+        if win32gui is None:
+            return ""
+        try:
+            title = win32gui.GetWindowText(hwnd)
+        except Exception:  # pragma: no cover - defensive
+            return ""
+        return title if isinstance(title, str) else ""
+
+    def _is_obs_main_window(self, hwnd: int) -> bool:
+        title = self._get_window_text(hwnd)
+        return (
+            re.match(r"^OBS\s+\d+(?:\.\d+){1,2}", title, re.IGNORECASE)
+            is not None
+        )
+
+    def _find_button_by_labels(
+        self, hwnd: int, labels: tuple[str, ...]
+    ) -> int | None:
+        if win32gui is None:
+            return None
+
+        candidates: list[int] = []
+
+        def callback(child_hwnd: int, _param: object) -> bool:
+            if win32gui is None:  # pragma: no cover - defensive
+                return False
+            try:
+                class_name = win32gui.GetClassName(child_hwnd)
+                text = win32gui.GetWindowText(child_hwnd).strip()
+            except Exception:  # pragma: no cover - defensive
+                return True
+            if class_name == "Button" and text:
+                normalized = text.replace("&", "").lower()
+                if any(label in normalized for label in labels):
+                    candidates.append(child_hwnd)
+                    return False
+            return True
+
+        try:
+            win32gui.EnumChildWindows(hwnd, callback, None)
+        except Exception:  # pragma: no cover - defensive
+            return None
+        return candidates[0] if candidates else None
+
+    def _find_affirmative_button(self, hwnd: int) -> int | None:
+        return self._find_button_by_labels(
+            hwnd,
+            ("はい", "yes", "ok", "終了", "exit", "quit"),
+        )
+
+    def _press_enter_on_window(self, hwnd: int) -> bool:
+        if win32api is None or win32con is None or win32gui is None:
+            return False
+
+        try:
+            win32gui.SetForegroundWindow(hwnd)
+            time.sleep(0.05)
+            vk_return = getattr(win32con, "VK_RETURN", 0x0D)
+            key_up = getattr(win32con, "KEYEVENTF_KEYUP", 0x0002)
+            win32api.keybd_event(vk_return, 0, 0, 0)
+            win32api.keybd_event(vk_return, 0, key_up, 0)
+        except (
+            Exception
+        ) as exc:  # pragma: no cover - depends on foreground state
+            self._logger.debug(
+                "OBS ダイアログへの Enter 送信をスキップ",
+                hwnd=hwnd,
+                error=str(exc),
+            )
+            return False
+        return True
+
+    def _invoke_uia_button_by_labels(
+        self,
+        pid: int,
+        labels: tuple[str, ...],
+        *,
+        window_title_tokens: tuple[str, ...] = (),
+        window_class_names: tuple[str, ...] = (),
+    ) -> tuple[str, str] | None:
+        if win32com_client is None:
+            return None
+
+        try:
+            uia = win32com_client.Dispatch("UIAutomationClient.CUIAutomation")
+            root = uia.GetRootElement()
+            process_condition = uia.CreatePropertyCondition(
+                UIA_PROCESS_ID_PROPERTY_ID, pid
+            )
+            windows = root.FindAll(UIA_TREE_SCOPE_CHILDREN, process_condition)
+            button_condition = uia.CreatePropertyCondition(
+                UIA_CONTROL_TYPE_PROPERTY_ID, UIA_BUTTON_CONTROL_TYPE_ID
+            )
+            normalized_labels = tuple(label.lower() for label in labels)
+            normalized_title_tokens = tuple(
+                token.lower() for token in window_title_tokens
+            )
+            expected_classes = set(window_class_names)
+
+            for window_index in range(windows.Length):
+                window = windows.GetElement(window_index)
+                window_name = str(window.CurrentName or "")
+                window_class_name = str(window.CurrentClassName or "")
+                normalized_window_name = window_name.lower()
+                if normalized_title_tokens or expected_classes:
+                    title_matched = any(
+                        token in normalized_window_name
+                        for token in normalized_title_tokens
+                    )
+                    class_matched = window_class_name in expected_classes
+                    if not title_matched and not class_matched:
+                        continue
+
+                buttons = window.FindAll(
+                    UIA_TREE_SCOPE_DESCENDANTS, button_condition
+                )
+                for button_index in range(buttons.Length):
+                    button = buttons.GetElement(button_index)
+                    button_name = str(button.CurrentName or "")
+                    normalized_button_name = button_name.replace(
+                        "&", ""
+                    ).lower()
+                    if not any(
+                        label in normalized_button_name
+                        for label in normalized_labels
+                    ):
+                        continue
+                    invoke_pattern = button.GetCurrentPattern(
+                        UIA_INVOKE_PATTERN_ID
+                    )
+                    invoke_pattern.Invoke()
+                    return window_name, button_name
+        except Exception as exc:  # pragma: no cover - depends on Windows UIA
+            self._logger.debug(
+                "OBS UI Automation ボタン操作をスキップ",
+                pid=pid,
+                error=str(exc),
+            )
+            return None
+        return None
+
+    def _handle_launch_dialogs(self, pid: int) -> None:
+        clicked = self._invoke_uia_button_by_labels(
+            pid,
+            ("通常", "normal", "run normally"),
+            window_title_tokens=("クラッシュ", "crash"),
+            window_class_names=("QMessageBox",),
+        )
+        if clicked is not None:
+            window_name, button_name = clicked
+            self._logger.warning(
+                "OBS クラッシュ検出ダイアログを通常モードで続行",
+                title=window_name,
+                button=button_name,
+            )
+            return
+
+        if win32api is None or win32con is None:
+            return
+        for hwnd in self.find_window_by_pid(pid):
+            title = self._get_window_text(hwnd)
+            if not any(
+                token in title.lower() for token in ("クラッシュ", "crash")
+            ):
+                continue
+            button_hwnd = self._find_button_by_labels(
+                hwnd, ("通常", "normal", "run normally")
+            )
+            if button_hwnd is not None:
+                bm_click = getattr(win32con, "BM_CLICK", 0x00F5)
+                win32api.PostMessage(button_hwnd, bm_click, 0, 0)
+                self._logger.warning(
+                    "OBS クラッシュ検出ダイアログを通常モードで続行",
+                    title=title,
+                )
+                return
+            if self._press_enter_on_window(hwnd):
+                self._logger.warning(
+                    "OBS クラッシュ検出ダイアログを Enter で通常モード続行",
+                    title=title,
+                )
+                return
+
+    def _confirm_exit_dialog_if_present(
+        self, pid: int, hwnds: list[int]
+    ) -> bool:
+        """OBS の終了確認ダイアログなら肯定ボタンを押す。"""
+        clicked = self._invoke_uia_button_by_labels(
+            pid,
+            ("はい", "yes", "ok", "終了", "exit", "quit"),
+            window_title_tokens=("obs", "確認", "confirm", "終了"),
+            window_class_names=("QMessageBox",),
+        )
+        if clicked is not None:
+            window_name, button_name = clicked
+            self._logger.info(
+                "OBS 終了確認ダイアログを承認",
+                title=window_name,
+                button=button_name,
+            )
+            return True
+
+        if win32api is None or win32con is None:
+            return False
+
+        for hwnd in hwnds:
+            if self._is_obs_main_window(hwnd):
+                continue
+            title = self._get_window_text(hwnd)
+            if not any(
+                token in title.lower()
+                for token in ("obs", "確認", "confirm", "終了")
+            ):
+                continue
+
+            button_hwnd = self._find_affirmative_button(hwnd)
+            if button_hwnd is None:
+                if self._press_enter_on_window(hwnd):
+                    self._logger.info(
+                        "OBS 終了確認ダイアログを Enter で承認",
+                        title=title,
+                    )
+                    return True
+                continue
+
+            bm_click = getattr(win32con, "BM_CLICK", 0x00F5)
+            win32api.PostMessage(button_hwnd, bm_click, 0, 0)
+            self._logger.info("OBS 終了確認ダイアログを承認", title=title)
+            return True
+        return False
+
     async def teardown(self) -> None:
         """OBSプロセスを終了。
 
         Windows環境ではWM_CLOSEメッセージで正常終了を試み、
         タイムアウトした場合は強制終了。
         """
+        async with self._lifecycle_lock:
+            await self._teardown_locked()
+
+    async def _teardown_locked(self) -> None:
+        """OBSプロセスを終了。呼び出し元で lifecycle lock を保持する。"""
         self._logger.info("OBS 終了要求")
 
-        if not await self.is_running():
+        running = await self.is_running()
+        owned_live_process = self._has_owned_live_process()
+        existing_process: psutil.Process | None = None
+        if not owned_live_process:
+            existing_process = await self._find_existing_obs_process()
+
+        if not running and not owned_live_process and existing_process is None:
             self._logger.info("OBS は既に停止済み")
             self._process = None
             return
-
-        if self._process is None:
+        if not running and owned_live_process:
             self._logger.warning(
-                "OBS プロセスハンドルがありません（外部起動の可能性）"
+                "OBS メインウィンドウは未検出ですが、管理中の OBS プロセスが残っています",
+                pid=self._process.pid if self._process is not None else None,
             )
+        if not running and existing_process is not None:
+            self._logger.warning(
+                "OBS メインウィンドウは未検出ですが、実行中の OBS プロセスが残っています",
+                pid=existing_process.pid,
+            )
+
+        process: ManagedOBSProcess | None = self._process
+        if process is None and existing_process is not None:
+            self._logger.info(
+                "OBS はアプリ起動前から実行中のため、プロセス終了をスキップします",
+                pid=existing_process.pid,
+            )
+            return
+
+        if process is None:
+            self._logger.warning("OBS プロセスハンドルがありません")
             return
 
         try:
             # Windows環境ではWM_CLOSEで正常終了
-            if win32api is not None and win32con is not None:
-                hwnds = self.find_window_by_pid(self._process.pid)
-                self._logger.info(
-                    "OBS ウィンドウを閉じる", window_count=len(hwnds)
-                )
-                for hwnd in hwnds:
-                    win32api.PostMessage(hwnd, win32con.WM_CLOSE, 0, 0)
+            timeout_seconds = 10.0
+            deadline = asyncio.get_running_loop().time() + timeout_seconds
+            close_logged_windows: set[int] = set()
 
-            # 最大10秒待機して終了しなければ強制終了
-            try:
-                self._logger.info("OBS 終了処理待機")
-                # subprocess.Popen.wait() を別スレッドで実行
-                await asyncio.wait_for(
-                    asyncio.to_thread(self._process.wait), timeout=10.0
-                )
-                self._logger.info("OBS 終了処理完了")
-            except asyncio.TimeoutError:
+            self._logger.info("OBS 終了処理待機")
+            while self._is_managed_process_alive(process):
+                if win32api is not None and win32con is not None:
+                    hwnds = self.find_window_by_pid(process.pid)
+                    handled_dialog = self._confirm_exit_dialog_if_present(
+                        process.pid, hwnds
+                    )
+                    main_hwnds = [
+                        hwnd
+                        for hwnd in hwnds
+                        if self._is_obs_main_window(hwnd)
+                    ]
+                    if main_hwnds:
+                        unlogged_hwnds = [
+                            hwnd
+                            for hwnd in main_hwnds
+                            if hwnd not in close_logged_windows
+                        ]
+                        if unlogged_hwnds:
+                            self._logger.info(
+                                "OBS ウィンドウを閉じる",
+                                window_count=len(unlogged_hwnds),
+                                pid=process.pid,
+                            )
+                            close_logged_windows.update(unlogged_hwnds)
+                        for hwnd in main_hwnds:
+                            win32api.PostMessage(hwnd, win32con.WM_CLOSE, 0, 0)
+                    elif handled_dialog:
+                        await asyncio.sleep(0.2)
+                        continue
+
+                remaining = deadline - asyncio.get_running_loop().time()
+                if remaining <= 0:
+                    break
+                await asyncio.sleep(min(0.2, remaining))
+
+            if self._is_managed_process_alive(process):
                 self._logger.warning("OBS 強制終了")
-                self._process.terminate()
-                await asyncio.to_thread(self._process.wait)
+                self._terminate_managed_process(process)
+            await self._wait_managed_process(process)
+            self._logger.info("OBS 終了処理完了")
 
         except Exception as exc:
             self._logger.error("OBS 終了失敗", error=str(exc))
