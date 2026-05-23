@@ -19,6 +19,8 @@ vars:
   VENV_PYTHON: .venv/Scripts/python.exe
   VENV_PYINSTALLER: .venv/Scripts/pyinstaller.exe
   WEAPON_TEMPLATE_SYNC_SCRIPT: backend/scripts/sync_weapon_templates.py
+  DESKTOP_DEPLOY_SCRIPT: scripts/deploy-desktop.ps1
+  DESKTOP_DEPLOY_ENV_FILE: scripts/deploy-desktop.env
 
 env:
   UV_CACHE_DIR: "{{.UV_CACHE_DIR}}"
@@ -26,6 +28,11 @@ env:
   NPM_CONFIG_CACHE: "{{.NPM_CACHE_DIR}}"
   PRE_COMMIT_HOME: "{{.PRE_COMMIT_HOME}}"
   VIRTUALENV_OVERRIDE_APP_DATA: "{{.VIRTUALENV_APP_DATA}}"
+
+includes:
+  local:
+    taskfile: ./Taskfile.local.yml
+    optional: true
 
 tasks:
   # ========================================
@@ -675,6 +682,30 @@ tasks:
     desc: Sync weapon template definitions from assets to YAML
     cmds:
       - "{{.VENV_PYTHON}} {{.WEAPON_TEMPLATE_SYNC_SCRIPT}}"
+
+  # ========================================
+  # 配備
+  # ========================================
+  deploy:
+    desc: Build if needed and deploy dist/SplatReplay to the env configured target
+    vars:
+      DEPLOY_ENV_FILE_VALUE: "{{default .DESKTOP_DEPLOY_ENV_FILE .DEPLOY_ENV_FILE}}"
+    cmds:
+      - powershell -NoProfile -ExecutionPolicy Bypass -File "{{.DESKTOP_DEPLOY_SCRIPT}}" -Mode Execute -RepoRoot "{{.ROOT_DIR}}" -EnvFile "{{.DEPLOY_ENV_FILE_VALUE}}"
+
+  deploy:inspect:
+    desc: Inspect desktop deploy build requirement and blocking processes
+    vars:
+      DEPLOY_ENV_FILE_VALUE: "{{default .DESKTOP_DEPLOY_ENV_FILE .DEPLOY_ENV_FILE}}"
+    cmds:
+      - powershell -NoProfile -ExecutionPolicy Bypass -File "{{.DESKTOP_DEPLOY_SCRIPT}}" -Mode Inspect -RepoRoot "{{.ROOT_DIR}}" -EnvFile "{{.DEPLOY_ENV_FILE_VALUE}}"
+
+  deploy:stop-running-apps:
+    desc: Stop SplatReplay / obs64 after confirmation and deploy
+    vars:
+      DEPLOY_ENV_FILE_VALUE: "{{default .DESKTOP_DEPLOY_ENV_FILE .DEPLOY_ENV_FILE}}"
+    cmds:
+      - powershell -NoProfile -ExecutionPolicy Bypass -File "{{.DESKTOP_DEPLOY_SCRIPT}}" -Mode Execute -RepoRoot "{{.ROOT_DIR}}" -EnvFile "{{.DEPLOY_ENV_FILE_VALUE}}" -StopRunningApps
 
   # ========================================
   # ユーティリティ
