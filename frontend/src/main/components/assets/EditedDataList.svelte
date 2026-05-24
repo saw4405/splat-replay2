@@ -4,6 +4,7 @@
   import ThumbnailZoomDialog from '../media/ThumbnailZoomDialog.svelte';
   import NotificationDialog from '../../../common/components/NotificationDialog.svelte';
   import ConfirmDialog from '../../../common/components/ConfirmDialog.svelte';
+  import { createVideoListActions } from './useVideoListActions.svelte';
 
   interface Props {
     videos?: EditedVideo[];
@@ -14,36 +15,8 @@
 
   let { videos = $bindable([]), onRefresh, onModalOpen, onModalClose }: Props = $props();
 
-  let showVideoPlayer = $state(false);
-  let showThumbnailZoom = $state(false);
-  let showAlertDialog = $state(false);
-  let showConfirmDialog = $state(false);
-  let alertMessage = $state('');
-  let alertVariant = $state<'info' | 'success' | 'warning' | 'error'>('info');
-  let confirmMessage = $state('');
-  let pendingDeleteVideo = $state<EditedVideo | null>(null);
-  let currentVideoUrl = $state('');
-  let currentThumbnailUrl = $state('');
+  // EditedDataList 固有の状態（タイトル表示用）
   let _currentVideoTitle = $state('');
-  // $state ではなく普通の変数で保持することで、$effect の依存ループを避ける
-  let wasModalOpen = false;
-  let deletingVideoId = $state<string | null>(null); // 削除中の動画ID
-
-  // モーダルの開閉状態を監視（$derived で計算し $effect で副作用を実行）
-  const isAnyModalOpen = $derived(
-    showVideoPlayer || showThumbnailZoom || showAlertDialog || showConfirmDialog
-  );
-
-  $effect(() => {
-    // isAnyModalOpen は $derived（非 $state）なので、wasModalOpen への書き込みで再実行されない
-    if (isAnyModalOpen && !wasModalOpen) {
-      onModalOpen?.();
-      wasModalOpen = true;
-    } else if (!isAnyModalOpen && wasModalOpen) {
-      onModalClose?.();
-      wasModalOpen = false;
-    }
-  });
 
   function getThumbnailUrl(filename: string): string {
     // ファイル名から拡張子を除去して .png を追加
@@ -56,62 +29,30 @@
     return `/videos/edited/${encodeURIComponent(videoId)}`;
   }
 
-  function handleImageError(e: Event): void {
-    const img = e.currentTarget as HTMLImageElement;
-    img.src =
-      "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='90'%3E%3Crect fill='%23333' width='160' height='90'/%3E%3Ctext fill='%23666' x='50%25' y='50%25' dominant-baseline='middle' text-anchor='middle' font-family='sans-serif' font-size='12'%3ENo Image%3C/text%3E%3C/svg%3E";
-  }
+  // 共通アクション（モーダル管理・削除・画像エラー処理）
+  const actions = createVideoListActions<EditedVideo>({
+    getThumbnailUrl,
+    getVideoUrl,
+    deleteVideo: async (video) => {
+      const { deleteEditedVideo } = await import('../../api/assets');
+      await deleteEditedVideo(video.id);
+    },
+    onRefresh: () => onRefresh?.(),
+    onModalOpen: () => onModalOpen?.(),
+    onModalClose: () => onModalClose?.(),
+  });
 
   function handlePlayVideo(video: EditedVideo): void {
-    currentVideoUrl = getVideoUrl(video.id); // フルパスを使用
+    // EditedDataList 固有: タイトル状態も更新する
     _currentVideoTitle = video.filename;
-    showVideoPlayer = true;
+    actions.handlePlayVideo(video);
   }
 
   function handleZoomThumbnail(video: EditedVideo): void {
-    currentThumbnailUrl = getThumbnailUrl(video.filename);
-    // サムネイルファイル名を設定
+    // EditedDataList 固有: サムネイルファイル名を設定する
     const nameWithoutExt = video.filename.replace(/\.[^/.]+$/, '');
     _currentVideoTitle = `${nameWithoutExt}.png`;
-    showThumbnailZoom = true;
-  }
-
-  async function handleDeleteVideo(event: MouseEvent, video: EditedVideo): Promise<void> {
-    event.stopPropagation();
-
-    confirmMessage = `「${video.filename}」を削除してもよろしいですか？\nこの操作は取り消せません。`;
-    pendingDeleteVideo = video;
-    showConfirmDialog = true;
-  }
-
-  async function confirmDelete(): Promise<void> {
-    if (!pendingDeleteVideo) return;
-
-    const video = pendingDeleteVideo;
-    deletingVideoId = video.id;
-    showConfirmDialog = false;
-    pendingDeleteVideo = null;
-
-    try {
-      const { deleteEditedVideo } = await import('../../api/assets');
-      await deleteEditedVideo(video.id);
-      console.log('Video deleted successfully:', video.id);
-
-      // ビデオリストを再読み込み
-      onRefresh?.();
-    } catch (error) {
-      console.error('Failed to delete video:', error);
-      alertMessage = `動画の削除に失敗しました: ${error}`;
-      alertVariant = 'error';
-      showAlertDialog = true;
-    } finally {
-      deletingVideoId = null;
-    }
-  }
-
-  function cancelDelete(): void {
-    showConfirmDialog = false;
-    pendingDeleteVideo = null;
+    actions.handleZoomThumbnail(video);
   }
 </script>
 
@@ -127,12 +68,12 @@
         <!-- 削除ボタン (フローティング右上) -->
         <button
           class="delete-button glass-icon-button"
-          class:deleting={deletingVideoId === video.id}
-          disabled={deletingVideoId === video.id}
-          onclick={(e) => handleDeleteVideo(e, video)}
+          class:deleting={actions.deletingVideoId === video.id}
+          disabled={actions.deletingVideoId === video.id}
+          onclick={(e) => actions.handleDeleteVideo(e, video)}
           title="動画を削除"
         >
-          {#if deletingVideoId === video.id}
+          {#if actions.deletingVideoId === video.id}
             <span class="spinner-small"></span>
           {:else}
             <svg
@@ -183,7 +124,7 @@
                 <img
                   src={getThumbnailUrl(video.filename)}
                   alt={video.filename}
-                  onerror={handleImageError}
+                  onerror={actions.handleImageError}
                 />
                 <div class="thumbnail-overlay">
                   <button
@@ -266,29 +207,29 @@
 </div>
 
 <NotificationDialog
-  isOpen={showAlertDialog}
-  variant={alertVariant}
-  message={alertMessage}
-  onClose={() => (showAlertDialog = false)}
+  isOpen={actions.showAlertDialog}
+  variant={actions.alertVariant}
+  message={actions.alertMessage}
+  onClose={() => (actions.showAlertDialog = false)}
 />
 <ConfirmDialog
-  isOpen={showConfirmDialog}
-  message={confirmMessage}
+  isOpen={actions.showConfirmDialog}
+  message={actions.confirmMessage}
   confirmText="削除"
-  onConfirm={confirmDelete}
-  onCancel={cancelDelete}
+  onConfirm={actions.confirmDelete}
+  onCancel={actions.cancelDelete}
 />
 
 <!-- モーダル -->
 <VideoPlayerDialog
-  bind:visible={showVideoPlayer}
-  videoUrl={currentVideoUrl}
+  bind:visible={actions.showVideoPlayer}
+  videoUrl={actions.currentVideoUrl}
   videoTitle="動画再生"
 />
 
 <ThumbnailZoomDialog
-  bind:visible={showThumbnailZoom}
-  imageUrl={currentThumbnailUrl}
+  bind:visible={actions.showThumbnailZoom}
+  imageUrl={actions.currentThumbnailUrl}
   imageTitle="サムネイル画像表示"
 />
 

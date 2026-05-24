@@ -10,6 +10,7 @@
   import SubtitleEditorDialog from '../metadata/SubtitleEditorDialog.svelte';
   import NotificationDialog from '../../../common/components/NotificationDialog.svelte';
   import ConfirmDialog from '../../../common/components/ConfirmDialog.svelte';
+  import { createVideoListActions } from './useVideoListActions.svelte';
 
   interface Props {
     videos?: RecordedVideo[];
@@ -20,22 +21,10 @@
 
   let { videos = $bindable([]), onRefresh, onModalOpen, onModalClose }: Props = $props();
 
+  // RecordedDataList 固有の状態
   let editingVideo = $state<RecordedVideo | null>(null);
   let showMetadataDialog = $state(false);
-  let showVideoPlayer = $state(false);
-  let showThumbnailZoom = $state(false);
   let showSubtitleEditor = $state(false);
-  let showAlertDialog = $state(false);
-  let showConfirmDialog = $state(false);
-  let alertMessage = $state('');
-  let alertVariant = $state<'info' | 'success' | 'warning' | 'error'>('info');
-  let confirmMessage = $state('');
-  let pendingDeleteVideo = $state<RecordedVideo | null>(null);
-  let currentVideoUrl = $state('');
-  let currentThumbnailUrl = $state('');
-  // $state ではなく普通の変数で保持することで、$effect の依存ループを避ける
-  let wasModalOpen = false;
-  let deletingVideoId = $state<string | null>(null); // 削除中の動画ID
   let metadataOptionMap = $state<ReturnType<typeof buildMetadataOptionMap> | null>(null);
 
   async function loadMetadataOptions(): Promise<void> {
@@ -46,27 +35,6 @@
       console.error('Failed to load metadata options:', error);
     }
   }
-
-  // モーダルの開閉状態を監視（$derived で計算し $effect で副作用を実行）
-  const isAnyModalOpen = $derived(
-    showMetadataDialog ||
-      showVideoPlayer ||
-      showThumbnailZoom ||
-      showSubtitleEditor ||
-      showAlertDialog ||
-      showConfirmDialog
-  );
-
-  $effect(() => {
-    // isAnyModalOpen は $derived（非 $state）なので、wasModalOpen への書き込みで再実行されない
-    if (isAnyModalOpen && !wasModalOpen) {
-      onModalOpen?.();
-      wasModalOpen = true;
-    } else if (!isAnyModalOpen && wasModalOpen) {
-      onModalClose?.();
-      wasModalOpen = false;
-    }
-  });
 
   function getThumbnailUrl(filename: string): string {
     // ファイル名から拡張子を除去して .png を追加
@@ -79,11 +47,20 @@
     return `/videos/recorded/${encodeURIComponent(videoId)}`;
   }
 
-  function handleImageError(e: Event): void {
-    const img = e.currentTarget as HTMLImageElement;
-    img.src =
-      "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='90'%3E%3Crect fill='%23333' width='160' height='90'/%3E%3Ctext fill='%23666' x='50%25' y='50%25' dominant-baseline='middle' text-anchor='middle' font-family='sans-serif' font-size='12'%3ENo Image%3C/text%3E%3C/svg%3E";
-  }
+  // 共通アクション（モーダル管理・削除・画像エラー処理）
+  const actions = createVideoListActions<RecordedVideo>({
+    getThumbnailUrl,
+    getVideoUrl,
+    deleteVideo: async (video) => {
+      const { deleteRecordedVideo } = await import('../../api/assets');
+      await deleteRecordedVideo(video.path);
+    },
+    onRefresh: () => onRefresh?.(),
+    onModalOpen: () => onModalOpen?.(),
+    onModalClose: () => onModalClose?.(),
+    // メタデータダイアログ・字幕エディタも isAnyModalOpen に含める
+    extraModalOpen: () => showMetadataDialog || showSubtitleEditor,
+  });
 
   function formatTimestamp(timestamp: string | null): string {
     if (!timestamp) return '未開始';
@@ -139,14 +116,11 @@
   });
 
   function handlePlayVideo(video: RecordedVideo): void {
-    currentVideoUrl = getVideoUrl(video.id);
-    showVideoPlayer = true;
+    actions.handlePlayVideo(video);
   }
 
   function handleZoomThumbnail(video: RecordedVideo): void {
-    currentThumbnailUrl = getThumbnailUrl(video.filename);
-
-    showThumbnailZoom = true;
+    actions.handleZoomThumbnail(video);
   }
 
   function handleEditMetadata(video: RecordedVideo): void {
@@ -166,7 +140,7 @@
   function handleEditSubtitle(event: MouseEvent, video: RecordedVideo): void {
     event.stopPropagation(); // メタデータダイアログが開かないようにする
     editingVideo = video;
-    currentVideoUrl = getVideoUrl(video.path);
+    actions.currentVideoUrl = getVideoUrl(video.path);
     showSubtitleEditor = true;
   }
 
@@ -198,9 +172,9 @@
       editingVideo = null;
     } catch (error) {
       console.error('Failed to save metadata:', error);
-      alertMessage = `メタデータの保存に失敗しました: ${error}`;
-      alertVariant = 'error';
-      showAlertDialog = true;
+      actions.alertMessage = `メタデータの保存に失敗しました: ${error}`;
+      actions.alertVariant = 'error';
+      actions.showAlertDialog = true;
     }
   }
 
@@ -210,44 +184,6 @@
     onRefresh?.();
     showSubtitleEditor = false;
     editingVideo = null;
-  }
-
-  async function handleDeleteVideo(event: MouseEvent, video: RecordedVideo): Promise<void> {
-    event.stopPropagation();
-
-    confirmMessage = `「${video.filename}」を削除してもよろしいですか？\nこの操作は取り消せません。`;
-    pendingDeleteVideo = video;
-    showConfirmDialog = true;
-  }
-
-  async function confirmDelete(): Promise<void> {
-    if (!pendingDeleteVideo) return;
-
-    const video = pendingDeleteVideo;
-    deletingVideoId = video.id;
-    showConfirmDialog = false;
-    pendingDeleteVideo = null;
-
-    try {
-      const { deleteRecordedVideo } = await import('../../api/assets');
-      await deleteRecordedVideo(video.path);
-      console.log('Video deleted successfully:', video.path);
-
-      // ビデオリストを再読み込み
-      onRefresh?.();
-    } catch (error) {
-      console.error('Failed to delete video:', error);
-      alertMessage = `動画の削除に失敗しました: ${error}`;
-      alertVariant = 'error';
-      showAlertDialog = true;
-    } finally {
-      deletingVideoId = null;
-    }
-  }
-
-  function cancelDelete(): void {
-    showConfirmDialog = false;
-    pendingDeleteVideo = null;
   }
 </script>
 
@@ -263,12 +199,12 @@
         <!-- 削除ボタン (フローティング右上) -->
         <button
           class="delete-button glass-icon-button"
-          class:deleting={deletingVideoId === video.id}
-          disabled={deletingVideoId === video.id}
-          onclick={(e) => handleDeleteVideo(e, video)}
+          class:deleting={actions.deletingVideoId === video.id}
+          disabled={actions.deletingVideoId === video.id}
+          onclick={(e) => actions.handleDeleteVideo(e, video)}
           title="動画を削除"
         >
-          {#if deletingVideoId === video.id}
+          {#if actions.deletingVideoId === video.id}
             <span class="spinner-small"></span>
           {:else}
             <svg
@@ -319,7 +255,7 @@
                 <img
                   src={getThumbnailUrl(video.filename)}
                   alt={video.filename}
-                  onerror={handleImageError}
+                  onerror={actions.handleImageError}
                 />
                 <div class="thumbnail-overlay">
                   <button
@@ -518,7 +454,7 @@
               onkeydown={(event) =>
                 triggerActionOnKeydown(event, () => {
                   editingVideo = video;
-                  currentVideoUrl = getVideoUrl(video.path);
+                  actions.currentVideoUrl = getVideoUrl(video.path);
                   showSubtitleEditor = true;
                 })}
               role="button"
@@ -552,39 +488,39 @@
   <SubtitleEditorDialog
     bind:visible={showSubtitleEditor}
     videoId={editingVideo.path}
-    videoUrl={currentVideoUrl}
+    videoUrl={actions.currentVideoUrl}
     onSaved={handleSaveSubtitle}
   />
 {/if}
 
 <VideoPlayerDialog
-  bind:visible={showVideoPlayer}
-  videoUrl={currentVideoUrl}
+  bind:visible={actions.showVideoPlayer}
+  videoUrl={actions.currentVideoUrl}
   videoTitle="動画再生"
 />
 
 <ThumbnailZoomDialog
-  bind:visible={showThumbnailZoom}
-  imageUrl={currentThumbnailUrl}
+  bind:visible={actions.showThumbnailZoom}
+  imageUrl={actions.currentThumbnailUrl}
   imageTitle="サムネイル画像表示"
 />
 
 <!-- アラートダイアログ -->
 <NotificationDialog
-  isOpen={showAlertDialog}
-  variant={alertVariant}
-  message={alertMessage}
-  onClose={() => (showAlertDialog = false)}
+  isOpen={actions.showAlertDialog}
+  variant={actions.alertVariant}
+  message={actions.alertMessage}
+  onClose={() => (actions.showAlertDialog = false)}
 />
 
 <!-- 確認ダイアログ -->
 <ConfirmDialog
-  isOpen={showConfirmDialog}
-  message={confirmMessage}
+  isOpen={actions.showConfirmDialog}
+  message={actions.confirmMessage}
   confirmText="削除"
   cancelText="キャンセル"
-  onConfirm={confirmDelete}
-  onCancel={cancelDelete}
+  onConfirm={actions.confirmDelete}
+  onCancel={actions.cancelDelete}
 />
 
 <style>

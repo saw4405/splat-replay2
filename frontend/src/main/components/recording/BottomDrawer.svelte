@@ -10,19 +10,8 @@
   import YouTubePermissionDialog from '../permission/YouTubePermissionDialog.svelte';
   import { fetchRecordedVideos, fetchEditedVideos } from '../../api/assets';
   import { fetchBattleHistory } from '../../api/history';
-  import { startEditUploadProcess, fetchEditUploadStatus } from '../../api/assets';
-  import type {
-    RecordedVideo,
-    EditedVideo,
-    EditUploadStatus,
-    BattleHistoryEntry,
-  } from '../../api/types';
-  import {
-    subscribeDomainEvents,
-    type DomainEvent,
-    type EditUploadCompletedPayload,
-  } from '../../domainEvents';
-  import { getProcessStatusPollIntervalMs, renderMode } from '../../renderMode';
+  import type { RecordedVideo, EditedVideo, BattleHistoryEntry } from '../../api/types';
+  import { createProcessFlow } from './useProcessFlow.svelte';
 
   // 展開状態: "closed" | "full"
   type DrawerState = 'closed' | 'full';
@@ -36,73 +25,43 @@
 
   let drawerState = $state<DrawerState>('closed');
   let activeTab = $state<'recorded' | 'edited' | 'statistics'>('recorded');
-  let isProcessing = $state(false);
   let isModalOpen = $state(false); // モーダルが開いているかどうか
-  let showProgressDialog = $state(false); // 進捗ダイアログ表示フラグ
-  let showAlertDialog = $state(false); // アラートダイアログ表示フラグ
-  let alertMessage = $state(''); // アラートメッセージ
-  let alertVariant = $state<'info' | 'success' | 'warning' | 'error'>('info');
-  let showYouTubePermissionDialog = $state(false); // YouTube権限ダイアログ表示フラグ
-  let rearmAutoRecordingOnAlertClose = $state(false);
 
   let recordedVideos = $state<RecordedVideo[]>([]);
   let editedVideos = $state<EditedVideo[]>([]);
   let battleHistory = $state<BattleHistoryEntry[]>([]);
-  let processStatus = $state<EditUploadStatus | null>(null);
 
-  let statusPollingInterval: number | null = null;
-  let assetEventSource: EventSource | null = null;
-  let assetEventRetryTimer: number | null = null;
-  let isSyncingProcessStatus = false;
   let isLoadingData = $state(false);
   let pendingDataReload = $state(false);
   let drawerElement = $state<HTMLDivElement | null>(null);
   let modalCloseTimer: number | null = null; // モーダルを閉じるタイマー
-  let processStatusPollIntervalMs = $state(getProcessStatusPollIntervalMs('cpu'));
 
   const recordedCount = $derived(recordedVideos.length);
   const editedCount = $derived(editedVideos.length);
   const battleCount = $derived(battleHistory.length);
 
+  const processFlow = createProcessFlow({
+    onDataReload: () => void loadData(),
+    onAutoRecordingRearmRequest: () => onAutoRecordingRearmRequest?.(),
+  });
+
+  const isProcessing = $derived(processFlow.isProcessing);
+
   $effect(() => {
     onRecordedCountChange?.(recordedCount);
-  });
-
-  $effect(() => {
-    isProcessing = processStatus?.state === 'running';
-  });
-
-  $effect(() => {
-    const next = getProcessStatusPollIntervalMs($renderMode);
-    if (processStatusPollIntervalMs !== next) {
-      processStatusPollIntervalMs = next;
-      if (statusPollingInterval !== null) {
-        startStatusPolling();
-      }
-    }
   });
 
   onMount(() => {
     // 初回データ取得
     void loadData();
-    connectAssetEventStream();
-    void syncProcessStatusFromServer();
+    processFlow.connectAssetEventStream();
+    void processFlow.syncProcessStatusFromServer();
     // グローバルクリックイベントリスナーを追加
     document.addEventListener('click', handleOutsideClick);
   });
 
   onDestroy(() => {
-    if (statusPollingInterval !== null) {
-      clearInterval(statusPollingInterval);
-    }
-    if (assetEventSource !== null) {
-      assetEventSource.close();
-      assetEventSource = null;
-    }
-    if (assetEventRetryTimer !== null) {
-      window.clearTimeout(assetEventRetryTimer);
-      assetEventRetryTimer = null;
-    }
+    processFlow.destroy();
     if (modalCloseTimer !== null) {
       window.clearTimeout(modalCloseTimer);
       modalCloseTimer = null;
@@ -141,104 +100,6 @@
     }
   }
 
-  function connectAssetEventStream(): void {
-    if (assetEventSource !== null) {
-      assetEventSource.close();
-      assetEventSource = null;
-    }
-    if (assetEventRetryTimer !== null) {
-      window.clearTimeout(assetEventRetryTimer);
-      assetEventRetryTimer = null;
-    }
-
-    console.log('[BottomDrawer] Connecting to /api/events/domain-events');
-    assetEventSource = subscribeDomainEvents((event: DomainEvent) => {
-      handleAssetEvent(event);
-    });
-    assetEventSource.onerror = () => {
-      console.error('[BottomDrawer] SSE connection error (domain-events)');
-      if (assetEventSource !== null) {
-        assetEventSource.close();
-        assetEventSource = null;
-      }
-      if (assetEventRetryTimer === null) {
-        assetEventRetryTimer = window.setTimeout(() => {
-          assetEventRetryTimer = null;
-          connectAssetEventStream();
-        }, 5000);
-      }
-    };
-    assetEventSource.onopen = () => {
-      console.log('[BottomDrawer] SSE connection opened (domain-events)');
-      // 接続確立時にデータを再取得（バックエンド起動遅延への対策）
-      void loadData();
-    };
-  }
-
-  function handleAssetEvent(event: DomainEvent): void {
-    if (event.type === 'domain.process.edit_upload_completed') {
-      const payload = event.payload as unknown as EditUploadCompletedPayload;
-      handleEditUploadCompleted(payload);
-      return;
-    }
-
-    if (event.type === 'domain.process.started') {
-      void syncProcessStatusFromServer();
-      return;
-    }
-
-    const assetEventTypes = new Set([
-      'domain.asset.recorded.saved',
-      'domain.asset.recorded.metadata_updated',
-      'domain.asset.recorded.subtitle_updated',
-      'domain.asset.recorded.deleted',
-      'domain.asset.edited.saved',
-      'domain.asset.edited.deleted',
-    ]);
-    if (!assetEventTypes.has(event.type)) {
-      return;
-    }
-    console.log('[BottomDrawer] Asset event received:', event.type);
-    void loadData();
-  }
-
-  function handleEditUploadCompleted(payload: EditUploadCompletedPayload): void {
-    if (statusPollingInterval !== null) {
-      clearInterval(statusPollingInterval);
-      statusPollingInterval = null;
-    }
-
-    const finishedAt = new Date().toISOString();
-    const startedAt = processStatus?.startedAt ?? null;
-    const sleepAfterUploadDefault = processStatus?.sleepAfterUploadDefault ?? false;
-    const sleepAfterUploadEffective =
-      payload.sleep_after_upload ?? processStatus?.sleepAfterUploadEffective ?? false;
-    processStatus = {
-      state: payload.success ? 'succeeded' : 'failed',
-      startedAt,
-      finishedAt,
-      error: payload.success ? null : payload.message,
-      sleepAfterUploadDefault,
-      sleepAfterUploadEffective,
-      sleepAfterUploadOverridden: sleepAfterUploadEffective !== sleepAfterUploadDefault,
-    };
-
-    showProgressDialog = false;
-    rearmAutoRecordingOnAlertClose = payload.success;
-
-    if (payload.success) {
-      alertMessage = payload.message || '編集・アップロード処理が完了しました!';
-      alertVariant = 'success';
-    } else {
-      const detail = payload.message || '不明なエラー';
-      alertMessage = `編集・アップロード処理が失敗しました: ${detail}`;
-      alertVariant = 'error';
-    }
-    showAlertDialog = true;
-
-    void loadData();
-  }
-
   function handleOutsideClick(event: MouseEvent): void {
     if (drawerState === 'closed' || !drawerElement || isModalOpen) {
       return;
@@ -271,121 +132,18 @@
     drawerState = 'full';
   }
 
-  async function startProcessing(): Promise<void> {
-    if (isProcessing) return;
-
-    try {
-      // YouTube権限ダイアログを表示済みか確認
-      const dialogResponse = await fetch('/api/settings/youtube-permission-dialog');
-      const dialogStatus = (await dialogResponse.json()) as { shown: boolean };
-
-      if (!dialogStatus.shown) {
-        // ダイアログを表示
-        showYouTubePermissionDialog = true;
-        return;
-      }
-
-      // 処理を開始
-      await executeProcessing();
-    } catch (error) {
-      console.error('処理開始エラー:', error);
-      alertMessage = `処理開始に失敗しました: ${error}`;
-      alertVariant = 'error';
-      rearmAutoRecordingOnAlertClose = false;
-      showAlertDialog = true;
-    }
-  }
-
-  async function executeProcessing(auto: boolean = false): Promise<void> {
-    try {
-      // 進捗ダイアログを表示
-      showProgressDialog = true;
-      const response = await startEditUploadProcess({ auto });
-      if (response.accepted) {
-        processStatus = response.status;
-        // 処理状態のポーリング開始
-        startStatusPolling();
-        await loadData(); // データを即座に再取得
-      } else if (response.status.state === 'running') {
-        applyRunningProcessStatus(response.status);
-        await loadData();
-      } else {
-        alertMessage = response.message || '処理を開始できませんでした(既に実行中の可能性)';
-        alertVariant = 'warning';
-        rearmAutoRecordingOnAlertClose = false;
-        showAlertDialog = true;
-      }
-    } catch (error) {
-      console.error('処理開始エラー:', error);
-      alertMessage = `処理開始に失敗しました: ${error}`;
-      alertVariant = 'error';
-      rearmAutoRecordingOnAlertClose = false;
-      showAlertDialog = true;
-    }
-  }
-
   /**
    * 自動処理フローから実行を開始するための関数
    */
   export function startAutoProcessing(): void {
-    if (isProcessing) {
-      showProgressDialog = true;
-      startStatusPolling();
-      return;
-    }
-    void executeProcessing(true);
-  }
-
-  function handleYouTubePermissionDialogClose(): void {
-    showYouTubePermissionDialog = false;
-    // ダイアログを閉じた後、処理を開始
-    void executeProcessing();
-  }
-
-  function startStatusPolling(): void {
-    // 既存のポーリングをクリア
-    if (statusPollingInterval !== null) {
-      clearInterval(statusPollingInterval);
-    }
-
-    // render_mode に応じた間隔で状況をチェック
-    statusPollingInterval = window.setInterval(async () => {
-      try {
-        const status = await fetchEditUploadStatus();
-        processStatus = status;
-
-        // 処理が完了したらポーリング停止
-        if (status.state === 'succeeded' || status.state === 'failed') {
-          if (statusPollingInterval !== null) {
-            clearInterval(statusPollingInterval);
-            statusPollingInterval = null;
-          }
-          // データを再取得
-          await loadData();
-
-          if (status.state === 'succeeded') {
-            alertMessage = '編集・アップロード処理が完了しました!';
-            alertVariant = 'success';
-            rearmAutoRecordingOnAlertClose = true;
-            showAlertDialog = true;
-          } else if (status.state === 'failed') {
-            alertMessage = `編集・アップロード処理が失敗しました: ${status.error || '不明なエラー'}`;
-            alertVariant = 'error';
-            rearmAutoRecordingOnAlertClose = false;
-            showAlertDialog = true;
-          }
-        }
-      } catch (error) {
-        console.error('状況取得エラー:', error);
-      }
-    }, processStatusPollIntervalMs);
+    processFlow.startAutoProcessing();
   }
 
   /**
    * 外部(MainAppなど)から進捗表示を開始するための関数
    */
   export function openProgress(): void {
-    void syncProcessStatusFromServer();
+    processFlow.openProgress();
   }
 
   /**
@@ -394,55 +152,23 @@
   export function toggle(): void {
     toggleDrawer();
   }
-
-  function applyRunningProcessStatus(status: EditUploadStatus): void {
-    processStatus = status;
-    showProgressDialog = true;
-    startStatusPolling();
-  }
-
-  async function syncProcessStatusFromServer(): Promise<void> {
-    if (isSyncingProcessStatus) {
-      return;
-    }
-    isSyncingProcessStatus = true;
-    try {
-      const status = await fetchEditUploadStatus();
-      if (status.state === 'running') {
-        applyRunningProcessStatus(status);
-      }
-    } catch (error) {
-      console.error('迥ｶ豕∝叙蠕励お繝ｩ繝ｼ:', error);
-    } finally {
-      isSyncingProcessStatus = false;
-    }
-  }
-
-  function handleAlertDialogClose(): void {
-    const shouldRearm = rearmAutoRecordingOnAlertClose;
-    showAlertDialog = false;
-    rearmAutoRecordingOnAlertClose = false;
-    if (shouldRearm) {
-      onAutoRecordingRearmRequest?.();
-    }
-  }
 </script>
 
 <!-- YouTube権限ダイアログ -->
 <YouTubePermissionDialog
-  bind:open={showYouTubePermissionDialog}
-  onClose={handleYouTubePermissionDialogClose}
+  bind:open={processFlow.showYouTubePermissionDialog}
+  onClose={processFlow.handleYouTubePermissionDialogClose}
 />
 
 <!-- 進捗ダイアログ -->
-<ProgressDialog bind:isOpen={showProgressDialog} />
+<ProgressDialog bind:isOpen={processFlow.showProgressDialog} />
 
 <!-- アラートダイアログ -->
 <NotificationDialog
-  isOpen={showAlertDialog}
-  variant={alertVariant}
-  message={alertMessage}
-  onClose={handleAlertDialogClose}
+  isOpen={processFlow.showAlertDialog}
+  variant={processFlow.alertVariant}
+  message={processFlow.alertMessage}
+  onClose={processFlow.handleAlertDialogClose}
 />
 
 <div
@@ -556,7 +282,7 @@
         aria-label="録画データの編集とYouTubeアップロードを開始"
         onclick={(e) => {
           e.stopPropagation();
-          startProcessing();
+          void processFlow.startProcessing();
         }}
         title="録画データの編集とYouTubeへのアップロードを開始します"
         data-testid="drawer-process-button"
