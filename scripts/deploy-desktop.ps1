@@ -179,17 +179,34 @@ function Invoke-GitText {
         [Parameter(Mandatory = $true)][string[]]$Arguments
     )
 
-    $output = & git -C $WorkingTree @Arguments 2>&1
-    if ($LASTEXITCODE -ne 0) {
-        $message = if ($output) { [string]::Join("`n", $output) } else { "git command failed." }
+    $stderrFile = [System.IO.Path]::GetTempFileName()
+    $previousErrorActionPreference = $ErrorActionPreference
+    try {
+        $ErrorActionPreference = "Continue"
+        $output = & git -C $WorkingTree @Arguments 2> $stderrFile
+        $exitCode = $LASTEXITCODE
+        $stderr = Get-Content -LiteralPath $stderrFile -Raw -Encoding UTF8
+    }
+    finally {
+        $ErrorActionPreference = $previousErrorActionPreference
+        Remove-Item -LiteralPath $stderrFile -Force -ErrorAction SilentlyContinue
+    }
+
+    $outputText = if ($null -eq $output) { "" } else { [string]::Join("`n", @($output)) }
+    if ($exitCode -ne 0) {
+        $messages = @()
+        if (-not [string]::IsNullOrWhiteSpace($outputText)) {
+            $messages += $outputText
+        }
+        if (-not [string]::IsNullOrWhiteSpace($stderr)) {
+            $messages += $stderr.TrimEnd()
+        }
+
+        $message = if ($messages.Count -gt 0) { [string]::Join("`n", $messages) } else { "git command failed." }
         throw "git $($Arguments -join ' ') failed: $message"
     }
 
-    if ($null -eq $output) {
-        return ""
-    }
-
-    return [string]::Join("`n", $output)
+    return $outputText
 }
 
 function Get-UntrackedEntries {
