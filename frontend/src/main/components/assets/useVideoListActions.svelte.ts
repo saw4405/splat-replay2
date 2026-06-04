@@ -17,9 +17,10 @@ export interface VideoBase {
 
 /** createVideoListActions に渡す設定オブジェクト */
 export interface VideoListActionsConfig<TVideo extends VideoBase> {
-  getThumbnailUrl: (filename: string) => string;
-  getVideoUrl: (videoId: string) => string;
+  getThumbnailUrl: (filename: string, video?: TVideo) => string;
+  getVideoUrl: (videoId: string, video?: TVideo) => string;
   deleteVideo: (video: TVideo) => Promise<void>;
+  getDeleteConfirmMessage?: (video: TVideo) => string;
   onRefresh?: () => void;
   onModalOpen?: () => void;
   onModalClose?: () => void;
@@ -86,20 +87,22 @@ export function createVideoListActions<TVideo extends VideoBase>(
 
   /** 動画プレイヤーモーダルを開く */
   function handlePlayVideo(video: TVideo): void {
-    currentVideoUrl = config.getVideoUrl(video.id);
+    currentVideoUrl = config.getVideoUrl(video.id, video);
     showVideoPlayer = true;
   }
 
   /** サムネイルズームモーダルを開く */
   function handleZoomThumbnail(video: TVideo): void {
-    currentThumbnailUrl = config.getThumbnailUrl(video.filename);
+    currentThumbnailUrl = config.getThumbnailUrl(video.filename, video);
     showThumbnailZoom = true;
   }
 
   /** 削除確認ダイアログを表示する */
   function handleDeleteVideo(event: MouseEvent, video: TVideo): void {
     event.stopPropagation();
-    confirmMessage = `「${video.filename}」を削除してもよろしいですか？\nこの操作は取り消せません。`;
+    confirmMessage =
+      config.getDeleteConfirmMessage?.(video) ??
+      `「${video.filename}」を削除してもよろしいですか？\nこの操作は取り消せません。`;
     pendingDeleteVideo = video;
     showConfirmDialog = true;
   }

@@ -47,6 +47,11 @@ export type RawEditedVideo = {
   id: string;
   path: string;
   filename: string;
+  source?: 'edited' | 'pending' | null;
+  playable?: boolean | null;
+  recorded_video_ids?: string[] | null;
+  thumbnail_source?: 'edited' | 'recorded' | null;
+  thumbnail_filename?: string | null;
   has_subtitle: boolean;
   has_thumbnail: boolean;
   duration_seconds: number | null;
@@ -120,6 +125,11 @@ export function mapEditedVideo(raw: RawEditedVideo): EditedVideo {
     id: raw.id,
     path: raw.path,
     filename: raw.filename,
+    source: raw.source ?? 'edited',
+    playable: raw.playable ?? true,
+    recordedVideoIds: raw.recorded_video_ids ?? [],
+    thumbnailSource: raw.thumbnail_source ?? 'edited',
+    thumbnailFilename: raw.thumbnail_filename ?? null,
     hasSubtitles: Boolean(raw.has_subtitle),
     hasThumbnail: Boolean(raw.has_thumbnail),
     durationSeconds: normaliseNumber(raw.duration_seconds, true),

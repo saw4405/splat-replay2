@@ -45,6 +45,9 @@ export interface EditUploadTriggerResponse {
 }
 
 // アセット
+export type EditedVideoSource = 'edited' | 'pending';
+export type EditedVideoThumbnailSource = 'edited' | 'recorded';
+
 export interface RecordedVideo {
   id: string;
   path: string;
@@ -78,6 +81,11 @@ export interface EditedVideo {
   id: string;
   path: string;
   filename: string;
+  source: EditedVideoSource;
+  playable: boolean;
+  recordedVideoIds: string[];
+  thumbnailSource: EditedVideoThumbnailSource;
+  thumbnailFilename: string | null;
   hasSubtitles: boolean;
   hasThumbnail: boolean;
   durationSeconds: number | null;

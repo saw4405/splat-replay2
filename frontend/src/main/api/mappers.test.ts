@@ -295,6 +295,11 @@ describe('mapEditedVideo', () => {
     expect(result.id).toBe('edited_123');
     expect(result.path).toBe('/path/to/edited.mkv');
     expect(result.filename).toBe('edited.mkv');
+    expect(result.source).toBe('edited');
+    expect(result.playable).toBe(true);
+    expect(result.recordedVideoIds).toEqual([]);
+    expect(result.thumbnailSource).toBe('edited');
+    expect(result.thumbnailFilename).toBeNull();
     expect(result.hasSubtitles).toBe(true);
     expect(result.hasThumbnail).toBe(true);
     expect(result.durationSeconds).toBe(600);
@@ -359,6 +364,37 @@ describe('mapEditedVideo', () => {
       description: null,
       custom_field: null,
     });
+  });
+
+  it('未生成の編集済動画グループ情報をマッピングする', () => {
+    const raw: RawEditedVideo = {
+      id: 'pending/20260314_11_Xマッチ_ガチエリア',
+      path: '',
+      filename: '20260314_11_Xマッチ_ガチエリア.mp4',
+      source: 'pending',
+      playable: false,
+      recorded_video_ids: ['recorded/first.mp4', 'recorded/second.mp4'],
+      thumbnail_source: 'edited',
+      thumbnail_filename: '20260314_11_Xマッチ_ガチエリア.mp4',
+      has_subtitle: true,
+      has_thumbnail: true,
+      duration_seconds: null,
+      updated_at: '2026-03-14T12:45:00',
+      size_bytes: 2048,
+      metadata: { recorded_count: '2' },
+      title: 'Xマッチ / ガチエリア',
+      description: '1勝1敗',
+    };
+
+    const result = mapEditedVideo(raw);
+
+    expect(result.source).toBe('pending');
+    expect(result.playable).toBe(false);
+    expect(result.recordedVideoIds).toEqual(['recorded/first.mp4', 'recorded/second.mp4']);
+    expect(result.thumbnailSource).toBe('edited');
+    expect(result.thumbnailFilename).toBe('20260314_11_Xマッチ_ガチエリア.mp4');
+    expect(result.title).toBe('Xマッチ / ガチエリア');
+    expect(result.description).toBe('1勝1敗');
   });
 });
 

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { EditedVideo } from '../../api/types';
+  import type { EditedVideo, EditedVideoSource } from '../../api/types';
   import VideoPlayerDialog from '../media/VideoPlayerDialog.svelte';
   import ThumbnailZoomDialog from '../media/ThumbnailZoomDialog.svelte';
   import NotificationDialog from '../../../common/components/NotificationDialog.svelte';
@@ -8,43 +8,89 @@
 
   interface Props {
     videos?: EditedVideo[];
+    isLoading?: boolean;
     onRefresh?: () => void;
     onModalOpen?: () => void;
     onModalClose?: () => void;
   }
 
-  let { videos = $bindable([]), onRefresh, onModalOpen, onModalClose }: Props = $props();
+  let {
+    videos = $bindable([]),
+    isLoading = false,
+    onRefresh,
+    onModalOpen,
+    onModalClose,
+  }: Props = $props();
 
   // EditedDataList 固有の状態（タイトル表示用）
   let _currentVideoTitle = $state('');
 
-  function getThumbnailUrl(filename: string): string {
+  const pendingPreviewTooltip = '現時点の録画済動画から作成した場合、この内容の編集動画になります';
+
+  const videoItems = $derived(videos);
+
+  function getThumbnailUrlForSource(source: 'edited' | 'recorded', filename: string): string {
     // ファイル名から拡張子を除去して .png を追加
     const nameWithoutExt = filename.replace(/\.[^/.]+$/, '');
-    return `/thumbnails/edited/${encodeURIComponent(nameWithoutExt)}.png`;
+    return `/thumbnails/${source}/${encodeURIComponent(nameWithoutExt)}.png`;
   }
 
-  function getVideoUrl(videoId: string): string {
+  function getThumbnailUrl(video: EditedVideo): string {
+    return getThumbnailUrlForSource(
+      video.thumbnailSource,
+      video.thumbnailFilename ?? video.filename
+    );
+  }
+
+  function getVideoUrl(videoId: string, video?: EditedVideo): string {
     // videoIdはフルパスなので、そのまま使用
+    if (video?.source === 'pending') {
+      return '';
+    }
     return `/videos/edited/${encodeURIComponent(videoId)}`;
   }
 
   // 共通アクション（モーダル管理・削除・画像エラー処理）
   const actions = createVideoListActions<EditedVideo>({
-    getThumbnailUrl,
+    getThumbnailUrl: (filename, video) =>
+      getThumbnailUrlForSource(
+        video?.thumbnailSource ?? 'edited',
+        video?.thumbnailFilename ?? filename
+      ),
     getVideoUrl,
     deleteVideo: async (video) => {
-      const { deleteEditedVideo } = await import('../../api/assets');
+      const { deleteEditedVideo, deleteRecordedVideo } = await import('../../api/assets');
+      if (video.source === 'pending') {
+        await Promise.all(video.recordedVideoIds.map((videoId) => deleteRecordedVideo(videoId)));
+        return;
+      }
       await deleteEditedVideo(video.id);
+    },
+    getDeleteConfirmMessage: (video) => {
+      if (video.source === 'pending') {
+        return `「${video.filename}」に結合予定の録画済動画 ${video.recordedVideoIds.length} 件を削除してもよろしいですか？\nこの操作は取り消せません。`;
+      }
+      return `「${video.filename}」を削除してもよろしいですか？\nこの操作は取り消せません。`;
     },
     onRefresh: () => onRefresh?.(),
     onModalOpen: () => onModalOpen?.(),
     onModalClose: () => onModalClose?.(),
   });
 
+  function getSourceLabel(source: EditedVideoSource): string {
+    return source === 'pending' ? '編集プレビュー' : '編集済';
+  }
+
+  function getSourceTooltip(source: EditedVideoSource): string | undefined {
+    return source === 'pending' ? pendingPreviewTooltip : undefined;
+  }
+
   function handlePlayVideo(video: EditedVideo): void {
+    if (!video.playable) {
+      return;
+    }
     // EditedDataList 固有: タイトル状態も更新する
-    _currentVideoTitle = video.filename;
+    _currentVideoTitle = video.title ?? video.filename;
     actions.handlePlayVideo(video);
   }
 
@@ -57,21 +103,60 @@
 </script>
 
 <div class="video-list glass-scroller">
-  {#if videos.length === 0}
+  {#if isLoading && videoItems.length === 0}
+    <div
+      class="video-item glass-card loading-preview-card"
+      data-testid="edited-video-loading-preview"
+    >
+      <div class="video-content">
+        <div class="metadata-container">
+          <div class="video-thumbnail-container">
+            <div
+              class="video-thumbnail loading-thumbnail"
+              data-testid="edited-video-thumbnail-loading"
+            >
+              <span class="spinner-small" data-testid="edited-video-loading-spinner"></span>
+              <span>サムネイル画像作成中</span>
+            </div>
+          </div>
+
+          <div class="video-info">
+            <div class="source-row">
+              <span class="source-badge pending">編集プレビューを作成中</span>
+            </div>
+            <div class="info-item" data-testid="edited-video-title-loading">
+              <span class="info-label">名称:</span>
+              <span class="info-value loading-field">
+                <span class="spinner-small" data-testid="edited-video-loading-spinner"></span>
+                <span>動画の名称作成中</span>
+              </span>
+            </div>
+            <div class="info-item" data-testid="edited-video-description-loading">
+              <span class="info-label">説明:</span>
+              <span class="info-value loading-field">
+                <span class="spinner-small" data-testid="edited-video-loading-spinner"></span>
+                <span>動画の説明作成中</span>
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  {:else if videoItems.length === 0}
     <div class="empty-state glass-panel">
       <div class="empty-icon">📦</div>
-      <p>編集済データがありません</p>
+      <p>編集データがありません</p>
     </div>
   {:else}
-    {#each videos as video (video.id)}
-      <div class="video-item glass-card">
+    {#each videoItems as video (`${video.source}:${video.id}`)}
+      <div class="video-item glass-card" class:pending-candidate={video.source === 'pending'}>
         <!-- 削除ボタン (フローティング右上) -->
         <button
           class="delete-button glass-icon-button"
           class:deleting={actions.deletingVideoId === video.id}
           disabled={actions.deletingVideoId === video.id}
           onclick={(e) => actions.handleDeleteVideo(e, video)}
-          title="動画を削除"
+          title={video.source === 'pending' ? '結合予定の録画済動画を削除' : '編集済動画を削除'}
         >
           {#if actions.deletingVideoId === video.id}
             <span class="spinner-small"></span>
@@ -122,26 +207,30 @@
             <div class="video-thumbnail-container">
               <div class="video-thumbnail">
                 <img
-                  src={getThumbnailUrl(video.filename)}
+                  src={getThumbnailUrl(video)}
                   alt={video.filename}
                   onerror={actions.handleImageError}
                 />
                 <div class="thumbnail-overlay">
-                  <button
-                    class="overlay-button play-button"
-                    onclick={() => handlePlayVideo(video)}
-                    title="動画を再生"
-                  >
-                    <svg
-                      width="24"
-                      height="24"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      xmlns="http://www.w3.org/2000/svg"
+                  {#if video.playable}
+                    <button
+                      class="overlay-button play-button"
+                      onclick={() => handlePlayVideo(video)}
+                      title="動画を再生"
                     >
-                      <path d="M8 5V19L19 12L8 5Z" fill="currentColor" />
-                    </svg>
-                  </button>
+                      <svg
+                        width="24"
+                        height="24"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        xmlns="http://www.w3.org/2000/svg"
+                      >
+                        <path d="M8 5V19L19 12L8 5Z" fill="currentColor" />
+                      </svg>
+                    </button>
+                  {:else}
+                    <span class="pending-video-label">動画未生成</span>
+                  {/if}
                   <button
                     class="overlay-button zoom-button"
                     onclick={() => handleZoomThumbnail(video)}
@@ -169,16 +258,28 @@
 
             <!-- 動画情報 (タイトルと説明) -->
             <div class="video-info">
+              <div class="source-row">
+                <span
+                  class="source-badge"
+                  class:pending={video.source === 'pending'}
+                  data-testid="edited-video-source-badge"
+                  title={getSourceTooltip(video.source)}
+                >
+                  {getSourceLabel(video.source)}
+                </span>
+              </div>
               {#if video.title}
                 <div class="info-item">
                   <span class="info-label">タイトル:</span>
-                  <span class="info-value">{video.title}</span>
+                  <span class="info-value" data-testid="edited-video-title">{video.title}</span>
                 </div>
               {/if}
               {#if video.description}
                 <div class="info-item">
                   <span class="info-label">説明:</span>
-                  <span class="info-value">{video.description}</span>
+                  <span class="info-value" data-testid="edited-video-description">
+                    {video.description}
+                  </span>
                 </div>
               {/if}
               {#if !video.title && !video.description}
@@ -287,6 +388,10 @@
       0 0 12px rgba(var(--theme-rgb-accent), 0.12);
   }
 
+  .video-item.pending-candidate {
+    border-color: rgba(var(--theme-rgb-warning), 0.35);
+  }
+
   .delete-button {
     position: absolute;
     top: 0.5rem;
@@ -338,6 +443,10 @@
     animation: spin 0.6s linear infinite;
   }
 
+  .loading-preview-card {
+    border-color: rgba(var(--theme-rgb-warning), 0.35);
+  }
+
   @keyframes spin {
     to {
       transform: rotate(360deg);
@@ -379,6 +488,17 @@
     border-radius: 6px;
     overflow: hidden;
     background: rgba(var(--theme-rgb-black), 0.4);
+  }
+
+  .loading-thumbnail {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.55rem;
+    color: var(--theme-status-warning);
+    font-size: 0.82rem;
+    font-weight: 700;
   }
 
   .video-thumbnail img {
@@ -433,6 +553,18 @@
     box-shadow: 0 4px 12px rgba(var(--theme-rgb-accent), 0.22);
   }
 
+  .pending-video-label {
+    border-radius: 999px;
+    border: 1px solid rgba(var(--theme-rgb-warning), 0.6);
+    background: rgba(var(--theme-rgb-black), 0.64);
+    color: var(--theme-status-warning);
+    font-size: 0.75rem;
+    font-weight: 700;
+    line-height: 1;
+    padding: 0.55rem 0.75rem;
+    white-space: nowrap;
+  }
+
   /* 動画情報 (タイトル・説明) */
   .video-info {
     --info-label-width: 3.5rem;
@@ -441,6 +573,29 @@
     padding: 0 0.5rem 0.5rem;
     border-radius: 6px;
     text-align: left;
+  }
+
+  .source-row {
+    display: flex;
+    align-items: center;
+    margin: 0 0 0.5rem;
+  }
+
+  .source-badge {
+    border-radius: 999px;
+    border: 1px solid rgba(var(--theme-rgb-accent), 0.45);
+    background: rgba(var(--theme-rgb-accent), 0.12);
+    color: var(--accent-color);
+    font-size: 0.72rem;
+    font-weight: 700;
+    line-height: 1;
+    padding: 0.3rem 0.55rem;
+  }
+
+  .source-badge.pending {
+    border-color: rgba(var(--theme-rgb-warning), 0.55);
+    background: rgba(var(--theme-rgb-warning), 0.12);
+    color: var(--theme-status-warning);
   }
 
   .info-item {
@@ -471,6 +626,13 @@
     word-break: break-word;
     overflow-wrap: break-word;
     white-space: pre-wrap;
+  }
+
+  .loading-field {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    color: var(--theme-status-warning);
   }
 
   .info-value-dim {

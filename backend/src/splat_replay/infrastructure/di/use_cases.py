@@ -9,12 +9,17 @@ import punq
 
 from splat_replay.application.interfaces import (
     BattleHistoryRepositoryPort,
+    ConfigPort,
+    FileSystemPort,
+    ImageSelector,
     LoggerPort,
+    PathsPort,
     VideoAssetRepositoryPort,
     VideoEditorPort,
 )
 from splat_replay.application.services import BattleHistoryService
 from splat_replay.application.services.common import SubtitleConverter
+from splat_replay.application.services.editing import ThumbnailGenerator
 from splat_replay.application.use_cases import AutoUseCase, UploadUseCase
 from splat_replay.application.use_cases.assets import (
     DeleteEditedVideoUseCase,
@@ -65,11 +70,21 @@ def register_app_usecases(container: punq.Container) -> None:
         )
 
     def list_edited_videos_factory() -> ListEditedVideosUseCase:
+        logger = container.resolve(LoggerPort)
+        file_system = container.resolve(FileSystemPort)
         return ListEditedVideosUseCase(
             repository=container.resolve(VideoAssetRepositoryPort),
-            logger=container.resolve(LoggerPort),
+            logger=logger,
             base_dir=base_dir,
             video_editor=container.resolve(VideoEditorPort),
+            config=container.resolve(ConfigPort),
+            thumbnail_generator=ThumbnailGenerator(
+                logger=logger,
+                paths=container.resolve(PathsPort),
+                image_selector=container.resolve(ImageSelector),
+                file_system=file_system,
+            ),
+            file_system=file_system,
         )
 
     def delete_edited_video_factory() -> DeleteEditedVideoUseCase:

@@ -220,7 +220,7 @@
           class:active={drawerState === 'full' && activeTab === 'recorded'}
           onclick={(e) => activateTab('recorded', e)}
           onkeydown={(e) => e.key === 'Enter' && activateTab('recorded', e)}
-          title="録画済 ({recordedCount}件)"
+          title="録画 ({recordedCount}件)"
         >
           <div class="tab-glow"></div>
           <span class="tab-icon">
@@ -228,7 +228,7 @@
             {#if recordedCount > 0}<span class="tab-badge">{recordedCount}</span>{/if}
           </span>
           <div class="tab-info">
-            <span class="tab-label">録画済</span>
+            <span class="tab-label">録画</span>
             <span class="tab-count" data-testid="recorded-count">{recordedCount}</span>
           </div>
         </button>
@@ -239,7 +239,7 @@
           class:active={drawerState === 'full' && activeTab === 'edited'}
           onclick={(e) => activateTab('edited', e)}
           onkeydown={(e) => e.key === 'Enter' && activateTab('edited', e)}
-          title="編集済 ({editedCount}件)"
+          title="編集 ({editedCount}件)"
         >
           <div class="tab-glow"></div>
           <span class="tab-icon">
@@ -247,8 +247,8 @@
             {#if editedCount > 0}<span class="tab-badge">{editedCount}</span>{/if}
           </span>
           <div class="tab-info">
-            <span class="tab-label">編集済</span>
-            <span class="tab-count">{editedCount}</span>
+            <span class="tab-label">編集</span>
+            <span class="tab-count" data-testid="edited-count">{editedCount}</span>
           </div>
         </button>
 
@@ -319,7 +319,7 @@
           <div class="data-section">
             <h3 class="section-title">
               <span class="title-icon">🎬</span>
-              録画済データ ({recordedCount}件)
+              録画データ ({recordedCount}件)
             </h3>
             <div class="list-container">
               <RecordedDataList
@@ -361,11 +361,12 @@
           <div class="data-section">
             <h3 class="section-title">
               <span class="title-icon">✨</span>
-              編集済データ ({editedCount}件)
+              編集データ ({editedCount}件)
             </h3>
             <div class="list-container">
               <EditedDataList
                 videos={editedVideos}
+                isLoading={isLoadingData && activeTab === 'edited'}
                 onRefresh={loadData}
                 onModalOpen={() => {
                   console.log('BottomDrawer: modalOpen event received from EditedDataList');

@@ -7,6 +7,8 @@ from typing import Literal
 
 
 EditUploadState = Literal["idle", "running", "succeeded", "failed"]
+EditedVideoSource = Literal["edited", "pending"]
+EditedVideoThumbnailSource = Literal["edited", "recorded"]
 
 
 @dataclass(frozen=True)
@@ -86,6 +88,11 @@ class EditedVideoDTO:
         size_bytes: ファイルサイズ（バイト）
         title: タイトル
         description: 説明
+        source: 動画の種別（edited/pending）
+        playable: 再生可能かどうか
+        recorded_video_ids: 未生成動画に結合される録画済み動画ID
+        thumbnail_source: サムネイル取得元（edited/recorded）
+        thumbnail_filename: サムネイル取得に使うファイル名
     """
 
     video_id: str
@@ -99,6 +106,11 @@ class EditedVideoDTO:
     size_bytes: int | None
     title: str | None
     description: str | None
+    source: EditedVideoSource = "edited"
+    playable: bool = True
+    recorded_video_ids: tuple[str, ...] = ()
+    thumbnail_source: EditedVideoThumbnailSource = "edited"
+    thumbnail_filename: str | None = None
 
 
 @dataclass(frozen=True)

@@ -1,4 +1,4 @@
-import { cleanup, render, screen, waitFor } from '@testing-library/svelte';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const { subscribeDomainEventsMock } = vi.hoisted(() => ({
@@ -61,10 +61,22 @@ type CapturedDomainEvent = {
   payload: Record<string, unknown>;
 };
 
+function createDeferred<T>(): {
+  promise: Promise<T>;
+  resolve: (value: T) => void;
+} {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((innerResolve) => {
+    resolve = innerResolve;
+  });
+  return { promise, resolve };
+}
+
 describe('BottomDrawer.svelte', () => {
   let fetchMock: ReturnType<typeof vi.fn>;
   let domainEventHandler: ((event: CapturedDomainEvent) => void) | null;
   let setIntervalSpy: ReturnType<typeof vi.spyOn>;
+  let originalAnimate: typeof Element.prototype.animate | undefined;
 
   function emitDomainEvent(event: CapturedDomainEvent): void {
     if (domainEventHandler === null) {
@@ -78,6 +90,11 @@ describe('BottomDrawer.svelte', () => {
     global.fetch = fetchMock;
     domainEventHandler = null;
     setIntervalSpy = vi.spyOn(window, 'setInterval');
+    originalAnimate = Element.prototype.animate;
+    Element.prototype.animate = vi.fn(() => ({
+      cancel: vi.fn(),
+      finished: Promise.resolve(),
+    })) as unknown as typeof Element.prototype.animate;
 
     subscribeDomainEventsMock.mockReset();
     subscribeDomainEventsMock.mockImplementation(
@@ -95,11 +112,21 @@ describe('BottomDrawer.svelte', () => {
 
   afterEach(() => {
     cleanup();
+    if (originalAnimate) {
+      Element.prototype.animate = originalAnimate;
+    } else {
+      delete (Element.prototype as { animate?: typeof Element.prototype.animate }).animate;
+    }
     setIntervalSpy.mockRestore();
     vi.restoreAllMocks();
   });
 
-  function installDefaultResponses(processStatuses: Array<Record<string, unknown>>): void {
+  function installDefaultResponses(
+    processStatuses: Array<Record<string, unknown>>,
+    options: {
+      editedAssets?: Array<Record<string, unknown>>;
+    } = {}
+  ): void {
     fetchMock.mockImplementation(async (input: string | URL | Request) => {
       const url = input.toString();
       if (url.includes('/api/assets/recorded')) {
@@ -135,7 +162,7 @@ describe('BottomDrawer.svelte', () => {
         ]);
       }
       if (url.includes('/api/assets/edited')) {
-        return jsonResponse([]);
+        return jsonResponse(options.editedAssets ?? []);
       }
       if (url.includes('/api/history/battle')) {
         return jsonResponse({ records: [] });
@@ -308,6 +335,102 @@ describe('BottomDrawer.svelte', () => {
     });
 
     expect(setIntervalSpy).toHaveBeenCalled();
+  });
+
+  it('タブは録画と編集として表示し、編集タブには編集プレビューを含む件数を表示する', async () => {
+    installDefaultResponses(
+      [
+        {
+          state: 'idle',
+          started_at: null,
+          finished_at: null,
+          error: null,
+          sleep_after_upload_default: false,
+          sleep_after_upload_effective: false,
+          sleep_after_upload_overridden: false,
+        },
+      ],
+      {
+        editedAssets: [
+          {
+            id: 'pending/20260314_12_Xマッチ_ガチエリア',
+            path: '',
+            filename: '20260314_12_Xマッチ_ガチエリア.mp4',
+            source: 'pending',
+            playable: false,
+            recorded_video_ids: ['recorded/recorded_video_1.mp4'],
+            thumbnail_source: 'edited',
+            thumbnail_filename: '20260314_12_Xマッチ_ガチエリア.mp4',
+            has_subtitle: false,
+            has_thumbnail: true,
+            duration_seconds: null,
+            updated_at: '2026-03-14T12:30:00',
+            size_bytes: 4096000,
+            metadata: {},
+            title: 'Xマッチ / ガチエリア',
+            description: 'WIN / 8K/3D',
+          },
+        ],
+      }
+    );
+
+    render(BottomDrawer);
+
+    await waitFor(() => {
+      expect(screen.getByTitle('録画 (1件)')).toBeInTheDocument();
+    });
+
+    expect(screen.getByTitle('編集 (1件)')).toBeInTheDocument();
+    expect(screen.getByTestId('recorded-count')).toHaveTextContent('1');
+    expect(screen.getByTestId('edited-count')).toHaveTextContent('1');
+  });
+
+  it('編集タブを開いたまま一覧取得中なら編集一覧へ作成中状態を渡す', async () => {
+    const editedResponse = createDeferred<Response>();
+
+    fetchMock.mockImplementation(async (input: string | URL | Request) => {
+      const url = input.toString();
+      if (url.includes('/api/assets/recorded')) {
+        return jsonResponse([]);
+      }
+      if (url.includes('/api/assets/edited')) {
+        return editedResponse.promise;
+      }
+      if (url.includes('/api/history/battle')) {
+        return jsonResponse({ records: [] });
+      }
+      if (url.includes('/api/settings/youtube-permission-dialog')) {
+        return jsonResponse({ shown: true });
+      }
+      if (url.includes('/api/process/status')) {
+        return jsonResponse({
+          state: 'idle',
+          started_at: null,
+          finished_at: null,
+          error: null,
+          sleep_after_upload_default: false,
+          sleep_after_upload_effective: false,
+          sleep_after_upload_overridden: false,
+        });
+      }
+      throw new Error(`Unexpected fetch: ${url}`);
+    });
+
+    const { container } = render(BottomDrawer);
+
+    await fireEvent.click(screen.getByTestId('bottom-drawer-toggle'));
+    const editedTab = container.querySelector('.tab.edited') as HTMLButtonElement;
+    await fireEvent.click(editedTab);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('stub-component')).toHaveAttribute('data-is-loading', 'true');
+    });
+
+    editedResponse.resolve(jsonResponse([]));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('stub-component')).toHaveAttribute('data-is-loading', 'false');
+    });
   });
 
   it('編集アップロード成功ダイアログを閉じると自動録画の再有効化を要求する', async () => {

@@ -5,9 +5,9 @@
 
 from __future__ import annotations
 
-from typing import Dict, Optional
+from typing import Dict, Literal, Optional
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 __all__ = [
     "RecordedVideoItem",
@@ -52,6 +52,11 @@ class EditedVideoItem(BaseModel):
     id: str
     path: str
     filename: str
+    source: Literal["edited", "pending"] = "edited"
+    playable: bool = True
+    recorded_video_ids: list[str] = Field(default_factory=list)
+    thumbnail_source: Literal["edited", "recorded"] = "edited"
+    thumbnail_filename: Optional[str] = None
     duration_seconds: Optional[float] = None
     has_subtitle: bool
     has_thumbnail: bool
