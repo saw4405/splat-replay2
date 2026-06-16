@@ -21,6 +21,7 @@ from splat_replay.application.interfaces import (
     RecorderWithTranscriptionPort,
     VideoAssetRepositoryPort,
     WeaponRecognitionPort,
+    XPDetectionDiagnosticsPort,
 )
 from splat_replay.application.services import (
     AutoEditor,
@@ -95,6 +96,9 @@ def register_app_services(container: Container) -> None:
         battle_history_service = container.resolve(BattleHistoryService)
         clock = container.resolve(ClockPort)
         config = container.resolve(ConfigPort)
+        xp_detection_diagnostics = container.resolve(
+            XPDetectionDiagnosticsPort
+        )
 
         return AutoRecorder(
             state_machine=state_machine,
@@ -110,6 +114,7 @@ def register_app_services(container: Container) -> None:
             battle_history_service=battle_history_service,
             clock=clock,
             config=config,
+            xp_detection_diagnostics=xp_detection_diagnostics,
         )
 
     container.register(AutoRecorder, factory=auto_recorder_factory)

@@ -1,10 +1,15 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from enum import Enum, auto
 from typing import TYPE_CHECKING, Awaitable, Callable, Optional
 
-from splat_replay.domain.models import Frame, RecordingMetadata
+from splat_replay.domain.models import (
+    Frame,
+    Match,
+    RateBase,
+    RecordingMetadata,
+)
 from splat_replay.domain.services import RecordState
 
 if TYPE_CHECKING:
@@ -23,6 +28,18 @@ class SessionPhase(Enum):
 
 
 ResumeTrigger = Callable[[Frame], Awaitable[bool]]
+
+
+@dataclass(frozen=True)
+class MatchRateCandidate:
+    match: Match
+    rate: RateBase
+
+
+def normalize_rate_candidate_match(match: Match) -> Match:
+    if match.is_anarchy():
+        return Match.ANARCHY
+    return match
 
 
 @dataclass(frozen=True)
@@ -45,6 +62,9 @@ class RecordingContext:
     weapon_detection_attempts: int = 0
     weapon_best_scores: tuple[float, ...] | None = None
     weapon_slot_results: tuple[WeaponSlotResult, ...] | None = None
+    rate_candidates: tuple[MatchRateCandidate, ...] = field(
+        default_factory=tuple
+    )
 
     def phase(self, sm_state: RecordState) -> SessionPhase:
         """現在のフェーズを返す。
@@ -64,3 +84,29 @@ class RecordingContext:
         if self.metadata.started_at is not None:
             return SessionPhase.MATCHING
         return SessionPhase.STANDBY
+
+    def with_rate_candidate(
+        self, match: Match, rate: RateBase
+    ) -> RecordingContext:
+        normalized_match = normalize_rate_candidate_match(match)
+        candidates = tuple(
+            candidate
+            for candidate in self.rate_candidates
+            if candidate.match is not normalized_match
+        )
+        return replace(
+            self,
+            rate_candidates=(
+                *candidates,
+                MatchRateCandidate(normalized_match, rate),
+            ),
+        )
+
+    def rate_candidate_for(self, match: Match | None) -> RateBase | None:
+        if match is None:
+            return None
+        normalized_match = normalize_rate_candidate_match(match)
+        for candidate in reversed(self.rate_candidates):
+            if candidate.match is normalized_match:
+                return candidate.rate
+        return None

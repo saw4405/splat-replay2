@@ -248,44 +248,55 @@ class AutoRecordingUseCase:
                 continue
 
             # 電源OFF検出
-            (
-                off_count,
-                last_check,
-                detected_power_off,
-            ) = await self._frame_processor.check_power_off(
-                frame, off_count, last_check
-            )
-            if detected_power_off:
-                self.logger.info("電源OFFを検出、録画を停止")
-                self._frame_processor.publish_power_off_detected()
-                break
-
-            # フェーズ変更ログ
-            (
-                context_snapshot,
-                revision_snapshot,
-            ) = await self._snapshot_context()
-            phase = context_snapshot.phase(self._session.state)
-            if self.last_phase != phase:
-                self.logger.info(
-                    f"フェーズが変更されました: {self.last_phase} -> {phase}"
+            try:
+                (
+                    off_count,
+                    last_check,
+                    detected_power_off,
+                ) = await self._frame_processor.check_power_off(
+                    frame, off_count, last_check
                 )
-                self.last_phase = phase
+                if detected_power_off:
+                    self.logger.info("電源OFFを検出、録画を停止")
+                    self._frame_processor.publish_power_off_detected()
+                    break
 
-            # フェーズ別処理（Command を取得）
-            command = await self._phase_handlers.handle_frame(
-                frame, context_snapshot, self._session.state
-            )
+                # フェーズ変更ログ
+                (
+                    context_snapshot,
+                    revision_snapshot,
+                ) = await self._snapshot_context()
+                phase = context_snapshot.phase(self._session.state)
+                if self.last_phase != phase:
+                    self.logger.info(
+                        f"フェーズが変更されました: {self.last_phase} -> {phase}"
+                    )
+                    self.last_phase = phase
 
-            # Context を更新（UseCase が単一所有）
-            await self._apply_command_context(
-                base_context=context_snapshot,
-                updated_context=command.updated_context,
-                base_revision=revision_snapshot,
-            )
+                # フェーズ別処理（Command を取得）
+                command = await self._phase_handlers.handle_frame(
+                    frame, context_snapshot, self._session.state
+                )
 
-            # Command を実行（副作用）
-            await self._execute_command(command, base_context=context_snapshot)
+                # Context を更新（UseCase が単一所有）
+                await self._apply_command_context(
+                    base_context=context_snapshot,
+                    updated_context=command.updated_context,
+                    base_revision=revision_snapshot,
+                )
+
+                # Command を実行（副作用）
+                await self._execute_command(
+                    command, base_context=context_snapshot
+                )
+
+            except Exception as e:
+                self.logger.exception(
+                    "メインループ内でのフレーム解析に失敗しました。フレームをスキップして処理を継続します。",
+                    error=str(e),
+                )
+                # CPUの過剰スピンを防止するため少量のウェイトを挟む
+                await asyncio.sleep(0.01)
 
         return detected_power_off
 
@@ -587,4 +598,5 @@ class AutoRecordingUseCase:
             and not context.weapon_detection_done
             and context.weapon_detection_attempts == 0
             and context.weapon_best_scores is None
+            and not context.rate_candidates
         )

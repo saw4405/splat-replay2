@@ -11,6 +11,7 @@ from splat_replay.application.interfaces import (
     ClockPort,
     EventBusPort,
     LoggerPort,
+    XPDetectionDiagnosticsPort,
 )
 from splat_replay.application.services.recording.commands import (
     RecordingCommand,
@@ -61,9 +62,15 @@ class PhaseHandlerRegistry:
         event_bus: EventBusPort,
         weapon_detection_service: WeaponDetectionService,
         clock: ClockPort | None = None,
+        xp_detection_diagnostics: XPDetectionDiagnosticsPort | None = None,
     ):
         # フェーズハンドラの初期化
-        self._standby = StandbyPhaseHandler(analyzer, logger, event_bus)
+        self._standby = StandbyPhaseHandler(
+            analyzer,
+            logger,
+            event_bus,
+            xp_detection_diagnostics=xp_detection_diagnostics,
+        )
         self._weapon_detection_service = weapon_detection_service
         self._matching = MatchingPhaseHandler(analyzer, logger, event_bus)
         self._in_game = InGamePhaseHandler(

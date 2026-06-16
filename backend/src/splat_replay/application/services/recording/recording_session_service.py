@@ -84,6 +84,7 @@ class RecordingSessionService:
         battle_history_service: BattleHistoryService | None = None,
         clock: ClockPort | None = None,
         config: ConfigPort | None = None,
+        metadata_merger: MetadataMerger | None = None,
     ):
         self.sm = state_machine
         self.recorder = recorder
@@ -96,6 +97,7 @@ class RecordingSessionService:
         self._pending_stop_reason: Literal["stop", "cancel"] | None = None
         self._clock = clock or _WallClock()
         self._config = config
+        self._merger = metadata_merger or MetadataMerger()
 
         # StateMachine のリスナーを登録
         self.sm.add_listener(self._on_state_change)
@@ -306,60 +308,7 @@ class RecordingSessionService:
                 self._ctx = replace(self._ctx, result_frame=frame)
 
         # 結果フレームから詳細情報を抽出（停止後の非ブロッキング処理）
-        if (
-            self._ctx.result_frame is not None
-            and self._ctx.metadata.result is None
-        ):
-            base_metadata = self._ctx.metadata
-            manual_fields = self._ctx.manual_fields
-            pending_result_updates = self._ctx.pending_result_updates
-            result = await self.analyzer.extract_session_result(
-                self._ctx.result_frame, self._ctx.metadata.game_mode
-            )
-            if result is not None and isinstance(result, BattleResult):
-                merger = MetadataMerger()
-                updated_metadata = replace(base_metadata, result=result)
-                if manual_fields:
-                    updated_metadata = merger.apply_manual_overrides(
-                        current=base_metadata,
-                        updated=updated_metadata,
-                        manual_fields=manual_fields,
-                    )
-                if pending_result_updates:
-                    updated_metadata, applied_fields = (
-                        merger.apply_pending_result_updates(
-                            updated_metadata,
-                            pending_result_updates,
-                            manual_fields,
-                        )
-                    )
-                    if applied_fields:
-                        manual_fields = manual_fields.union(applied_fields)
-                    pending_result_updates = {}
-                self._ctx = replace(
-                    self._ctx,
-                    metadata=updated_metadata,
-                    manual_fields=manual_fields,
-                    pending_result_updates=pending_result_updates,
-                )
-                self.logger.info(
-                    "結果詳細を取得",
-                    match=str(result.match),
-                    rule=str(result.rule),
-                    stage=str(result.stage),
-                    kill=result.kill,
-                    death=result.death,
-                    special=result.special,
-                )
-                # メタデータ更新通知
-                if self._domain_publisher:
-                    self._domain_publisher.publish_domain_event(
-                        RecordingMetadataUpdated(
-                            metadata=recording_metadata_to_dict(
-                                self._ctx.metadata
-                            )
-                        )
-                    )
+        await self._extract_and_apply_result()
 
         asset = self.asset_repository.save_recording(
             video=video,
@@ -375,6 +324,67 @@ class RecordingSessionService:
 
         # 録画停止後、次のバトル検出のためにコンテキストをリセット
         await self.reset()
+
+    async def _extract_and_apply_result(self) -> None:
+        """結果フレームから詳細情報を抽出し、メタデータに適用する。"""
+        if (
+            self._ctx.result_frame is None
+            or self._ctx.metadata.result is not None
+        ):
+            return
+
+        base_metadata = self._ctx.metadata
+        manual_fields = self._ctx.manual_fields
+        pending_result_updates = self._ctx.pending_result_updates
+        result = await self.analyzer.extract_session_result(
+            self._ctx.result_frame, self._ctx.metadata.game_mode
+        )
+        if result is None or not isinstance(result, BattleResult):
+            return
+
+        updated_metadata = replace(base_metadata, result=result)
+        candidate_rate = self._ctx.rate_candidate_for(result.match)
+        if candidate_rate is not None:
+            updated_metadata = replace(updated_metadata, rate=candidate_rate)
+        if manual_fields:
+            updated_metadata = self._merger.apply_manual_overrides(
+                current=base_metadata,
+                updated=updated_metadata,
+                manual_fields=manual_fields,
+            )
+        if pending_result_updates:
+            updated_metadata, applied_fields = (
+                self._merger.apply_pending_result_updates(
+                    updated_metadata,
+                    pending_result_updates,
+                    manual_fields,
+                )
+            )
+            if applied_fields:
+                manual_fields = manual_fields.union(applied_fields)
+            pending_result_updates = {}
+        self._ctx = replace(
+            self._ctx,
+            metadata=updated_metadata,
+            manual_fields=manual_fields,
+            pending_result_updates=pending_result_updates,
+        )
+        self.logger.info(
+            "結果詳細を取得",
+            match=str(result.match),
+            rule=str(result.rule),
+            stage=str(result.stage),
+            kill=result.kill,
+            death=result.death,
+            special=result.special,
+        )
+        # メタデータ更新通知
+        if self._domain_publisher:
+            self._domain_publisher.publish_domain_event(
+                RecordingMetadataUpdated(
+                    metadata=recording_metadata_to_dict(self._ctx.metadata)
+                )
+            )
 
     async def reset(self) -> None:
         """メタデータをリセットする。"""

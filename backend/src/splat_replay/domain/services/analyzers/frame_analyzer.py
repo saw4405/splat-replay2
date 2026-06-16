@@ -16,6 +16,7 @@ from splat_replay.domain.models import (
 from .battle_analyzer import BattleFrameAnalyzer
 from splat_replay.domain.ports import ImageMatcherPort
 from .salmon_analyzer import SalmonFrameAnalyzer
+from .xp_detection import XPExtractionDiagnostics
 
 
 class FrameAnalyzer:
@@ -68,6 +69,22 @@ class FrameAnalyzer:
         if match is None:
             return None
         return await plugin.extract_rate(frame, match)
+
+    async def extract_rate_for_match(
+        self, frame: Frame, mode: GameMode, match: Match
+    ) -> Optional[RateBase]:
+        plugin = self.plugins.get(mode)
+        if plugin is None:
+            return None
+        return await plugin.extract_rate(frame, match)
+
+    async def extract_xp_diagnostics(
+        self, frame: Frame
+    ) -> Optional[XPExtractionDiagnostics]:
+        plugin = self.plugins.get(GameMode.BATTLE)
+        if not isinstance(plugin, BattleFrameAnalyzer):
+            return None
+        return await plugin.extract_xp_diagnostics(frame)
 
     async def detect_matching_start(self, frame: Frame) -> bool:
         """マッチング開始画面を検出する。"""

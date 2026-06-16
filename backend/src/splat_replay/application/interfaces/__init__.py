@@ -108,6 +108,10 @@ from splat_replay.application.interfaces.weapon_detection import (
     WeaponRecognitionResult,
     WeaponSlotResult,
 )
+from splat_replay.application.interfaces.xp_detection_diagnostics import (
+    XPDetectionDiagnosticsPort,
+    XPDetectionDiagnosticsRecord,
+)
 
 # Domain Service用ポートはDomain層からインポート（ポート配置ルールに準拠）
 from splat_replay.domain.ports import ImageMatcherPort, OCRPort
@@ -167,6 +171,8 @@ __all__ = [
     "WeaponRecognitionPort",
     "WeaponRecognitionResult",
     "WeaponSlotResult",
+    "XPDetectionDiagnosticsPort",
+    "XPDetectionDiagnosticsRecord",
     # Image
     "Color",
     "ImageDrawerPort",

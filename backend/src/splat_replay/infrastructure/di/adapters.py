@@ -23,6 +23,7 @@ from splat_replay.application.interfaces import (
     EventPublisher,
     FramePublisher,
     ImageSelector,
+    LoggerPort,
     MicrophoneEnumeratorPort,
     PowerPort,
     RecorderWithTranscriptionPort,
@@ -37,6 +38,7 @@ from splat_replay.application.interfaces import (
     VideoEditorPort,
     VideoRecorderPort,
     WeaponRecognitionPort,
+    XPDetectionDiagnosticsPort,
 )
 from splat_replay.domain.config import VideoEditSettings, VideoStorageSettings
 from splat_replay.domain.models import Frame
@@ -77,6 +79,9 @@ from splat_replay.infrastructure import (
 )
 from splat_replay.infrastructure.adapters.system.capture_clock import (
     CaptureClock,
+)
+from splat_replay.infrastructure.adapters.diagnostics import (
+    FileXPDetectionDiagnostics,
 )
 from splat_replay.infrastructure.adapters.upload import NoOpUploadPort
 from splat_replay.infrastructure.config import load_settings_from_toml
@@ -197,6 +202,13 @@ def register_adapters(container: punq.Container) -> None:
     )
     container.register(ImageMatcherPort, MatcherRegistry)
     container.register(SubtitleEditorPort, SubtitleEditor)
+    container.register(
+        XPDetectionDiagnosticsPort,
+        factory=lambda: FileXPDetectionDiagnostics(
+            logger=cast(LoggerPort, container.resolve(LoggerPort))
+        ),
+        scope=punq.Scope.singleton,
+    )
     container.register(
         ImageSelector, instance=ImageDrawer.select_brightest_image
     )

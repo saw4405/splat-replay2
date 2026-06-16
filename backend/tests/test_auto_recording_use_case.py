@@ -14,6 +14,7 @@ from splat_replay.application.services.recording.frame_processing_service import
     FrameProcessingService,
 )
 from splat_replay.application.services.recording.recording_context import (
+    MatchRateCandidate,
     RecordingContext,
 )
 from splat_replay.application.services.recording.publisher_worker import (
@@ -28,7 +29,9 @@ from splat_replay.application.services.recording.recording_session_service impor
 from splat_replay.application.use_cases.auto_recording_use_case import (
     AutoRecordingUseCase,
 )
-from splat_replay.domain.models import Frame, RecordingMetadata
+from splat_replay.domain.models import Frame, Match, RecordingMetadata, XP
+from splat_replay.domain.services import RecordState
+import asyncio
 
 
 class _LoggerStub:
@@ -73,11 +76,22 @@ class _PhaseHandlersSpy:
 
 
 class _SessionSpy:
+    state: RecordState
+
     def __init__(self, *, events: list[str]) -> None:
         self._events = events
         self.updated_contexts: list[RecordingContext] = []
         self.context_at_stop: RecordingContext | None = None
         self.result_frame_at_stop: Frame | None = None
+        self.state = RecordState.RECORDING
+
+    @property
+    def context(self) -> RecordingContext:
+        return (
+            self.updated_contexts[-1]
+            if self.updated_contexts
+            else RecordingContext()
+        )
 
     def update_context(self, context: RecordingContext) -> None:
         self._events.append("update")
@@ -93,6 +107,14 @@ class _SessionSpy:
 
 def test_is_reset_context_returns_true_for_default_context() -> None:
     assert AutoRecordingUseCase._is_reset_context(RecordingContext()) is True
+
+
+def test_is_reset_context_returns_false_when_rate_candidates_exist() -> None:
+    context = RecordingContext(
+        rate_candidates=(MatchRateCandidate(Match.X, XP(2219.8)),)
+    )
+
+    assert AutoRecordingUseCase._is_reset_context(context) is False
 
 
 @pytest.mark.asyncio
@@ -179,3 +201,75 @@ async def test_stop_recording_handles_result_frame_without_context_equality() ->
     assert session.result_frame_at_stop is frame
     assert phase_handlers.cancel_calls == 1
     assert events == ["update", "drain", "update", "stop", "cancel"]
+
+
+class _DummyFrameProcessorWithException:
+    def __init__(self, frames: list[Frame | None]) -> None:
+        self._frames = list(frames)
+        self.check_power_off_calls = 0
+
+    async def acquire_frame(self) -> Frame | None:
+        return self._frames.pop(0) if self._frames else None
+
+    async def check_power_off(
+        self, frame: Frame, off_count: int, last_check: float
+    ) -> tuple[int, float, bool]:
+        self.check_power_off_calls += 1
+        if self.check_power_off_calls == 1:
+            raise RuntimeError("Simulated crash in OpenCV frame check")
+        return off_count, last_check, False
+
+
+@pytest.mark.asyncio
+async def test_main_loop_recovers_from_analysis_exception() -> None:
+    events: list[str] = []
+    frame1 = np.zeros((2, 2, 3), dtype=np.uint8)
+    frame2 = np.ones((2, 2, 3), dtype=np.uint8)
+    frame3 = np.ones((2, 2, 3), dtype=np.uint8) * 2
+    processor = _DummyFrameProcessorWithException(
+        [frame1, frame2, frame3, None]
+    )
+
+    session = _SessionSpy(events=events)
+    session.state = RecordState.STOPPED
+
+    phase_handlers = _PhaseHandlersSpy(
+        drained_context=RecordingContext(),
+        events=events,
+    )
+
+    class _FrameProcessorStub:
+        def __init__(self, impl: _DummyFrameProcessorWithException) -> None:
+            self._impl = impl
+
+        async def acquire_frame(self) -> Frame | None:
+            return await self._impl.acquire_frame()
+
+        async def check_power_off(
+            self, frame: Frame, off_count: int, last_check: float
+        ) -> tuple[int, float, bool]:
+            return await self._impl.check_power_off(
+                frame, off_count, last_check
+            )
+
+    use_case = AutoRecordingUseCase(
+        session_service=cast(RecordingSessionService, session),
+        frame_processor=cast(
+            FrameProcessingService, _FrameProcessorStub(processor)
+        ),
+        phase_handlers=cast(PhaseHandlerRegistry, phase_handlers),
+        context=RecordingContext(),
+        capture=cast(CapturePort, object()),
+        capture_producer=cast(FrameCaptureProducer, object()),
+        publisher_worker=cast(PublisherWorker, object()),
+        logger=cast(LoggerPort, _LoggerStub()),
+    )
+
+    async def stop_later():
+        await asyncio.sleep(0.05)
+        use_case._stop_event.set()
+
+    asyncio.create_task(stop_later())
+    await use_case._run_main_loop()
+
+    assert processor.check_power_off_calls == 2

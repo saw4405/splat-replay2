@@ -15,6 +15,7 @@ from splat_replay.application.interfaces import (
     RecorderWithTranscriptionPort,
     VideoAssetRepositoryPort,
     WeaponRecognitionPort,
+    XPDetectionDiagnosticsPort,
 )
 from splat_replay.application.services.recording.frame_capture_producer import (
     FrameCaptureProducer,
@@ -85,6 +86,7 @@ class AutoRecorder:
         weapon_detection_window_seconds: float = DETECTION_WINDOW_SECONDS,
         clock: ClockPort | None = None,
         config: ConfigPort | None = None,
+        xp_detection_diagnostics: XPDetectionDiagnosticsPort | None = None,
     ):
         self.logger = logger
         self._stop_event = asyncio.Event()
@@ -179,6 +181,7 @@ class AutoRecorder:
             event_bus=event_bus_adapter,
             weapon_detection_service=weapon_detection_service,
             clock=clock,
+            xp_detection_diagnostics=xp_detection_diagnostics,
         )
 
     # ================================================================

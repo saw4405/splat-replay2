@@ -15,6 +15,7 @@ from splat_replay.domain.models import (
     Rule,
     Stage,
     Udemae,
+    as_frame,
 )
 from splat_replay.domain.ports import (
     BattleMedalRecognizerPort,
@@ -25,6 +26,7 @@ from splat_replay.domain.ports import (
 
 from .analyzer_plugin import AnalyzerPlugin
 from .kill_record_extractor import KillRecordExtractor
+from .xp_detection import XPExtractionDiagnostics, parse_xp_ocr_text
 
 
 class _NullBattleMedalRecognizer:
@@ -95,13 +97,65 @@ class BattleFrameAnalyzer(AnalyzerPlugin):
         )
         if xp_str is None:
             return None
-        xp_str = xp_str.strip()
-
-        try:
-            xp = float(xp_str)
-        except ValueError:
+        parsed_xp, validation_error = parse_xp_ocr_text(xp_str)
+        if validation_error is not None or parsed_xp is None:
             return None
-        return XP(xp)
+        return XP(parsed_xp)
+
+    async def extract_xp_diagnostics(
+        self, frame: Frame
+    ) -> XPExtractionDiagnostics:
+        """XP OCR の診断情報を含めて抽出する。"""
+        xp_image = as_frame(frame[190:240, 1730:1880].copy())
+        xp_proc = (
+            self.image_editor_factory(xp_image)
+            .rotate(-4)
+            .resize(2, 2)
+            .binarize()
+            .invert()
+            .image
+        )
+        xp_str = await self.ocr.recognize_text(
+            xp_proc, ps_mode="SINGLE_LINE", whitelist="0123456789."
+        )
+        if xp_str is None:
+            return XPExtractionDiagnostics(
+                xp_roi=xp_image,
+                xp_processed=xp_proc,
+                ocr_text=None,
+                parsed_xp=None,
+                xp=None,
+                validation_error=None,
+            )
+        parsed_xp, validation_error = parse_xp_ocr_text(xp_str)
+        if validation_error is not None or parsed_xp is None:
+            return XPExtractionDiagnostics(
+                xp_roi=xp_image,
+                xp_processed=xp_proc,
+                ocr_text=xp_str,
+                parsed_xp=None,
+                xp=None,
+                validation_error=validation_error,
+            )
+        try:
+            xp = XP(parsed_xp)
+        except Exception as exc:
+            return XPExtractionDiagnostics(
+                xp_roi=xp_image,
+                xp_processed=xp_proc,
+                ocr_text=xp_str,
+                parsed_xp=parsed_xp,
+                xp=None,
+                validation_error=str(exc),
+            )
+        return XPExtractionDiagnostics(
+            xp_roi=xp_image,
+            xp_processed=xp_proc,
+            ocr_text=xp_str,
+            parsed_xp=parsed_xp,
+            xp=xp,
+            validation_error=None,
+        )
 
     async def detect_session_start(self, frame: Frame) -> bool:
         return await self.matcher.match("battle_start", frame)
