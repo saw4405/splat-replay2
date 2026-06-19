@@ -31,6 +31,7 @@ class XPDetectionDiagnosticsRecord:
     metadata_will_update: bool
     xp_roi: Frame
     xp_processed: Frame
+    xp_processed_connected_component_count: int | None = None
     x_select_roi: Frame | None = None
 
 

@@ -222,6 +222,9 @@ class StandbyPhaseHandler:
             metadata_will_update=False,
             xp_roi=diagnostics.xp_roi,
             xp_processed=diagnostics.xp_processed,
+            xp_processed_connected_component_count=(
+                diagnostics.xp_processed_connected_component_count
+            ),
         )
         return _RateDetection(detected_match, detected_rate)
 
@@ -251,6 +254,7 @@ class StandbyPhaseHandler:
         metadata_will_update: bool,
         xp_roi: Frame,
         xp_processed: Frame,
+        xp_processed_connected_component_count: int | None,
     ) -> None:
         diagnostics = self._xp_detection_diagnostics
         if diagnostics is None:
@@ -287,6 +291,9 @@ class StandbyPhaseHandler:
             metadata_will_update=metadata_will_update,
             xp_roi=xp_roi,
             xp_processed=xp_processed,
+            xp_processed_connected_component_count=(
+                xp_processed_connected_component_count
+            ),
             x_select_roi=self._crop_x_match_select_roi(frame),
         )
         try:

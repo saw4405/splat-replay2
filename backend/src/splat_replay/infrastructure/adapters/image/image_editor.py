@@ -49,10 +49,14 @@ class ImageEditor(ImageEditorPort):
         self._image = as_frame(image)
         return self
 
-    def binarize(self) -> "ImageEditor":
+    def binarize(self, threshold: int | None = None) -> "ImageEditor":
         gray_image = cv2.cvtColor(self._image, cv2.COLOR_BGR2GRAY)
+        threshold_value = 0 if threshold is None else threshold
+        threshold_type = cv2.THRESH_BINARY
+        if threshold is None:
+            threshold_type += cv2.THRESH_OTSU
         image = cv2.threshold(
-            gray_image, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU
+            gray_image, threshold_value, 255, threshold_type
         )[1]
         self._image = as_frame(image)
         return self
@@ -69,3 +73,20 @@ class ImageEditor(ImageEditorPort):
         image = cv2.bitwise_not(self._image)
         self._image = as_frame(image)
         return self
+
+    def count_connected_components(
+        self, *, foreground_threshold: int, min_area: int
+    ) -> int:
+        if self._image.ndim == 3:
+            gray_image = cv2.cvtColor(self._image, cv2.COLOR_BGR2GRAY)
+        else:
+            gray_image = self._image
+        foreground = (gray_image < foreground_threshold).astype(np.uint8)
+        count, _, stats, _ = cv2.connectedComponentsWithStats(
+            foreground, connectivity=8
+        )
+        return sum(
+            1
+            for index in range(1, count)
+            if int(stats[index, cv2.CC_STAT_AREA]) >= min_area
+        )

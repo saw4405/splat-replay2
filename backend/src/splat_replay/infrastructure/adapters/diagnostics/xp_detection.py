@@ -119,6 +119,9 @@ class FileXPDetectionDiagnostics:
             ),
             "same_candidate_count": record.same_candidate_count,
             "metadata_will_update": record.metadata_will_update,
+            "xp_processed_connected_component_count": (
+                record.xp_processed_connected_component_count
+            ),
             "xp_roi_image": xp_roi_path.resolve().as_posix(),
             "xp_processed_image": xp_processed_path.resolve().as_posix(),
             "x_select_roi_image": (

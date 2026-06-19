@@ -82,6 +82,14 @@ def _frame(value: int, shape: tuple[int, ...] = (8, 8, 3)) -> Frame:
     return as_frame(np.full(shape, value, dtype=np.uint8))
 
 
+def _xp_frame_with_dark_components(component_count: int) -> Frame:
+    frame = np.full((1080, 1920, 3), 255, dtype=np.uint8)
+    for index in range(component_count):
+        left = 1732 + (index * 20)
+        frame[200:210, left : left + 10] = 0
+    return as_frame(frame)
+
+
 def _diagnostics_record() -> XPDetectionDiagnosticsRecord:
     return XPDetectionDiagnosticsRecord(
         timestamp=datetime(2026, 5, 28, 12, 34, 56),
@@ -104,6 +112,7 @@ def _diagnostics_record() -> XPDetectionDiagnosticsRecord:
         metadata_will_update=True,
         xp_roi=_frame(10),
         xp_processed=_frame(255, (8, 8)),
+        xp_processed_connected_component_count=6,
         x_select_roi=_frame(120),
     )
 
@@ -148,6 +157,7 @@ def test_file_xp_detection_diagnostics_writes_jsonl_and_roi_images(
     jsonl = jsonl_path.read_text(encoding="utf-8")
     assert '"ocr_text": "2219.8\\n"' in jsonl
     assert '"delta_from_previous_xp": 247.9' in jsonl
+    assert '"xp_processed_connected_component_count": 6' in jsonl
     assert '"xp_roi_gray_std"' in jsonl
     assert '"x_select_roi_hsv_mean"' in jsonl
     assert '"x_select_x_battle_hsv_match_ratio"' in jsonl
@@ -204,7 +214,8 @@ class _ImageEditor:
         _ = top, bottom, left, right, color
         return self
 
-    def binarize(self) -> "_ImageEditor":
+    def binarize(self, threshold: int | None = None) -> "_ImageEditor":
+        _ = threshold
         return self
 
     def erode(
@@ -215,6 +226,61 @@ class _ImageEditor:
 
     def invert(self) -> "_ImageEditor":
         return self
+
+    def count_connected_components(
+        self, *, foreground_threshold: int, min_area: int
+    ) -> int:
+        if self._image.ndim == 3:
+            foreground = np.any(self._image < foreground_threshold, axis=2)
+        else:
+            foreground = self._image < foreground_threshold
+        height, width = foreground.shape[:2]
+        visited = np.zeros((height, width), dtype=np.bool_)
+        component_count = 0
+        for y in range(height):
+            for x in range(width):
+                if visited[y, x] or not foreground[y, x]:
+                    continue
+                area = 0
+                stack = [(x, y)]
+                visited[y, x] = True
+                while stack:
+                    current_x, current_y = stack.pop()
+                    area += 1
+                    for next_y in range(current_y - 1, current_y + 2):
+                        if next_y < 0 or next_y >= height:
+                            continue
+                        for next_x in range(current_x - 1, current_x + 2):
+                            if next_x < 0 or next_x >= width:
+                                continue
+                            if (
+                                visited[next_y, next_x]
+                                or not foreground[next_y, next_x]
+                            ):
+                                continue
+                            visited[next_y, next_x] = True
+                            stack.append((next_x, next_y))
+                if area >= min_area:
+                    component_count += 1
+        return component_count
+
+
+class _FixedThresholdImageEditor(_ImageEditor):
+    def __init__(self, image: Frame) -> None:
+        super().__init__(image)
+        self._component_count = 4
+
+    def binarize(
+        self, threshold: int | None = None
+    ) -> "_FixedThresholdImageEditor":
+        self._component_count = 6 if threshold == 115 else 4
+        return self
+
+    def count_connected_components(
+        self, *, foreground_threshold: int, min_area: int
+    ) -> int:
+        _ = foreground_threshold, min_area
+        return self._component_count
 
 
 def _battle_analyzer_with_ocr(text: str | None) -> BattleFrameAnalyzer:
@@ -246,6 +312,82 @@ async def test_extract_xp_diagnostics_reports_invalid_ocr_format() -> None:
     assert diagnostics.parsed_xp is None
     assert diagnostics.xp is None
     assert diagnostics.validation_error == "XP_OCR_INVALID_FORMAT"
+
+
+@pytest.mark.asyncio
+async def test_extract_xp_rejects_valid_decimal_when_components_are_merged() -> (
+    None
+):
+    analyzer = _battle_analyzer_with_ocr("2000.1\n")
+
+    xp = await analyzer.extract_xp(_xp_frame_with_dark_components(4))
+
+    assert xp is None
+
+
+@pytest.mark.asyncio
+async def test_extract_xp_uses_fixed_threshold_for_binarization() -> None:
+    analyzer = BattleFrameAnalyzer(
+        matcher=cast(ImageMatcherPort, _Matcher()),
+        ocr=cast(OCRPort, _OCR("2109.1\n")),
+        image_editor_factory=cast(
+            ImageEditorFactory, _FixedThresholdImageEditor
+        ),
+    )
+
+    xp = await analyzer.extract_xp(_frame(0, (1080, 1920, 3)))
+
+    assert xp == XP(2109.1)
+
+
+@pytest.mark.asyncio
+async def test_extract_xp_accepts_valid_decimal_when_components_match() -> (
+    None
+):
+    analyzer = _battle_analyzer_with_ocr("2109.1\n")
+
+    xp = await analyzer.extract_xp(_xp_frame_with_dark_components(6))
+
+    assert xp == XP(2109.1)
+
+
+@pytest.mark.asyncio
+async def test_extract_xp_accepts_valid_three_digit_decimal_when_five_components_match() -> (
+    None
+):
+    analyzer = _battle_analyzer_with_ocr("500.0\n")
+
+    xp = await analyzer.extract_xp(_xp_frame_with_dark_components(5))
+
+    assert xp == XP(500.0)
+
+
+@pytest.mark.asyncio
+async def test_extract_xp_rejects_valid_decimal_when_component_count_is_unexpected() -> (
+    None
+):
+    analyzer = _battle_analyzer_with_ocr("2109.1\n")
+
+    xp = await analyzer.extract_xp(_xp_frame_with_dark_components(7))
+
+    assert xp is None
+
+
+@pytest.mark.asyncio
+async def test_extract_xp_diagnostics_reports_component_count_mismatch() -> (
+    None
+):
+    analyzer = _battle_analyzer_with_ocr("2000.1\n")
+
+    diagnostics = await analyzer.extract_xp_diagnostics(
+        _xp_frame_with_dark_components(4)
+    )
+
+    assert diagnostics.ocr_text == "2000.1\n"
+    assert diagnostics.parsed_xp == 2000.1
+    assert diagnostics.xp is None
+    assert diagnostics.validation_error == "XP_OCR_COMPONENT_COUNT_MISMATCH"
+    assert diagnostics.xp_processed_connected_component_count == 4
 
 
 class _Analyzer:

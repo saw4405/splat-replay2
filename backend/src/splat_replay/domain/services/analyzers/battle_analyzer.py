@@ -20,13 +20,21 @@ from splat_replay.domain.models import (
 from splat_replay.domain.ports import (
     BattleMedalRecognizerPort,
     ImageEditorFactory,
+    ImageEditorPort,
     ImageMatcherPort,
     OCRPort,
 )
 
 from .analyzer_plugin import AnalyzerPlugin
 from .kill_record_extractor import KillRecordExtractor
-from .xp_detection import XPExtractionDiagnostics, parse_xp_ocr_text
+from .xp_detection import (
+    XPExtractionDiagnostics,
+    XP_BINARIZE_THRESHOLD,
+    XP_FOREGROUND_THRESHOLD,
+    XP_MIN_COMPONENT_AREA,
+    parse_xp_ocr_text,
+    validate_xp_processed_component_count,
+)
 
 
 class _NullBattleMedalRecognizer:
@@ -83,40 +91,30 @@ class BattleFrameAnalyzer(AnalyzerPlugin):
 
     async def extract_xp(self, frame: Frame) -> Optional[XP]:
         """XPを取得する。"""
-        xp_image = frame[190:240, 1730:1880]
-        xp_proc = (
-            self.image_editor_factory(xp_image)
-            .rotate(-4)
-            .resize(2, 2)
-            .binarize()
-            .invert()
-            .image
-        )
-        xp_str = await self.ocr.recognize_text(
-            xp_proc, ps_mode="SINGLE_LINE", whitelist="0123456789."
-        )
-        if xp_str is None:
-            return None
-        parsed_xp, validation_error = parse_xp_ocr_text(xp_str)
-        if validation_error is not None or parsed_xp is None:
-            return None
-        return XP(parsed_xp)
-
-    async def extract_xp_diagnostics(
-        self, frame: Frame
-    ) -> XPExtractionDiagnostics:
-        """XP OCR の診断情報を含めて抽出する。"""
         xp_image = as_frame(frame[190:240, 1730:1880].copy())
-        xp_proc = (
+        diagnostics = await self._extract_xp_from_roi(xp_image)
+        return diagnostics.xp
+
+    def _prepare_xp_editor(self, xp_image: Frame) -> ImageEditorPort:
+        return (
             self.image_editor_factory(xp_image)
             .rotate(-4)
             .resize(2, 2)
-            .binarize()
+            .binarize(threshold=XP_BINARIZE_THRESHOLD)
             .invert()
-            .image
         )
+
+    async def _extract_xp_from_roi(
+        self, xp_image: Frame
+    ) -> XPExtractionDiagnostics:
+        xp_editor = self._prepare_xp_editor(xp_image)
+        xp_proc = xp_editor.image
         xp_str = await self.ocr.recognize_text(
             xp_proc, ps_mode="SINGLE_LINE", whitelist="0123456789."
+        )
+        component_count = xp_editor.count_connected_components(
+            foreground_threshold=XP_FOREGROUND_THRESHOLD,
+            min_area=XP_MIN_COMPONENT_AREA,
         )
         if xp_str is None:
             return XPExtractionDiagnostics(
@@ -126,6 +124,7 @@ class BattleFrameAnalyzer(AnalyzerPlugin):
                 parsed_xp=None,
                 xp=None,
                 validation_error=None,
+                xp_processed_connected_component_count=component_count,
             )
         parsed_xp, validation_error = parse_xp_ocr_text(xp_str)
         if validation_error is not None or parsed_xp is None:
@@ -136,6 +135,20 @@ class BattleFrameAnalyzer(AnalyzerPlugin):
                 parsed_xp=None,
                 xp=None,
                 validation_error=validation_error,
+                xp_processed_connected_component_count=component_count,
+            )
+        validation_error = validate_xp_processed_component_count(
+            component_count
+        )
+        if validation_error is not None:
+            return XPExtractionDiagnostics(
+                xp_roi=xp_image,
+                xp_processed=xp_proc,
+                ocr_text=xp_str,
+                parsed_xp=parsed_xp,
+                xp=None,
+                validation_error=validation_error,
+                xp_processed_connected_component_count=component_count,
             )
         try:
             xp = XP(parsed_xp)
@@ -147,6 +160,7 @@ class BattleFrameAnalyzer(AnalyzerPlugin):
                 parsed_xp=parsed_xp,
                 xp=None,
                 validation_error=str(exc),
+                xp_processed_connected_component_count=component_count,
             )
         return XPExtractionDiagnostics(
             xp_roi=xp_image,
@@ -155,6 +169,83 @@ class BattleFrameAnalyzer(AnalyzerPlugin):
             parsed_xp=parsed_xp,
             xp=xp,
             validation_error=None,
+            xp_processed_connected_component_count=component_count,
+        )
+
+    async def extract_xp_diagnostics(
+        self, frame: Frame
+    ) -> XPExtractionDiagnostics:
+        """XP OCR の診断情報を含めて抽出する。"""
+        xp_image = as_frame(frame[190:240, 1730:1880].copy())
+        xp_editor = (
+            self.image_editor_factory(xp_image)
+            .rotate(-4)
+            .resize(2, 2)
+            .binarize(threshold=XP_BINARIZE_THRESHOLD)
+            .invert()
+        )
+        xp_proc = xp_editor.image
+        xp_str = await self.ocr.recognize_text(
+            xp_proc, ps_mode="SINGLE_LINE", whitelist="0123456789."
+        )
+        component_count = xp_editor.count_connected_components(
+            foreground_threshold=XP_FOREGROUND_THRESHOLD,
+            min_area=XP_MIN_COMPONENT_AREA,
+        )
+        if xp_str is None:
+            return XPExtractionDiagnostics(
+                xp_roi=xp_image,
+                xp_processed=xp_proc,
+                ocr_text=None,
+                parsed_xp=None,
+                xp=None,
+                validation_error=None,
+                xp_processed_connected_component_count=component_count,
+            )
+        parsed_xp, validation_error = parse_xp_ocr_text(xp_str)
+        if validation_error is not None or parsed_xp is None:
+            return XPExtractionDiagnostics(
+                xp_roi=xp_image,
+                xp_processed=xp_proc,
+                ocr_text=xp_str,
+                parsed_xp=None,
+                xp=None,
+                validation_error=validation_error,
+                xp_processed_connected_component_count=component_count,
+            )
+        validation_error = validate_xp_processed_component_count(
+            component_count
+        )
+        if validation_error is not None:
+            return XPExtractionDiagnostics(
+                xp_roi=xp_image,
+                xp_processed=xp_proc,
+                ocr_text=xp_str,
+                parsed_xp=parsed_xp,
+                xp=None,
+                validation_error=validation_error,
+                xp_processed_connected_component_count=component_count,
+            )
+        try:
+            xp = XP(parsed_xp)
+        except Exception as exc:
+            return XPExtractionDiagnostics(
+                xp_roi=xp_image,
+                xp_processed=xp_proc,
+                ocr_text=xp_str,
+                parsed_xp=parsed_xp,
+                xp=None,
+                validation_error=str(exc),
+                xp_processed_connected_component_count=component_count,
+            )
+        return XPExtractionDiagnostics(
+            xp_roi=xp_image,
+            xp_processed=xp_proc,
+            ocr_text=xp_str,
+            parsed_xp=parsed_xp,
+            xp=xp,
+            validation_error=None,
+            xp_processed_connected_component_count=component_count,
         )
 
     async def detect_session_start(self, frame: Frame) -> bool:
