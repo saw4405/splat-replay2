@@ -17,6 +17,7 @@ from splat_replay.application.interfaces import (
 from splat_replay.domain.models import (
     BattleResult,
     Judgement,
+    Match,
     SalmonResult,
     VideoAsset,
 )
@@ -77,6 +78,7 @@ class ThumbnailGenerator:
         win_lose = f"{win_count} - {lose_count}"
 
         # マッチ画像
+        is_event_match = result.match is Match.CHALLENGE
         match_name = result.match.value
         match_name = match_name.split("(")[0]
         match_image_path = self.paths.get_thumbnail_asset(f"{match_name}.png")
@@ -91,6 +93,8 @@ class ThumbnailGenerator:
         ]
         if len(rates) == 0:
             rate = None
+        elif is_event_match:
+            rate = f"Best Power: {max(rates)}"
         else:
             min_rate = min(rates)
             max_rate = max(rates)
@@ -103,7 +107,9 @@ class ThumbnailGenerator:
                 rate = f"{rate_prefix}{min_rate} ~ {max_rate}"
 
         rate_text_color = (
-            (1, 249, 196)
+            (241, 46, 125)
+            if is_event_match
+            else (1, 249, 196)
             if match_name == "Xマッチ"
             else (250, 97, 0)
             if match_name == "バンカラマッチ"

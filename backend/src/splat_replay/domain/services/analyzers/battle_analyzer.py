@@ -85,6 +85,9 @@ class BattleFrameAnalyzer(AnalyzerPlugin):
 
             if match is Match.X:
                 return await self.extract_xp(frame)
+
+            if match is Match.CHALLENGE:
+                return await self.extract_event_power(frame)
         except Exception:
             return None
         return None
@@ -93,6 +96,15 @@ class BattleFrameAnalyzer(AnalyzerPlugin):
         """XPを取得する。"""
         xp_image = as_frame(frame[190:240, 1730:1880].copy())
         diagnostics = await self._extract_xp_from_roi(xp_image)
+        return diagnostics.xp
+
+    async def extract_event_power(self, frame: Frame) -> Optional[XP]:
+        """最高イベントパワーを取得する。"""
+        if not await self.matcher.match("battle_rate_event_power_best", frame):
+            return None
+        # 指定ROIの下端にOCRノイズが入るため、OCR入力はXPと同じ高さにそろえる。
+        event_power_ocr_image = as_frame(frame[190:240, 1710:1860].copy())
+        diagnostics = await self._extract_xp_from_roi(event_power_ocr_image)
         return diagnostics.xp
 
     def _prepare_xp_editor(self, xp_image: Frame) -> ImageEditorPort:

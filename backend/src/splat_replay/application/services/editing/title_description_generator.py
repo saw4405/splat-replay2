@@ -19,6 +19,7 @@ from splat_replay.application.interfaces import (
 from splat_replay.domain.models import (
     BattleResult,
     Judgement,
+    Match,
     RateBase,
     SalmonResult,
     VideoAsset,
@@ -131,6 +132,7 @@ class TitleDescriptionGenerator:
             if (
                 asset.metadata
                 and asset.metadata.rate
+                and not self._is_event_match_asset(asset)
                 and asset.metadata.rate != last_rate
             ):
                 chapters += (
@@ -147,6 +149,11 @@ class TitleDescriptionGenerator:
                 win += 1 if asset.metadata.judgement == Judgement.WIN else 0
                 lose += 1 if asset.metadata.judgement == Judgement.LOSE else 0
 
+                if res.match is Match.CHALLENGE and asset.metadata.rate:
+                    chapters += (
+                        f"{self._format_event_power(asset.metadata.rate)}\n"
+                    )
+
                 # チャプター生成
                 tokens = {
                     "RESULT": asset.metadata.judgement.value
@@ -159,7 +166,7 @@ class TitleDescriptionGenerator:
                         res.gold_medals, res.silver_medals
                     ),
                     "STAGE": self._enum_value(res.stage),
-                    "RATE": f"{asset.metadata.rate.label}{asset.metadata.rate}"
+                    "RATE": self._format_asset_rate(asset)
                     if asset.metadata.rate
                     else "",
                     "BATTLE": self._enum_value(res.match),
@@ -206,6 +213,12 @@ class TitleDescriptionGenerator:
         ]
         if len(rates) == 0:
             rate = ""
+        elif (
+            first
+            and isinstance(first, BattleResult)
+            and first.match is Match.CHALLENGE
+        ):
+            rate = self._format_event_power(max(rates))
         else:
             max_rate = max(rates).short_str()
             min_rate = min(rates).short_str()
@@ -326,3 +339,25 @@ class TitleDescriptionGenerator:
     @staticmethod
     def _format_medals(gold: int, silver: int) -> str:
         return f"🥇x{gold} 🥈x{silver}"
+
+    @staticmethod
+    def _is_event_match_asset(asset: VideoAsset) -> bool:
+        if asset.metadata is None:
+            return False
+        result = asset.metadata.result
+        return (
+            isinstance(result, BattleResult)
+            and result.match is Match.CHALLENGE
+        )
+
+    @staticmethod
+    def _format_event_power(rate: RateBase) -> str:
+        return f"最高イベントパワー: {rate}"
+
+    @classmethod
+    def _format_asset_rate(cls, asset: VideoAsset) -> str:
+        if asset.metadata is None or asset.metadata.rate is None:
+            return ""
+        if cls._is_event_match_asset(asset):
+            return cls._format_event_power(asset.metadata.rate)
+        return f"{asset.metadata.rate.label}{asset.metadata.rate}"

@@ -108,6 +108,9 @@ matcher_groups:
     - battle_rate_udemae_s_plus
     - battle_rate_udemae_s
 
+  battle_rate_event_power_best:
+    - battle_rate_event_power_best
+
   battle_rate_xp_rules:
     - battle_rate_xp_rainmaker # ガチホコ
     - battle_rate_xp_splat_zones # ガチエリア
@@ -792,6 +795,18 @@ simple_matchers:
     template_path: "assets/matching/battle_rate_udemae_s_plus.png"
     threshold: 0.9
     description: "ウデマエS+を検出する"
+
+  battle_rate_event_power_best:
+    name: "最高イベントパワー"
+    type: "template"
+    template_path: "assets/matching/battle_rate_event_power_best.png"
+    roi:
+      x: 1460
+      y: 190
+      width: 260
+      height: 90
+    threshold: 0.9
+    description: "イベントマッチ選択画面で最高イベントパワー表示を検出する"
 
   battle_rate_xp_rainmaker:
     name: "ガチホコ"

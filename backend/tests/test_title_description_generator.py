@@ -154,16 +154,18 @@ def _build_asset(
     *,
     rate: RateBase | None = None,
     judgement: Judgement | None = Judgement.WIN,
+    match: Match = Match.X,
+    video: Path = Path("dummy.mp4"),
 ) -> VideoAsset:
     return VideoAsset(
-        video=Path("dummy.mp4"),
+        video=video,
         metadata=RecordingMetadata(
             game_mode=GameMode.BATTLE,
             started_at=dt.datetime(2026, 3, 1, 12, 0, 0),
             rate=rate,
             judgement=judgement,
             result=BattleResult(
-                match=Match.X,
+                match=match,
                 rule=Rule.RAINMAKER,
                 stage=Stage.HAMMERHEAD_BRIDGE,
                 kill=7,
@@ -184,6 +186,18 @@ async def _generate_title(
         time_slot=dt.time(12, 0, 0),
     )
     return title
+
+
+async def _generate_description(
+    generator: TitleDescriptionGenerator,
+    assets: list[VideoAsset],
+) -> str:
+    _, description = await generator.generate(
+        assets,
+        day=dt.date(2026, 3, 1),
+        time_slot=dt.time(12, 0, 0),
+    )
+    return description
 
 
 @pytest.mark.asyncio
@@ -261,3 +275,86 @@ async def test_generate_title_keeps_literal_empty_parentheses() -> None:
     title = await _generate_title(generator, _build_asset(rate=None))
 
     assert title == f"{Match.X.value}() {Rule.RAINMAKER.value}"
+
+
+@pytest.mark.asyncio
+async def test_generate_title_uses_event_power_label_for_event_match_rate() -> (
+    None
+):
+    generator = _build_generator("{BATTLE}({RATE}) {RULE}")
+
+    title = await _generate_title(
+        generator,
+        _build_asset(rate=XP(2180.0), match=Match.CHALLENGE),
+    )
+
+    assert (
+        title
+        == f"{Match.CHALLENGE.value}(最高イベントパワー: 2180.0) {Rule.RAINMAKER.value}"
+    )
+
+
+@pytest.mark.asyncio
+async def test_generate_title_uses_highest_event_power_only_for_event_match() -> (
+    None
+):
+    generator = _build_generator("{BATTLE}({RATE}) {RULE}")
+
+    title, _ = await generator.generate(
+        [
+            _build_asset(
+                rate=XP(2105.7),
+                match=Match.CHALLENGE,
+                video=Path("first.mp4"),
+            ),
+            _build_asset(
+                rate=XP(2180.0),
+                match=Match.CHALLENGE,
+                video=Path("second.mp4"),
+            ),
+        ],
+        day=dt.date(2026, 3, 1),
+        time_slot=dt.time(12, 0, 0),
+    )
+
+    assert "最高イベントパワー: 2180.0" in title
+    assert "2105.7-2180.0" not in title
+
+
+@pytest.mark.asyncio
+async def test_generate_description_includes_event_power_before_each_battle() -> (
+    None
+):
+    settings = VideoEditSettings(
+        title_template="{BATTLE} {RULE}",
+        description_template="{CHAPTERS}",
+        chapter_template="{RESULT:<5} {KILL:>3}k {DEATH:>3}d {SPECIAL:>3}s {STAGE}",
+    )
+    generator = TitleDescriptionGenerator(
+        cast(LoggerPort, _DummyLogger()),
+        cast(ConfigPort, _DummyConfig(settings)),
+        cast(VideoEditorPort, _DummyVideoEditor()),
+    )
+
+    description = await _generate_description(
+        generator,
+        [
+            _build_asset(
+                rate=XP(2105.7),
+                match=Match.CHALLENGE,
+                video=Path("first.mp4"),
+            ),
+            _build_asset(
+                rate=XP(2180.0),
+                match=Match.CHALLENGE,
+                video=Path("second.mp4"),
+            ),
+        ],
+    )
+
+    lines = description.splitlines()
+    assert lines[0] == "最高イベントパワー: 2105.7"
+    assert lines[1].startswith("00:00:00")
+    assert lines[2] == "最高イベントパワー: 2180.0"
+    assert lines[3].startswith("00:00:12")
+    assert "XP:" not in description

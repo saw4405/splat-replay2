@@ -126,6 +126,7 @@ def _service(
     ("final_match", "expected_rate"),
     [
         (Match.X, XP(2219.8)),
+        (Match.CHALLENGE, XP(2180.0)),
         (Match.ANARCHY_OPEN, Udemae("S+")),
         (Match.ANARCHY_SERIES, Udemae("S+")),
     ],
@@ -139,6 +140,7 @@ async def test_result_applies_rate_candidate_for_confirmed_match(
         result_frame=_frame(),
         rate_candidates=(
             MatchRateCandidate(Match.X, XP(2219.8)),
+            MatchRateCandidate(Match.CHALLENGE, XP(2180.0)),
             MatchRateCandidate(Match.ANARCHY, Udemae("S+")),
         ),
     )
