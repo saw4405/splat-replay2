@@ -8,6 +8,17 @@ import cv2
 import numpy as np
 import pytest
 
+try:
+    import pytesseract
+except ImportError:
+    HAS_TESSERACT = False
+else:
+    try:
+        pytesseract.get_tesseract_version()
+        HAS_TESSERACT = True
+    except pytesseract.TesseractNotFoundError:
+        HAS_TESSERACT = False
+
 BASE = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(BASE / "src"))  # noqa: E402
 
@@ -26,6 +37,27 @@ from splat_replay.domain.services.analyzers import (  # noqa: E402
 from splat_replay.infrastructure import MatcherRegistry, TesseractOCR  # noqa: E402
 from splat_replay.infrastructure.adapters.image import ImageEditor  # noqa: E402
 
+
+class DummyOCR:
+    def recognize_text_sync(
+        self,
+        image: np.ndarray,
+        ps_mode: str | None = None,
+        whitelist: str | None = None,
+    ) -> str | None:
+        _ = image, ps_mode, whitelist
+        return None
+
+    async def recognize_text(
+        self,
+        image: np.ndarray,
+        ps_mode: str | None = None,
+        whitelist: str | None = None,
+    ) -> str | None:
+        _ = image, ps_mode, whitelist
+        return None
+
+
 BASE_DIR = Path(__file__).resolve().parent
 TEMPLATE_DIR = BASE_DIR / "fixtures" / "templates"
 MATCHER_SETTINGS = ImageMatchingSettings.load_from_yaml(
@@ -35,9 +67,10 @@ MATCHER_SETTINGS = ImageMatchingSettings.load_from_yaml(
 
 def _create_analyzer() -> FrameAnalyzer:
     matcher_registry = MatcherRegistry(MATCHER_SETTINGS)
+    ocr = TesseractOCR() if HAS_TESSERACT else DummyOCR()
     battle = BattleFrameAnalyzer(
         matcher_registry,
-        TesseractOCR(),
+        ocr,
         lambda image: ImageEditor(image),
     )
     salmon = SalmonFrameAnalyzer(matcher_registry)
@@ -52,6 +85,7 @@ def _load_image(filename: str) -> np.ndarray:
 
 
 @pytest.mark.asyncio
+@pytest.mark.skipif(not HAS_TESSERACT, reason="Tesseract OCR is not installed")
 @pytest.mark.parametrize(
     ("filename", "expected"),
     [

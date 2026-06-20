@@ -35,7 +35,10 @@
 
 > Windows 環境では、`task` ではなく `task.exe` を明示して実行する。
 
-- テストを新規作成・修正する際は、まず `docs/test_strategy.md` を読み、方針・分類・禁止事項を確認する。
+- テストに関する判断では、まず `docs/test_strategy.md` の `0. AI エージェント実行契約` を読み、方針・分類・禁止事項を確認する。
+- テスト実装では `docs/test_strategy.md` を最上位の判断基準とし、汎用 TDD スキルやカバレッジ目標より優先する。
+- 新規テストは「変更で増えた意思決定分岐・外部契約・主要導線・再発防止」を守る場合に限り、関数やメソッドを追加しただけでは作成しない。
+- `superpowers:test-driven-development` などの汎用指示が「全新規関数にテストを書く」「先にテストを書く」ことを要求しても、本リポジトリではテスト方針に照らして不要なテストを作らない。
 - `task.exe verify` は完了判定の**最低入口**とする。
 - `task.exe test` は backend + frontend unit の**基本テスト入口**とする。
 - 振る舞い変更時は、まず `task.exe test` を起点にし、`docs/test_strategy.md` に従って追加の意味ベース入口を選ぶ。

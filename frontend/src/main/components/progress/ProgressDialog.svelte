@@ -328,7 +328,7 @@
               {:else if phase.status === 'failed'}
                 <XCircle size={14} />
               {:else if phase.status === 'active'}
-                <Loader2 size={14} class="icon-spin" />
+                <Loader2 size={14} class="icon-spin" aria-busy="true" />
               {:else}
                 <span class="phase-number">{i + 1}</span>
               {/if}
@@ -411,7 +411,7 @@
                     <li class="item-row" data-status={item.status}>
                       <span class="item-icon">
                         {#if item.status === 'active'}
-                          <Loader2 size={14} class="icon-spin" />
+                          <Loader2 size={14} class="icon-spin" aria-busy="true" />
                         {:else if item.status === 'success'}
                           <CheckCircle2 size={14} />
                         {:else if item.status === 'failure'}
@@ -439,7 +439,7 @@
                                     : '待機中'}"
                             >
                               {#if step.status === 'active'}
-                                <Loader2 size={10} class="icon-spin" />
+                                <Loader2 size={10} class="icon-spin" aria-busy="true" />
                               {:else if step.status === 'success'}
                                 <CheckCircle2 size={10} />
                               {:else if step.status === 'failure'}

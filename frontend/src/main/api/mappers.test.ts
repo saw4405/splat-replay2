@@ -465,9 +465,6 @@ describe('mapEditUploadStatus', () => {
 
     const result = mapEditUploadStatus(raw);
 
-    expect(typeof result.sleepAfterUploadDefault).toBe('boolean');
-    expect(typeof result.sleepAfterUploadEffective).toBe('boolean');
-    expect(typeof result.sleepAfterUploadOverridden).toBe('boolean');
     expect(result.sleepAfterUploadDefault).toBe(true);
     expect(result.sleepAfterUploadEffective).toBe(true);
     expect(result.sleepAfterUploadOverridden).toBe(false);

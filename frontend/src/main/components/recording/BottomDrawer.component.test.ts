@@ -416,11 +416,10 @@ describe('BottomDrawer.svelte', () => {
       throw new Error(`Unexpected fetch: ${url}`);
     });
 
-    const { container } = render(BottomDrawer);
+    render(BottomDrawer);
 
     await fireEvent.click(screen.getByTestId('bottom-drawer-toggle'));
-    const editedTab = container.querySelector('.tab.edited') as HTMLButtonElement;
-    await fireEvent.click(editedTab);
+    await fireEvent.click(screen.getByTitle('編集 (0件)'));
 
     await waitFor(() => {
       expect(screen.getByTestId('stub-component')).toHaveAttribute('data-is-loading', 'true');

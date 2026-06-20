@@ -7,6 +7,7 @@ import { expect, type Locator, type Page } from '@playwright/test';
 import {
   configureReplayAsset,
   ensureE2EEnvironment,
+  listReplayAssets,
   loadSidecarMetadata,
   resetE2EState,
   type E2EEnvironment,
@@ -90,6 +91,8 @@ function behaviorEditAfterPowerOffField(page: Page): Locator {
   return page.getByTestId('settings-field-behavior-behavior-edit_after_power_off');
 }
 
+const editAfterPowerOffLabel = '電源オフ後に編集開始する';
+
 async function openSettings(page: Page): Promise<void> {
   await page.getByTestId('settings-button').click();
   await expect(page.getByRole('dialog', { name: '設定' })).toBeVisible();
@@ -101,24 +104,17 @@ async function openBehaviorSettings(page: Page): Promise<void> {
   await expect(behaviorEditAfterPowerOffField(page)).toBeVisible();
 }
 
-async function setCheckboxValue(checkbox: Locator, checked: boolean): Promise<void> {
-  if ((await checkbox.isChecked()) === checked) {
-    return;
+async function setCheckboxValue(field: Locator, label: string, checked: boolean): Promise<void> {
+  const checkbox = field.getByRole('checkbox', { name: label });
+  if ((await checkbox.isChecked()) !== checked) {
+    await field.getByText(label, { exact: true }).click();
   }
-  await checkbox.evaluate((element, nextChecked) => {
-    const input = element as HTMLInputElement;
-    input.checked = nextChecked;
-    input.dispatchEvent(new Event('input', { bubbles: true }));
-    input.dispatchEvent(new Event('change', { bubbles: true }));
-  }, checked);
+  await expect(checkbox).toBeChecked({ checked });
 }
 
 export async function saveBehaviorSettings(page: Page): Promise<void> {
   await openBehaviorSettings(page);
-  await setCheckboxValue(
-    behaviorEditAfterPowerOffField(page).locator('input[type="checkbox"]'),
-    true
-  );
+  await setCheckboxValue(behaviorEditAfterPowerOffField(page), editAfterPowerOffLabel, true);
   await page.getByRole('button', { name: '保存' }).click();
   await expect(page.getByRole('dialog', { name: '設定' })).toBeHidden();
 }
@@ -126,7 +122,9 @@ export async function saveBehaviorSettings(page: Page): Promise<void> {
 export async function verifyPersistedBehaviorSettings(page: Page): Promise<void> {
   await openBehaviorSettings(page);
   await expect(
-    behaviorEditAfterPowerOffField(page).locator('input[type="checkbox"]')
+    behaviorEditAfterPowerOffField(page).getByRole('checkbox', {
+      name: editAfterPowerOffLabel,
+    })
   ).toBeChecked();
 }
 
@@ -143,42 +141,50 @@ async function requestAutoRecordingEnable(page: Page): Promise<AutoRecordingEnab
 export async function waitForRecordingLifecycle(page: Page): Promise<void> {
   await waitForVideoPreviewReady(page);
   const statusLabel = page.getByTestId('video-preview-status');
-  const deadline = Date.now() + 120_000;
-  let lastStatus = 'unknown';
 
-  while (Date.now() < deadline) {
-    try {
-      await expect(statusLabel).toHaveText('Recording', {
-        timeout: 5_000,
-      });
-      return;
-    } catch {
-      lastStatus = (await statusLabel.textContent().catch(() => null))?.trim() ?? 'unknown';
-    }
-
-    await requestAutoRecordingEnable(page);
-    await page.waitForTimeout(1_000);
-  }
-
-  throw new Error(`録画開始を待機中にタイムアウトしました。最後の表示状態: ${lastStatus}`);
+  await expect
+    .poll(
+      async () => {
+        try {
+          const isVisible = await statusLabel.isVisible();
+          if (!isVisible) {
+            await requestAutoRecordingEnable(page);
+            return 'not_visible';
+          }
+          const text = await statusLabel.textContent();
+          if (text?.trim() === 'Recording') {
+            return 'Recording';
+          }
+          await requestAutoRecordingEnable(page);
+          return text?.trim() ?? 'unknown';
+        } catch {
+          await requestAutoRecordingEnable(page);
+          return 'error';
+        }
+      },
+      {
+        timeout: 120_000,
+        intervals: [1000],
+      }
+    )
+    .toBe('Recording');
 }
 
 export async function ensureAutoRecordingEnabled(page: Page): Promise<void> {
   await disableAutoRecording(page);
 
-  const deadline = Date.now() + 30_000;
-  let lastState = 'unknown';
-
-  while (Date.now() < deadline) {
-    const body = await requestAutoRecordingEnable(page);
-    lastState = body.state ?? 'unknown';
-    if (lastState === 'running') {
-      return;
-    }
-    await page.waitForTimeout(500);
-  }
-
-  throw new Error(`自動録画を有効化できませんでした。最後の state: ${lastState}`);
+  await expect
+    .poll(
+      async () => {
+        const body = await requestAutoRecordingEnable(page);
+        return body.state ?? 'unknown';
+      },
+      {
+        timeout: 30_000,
+        intervals: [500],
+      }
+    )
+    .toBe('running');
 }
 
 async function recorderState(page: Page): Promise<string> {
@@ -189,21 +195,20 @@ async function recorderState(page: Page): Promise<string> {
 }
 
 async function disableAutoRecording(page: Page): Promise<void> {
-  const deadline = Date.now() + 30_000;
-  let lastState = 'unknown';
-
-  while (Date.now() < deadline) {
-    const response = await page.request.post('/api/recorder/disable-auto');
-    expect(response.ok()).toBeTruthy();
-    const body = (await response.json()) as { state?: string | null };
-    lastState = body.state ?? 'unknown';
-    if (lastState === 'stopped') {
-      return;
-    }
-    await page.waitForTimeout(500);
-  }
-
-  throw new Error(`自動録画を停止できませんでした。最後の state: ${lastState}`);
+  await expect
+    .poll(
+      async () => {
+        const response = await page.request.post('/api/recorder/disable-auto');
+        if (!response.ok()) return 'failed';
+        const body = (await response.json()) as { state?: string | null };
+        return body.state ?? 'unknown';
+      },
+      {
+        timeout: 30_000,
+        intervals: [500],
+      }
+    )
+    .toBe('stopped');
 }
 
 export async function waitForRecordingStopped(page: Page): Promise<void> {
@@ -230,26 +235,28 @@ export async function stopRecordingForTeardown(page: Page): Promise<void> {
     console.warn('stopRecordingForTeardown: 停止要求を送れませんでした', error);
   }
 
-  const deadline = Date.now() + 10_000;
-  while (Date.now() < deadline) {
-    try {
-      if ((await recorderState(page)) === 'STOPPED') {
-        await page.waitForTimeout(3_000);
-        return;
+  // STOPPED になるのをポーリングで待機
+  await expect
+    .poll(
+      async () => {
+        try {
+          return await recorderState(page);
+        } catch {
+          return 'ERROR';
+        }
+      },
+      {
+        timeout: 10_000,
+        intervals: [500],
       }
-    } catch {
-      // backend 切り替え中の一時失敗は cleanup では許容する
-    }
-    await page.waitForTimeout(500);
-  }
+    )
+    .toBe('STOPPED');
 
   try {
     await disableAutoRecording(page);
   } catch (error) {
     console.warn('stopRecordingForTeardown: 自動録画停止要求を送れませんでした', error);
   }
-
-  await page.waitForTimeout(1_000);
 }
 
 export async function waitForVideoPreviewReady(page: Page): Promise<void> {
@@ -428,7 +435,10 @@ export function expectedRecordedVideoCount(asset: ReplayAsset): number {
 }
 
 export function recordableReplayAssets(environment: E2EEnvironment): ReplayAsset[] {
-  return environment.replayAssets.filter((asset) => expectedRecordedVideoCount(asset) > 0);
+  const assets = listReplayAssets(environment.autoRecordingReplayDir).filter(
+    (asset) => expectedRecordedVideoCount(asset) > 0
+  );
+  return environment.mode === 'smoke' ? assets.slice(0, 1) : assets;
 }
 
 export function resetReplayTestState(environment: E2EEnvironment): void {

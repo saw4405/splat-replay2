@@ -14,7 +14,7 @@ import {
   environment,
   gotoMain,
   prepareReplayAssetWithScenario,
-  replayAssets,
+  recordableReplayAssets,
   stopRecordingForTeardown,
   waitForRecordingLifecycle,
 } from './support/appHelpers';
@@ -22,7 +22,7 @@ import {
 test.setTimeout(process.env.SPLAT_REPLAY_E2E_MODE === 'full' ? 1_200_000 : 600_000);
 
 const e2eEnvironment = environment();
-const firstAsset = replayAssets(e2eEnvironment)[0];
+const firstAsset = recordableReplayAssets(e2eEnvironment)[0];
 const liveRecordingBootstrapScenario = {
   replay_bootstrap: {
     phase: 'in_game',
@@ -34,8 +34,7 @@ test('エラー回復 - メタデータオプション読み込み失敗時も�
   page,
 }) => {
   if (!firstAsset) {
-    test.skip();
-    return;
+    throw new Error('Recording error recovery test requires at least one recordable replay asset.');
   }
 
   prepareReplayAssetWithScenario(e2eEnvironment, firstAsset, liveRecordingBootstrapScenario);
@@ -62,8 +61,7 @@ test('エラー回復 - メタデータオプション読み込み失敗時も�
 
 test('エラー回復 - 録画中メタデータ保存失敗後に再試行できる', async ({ page }) => {
   if (!firstAsset) {
-    test.skip();
-    return;
+    throw new Error('Recording error recovery test requires at least one recordable replay asset.');
   }
 
   prepareReplayAssetWithScenario(e2eEnvironment, firstAsset, liveRecordingBootstrapScenario);

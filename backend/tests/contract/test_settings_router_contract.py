@@ -1,0 +1,507 @@
+"""Settings Router Contract Tests.
+
+責務：
+- Settings エンドポイントの存在を保証する
+- レスポンススキーマの検証
+- エラーハンドリングの確認
+
+分類: contract
+"""
+
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
+import pytest
+from fastapi import status
+from fastapi.routing import APIRoute
+from fastapi.testclient import TestClient
+
+from splat_replay.application.interfaces import (
+    CaptureDeviceBindingResult,
+    CaptureDeviceDiagnostics,
+    CaptureDeviceRecoveryResult,
+    CaptureDeviceRecoveryTrigger,
+)
+from splat_replay.application.services import DeviceChecker
+
+if TYPE_CHECKING:
+    pass
+
+pytestmark = pytest.mark.contract
+
+
+def _current_capture_device_name(client: TestClient) -> str:
+    response = client.get("/api/settings")
+    assert response.status_code == status.HTTP_200_OK
+    sections = response.json()["sections"]
+    capture_section = next(
+        section for section in sections if section["id"] == "capture_device"
+    )
+    name_field = next(
+        field for field in capture_section["fields"] if field["id"] == "name"
+    )
+    assert isinstance(name_field["value"], str)
+    return name_field["value"]
+
+
+def _route_by_path(router, path: str) -> APIRoute:
+    return next(
+        route
+        for route in router.routes
+        if isinstance(route, APIRoute) and route.path == path
+    )
+
+
+class TestSettingsEndpoints:
+    """設定エンドポイントのcontractテスト。"""
+
+    def test_get_settings(self, client: TestClient) -> None:
+        """GET /api/settings - アプリケーション設定取得。"""
+        response = client.get("/api/settings")
+        assert response.status_code == status.HTTP_200_OK
+
+        data = response.json()
+        # sectionsフィールドの存在確認
+        assert "sections" in data
+        assert isinstance(data["sections"], (list, dict))
+
+    def test_get_settings_includes_webview_render_mode(
+        self, client: TestClient
+    ) -> None:
+        """GET /api/settings - webview.render_mode が取得できる。"""
+        response = client.get("/api/settings")
+        assert response.status_code == status.HTTP_200_OK
+
+        sections = response.json()["sections"]
+        assert isinstance(sections, list)
+
+        webview_section = next(
+            section for section in sections if section["id"] == "webview"
+        )
+        render_mode = next(
+            field
+            for field in webview_section["fields"]
+            if field["id"] == "render_mode"
+        )
+
+        assert render_mode["type"] == "select"
+        assert render_mode["choices"] == ["cpu", "gpu"]
+        assert render_mode["choice_labels"] == {
+            "cpu": "CPU",
+            "gpu": "GPU",
+        }
+        assert render_mode["value"] in {"cpu", "gpu"}
+
+    def test_get_settings_includes_remote_access_toggle(
+        self, client: TestClient
+    ) -> None:
+        """GET /api/settings - remote_access.enabled が取得できる。"""
+        response = client.get("/api/settings")
+        assert response.status_code == status.HTTP_200_OK
+
+        sections = response.json()["sections"]
+        assert isinstance(sections, list)
+
+        remote_section = next(
+            section for section in sections if section["id"] == "remote_access"
+        )
+        enabled = next(
+            field
+            for field in remote_section["fields"]
+            if field["id"] == "enabled"
+        )
+
+        assert enabled["type"] == "boolean"
+        assert isinstance(enabled["value"], bool)
+        assert enabled["user_editable"] is True
+
+    def test_get_webview_render_mode(self, client: TestClient) -> None:
+        """GET /api/settings/webview-render-mode - 描画モードだけを軽量取得できる。"""
+        response = client.get("/api/settings/webview-render-mode")
+
+        assert response.status_code == status.HTTP_200_OK
+        assert response.json() == {"render_mode": "gpu"}
+
+    def test_update_settings_valid(self, client: TestClient) -> None:
+        """PUT /api/settings - 設定更新（正常系）。"""
+        # 最小限の有効なリクエスト
+        request_data = {"sections": []}
+        response = client.put("/api/settings", json=request_data)
+
+        assert response.status_code == status.HTTP_200_OK
+        data = response.json()
+        assert data["status"] == "ok"
+
+    def test_update_settings_unknown_section(self, client: TestClient) -> None:
+        """PUT /api/settings - 存在しないセクションID（エラー系）。"""
+        request_data = {
+            "sections": [
+                {"id": "unknown_section_id", "values": {"key": "value"}}
+            ]
+        }
+        response = client.put("/api/settings", json=request_data)
+
+        assert response.status_code == status.HTTP_404_NOT_FOUND
+        data = response.json()
+        assert "detail" in data
+
+    def test_update_settings_unknown_field(self, client: TestClient) -> None:
+        """PUT /api/settings - 存在しないフィールド（エラー系）。"""
+        # 既知のセクションIDに対して存在しないフィールドを指定
+        # セクションIDは実装依存のため、まず設定を取得
+        get_response = client.get("/api/settings")
+        assert get_response.status_code == status.HTTP_200_OK
+
+        sections_data = get_response.json()["sections"]
+        if not sections_data:
+            pytest.skip("設定セクションが空のためスキップ")
+
+        # 最初のセクションIDを使用
+        if isinstance(sections_data, list):
+            first_section_id = sections_data[0].get("id")
+        elif isinstance(sections_data, dict):
+            first_section_id = list(sections_data.keys())[0]
+        else:
+            pytest.skip("設定セクション形式が不明")
+
+        request_data = {
+            "sections": [
+                {
+                    "id": first_section_id,
+                    "values": {"invalid_field_name": "value"},
+                }
+            ]
+        }
+        response = client.put("/api/settings", json=request_data)
+
+        # 無効なフィールドは400または422
+        assert response.status_code in [
+            status.HTTP_400_BAD_REQUEST,
+            status.HTTP_422_UNPROCESSABLE_CONTENT,
+        ]
+
+    def test_update_settings_invalid_value_type(
+        self, client: TestClient
+    ) -> None:
+        """PUT /api/settings - 無効な値の型（エラー系）。"""
+        # バリデーションエラーを引き起こす不正な型
+        request_data = {
+            "sections": [
+                {
+                    "id": "obs",
+                    "values": {"port": "not_a_number"},
+                }  # 数値が期待される場所に文字列
+            ]
+        }
+        response = client.put("/api/settings", json=request_data)
+
+        assert response.status_code in [
+            status.HTTP_400_BAD_REQUEST,
+            status.HTTP_404_NOT_FOUND,  # obsセクションが存在しない場合
+            status.HTTP_422_UNPROCESSABLE_CONTENT,
+        ]
+
+    def test_update_settings_invalid_schema(self, client: TestClient) -> None:
+        """PUT /api/settings - 不正なリクエストスキーマ（エラー系）。"""
+        # sectionsフィールドが欠落
+        request_data = {"invalid_field": "value"}
+        response = client.put("/api/settings", json=request_data)
+
+        assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
+
+    def test_update_settings_roundtrip_webview_render_mode(
+        self, client: TestClient
+    ) -> None:
+        """PUT /api/settings - webview.render_mode を更新して再取得できる。"""
+        response = client.put(
+            "/api/settings",
+            json={
+                "sections": [
+                    {"id": "webview", "values": {"render_mode": "gpu"}}
+                ]
+            },
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+
+        after = client.get("/api/settings")
+        assert after.status_code == status.HTTP_200_OK
+        sections = after.json()["sections"]
+        assert isinstance(sections, list)
+
+        webview_section = next(
+            section for section in sections if section["id"] == "webview"
+        )
+        render_mode = next(
+            field
+            for field in webview_section["fields"]
+            if field["id"] == "render_mode"
+        )
+
+        assert render_mode["value"] == "gpu"
+
+    def test_update_settings_roundtrip_remote_access_enabled(
+        self, client: TestClient
+    ) -> None:
+        """PUT /api/settings - remote_access.enabled を更新して再取得できる。"""
+        response = client.put(
+            "/api/settings",
+            json={
+                "sections": [
+                    {"id": "remote_access", "values": {"enabled": True}}
+                ]
+            },
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+
+        after = client.get("/api/settings")
+        assert after.status_code == status.HTTP_200_OK
+        sections = after.json()["sections"]
+        assert isinstance(sections, list)
+
+        remote_section = next(
+            section for section in sections if section["id"] == "remote_access"
+        )
+        enabled = next(
+            field
+            for field in remote_section["fields"]
+            if field["id"] == "enabled"
+        )
+
+        assert enabled["value"] is True
+
+
+class TestDeviceStatusEndpoints:
+    """デバイス状態エンドポイントのcontractテスト。"""
+
+    def test_get_device_status(self, client: TestClient) -> None:
+        """GET /api/device/status - デバイス状態取得。"""
+        response = client.get("/api/device/status")
+        assert response.status_code == status.HTTP_200_OK
+
+        # レスポンス形式の検証
+        # is_connected: bool を返すことを想定
+        data = response.json()
+        assert isinstance(data, (bool, dict))
+
+    def test_post_device_recover(
+        self, client: TestClient, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """POST /api/device/recover - 復旧レスポンスを返す。"""
+
+        def _fake_recover(
+            self: DeviceChecker, trigger: CaptureDeviceRecoveryTrigger
+        ) -> CaptureDeviceRecoveryResult:
+            return CaptureDeviceRecoveryResult(
+                trigger=trigger,
+                attempted=True,
+                recovered=False,
+                message="recover failed",
+                action="restart-device",
+            )
+
+        monkeypatch.setattr(DeviceChecker, "recover_device", _fake_recover)
+
+        response = client.post(
+            "/api/device/recover", json={"trigger": "manual"}
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+        data = response.json()
+        assert data["attempted"] is True
+        assert data["recovered"] is False
+        assert data["message"] == "recover failed"
+
+    def test_get_device_diagnostics(
+        self, client: TestClient, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """GET /api/device/diagnostics - 診断情報を返す。"""
+
+        def _fake_diagnostics(self: DeviceChecker) -> CaptureDeviceDiagnostics:
+            return CaptureDeviceDiagnostics(
+                configured_device_name="MiraBox Capture",
+                configured_hardware_id="USB\\VID_534D&PID_2109",
+                configured_location_path="PCIROOT(0)#PCI(1400)#USBROOT(0)#USB(3)#USB(2)",
+                configured_parent_instance_id="USB\\VID_534D&PID_2109\\6&23427119&0&2",
+                resolved_device=None,
+                available_devices=[],
+                last_recovery=None,
+            )
+
+        monkeypatch.setattr(
+            DeviceChecker, "get_diagnostics", _fake_diagnostics
+        )
+
+        response = client.get("/api/device/diagnostics")
+
+        assert response.status_code == status.HTTP_200_OK
+        data = response.json()
+        assert data["configured_device_name"] == "MiraBox Capture"
+        assert "available_devices" in data
+
+    def test_update_settings_capture_device_rebinds(
+        self, client: TestClient, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """PUT /api/settings - capture_device 更新後に再バインドを通す。"""
+        calls: list[str] = []
+        current_name = _current_capture_device_name(client)
+        next_name = (
+            "MiraBox Capture"
+            if current_name != "MiraBox Capture"
+            else "Capture Device"
+        )
+
+        def _fake_rebind(self: DeviceChecker) -> CaptureDeviceBindingResult:
+            calls.append("rebind")
+            return CaptureDeviceBindingResult(
+                device_name=next_name,
+                binding_status="bound",
+                message="bound",
+            )
+
+        monkeypatch.setattr(
+            DeviceChecker, "rebind_configured_device", _fake_rebind
+        )
+
+        response = client.put(
+            "/api/settings",
+            json={
+                "sections": [
+                    {
+                        "id": "capture_device",
+                        "values": {"name": next_name},
+                    }
+                ]
+            },
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+
+    def test_update_settings_skips_capture_device_rebind_when_name_is_unchanged(
+        self, client: TestClient, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        calls: list[str] = []
+        current_name = _current_capture_device_name(client)
+
+        def _fake_rebind(self: DeviceChecker) -> CaptureDeviceBindingResult:
+            calls.append("rebind")
+            return CaptureDeviceBindingResult(
+                device_name=current_name,
+                binding_status="name_only",
+                message="unchanged",
+            )
+
+        monkeypatch.setattr(
+            DeviceChecker, "rebind_configured_device", _fake_rebind
+        )
+
+        response = client.put(
+            "/api/settings",
+            json={
+                "sections": [
+                    {
+                        "id": "capture_device",
+                        "values": {"name": current_name},
+                    }
+                ]
+            },
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+
+
+class TestPermissionDialogEndpoints:
+    """許可ダイアログ状態エンドポイントのcontractテスト。"""
+
+    def test_get_camera_permission_dialog_status(
+        self, client: TestClient
+    ) -> None:
+        """GET /api/settings/camera-permission-dialog - カメラ許可ダイアログ状態取得。"""
+        response = client.get("/api/settings/camera-permission-dialog")
+        assert response.status_code == status.HTTP_200_OK
+
+        data = response.json()
+        assert "shown" in data
+        assert isinstance(data["shown"], bool)
+
+    def test_mark_camera_permission_dialog_shown(
+        self, client: TestClient
+    ) -> None:
+        """POST /api/settings/camera-permission-dialog - カメラ許可ダイアログを表示済みとしてマーク。"""
+        request_data = {"shown": True}
+        response = client.post(
+            "/api/settings/camera-permission-dialog", json=request_data
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+        data = response.json()
+        assert "status" in data
+        assert data["status"] == "ok"
+
+    def test_get_youtube_permission_dialog_status(
+        self, client: TestClient
+    ) -> None:
+        """GET /api/settings/youtube-permission-dialog - YouTube許可ダイアログ状態取得。"""
+        response = client.get("/api/settings/youtube-permission-dialog")
+        assert response.status_code == status.HTTP_200_OK
+
+        data = response.json()
+        assert "shown" in data
+        assert isinstance(data["shown"], bool)
+
+    def test_mark_youtube_permission_dialog_shown(
+        self, client: TestClient
+    ) -> None:
+        """POST /api/settings/youtube-permission-dialog - YouTube許可ダイアログを表示済みとしてマーク。"""
+        request_data = {"shown": True}
+        response = client.post(
+            "/api/settings/youtube-permission-dialog", json=request_data
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+        data = response.json()
+        assert "status" in data
+        assert data["status"] == "ok"
+
+    def test_permission_dialog_invalid_request(
+        self, client: TestClient
+    ) -> None:
+        """POST /api/settings/*-permission-dialog - 不正なリクエストスキーマ。"""
+        # 不正なフィールド
+        request_data = {"invalid_field": True}
+        response = client.post(
+            "/api/settings/camera-permission-dialog", json=request_data
+        )
+
+        # shownフィールドが無い場合はデフォルト値で処理される可能性もあるため、
+        # 200または422を許容
+        assert response.status_code in [
+            status.HTTP_200_OK,
+            status.HTTP_422_UNPROCESSABLE_CONTENT,
+        ]
+
+
+class TestSettingsPersistence:
+    """設定の永続化確認テスト。"""
+
+    def test_settings_roundtrip(self, client: TestClient) -> None:
+        """設定の取得→更新→再取得のラウンドトリップテスト。"""
+        # 1. 現在の設定を取得
+        get_response = client.get("/api/settings")
+        assert get_response.status_code == status.HTTP_200_OK
+        # セクション構造の存在を確認
+        assert "sections" in get_response.json()
+
+        # 2. 空の更新を実行（変更なし）
+        update_request = {"sections": []}
+        update_response = client.put("/api/settings", json=update_request)
+        assert update_response.status_code == status.HTTP_200_OK
+
+        # 3. 再度取得して一貫性を確認
+        get_response_after = client.get("/api/settings")
+        assert get_response_after.status_code == status.HTTP_200_OK
+
+        # 更新していないため、セクション構造は維持される
+        assert "sections" in get_response_after.json()

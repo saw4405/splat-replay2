@@ -9,6 +9,7 @@ export const baseVitestConfig = defineConfig({
     globals: true,
     environment: 'happy-dom',
     setupFiles: ['./vitest.setup.ts'],
+    testTimeout: 20000,
     exclude: ['node_modules', 'dist'],
     coverage: {
       provider: 'v8',

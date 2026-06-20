@@ -49,7 +49,7 @@ test('編集・アップロード開始ワークフロー', async ({ page }) => 
     timeout: 30_000,
   });
 
-  const startButton = page.locator('button.process-button');
+  const startButton = page.getByTestId('drawer-process-button');
   await expect(startButton).toBeVisible({ timeout: 30_000 });
   await expect(startButton).toHaveText(/処理開始/);
   await expect(startButton).toBeEnabled();

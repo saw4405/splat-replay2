@@ -141,7 +141,13 @@ task.exe test:workflow:full       # E2E 全件
 - **component/integration テスト**: テスト対象コンポーネントと同じディレクトリに `.component.test.ts` または `.integration.test.ts` で配置
 - **E2E テスト**: `frontend/tests/e2e/` に配置
 
-### 5.4 component/integration テストの書き方
+### 5.4 セレクタ方針
+
+- **第一選択**: `role` / `label` / `title` / 可視テキストなど、ユーザーが認識できる観測点を使う
+- **補助契約**: `data-testid` は複数同型要素の識別や、アクセシブル名だけでは曖昧な箇所に限定する
+- **避ける**: `component.open`、CSS class、DOM タグ名、`querySelector` などの内部構造検査に寄せない
+
+### 5.5 component/integration テストの書き方
 
 **注記**: logic テストも Vitest で実行するため、同じ API を使用できます。
 

@@ -31,7 +31,7 @@
 
   let { open = $bindable(false) }: Props = $props();
 
-  // テストから component.open でアクセスできるように export
+  // 親コンポーネントと BaseDialog の bind:open を同期するために公開する。
   export { open };
 
   let sections = $state<SettingsUiSection[]>([]);

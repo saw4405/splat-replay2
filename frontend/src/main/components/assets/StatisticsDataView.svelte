@@ -196,7 +196,7 @@
                 <ul class="stage-list">
                   {#each Object.entries(rStat.stages).sort((a, b) => b[1].matches - a[1].matches) as [sKey, sStat]}
                     {@const sWinRate = sStat.matches > 0 ? (sStat.wins / sStat.matches) * 100 : 0}
-                    <li class="stage-row">
+                    <li class="stage-row" aria-label={stageLabel(sKey)}>
                       <span class="stage-name">{stageLabel(sKey)}</span>
                       <span class="stage-meta">
                         <span class="count">{sStat.matches}戦</span>

@@ -8,15 +8,15 @@
 
 ### テストファイル
 
-1. **test_weapon_recognition_performance.py** - ブキ判定処理時間測定
-   - レポート出力なし/ありでの処理時間比較
+1. **test_weapon_recognition_performance.py** - ブキ判定処理時間の閾値付き回帰
+   - 録画中に使うレポート出力なしの処理時間を測定
    - 統計情報: 平均・中央値・最小・最大・標準偏差
-   - アサート: 処理完了のみ（閾値判定なし）
+   - アサート: 正確性の前提と平均処理時間の閾値
 
-2. **test_weapon_display_detection_performance.py** - ブキ表示検出時間測定
+2. **test_weapon_display_detection_performance.py** - ブキ表示検出時間の閾値付き回帰
    - 表示あり/なしフレームでの処理時間比較
    - 統計情報: 平均・最小・最大
-   - アサート: 正確性のみ（閾値判定なし）
+   - アサート: 正確性と平均処理時間の閾値
 
 3. **test_frame_analyzer_performance.py** - FrameAnalyzer メソッド閾値判定
    - デフォルト閾値: 1/30秒/4 = 約8.33ms（30fpsで1フレーム当たり4解析を想定）
@@ -25,10 +25,10 @@
    - 測定回数: 5回（ITER=5）
    - 対象メソッド数: 20以上（SpeedCase配列）
 
-4. **test_handler_performance.py** - InGamePhaseHandler 処理時間測定
+4. **test_handler_performance.py** - InGamePhaseHandler 処理時間の閾値付き回帰
    - 目標閾値: 1/30秒 = 約33.33ms
    - 測定回数: 5回（ITER=5）
-   - アサート: なし（測定結果の出力のみ）
+   - アサート: 平均処理時間の閾値
 
 ### 実行方法
 
@@ -58,17 +58,13 @@ def perf_recorder() -> Iterator[Callable[[PerfRecord], None]]:
 
 **現状**:
 
-- `test_frame_analyzer_performance.py` のみ閾値判定あり
-- 他のテストは測定のみ（Pass/Fail判定なし）
+- 実行時導線に入る処理は `perf` とし、閾値付きで検出する
+- 診断レポート出力など、ユーザー導線の時間予算から外す測定だけを `benchmark` にする
 
 **拡充案**:
 
-- `test_weapon_recognition_performance.py` に妥当な閾値を設定
-  - 例: レポート出力なし < 100ms、レポート出力あり < 200ms
-- `test_weapon_display_detection_performance.py` に閾値を設定
-  - 例: 表示検出 < 20ms
-- `test_handler_performance.py` に閾値判定を追加
-  - 目標: < 33.33ms（30fps対応）
+- 閾値の根拠を、録画ループ、判定間隔、検知窓、過去安定値のどれに基づくか明記する
+- 閾値超過が続く項目は `benchmark` へ落とすのではなく、まず実装改善対象として扱う
 
 ### 2. カバレッジ拡大
 
@@ -153,9 +149,9 @@ def perf_recorder() -> Iterator[Callable[[PerfRecord], None]]:
 
 ### 画像認識の閾値
 
-- **軽量検出** (テンプレートマッチング単純): < 10ms
-- **中量検出** (複数テンプレート): < 20ms
-- **重量検出** (OCR含む): < 100ms
+- **軽量検出** (フレームごとの単純判定): 1フレーム処理時間を目安にする
+- **間隔付きバックグラウンド検出**: 起動間隔内で完了することを目安にする
+- **重量認識**: 検知窓内で複数回試行できることを目安にする
 
 ### I/O処理の閾値
 

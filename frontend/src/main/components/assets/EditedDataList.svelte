@@ -149,10 +149,15 @@
     </div>
   {:else}
     {#each videoItems as video (`${video.source}:${video.id}`)}
-      <div class="video-item glass-card" class:pending-candidate={video.source === 'pending'}>
+      <div
+        class="video-item glass-card"
+        class:pending-candidate={video.source === 'pending'}
+        data-testid="edited-video-item"
+      >
         <!-- 削除ボタン (フローティング右上) -->
         <button
           class="delete-button glass-icon-button"
+          data-testid="edited-video-delete-button"
           class:deleting={actions.deletingVideoId === video.id}
           disabled={actions.deletingVideoId === video.id}
           onclick={(e) => actions.handleDeleteVideo(e, video)}
@@ -215,6 +220,7 @@
                   {#if video.playable}
                     <button
                       class="overlay-button play-button"
+                      data-testid="edited-video-play-button"
                       onclick={() => handlePlayVideo(video)}
                       title="動画を再生"
                     >
@@ -233,6 +239,7 @@
                   {/if}
                   <button
                     class="overlay-button zoom-button"
+                    data-testid="edited-video-zoom-button"
                     onclick={() => handleZoomThumbnail(video)}
                     title="拡大表示"
                   >

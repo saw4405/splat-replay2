@@ -81,7 +81,7 @@ describe('Metadata編集フロー Integration', () => {
 
   describe('初期化とデータ読み込み', () => {
     it('ダイアログを開くとメタデータオプションが利用可能である', async () => {
-      const { container } = render(MetadataEditDialog, {
+      render(MetadataEditDialog, {
         props: {
           visible: true,
           videoId: 'test-video.mp4',
@@ -93,9 +93,9 @@ describe('Metadata編集フロー Integration', () => {
       // ドロップダウンが存在し、選択可能な状態になることを確認
       await waitFor(
         () => {
-          const matchSelect = container.querySelector('select#match');
-          const ruleSelect = container.querySelector('select#rule');
-          const stageSelect = container.querySelector('select#stage');
+          const matchSelect = screen.getByLabelText('マッチ');
+          const ruleSelect = screen.getByLabelText('ルール');
+          const stageSelect = screen.getByLabelText('ステージ');
 
           expect(matchSelect).toBeInTheDocument();
           expect(ruleSelect).toBeInTheDocument();
@@ -106,7 +106,7 @@ describe('Metadata編集フロー Integration', () => {
 
       // オプションが正しく読み込まれていることを確認
       // （空のselect elements ではないことを確認）
-      const matchSelect = container.querySelector('select#match') as HTMLSelectElement;
+      const matchSelect = screen.getByLabelText('マッチ') as HTMLSelectElement;
       const options = Array.from(matchSelect.options);
       // 最初のオプション（空の選択肢）を除いて、実際のオプションがあるはず
       expect(options.length).toBeGreaterThan(0);
@@ -117,7 +117,7 @@ describe('Metadata編集フロー Integration', () => {
       const testFetchMock = vi.fn().mockRejectedValue(new Error('Network error'));
       global.fetch = testFetchMock;
 
-      const { container } = render(MetadataEditDialog, {
+      render(MetadataEditDialog, {
         props: {
           visible: true,
           videoId: 'test-video.mp4',
@@ -132,8 +132,7 @@ describe('Metadata編集フロー Integration', () => {
       expect(screen.getByLabelText('キル数')).toBeInTheDocument();
       expect(screen.getByLabelText('デス数')).toBeInTheDocument();
 
-      // セレクトボックスは存在するが、オプションが空かもしれない
-      const matchSelect = container.querySelector('select#match');
+      const matchSelect = screen.getByLabelText('マッチ');
       expect(matchSelect).toBeInTheDocument();
 
       // 保存ボタンとキャンセルボタンは正常に表示される

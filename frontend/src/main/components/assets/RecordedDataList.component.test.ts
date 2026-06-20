@@ -1,4 +1,4 @@
-import { render, screen, fireEvent, waitFor, cleanup } from '@testing-library/svelte';
+import { render, screen, fireEvent, waitFor, cleanup, within } from '@testing-library/svelte';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import RecordedDataList from './RecordedDataList.svelte';
 import type { RecordedVideo } from '../../api/types';
@@ -125,16 +125,16 @@ describe('RecordedDataList', () => {
 
   describe('リスト表示', () => {
     it('動画リストが空の場合、何も表示されない', () => {
-      const { container } = render(RecordedDataList, { props: { videos: [] } });
-      expect(container.querySelector('.video-item')).not.toBeInTheDocument();
+      render(RecordedDataList, { props: { videos: [] } });
+      expect(screen.queryByTestId('recorded-video-item')).not.toBeInTheDocument();
     });
 
     it('動画リストが表示される', () => {
-      const { container } = render(RecordedDataList, { props: { videos: mockVideos } });
+      render(RecordedDataList, { props: { videos: mockVideos } });
 
       // ファイル名はaltテキストとして表示される
-      const img1 = container.querySelector('img[alt="test_video_1.mp4"]');
-      const img2 = container.querySelector('img[alt="test_video_2.mp4"]');
+      const img1 = screen.getByAltText('test_video_1.mp4');
+      const img2 = screen.getByAltText('test_video_2.mp4');
       expect(img1).toBeInTheDocument();
       expect(img2).toBeInTheDocument();
     });
@@ -156,9 +156,9 @@ describe('RecordedDataList', () => {
 
   describe('サムネイルURL生成', () => {
     it('サムネイルURLが正しく生成される', () => {
-      const { container } = render(RecordedDataList, { props: { videos: mockVideos } });
+      render(RecordedDataList, { props: { videos: mockVideos } });
 
-      const img = container.querySelector('img[alt*="test_video_1"]') as HTMLImageElement;
+      const img = screen.getByAltText(/test_video_1/) as HTMLImageElement;
       expect(img).toBeInTheDocument();
       expect(img.src).toContain('/thumbnails/recorded/test_video_1.png');
     });
@@ -166,9 +166,9 @@ describe('RecordedDataList', () => {
 
   describe('画像エラー処理', () => {
     it('画像読み込みエラー時にフォールバック画像が表示される', async () => {
-      const { container } = render(RecordedDataList, { props: { videos: mockVideos } });
+      render(RecordedDataList, { props: { videos: mockVideos } });
 
-      const img = container.querySelector('img') as HTMLImageElement;
+      const img = screen.getByAltText('test_video_1.mp4') as HTMLImageElement;
       expect(img).toBeInTheDocument();
 
       const originalSrc = img.src;
@@ -214,9 +214,11 @@ describe('RecordedDataList', () => {
 
   describe('動画削除', () => {
     it('削除ボタンをクリックすると確認ダイアログが表示される', async () => {
-      const { container } = render(RecordedDataList, { props: { videos: mockVideos } });
+      render(RecordedDataList, { props: { videos: mockVideos } });
 
-      const deleteButton = container.querySelector('.delete-button') as HTMLButtonElement;
+      const deleteButton = screen.getAllByTestId(
+        'recorded-video-delete-button'
+      )[0] as HTMLButtonElement;
       expect(deleteButton).toBeInTheDocument();
       await fireEvent.click(deleteButton);
 
@@ -296,7 +298,7 @@ describe('RecordedDataList', () => {
       });
 
       await fireEvent.click(
-        screen.getByRole('dialog', { name: 'エラー' }).querySelector('button')!
+        within(screen.getByRole('dialog', { name: 'エラー' })).getByTestId('dialog-confirm-button')
       );
 
       await fireEvent.click(screen.getByTestId('recorded-video-metadata-button'));

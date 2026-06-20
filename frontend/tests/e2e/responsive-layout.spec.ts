@@ -6,24 +6,46 @@ const e2eEnvironment = environment();
 const captureResponsiveScreenshots =
   process.env.SPLAT_REPLAY_CAPTURE_RESPONSIVE_SCREENSHOTS === '1';
 
-type LayoutMode = 'portrait' | 'landscape';
-
 type ViewportCase = {
   name: string;
   size: {
     width: number;
     height: number;
   };
-  mode: LayoutMode;
+  expectsFloatingDrawerButton: boolean;
 };
 
 const viewportCases: ViewportCase[] = [
-  { name: 'iPhone SE portrait', size: { width: 375, height: 667 }, mode: 'portrait' },
-  { name: 'iPhone SE landscape', size: { width: 667, height: 375 }, mode: 'landscape' },
-  { name: 'iPhone 5 portrait', size: { width: 320, height: 568 }, mode: 'portrait' },
-  { name: 'iPad portrait', size: { width: 768, height: 1024 }, mode: 'portrait' },
-  { name: 'iPad landscape', size: { width: 1024, height: 768 }, mode: 'portrait' },
-  { name: 'desktop 16:9', size: { width: 1920, height: 1080 }, mode: 'portrait' },
+  {
+    name: 'iPhone SE portrait',
+    size: { width: 375, height: 667 },
+    expectsFloatingDrawerButton: false,
+  },
+  {
+    name: 'iPhone SE landscape',
+    size: { width: 667, height: 375 },
+    expectsFloatingDrawerButton: true,
+  },
+  {
+    name: 'iPhone 5 portrait',
+    size: { width: 320, height: 568 },
+    expectsFloatingDrawerButton: false,
+  },
+  {
+    name: 'iPad portrait',
+    size: { width: 768, height: 1024 },
+    expectsFloatingDrawerButton: false,
+  },
+  {
+    name: 'iPad landscape',
+    size: { width: 1024, height: 768 },
+    expectsFloatingDrawerButton: false,
+  },
+  {
+    name: 'desktop 16:9',
+    size: { width: 1920, height: 1080 },
+    expectsFloatingDrawerButton: false,
+  },
 ];
 
 function expectBoxInsideViewport(
@@ -66,7 +88,10 @@ async function expectPreviewKeepsSixteenByNine(page: Page): Promise<void> {
   expect(ratio, 'preview should preserve a 16:9 aspect ratio').toBeLessThan(1.8);
 }
 
-async function expectMainControlsStayReachable(page: Page, mode: LayoutMode): Promise<void> {
+async function expectMainControlsStayReachable(
+  page: Page,
+  expectsFloatingDrawerButton: boolean
+): Promise<void> {
   const viewport = page.viewportSize();
   if (!viewport) {
     throw new Error('viewport size is not configured');
@@ -75,7 +100,7 @@ async function expectMainControlsStayReachable(page: Page, mode: LayoutMode): Pr
   const controls: Array<[Locator, string]> = [
     [page.getByTestId('settings-button'), 'settings button'],
   ];
-  if (mode === 'landscape') {
+  if (expectsFloatingDrawerButton) {
     controls.push([page.getByTestId('main-drawer-button'), 'drawer button']);
   } else {
     controls.push([page.getByTestId('drawer-process-button'), 'process button']);
@@ -98,7 +123,7 @@ async function expectTabsRemainOperable(page: Page): Promise<void> {
 }
 
 async function expectTabletTabsKeepTextDensity(page: Page): Promise<void> {
-  await expect(page.locator('.tab-info').first()).toBeVisible();
+  await expect(page.getByTestId('tab-info').first()).toBeVisible();
 }
 
 async function captureScreenshotIfRequested(
@@ -125,13 +150,13 @@ for (const viewportCase of viewportCases) {
     await expect(page.getByTestId('main-app-shell')).toBeVisible();
     await expectNoHorizontalDocumentOverflow(page);
     await expectPreviewKeepsSixteenByNine(page);
-    await expectMainControlsStayReachable(page, viewportCase.mode);
+    await expectMainControlsStayReachable(page, viewportCase.expectsFloatingDrawerButton);
     await expectTabsRemainOperable(page);
 
     const drawerButton = page.getByTestId('main-drawer-button');
     const drawerRoot = page.getByTestId('bottom-drawer-root');
 
-    if (viewportCase.mode === 'landscape') {
+    if (viewportCase.expectsFloatingDrawerButton) {
       await expect(drawerButton).toBeVisible();
       const drawerBox = await drawerRoot.boundingBox();
       expect(drawerBox, 'hidden drawer should keep a measurable box').not.toBeNull();
@@ -142,7 +167,7 @@ for (const viewportCase of viewportCases) {
       const previewBox = await visibleBox(page.getByTestId('preview-container'), 'preview');
       expect(
         previewBox.height,
-        'landscape preview should use most of the available height'
+        'compact landscape preview should use most of the available height'
       ).toBeGreaterThanOrEqual(viewportCase.size.height * 0.7);
     } else {
       await expect(drawerButton).toBeHidden();
@@ -179,5 +204,5 @@ test('main responsive layout: drawer labels collapse before the overlap threshol
   await page.setViewportSize({ width: 640, height: 900 });
   await gotoMain(page);
 
-  await expect(page.locator('.tab-info').first()).toBeHidden();
+  await expect(page.getByTestId('tab-info').first()).toBeHidden();
 });

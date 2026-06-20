@@ -388,7 +388,7 @@ tasks:
     desc: Type check backend code
     dir: "{{.BACKEND_DIR}}"
     cmds:
-      - uv run ty check
+      - uv run ty check src tests
 
   type-check:frontend:
     desc: Type check frontend code
@@ -416,7 +416,7 @@ tasks:
       TEMP: "{{.LOCAL_TEMP_DIR}}"
       TMPDIR: "{{.LOCAL_TEMP_DIR}}"
     cmds:
-      - uv run pytest -q
+      - powershell -NoProfile -ExecutionPolicy Bypass -File "{{.ROOT_DIR}}/scripts/run-backend-pytest.ps1" -q
 
   test:frontend:
     desc: Run frontend unit tests (logic + component + integration)
@@ -466,7 +466,7 @@ tasks:
       TEMP: "{{.LOCAL_TEMP_DIR}}"
       TMPDIR: "{{.LOCAL_TEMP_DIR}}"
     cmds:
-      - uv run pytest -q -m "contract and not perf"
+      - powershell -NoProfile -ExecutionPolicy Bypass -File "{{.ROOT_DIR}}/scripts/run-backend-pytest.ps1" -q -m "contract and not perf"
 
   test:workflow:smoke:
     desc: Run lightweight replay workflow regression with the first bundled asset
@@ -502,7 +502,21 @@ tasks:
       TEMP: "{{.LOCAL_TEMP_DIR}}"
       TMPDIR: "{{.LOCAL_TEMP_DIR}}"
     cmds:
-      - uv run pytest -q -m perf
+      - powershell -NoProfile -ExecutionPolicy Bypass -File "{{.ROOT_DIR}}/scripts/run-backend-pytest.ps1" -q -m "perf and not benchmark"
+
+  test:benchmark:
+    desc: Run measurement-only performance benchmarks
+    dir: "{{.BACKEND_DIR}}"
+    deps:
+      - install:backend
+      - prepare:runtime-dirs
+    env:
+      TMP: "{{.LOCAL_TEMP_DIR}}"
+      TEMP: "{{.LOCAL_TEMP_DIR}}"
+      TMPDIR: "{{.LOCAL_TEMP_DIR}}"
+      PYTEST_ALLOW_NO_TESTS: "1"
+    cmds:
+      - powershell -NoProfile -ExecutionPolicy Bypass -File "{{.ROOT_DIR}}/scripts/run-backend-pytest.ps1" -q -m benchmark
 
   test:release:
     desc: Run release-quality regression gate
@@ -597,7 +611,7 @@ tasks:
       TEMP: "{{.LOCAL_TEMP_DIR}}"
       TMPDIR: "{{.LOCAL_TEMP_DIR}}"
     cmds:
-      - uv run pytest -v
+      - powershell -NoProfile -ExecutionPolicy Bypass -File "{{.ROOT_DIR}}/scripts/run-backend-pytest.ps1" -v
 
   # ========================================
   # Coverage (カバレッジ測定)
@@ -619,7 +633,7 @@ tasks:
       TEMP: "{{.LOCAL_TEMP_DIR}}"
       TMPDIR: "{{.LOCAL_TEMP_DIR}}"
     cmds:
-      - uv run pytest --cov=splat_replay --cov-report=term --cov-report=html tests/
+      - powershell -NoProfile -ExecutionPolicy Bypass -File "{{.ROOT_DIR}}/scripts/run-backend-pytest.ps1" --cov=splat_replay --cov-report=term --cov-report=html tests/
       - cmd: 'powershell -NoProfile -Command "Write-Host ''''; Write-Host ''カバレッジレポート生成完了:'' -ForegroundColor Green; Write-Host ''  {{.BACKEND_DIR}}/htmlcov/index.html'' -ForegroundColor Yellow; Write-Host ''''"'
 
   coverage:frontend:

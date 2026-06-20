@@ -184,8 +184,7 @@ describe('Settings フロー Integration', () => {
 
       // SelectFieldはカスタムコンポーネント（button）なので、値を含むspan要素を確認
       const selectButton = screen.getByRole('combobox');
-      let selectValueSpan = selectButton.querySelector('.select-value');
-      expect(selectValueSpan?.textContent).toBe('info');
+      expect(selectButton).toHaveTextContent('info');
 
       // SelectFieldはクリックしてドロップダウンを開く
       await fireEvent.click(selectButton);
@@ -210,8 +209,7 @@ describe('Settings フロー Integration', () => {
       // 値が更新されるまで待つ（ドロップダウンが閉じるのを待つ）
       await waitFor(
         () => {
-          selectValueSpan = selectButton.querySelector('.select-value');
-          expect(selectValueSpan?.textContent).toBe('error');
+          expect(selectButton).toHaveTextContent('error');
         },
         { timeout: 2000 }
       );
@@ -250,7 +248,7 @@ describe('Settings フロー Integration', () => {
       );
       fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({}), { status: 200 }));
 
-      const { component } = render(SettingsDialog, { props: { open: true } });
+      render(SettingsDialog, { props: { open: true } });
 
       await waitFor(() => {
         expect(screen.queryByText('デバッグモード')).toBeInTheDocument();
@@ -260,7 +258,7 @@ describe('Settings フロー Integration', () => {
       await fireEvent.click(saveButton);
 
       await waitFor(() => {
-        expect(component.open).toBe(false);
+        expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
       });
     });
 
@@ -296,7 +294,7 @@ describe('Settings フロー Integration', () => {
       );
       fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({}), { status: 200 }));
 
-      const { component } = render(SettingsDialog, { props: { open: true } });
+      render(SettingsDialog, { props: { open: true } });
 
       await waitFor(() => {
         expect(screen.getByTestId('settings-section-display')).toHaveTextContent('表示');
@@ -331,7 +329,7 @@ describe('Settings フロー Integration', () => {
       });
 
       await waitFor(() => {
-        expect(component.open).toBe(false);
+        expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
       });
 
       expect(document.documentElement.dataset.renderMode).toBe('gpu');
@@ -364,7 +362,7 @@ describe('Settings フロー Integration', () => {
 
   describe('キャンセルフロー', () => {
     it('キャンセルボタンをクリックするとダイアログが閉じる', async () => {
-      const { component } = render(SettingsDialog, { props: { open: true } });
+      render(SettingsDialog, { props: { open: true } });
 
       await waitFor(() => {
         expect(screen.queryByText('デバッグモード')).toBeInTheDocument();
@@ -374,7 +372,7 @@ describe('Settings フロー Integration', () => {
       await fireEvent.click(cancelButton);
 
       await waitFor(() => {
-        expect(component.open).toBe(false);
+        expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
       });
     });
   });

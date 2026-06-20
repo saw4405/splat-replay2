@@ -19,8 +19,7 @@
   showCloseButton={true}
 >
   <div class="video-container">
-    <video controls autoplay class="video-player">
-      <source src={videoUrl} type="video/mp4" />
+    <video controls autoplay class="video-player" src={videoUrl} aria-label={`${videoTitle}を再生`}>
       <track kind="captions" />
       お使いのブラウザは動画再生に対応していません。
     </video>

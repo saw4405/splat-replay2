@@ -82,16 +82,16 @@ describe('EditedDataList', () => {
 
   describe('リスト表示', () => {
     it('動画リストが空の場合、何も表示されない', () => {
-      const { container } = render(EditedDataList, { props: { videos: [] } });
-      expect(container.querySelector('.video-item')).not.toBeInTheDocument();
+      render(EditedDataList, { props: { videos: [] } });
+      expect(screen.queryByTestId('edited-video-item')).not.toBeInTheDocument();
     });
 
     it('編集済み動画リストが表示される', () => {
-      const { container } = render(EditedDataList, { props: { videos: mockVideos } });
+      render(EditedDataList, { props: { videos: mockVideos } });
 
       // ファイル名はaltテキストとして表示される
-      const img1 = container.querySelector('img[alt="edited_video_1.mp4"]');
-      const img2 = container.querySelector('img[alt="edited_video_2.mp4"]');
+      const img1 = screen.getByAltText('edited_video_1.mp4');
+      const img2 = screen.getByAltText('edited_video_2.mp4');
       expect(img1).toBeInTheDocument();
       expect(img2).toBeInTheDocument();
     });
@@ -117,11 +117,9 @@ describe('EditedDataList', () => {
       expect(screen.getByTestId('edited-video-description')).toHaveTextContent('8K/3D');
       expect(screen.getByTestId('edited-video-description')).toHaveTextContent('SP×2');
 
-      expect(container.querySelector('.play-button')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('edited-video-play-button')).not.toBeInTheDocument();
 
-      const img = container.querySelector(
-        'img[alt="20260314_12_Xマッチ_ガチエリア.mp4"]'
-      ) as HTMLImageElement;
+      const img = screen.getByAltText('20260314_12_Xマッチ_ガチエリア.mp4') as HTMLImageElement;
       expect(img).toBeInTheDocument();
       expect(img.src).toContain(
         '/thumbnails/edited/20260314_12_X%E3%83%9E%E3%83%83%E3%83%81_%E3%82%AC%E3%83%81%E3%82%A8%E3%83%AA%E3%82%A2.png'
@@ -161,9 +159,9 @@ describe('EditedDataList', () => {
 
   describe('サムネイルURL生成', () => {
     it('サムネイルURLが正しく生成される', () => {
-      const { container } = render(EditedDataList, { props: { videos: mockVideos } });
+      render(EditedDataList, { props: { videos: mockVideos } });
 
-      const img = container.querySelector('img[alt*="edited_video_1"]') as HTMLImageElement;
+      const img = screen.getByAltText(/edited_video_1/) as HTMLImageElement;
       expect(img).toBeInTheDocument();
       expect(img.src).toContain('/thumbnails/edited/edited_video_1.png');
     });
@@ -171,9 +169,9 @@ describe('EditedDataList', () => {
 
   describe('画像エラー処理', () => {
     it('画像読み込みエラー時にフォールバック画像が表示される', async () => {
-      const { container } = render(EditedDataList, { props: { videos: mockVideos } });
+      render(EditedDataList, { props: { videos: mockVideos } });
 
-      const img = container.querySelector('img') as HTMLImageElement;
+      const img = screen.getByAltText('edited_video_1.mp4') as HTMLImageElement;
       expect(img).toBeInTheDocument();
 
       const originalSrc = img.src;
@@ -189,12 +187,12 @@ describe('EditedDataList', () => {
   describe('モーダル状態管理', () => {
     it('動画プレイヤーを開くとmodalOpenイベントが発火する', async () => {
       const modalOpenHandler = vi.fn();
-      const { container } = render(EditedDataList, {
+      render(EditedDataList, {
         props: { videos: mockVideos, onModalOpen: modalOpenHandler },
       });
 
       // オーバーレイ内の再生ボタンをクリック
-      const playButton = container.querySelector('.play-button') as HTMLButtonElement;
+      const playButton = screen.getAllByTestId('edited-video-play-button')[0] as HTMLButtonElement;
       expect(playButton).toBeInTheDocument();
       await fireEvent.click(playButton);
 
@@ -203,12 +201,12 @@ describe('EditedDataList', () => {
 
     it('サムネイルズームを開くとmodalOpenイベントが発火する', async () => {
       const modalOpenHandler = vi.fn();
-      const { container } = render(EditedDataList, {
+      render(EditedDataList, {
         props: { videos: mockVideos, onModalOpen: modalOpenHandler },
       });
 
       // オーバーレイ内のズームボタンをクリック
-      const zoomButton = container.querySelector('.zoom-button') as HTMLButtonElement;
+      const zoomButton = screen.getAllByTestId('edited-video-zoom-button')[0] as HTMLButtonElement;
       expect(zoomButton).toBeInTheDocument();
       await fireEvent.click(zoomButton);
 
@@ -218,9 +216,11 @@ describe('EditedDataList', () => {
 
   describe('動画削除', () => {
     it('削除ボタンをクリックすると確認ダイアログが表示される', async () => {
-      const { container } = render(EditedDataList, { props: { videos: mockVideos } });
+      render(EditedDataList, { props: { videos: mockVideos } });
 
-      const deleteButton = container.querySelector('.delete-button') as HTMLButtonElement;
+      const deleteButton = screen.getAllByTestId(
+        'edited-video-delete-button'
+      )[0] as HTMLButtonElement;
       expect(deleteButton).toBeInTheDocument();
       await fireEvent.click(deleteButton);
 
@@ -232,10 +232,12 @@ describe('EditedDataList', () => {
     it('削除確認後に削除APIが呼ばれる', async () => {
       fetchMock.mockResolvedValue(new Response(JSON.stringify({}), { status: 200 }));
 
-      const { container } = render(EditedDataList, { props: { videos: mockVideos } });
+      render(EditedDataList, { props: { videos: mockVideos } });
 
       // 削除ボタンをクリック
-      const deleteButton = container.querySelector('.delete-button') as HTMLButtonElement;
+      const deleteButton = screen.getAllByTestId(
+        'edited-video-delete-button'
+      )[0] as HTMLButtonElement;
       expect(deleteButton).toBeInTheDocument();
       await fireEvent.click(deleteButton);
 
@@ -255,11 +257,13 @@ describe('EditedDataList', () => {
     it('未生成グループの削除では結合予定の録画済動画を削除する', async () => {
       fetchMock.mockResolvedValue(new Response(JSON.stringify({}), { status: 200 }));
 
-      const { container } = render(EditedDataList, {
+      render(EditedDataList, {
         props: { videos: mockPendingVideos },
       });
 
-      const deleteButton = container.querySelector('.delete-button') as HTMLButtonElement;
+      const deleteButton = screen.getAllByTestId(
+        'edited-video-delete-button'
+      )[0] as HTMLButtonElement;
       expect(deleteButton).toBeInTheDocument();
       await fireEvent.click(deleteButton);
 

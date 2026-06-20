@@ -181,6 +181,7 @@ describe('VideoPreviewContainer.svelte', () => {
   });
 
   it('接続中から切断へ遷移したら idle_auto 回復を呼び出す', async () => {
+    vi.useFakeTimers();
     const deviceStatuses = [true, false];
     fetchMock.mockImplementation(async (input: string | URL | Request) => {
       const url = input.toString();
@@ -202,24 +203,21 @@ describe('VideoPreviewContainer.svelte', () => {
 
     render(VideoPreviewContainer);
 
-    await waitFor(() => {
-      expect(fetchMock).toHaveBeenCalledWith(
-        '/api/recorder/prepare',
-        expect.objectContaining({ method: 'POST' })
-      );
-    });
-    await waitFor(() => {
-      expect(fetchMock).toHaveBeenCalledWith(
-        '/api/recorder/enable-auto',
-        expect.objectContaining({ method: 'POST' })
-      );
-    });
-    await Promise.resolve();
-    await Promise.resolve();
+    await vi.advanceTimersByTimeAsync(100);
+    await vi.runOnlyPendingTimersAsync();
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/recorder/prepare',
+      expect.objectContaining({ method: 'POST' })
+    );
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/recorder/enable-auto',
+      expect.objectContaining({ method: 'POST' })
+    );
     expect(notifyRecordingReadyMock).toHaveBeenCalled();
 
     recoverCaptureDeviceMock.mockClear();
-    await new Promise((resolve) => window.setTimeout(resolve, 650));
+    await vi.advanceTimersByTimeAsync(650);
 
     const deviceStatusCalls = fetchMock.mock.calls.filter(([input]) =>
       input.toString().includes('/api/device/status')
@@ -229,6 +227,7 @@ describe('VideoPreviewContainer.svelte', () => {
   });
 
   it('prepare 中の切断では idle_auto 回復を走らせない', async () => {
+    vi.useFakeTimers();
     const deviceStatuses = [true, false];
     const pendingPrepare = new Promise<Response>(() => {});
     fetchMock.mockImplementation(async (input: string | URL | Request) => {
@@ -248,19 +247,20 @@ describe('VideoPreviewContainer.svelte', () => {
 
     render(VideoPreviewContainer);
 
-    await waitFor(() => {
-      expect(fetchMock).toHaveBeenCalledWith(
-        '/api/recorder/prepare',
-        expect.objectContaining({ method: 'POST' })
-      );
-    });
+    await vi.advanceTimersByTimeAsync(100);
 
-    await new Promise((resolve) => window.setTimeout(resolve, 650));
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/recorder/prepare',
+      expect.objectContaining({ method: 'POST' })
+    );
+
+    await vi.advanceTimersByTimeAsync(650);
 
     expect(recoverCaptureDeviceMock).not.toHaveBeenCalledWith('idle_auto');
   });
 
   it('録画セッションが一時停止中の切断では idle_auto 回復を走らせない', async () => {
+    vi.useFakeTimers();
     const deviceStatuses = [true, false];
     fetchMock.mockImplementation(async (input: string | URL | Request) => {
       const url = input.toString();
@@ -282,12 +282,13 @@ describe('VideoPreviewContainer.svelte', () => {
 
     render(VideoPreviewContainer);
 
-    await waitFor(() => {
-      expect(fetchMock).toHaveBeenCalledWith(
-        '/api/recorder/enable-auto',
-        expect.objectContaining({ method: 'POST' })
-      );
-    });
+    await vi.advanceTimersByTimeAsync(100);
+    await vi.runOnlyPendingTimersAsync();
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/recorder/enable-auto',
+      expect.objectContaining({ method: 'POST' })
+    );
 
     emitDomainEvent({ type: 'domain.recording.started', payload: {} });
     emitDomainEvent({
@@ -296,12 +297,13 @@ describe('VideoPreviewContainer.svelte', () => {
     });
 
     recoverCaptureDeviceMock.mockClear();
-    await new Promise((resolve) => window.setTimeout(resolve, 650));
+    await vi.advanceTimersByTimeAsync(650);
 
     expect(recoverCaptureDeviceMock).not.toHaveBeenCalledWith('idle_auto');
   });
 
   it('video_file モードでは追加の device status ポーリングをしない', async () => {
+    vi.useFakeTimers();
     getRecorderPreviewModeMock.mockResolvedValue('video_file');
 
     fetchMock.mockImplementation(async (input: string | URL | Request) => {
@@ -320,14 +322,15 @@ describe('VideoPreviewContainer.svelte', () => {
 
     render(VideoPreviewContainer);
 
-    await waitFor(() => {
-      expect(fetchMock).toHaveBeenCalledWith(
-        '/api/device/status',
-        expect.objectContaining({ cache: 'no-store' })
-      );
-    });
+    await vi.advanceTimersByTimeAsync(100);
+    await vi.runOnlyPendingTimersAsync();
 
-    await new Promise((resolve) => window.setTimeout(resolve, 650));
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/device/status',
+      expect.objectContaining({ cache: 'no-store' })
+    );
+
+    await vi.advanceTimersByTimeAsync(650);
 
     const deviceStatusCalls = fetchMock.mock.calls.filter(([input]) =>
       input.toString().includes('/api/device/status')

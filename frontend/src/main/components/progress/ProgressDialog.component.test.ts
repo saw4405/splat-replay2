@@ -32,16 +32,17 @@ describe('ProgressDialog', () => {
       onerror: null,
     };
 
-    // @ts-expect-error - EventSourceのモック
-    global.EventSource = vi.fn(function (this: typeof mockEventSource) {
+    const eventSourceMockConstructor = vi.fn(function (this: typeof mockEventSource) {
       return mockEventSource;
     });
+    vi.stubGlobal('EventSource', eventSourceMockConstructor);
   });
 
   afterEach(() => {
     cleanup();
     vi.clearAllTimers();
     vi.restoreAllMocks();
+    vi.unstubAllGlobals();
   });
 
   function mockIdleStatusResponse(): void {
@@ -130,7 +131,7 @@ describe('ProgressDialog', () => {
     it('実行中アイコンに回転アニメーション用クラスを適用する', async () => {
       mockIdleStatusResponse();
 
-      const { container } = render(ProgressDialog, { props: { isOpen: true } });
+      render(ProgressDialog, { props: { isOpen: true } });
 
       await vi.waitFor(() => {
         expect(registeredEventHandler('progress_event')).toEqual(expect.any(Function));
@@ -159,7 +160,10 @@ describe('ProgressDialog', () => {
       );
 
       await vi.waitFor(() => {
-        expect(container.querySelector('svg.icon-spin')).not.toBeNull();
+        expect(screen.getByRole('progressbar', { name: '自動編集' })).toHaveAttribute(
+          'aria-valuenow',
+          '0'
+        );
       });
     });
   });

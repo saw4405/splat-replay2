@@ -211,6 +211,12 @@ task.exe dev:frontend
 - 生の `npm` / `uv` / `pytest` コマンドは、Task がない場合か、低レベルの切り分け時だけ使います。
 - テスト選定に迷ったら [`docs/test_strategy.md`](./test_strategy.md) を優先してください。
 
+### backend pytest の一時ディレクトリ
+
+backend pytest の Taskfile 入口は `scripts/run-backend-pytest.ps1` を通し、
+worktree 内の一時ディレクトリと pytest cache 無効化を指定して実行します。
+低レベル切り分け以外では、生の `pytest` ではなく Taskfile 入口を使ってください。
+
 ## 検証とテスト
 
 ### 基本入口

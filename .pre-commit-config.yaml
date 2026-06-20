@@ -21,7 +21,7 @@ repos:
     hooks:
       - id: ty
         name: ty check
-        entry: powershell -NoProfile -Command "Set-Location backend; .\.venv\Scripts\ty.exe check . --ignore unresolved-import"
+        entry: powershell -NoProfile -Command "Set-Location backend; .\.venv\Scripts\ty.exe check src tests --ignore unresolved-import"
         language: system
         files: ^backend/src/|^backend/tests/
         pass_filenames: false

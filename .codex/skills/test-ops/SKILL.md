@@ -1,83 +1,46 @@
 ---
 name: test-ops
-description: 変更内容から必要な Taskfile の検証入口を選び、最小限の確認順序を決める必要があるときに使用する。特に frontend UI、API 契約、E2E、性能影響が絡み、`task.exe test` だけでは不足する可能性がある変更で使用する。
+description: テスト実装・修正・削除・整理、既存テストのレビュー、検証入口選定、カバレッジ確認など、テストに関する判断を行うときに使用する。
 ---
 
 # Test Ops
 
 ## Overview
 
-このスキルは、このリポジトリの変更を「何を保証するか」で分類し、
-`docs/test_strategy.md` を一次情報として必要な `task.exe` 入口を選ぶ。
-詳細な分類定義は文書に置き、ここでは運用手順だけを定義する。
+このスキルは、テストに関する判断を必ず `docs/test_strategy.md` へ接続するための入口です。
+テスト方針、分類、禁止事項、テスト実装の到達基準、検証入口の選定は
+`docs/test_strategy.md` を SSoT とし、このスキルには詳細ルールを重複定義しません。
 
 ## Workflow
 
-1. 先に `docs/test_strategy.md` を読む。
-2. 変更を `static / logic / contract / workflow / performance` のどれに当たるかで分類する。
-3. frontend 変更では必要に応じて `logic / component / integration / workflow` へ細分化する。
-4. `fast-to-slow` で、必要最小限の入口を選ぶ。
-5. 選んだ入口ごとに、なぜ必要かと、なぜ重い入口を省いたかを説明する。
-6. 実行後は、変更分類、実行した入口、未確認事項、追加で必要な確認を報告する。
+1. テストに関する作業なら、最初に `docs/test_strategy.md` の `0. AI エージェント実行契約` を読む。
+2. 作業前に、変更分類、新規テスト判断、検証入口、完了報告項目を決める。
+3. テスト実装・修正・削除・整理、既存テストのレビュー、検証入口選定、カバレッジ確認はすべて `docs/test_strategy.md` に従って判断する。
+4. 汎用 TDD スキル、古い計画、既存テストの慣習、カバレッジ率目標と衝突する場合も、`docs/test_strategy.md` を優先する。
+5. Taskfile の実在する入口名を確認する必要がある場合だけ `Taskfile.yml` を見る。
+6. frontend 固有のテストファイル名やセレクタ方針を確認する必要がある場合だけ `frontend/AGENTS.md` を見る。
+7. 完了報告では、`docs/test_strategy.md` のテンプレートに基づく判断と未確認事項を明記する。
 
 ## Primary Reference
 
 - `docs/test_strategy.md`
-  - 変更分類
-  - 意味ベース入口
-  - AI エージェントの完了報告
+  - テスト方針の SSoT
+  - AI エージェント実行契約
+  - 変更分類、テスト実装基準、禁止事項、意味ベース入口、完了報告
 - `frontend/AGENTS.md`
-  - frontend テスト種別
-  - ファイル命名規約
+  - frontend 固有ルールが必要な場合だけ参照
 - `Taskfile.yml`
-  - 実在する入口名
-
-## Selection Rules
-
-- `task.exe verify` は完了判定の最低入口とする。
-- `task.exe test` は backend + frontend unit の基本入口とする。
-- unit レイヤで守れる変更は、まず `task.exe test` を起点にする。
-- frontend の UI コンポーネント単体は `task.exe test:frontend:component` を優先する。
-- frontend の複数コンポーネント連携や状態管理は `task.exe test:frontend:integration` を優先する。
-- 主要導線、replay、録画済み一覧、preview 周辺は `task.exe test:workflow:smoke` を優先する。
-- API、schema、settings の契約変更は `task.exe test:contract` を含める。
-- 認識・解析・閾値変更は `task.exe test:performance` を release 前候補として明示する。
-- リリース前の総合確認は `task.exe test:release`、性能影響がある場合は `task.exe test:release:performance` を使う。
-
-## Guardrails
-
-- `task.exe test` だけで `contract` / `workflow` / `performance` まで確認したとは扱わない。
-- `workflow:full` を初手で提案しない。必要性がある場合だけ後段に置く。
-- Taskfile に存在しない raw command を新しい標準入口として提案しない。
-- docs の説明と Taskfile の実体がずれている場合は、ずれ自体を指摘する。
-- `未確認` の項目を「パス想定」で言い換えない。
+  - 実在する `task.exe` 入口名が必要な場合だけ参照
 
 ## Report Template
 
+- 参照した方針: `docs/test_strategy.md`
 - 変更分類:
+- 新規テスト判断:
+- テスト実行判断:
 - 実行した入口:
-- 省略した重い入口と理由:
+- 省略した入口と理由:
 - 未確認事項:
 - 追加で必要な確認:
-
-## Common Cases
-
-- ドキュメントのみ:
-  - リンクとコマンドの整合確認に留める。
-- backend の内部ロジック:
-  - `task.exe test:backend`
-- frontend の純粋 TS ロジック:
-  - `task.exe test:frontend:logic`
-- frontend の UI コンポーネント単体:
-  - `task.exe test:frontend`
-  - 必要に応じて `task.exe test:frontend:component`
-- frontend の複数コンポーネント連携:
-  - `task.exe test:frontend`
-  - 必要に応じて `task.exe test:frontend:integration`
-- user-visible flow:
-  - `task.exe test`
-  - `task.exe test:workflow:smoke`
-- release 前:
-  - `task.exe test:release`
 
 このスキル自体は追加の `scripts/` や `references/` を持たず、repo 既存文書を一次参照として使う。

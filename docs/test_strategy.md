@@ -1,288 +1,216 @@
 # テスト戦略
 
-## 1. 目的
+この文書は、Splat Replay のテスト判断の SSoT です。
+目的は「どの runner を使うか」ではなく、「何を保証するか」を短く決めることです。
 
-この文書は、Splat Replay のテスト戦略を「個別ツール」ではなく
-「何を保証するか」で整理するための親文書です。
-人間の開発者だけでなく、AI エージェントが変更分類から
-必要な確認を選ぶときの一次参照としても使います。
+## 0. AI エージェント実行契約
 
-今回の戦略は、次の 3 点を同時に満たすことを目的とします。
+テストに関する作業では、最初に次を決めます。
 
-- 開発時は、変更範囲に応じて最小限の確認だけを素早く回せること
-- リリース時は、重い回帰確認を含めて品質重視で確認できること
-- 将来、runner、ディレクトリ構成、アーキテクチャが変わっても、
-  運用の主語を保てること
+1. 変更分類: `static / logic / component / integration / contract / workflow / performance`
+   - 1 変更に複数分類が必要な場合は、下位の fast test を先に選び、境界・導線・性能の変更だけを追加する。
+2. 新規テスト判断: 追加、更新、削除、または不要
+3. 検証入口: `task.exe` の意味ベース入口
+4. 完了報告: 保証したこと、未確認のこと
 
-## 2. 基本原則
+優先順位:
 
-- テストは実装技法ではなく、保証したい性質で分類する
-- 開発時は `fast-to-slow` で実行し、必要最小限から始める
-- リリース時だけ重い回帰確認を必須にする
-- 入口は raw command ではなく Taskfile の意味ベース名を主語にする
-- 境界契約が変わる変更は contract テストを先に更新する
-- UI を含む主要フローは workflow テストで守る
-- 性能回帰は performance テストで別枠管理する
+- 本文書を、汎用 TDD 手順、既存テストの慣習、カバレッジ率目標より優先する。
+- 新規関数や新規メソッドを追加しただけでは、テスト追加理由にしない。
+- カバレッジ率を上げること自体を目的にしたテストを追加しない。
+- `workflow:full` や release 系入口を初手にしない。必要性を分類で説明できる場合だけ使う。
+- 未確認の点を「通るはず」「影響なしのはず」と言い換えない。
+- `skip`、期待値緩和、marker 変更、テスト削除で green にした場合は、保証を落としていないかを必ず説明する。
+- `--list`、構文確認、型チェック、format check は部分検証です。テストの成功として報告しない。
 
-## 3. テスト分類
+完了報告には、最低限これを書く。
 
-| 分類          | 守るもの                                   | 現在の主な実装                                                                                                                                   | 備考                                                                                                                                 |
-| ------------- | ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------ |
-| `static`      | 形式、型、依存方向                         | `task.exe format`, `task.exe lint`, `task.exe type-check`, `task.exe verify` 内の `import-lint`                                                  | 実装言語や runner が変わっても分類は維持する                                                                                         |
-| `logic`       | 純粋関数、変換、軽量 adapter、内部ロジック | backend の通常 `pytest`、frontend の Vitest logic テスト                                                                                         | 高速反復の主力                                                                                                                       |
-| `contract`    | API、schema、境界契約                      | `backend/tests/integration/test_api_contract.py`、`backend/tests/test_metadata_contracts.py`、`backend/tests/test_recording_preview_api.py` など | 破壊的変更の早期検知に使う                                                                                                           |
-| `workflow`    | UI を含む主要フロー回帰                    | Playwright replay E2E                                                                                                                            | replay を使う主要導線 guard。frontend の component / integration はこの層を補完し、smoke は replay を加速し、full は全フレームで回す |
-| `performance` | 閾値付き性能回帰                           | `pytest -m perf`                                                                                                                                 | 常時ではなく影響変更時とリリース前に使う                                                                                             |
+```text
+- 参照した方針: docs/test_strategy.md
+- 変更分類:
+- 新規テスト判断:
+- テスト実行判断:
+- 実行した入口:
+- 省略した入口と理由:
+- 未確認事項:
+- 追加で必要な確認:
+```
 
-### 3.1. frontend のテスト層
+広範レビュー時:
 
-frontend は **Vitest + @testing-library/svelte** に統一し、以下の 4 層構成でテストを実施します。
+- 対象が複数層・多数ファイルにまたがる場合は、サブエージェントや並列レビューを分類単位で使ってよい。
+- 分割単位は `backend contract`、`backend performance`、`frontend component / integration`、`workflow` のように、保証したい性質で切る。
+- サブエージェントの所見は未確定情報として扱い、メインエージェントが本文書の分類・禁止事項・偽合格防止に照らして統合判断する。
+- 最終対応は個別テストの好みではなく、保証を落とす変更がないか、偽合格になっていないかで決める。
 
-- `logic`: 純粋な TypeScript ロジック（`.test.ts` / Vitest）
-- `component`: UI コンポーネント単体（`.component.test.ts` / Vitest + Testing Library）
-- `integration`: 複数コンポーネント連携（`.integration.test.ts` / Vitest + Testing Library）
-- `workflow`: 主要フローの E2E 回帰（`.spec.ts` / Playwright）
+## 1. 基本方針
 
-**注記**: 以前は logic テストに node:test を使用していましたが、ベストプラクティスに沿って Vitest に統一しました。これによりテストフレームワークの一元化、設定・実行コマンドの統一、カバレッジの統合管理が可能になりました。
+- テストは実装単位ではなく、保証したい性質で分類する。
+- 開発時は fast-to-slow で、必要最小限から始める。
+- リリース時だけ重い回帰確認を必須にする。
+- 入口は raw command ではなく Taskfile の意味ベース名を主語にする。
+- 分類は runner や配置ではなく、観測境界で決める。
+- 境界契約が変わる変更は `contract` を更新する。
+- ユーザー主要導線は `workflow` で守る。
+- 性能回帰は `performance` で別枠管理する。通常のマージ必須 gate には含めず、性能影響のある変更時とリリース前に使う。
+- `benchmark` と `coverage` は補助測定であり、保証分類ではない。
 
-## 4. 現在の実装への対応表
+## 2. 分類と入口
 
-### 4.1. backend
+| 分類 | 守るもの | 主な入口 |
+| ---- | -------- | -------- |
+| `static` | 形式、型、依存方向 | `task.exe format:check`, `task.exe lint`, `task.exe type-check`, `task.exe import-lint` |
+| `logic` | 純粋関数、変換、軽量 adapter、内部ロジック | `task.exe test`, `task.exe test:backend`, `task.exe test:frontend:logic` |
+| `component` | UI コンポーネント単体のユーザー可視振る舞い | `task.exe test:frontend:component` |
+| `integration` | 複数コンポーネント、state、adapter の連携 | `task.exe test:frontend:integration` |
+| `contract` | API、schema、公開 JSON、DTO、settings の境界契約 | `task.exe test:contract` |
+| `workflow` | UI を含むユーザー主要導線 | `task.exe test:workflow:smoke`, `task.exe test:workflow:full` |
+| `performance` | 実行時の時間予算を持つ処理の閾値付き性能回帰 | `task.exe test:performance` |
 
-- `logic`
-  - `uv run pytest -q`
-  - 既定で `-m 'not perf'` が有効
-- `contract`
-  - `backend/tests/integration/test_api_contract.py`
-  - `backend/tests/test_metadata_contracts.py`
-  - `backend/tests/test_recording_preview_api.py`
-- `performance`
-  - `uv run pytest -m perf -q`
+補助入口:
 
-### 4.2. frontend
+- `task.exe verify`: 全体 gate。分類の代替ではなく、完了判定として扱う。
+- `task.exe test:benchmark`: 時間予算が未確定な探索・診断向けの観測専用。release 判定には含めない。
+- `task.exe coverage`, `task.exe coverage:backend`, `task.exe coverage:frontend`: 未テスト分岐の発見に使う。
+- `task.exe doctor`, `task.exe doctor:json`: checkout 前提の診断。変更内容の保証には使わない。
 
-- `logic`
-  - `npm run test:logic`
-  - `task.exe test:frontend:logic`
-  - 対象は `.test.ts` の純粋ロジックテスト（Vitest）
-- `component` / `integration`
-  - `npm run test:component` / `npm run test:integration`
-  - 対象は `.component.test.ts` / `.integration.test.ts`（Vitest + @testing-library/svelte）
-  - `npm run test` / `npm run test:unit` で logic + component + integration を一括実行
-  - `task.exe test:frontend` は frontend unit 一括、`task.exe test` は backend + frontend unit の基本入口
-- `workflow`
-  - `npm run test:e2e`
-  - replay asset を使う Playwright E2E
+frontend の命名:
 
-### 4.3. 主要な意味ベース入口
+- logic: `.test.ts`
+- component: `.component.test.ts`
+- integration: `.integration.test.ts`
+- workflow: `.spec.ts`
 
-現在の運用では、Taskfile に次の意味ベース入口を持ちます。
+frontend の component / integration では、`role`、`label`、`title`、可視テキストを第一選択にします。
+`data-testid` は複数同型要素の識別など、アクセシブル名だけでは曖昧な場合に限ります。
 
-- `task.exe test`
-- `task.exe verify`
-- `task.exe test:contract`
-- `task.exe test:frontend`
-- `task.exe test:frontend:logic`
-- `task.exe test:frontend:component`
-- `task.exe test:frontend:integration`
-- `task.exe test:frontend:unit`
-- `task.exe test:workflow:smoke`
-- `task.exe test:workflow:full`
-- `task.exe test:performance`
-- `task.exe test:release`
-- `task.exe test:release:performance`
+backend の配置と marker:
 
-これらの名前は、内部実装が変わっても維持する前提です。
-runner や対象ファイルが変わる場合は、Task の中身だけを差し替えます。
+- `contract` は `backend/tests/contract/**` に置き、`pytest.mark.contract` で選別できるようにする。
+- `performance` は `backend/tests/performance/**` に置き、閾値付き回帰は `pytest.mark.perf`、観測専用は `pytest.mark.benchmark` で release 判定から分ける。
+- `perf` / `benchmark` は現在の実装手法ではなく、あるべき時間予算で決める。OCR、画像マッチング、外部 adapter 呼び出しでも、録画中・録画終了直後・メタデータ確定などの実行時導線に入るなら `perf` として扱う。
+- `logic` と `contract` / `performance` を同一テストファイルに混ぜない。例外はテスト名かコメントで分類理由を書く。
 
-補足: `task.exe doctor` / `task.exe doctor:json` は、親 repo と同じ通常フローに入る前提を
-checkout 単位で診断する入口です。依存関係、Git hooks、Git LFS、replay asset、主要ツールの
-状態を確認しますが、テスト分類そのものではありません。変更内容の保証は引き続き上記の
-意味ベース入口で選びます。
+## 3. 変更別の選定
 
-## 5. 変更分類ごとの選定ルール
+| 変更内容 | 必須 | 条件付き |
+| -------- | ---- | -------- |
+| ドキュメントのみ | リンク、入口名、方針間の整合確認 | 追加のテスト runner は不要。完了判定の扱いは `AGENTS.md` に従う |
+| backend 内部ロジック、変換、軽量 adapter | `logic` | public 契約に触れるなら `contract` |
+| frontend 純粋 TS ロジック、mapper、state 整形 | `logic` | なし |
+| frontend UI 単体 | `component` | 複数部品連携なら `integration` |
+| frontend 状態管理、複数コンポーネント連携 | `integration` | 主要導線なら `workflow:smoke` |
+| API、schema、settings 入出力 | `contract` | 振る舞い変更があれば `logic`、UI 影響があれば `workflow:smoke` |
+| UI 表示、録画導線、録画済み一覧、preview 周辺 | 最小の `component / integration / workflow:smoke` | 破壊的変更や広範囲変更なら `workflow:full` |
+| 認識、解析、録画時間判定、閾値 | `logic` | 時間予算を持つ処理は `performance`、release 前に `test:release:performance` |
+| 責務移動、フォルダ再編、アーキテクチャ変更 | `static` | 影響した分類を追加 |
 
-### 5.1. 日常開発
+リリース前:
 
-日常開発では、一律に重いテストを回すのではなく、
-変更の性質に応じて必要最小限を選びます。
+- 基本入口: `task.exe test:release`
+- 認識、解析、録画時間判定、閾値に関係する場合: `task.exe test:release:performance`
 
-| 変更内容                                        | 必須                       | 条件付き                                                                      |
-| ----------------------------------------------- | -------------------------- | ----------------------------------------------------------------------------- |
-| ドキュメントのみ                                | リンクとコマンドの整合確認 | なし                                                                          |
-| backend の内部ロジック、変換、軽量 adapter      | `logic`                    | public 契約に触れるなら `contract`                                            |
-| frontend の純粋 TS ロジック、mapper、state 整形 | `logic`                    | なし                                                                          |
-| frontend の UI コンポーネント単体               | `component`                | 複数コンポーネント連携なら `integration`                                      |
-| frontend の複数コンポーネント連携、状態管理     | `integration`              | 主要フローに影響するなら `workflow:smoke`                                     |
-| API、schema、settings の入出力                  | `contract`                 | 振る舞い変更があれば `logic` と `workflow:smoke`                              |
-| UI 表示、録画導線、録画済み一覧、preview 周辺   | `workflow:smoke`           | 破壊的変更や広範囲変更なら `workflow:full`                                    |
-| 認識・解析・録画時間判定・閾値                  | `logic`                    | release 前に `performance`                                                    |
-| アーキテクチャ変更、責務移動、フォルダ再編      | `static`                   | 影響した意味分類ごとに `logic / contract / workflow / performance` を追加する |
+## 4. テスト追加判断
 
-補足:
+新規テストを書くとき:
 
-- `task.exe test` は default な unit suite の入口として扱う。
-- `contract` / `workflow` / `performance` が絡む変更では、`task.exe test` に加えて該当入口を追加する。
+- バグ修正: 失敗を再現する回帰テストを、最も安定した下位レイヤに追加する。
+- 新機能: happy path に加え、主要分岐、入力異常、状態不整合の代表点を fast test で守る。
+- 外部公開境界の追加・変更: `contract` を更新する。
+- ユーザー主要導線の追加・変更: `workflow:smoke` を追加または更新する。
+- 永続化、ファイル操作、非同期処理: 成功系、代表的な失敗系、cleanup / rollback / state reset のいずれかを確認する。
+- 認識、解析、閾値: 代表入力を fixture として固定する。
 
-### 5.2. リリース前
+新規テストを書かないとき:
 
-リリース前は `task.exe test:release` を基本入口とします。
+- 振る舞い不変で、分岐や境界も増えない純粋移動。
+- 既存テストで保証されている薄い委譲。
+- 言語、標準ライブラリ、フレームワークの標準動作。
+- カバレッジ率だけを上げるためのテスト。
 
-認識・解析・録画時間判定・閾値に関係する変更では、
-`task.exe test:release:performance` を使います。
+不要判断をした場合は、完了報告に「既存テストで守られる範囲」または「新しい分岐がないこと」を短く書きます。
 
-性能確認だけを単独で回したい場合は、`task.exe test:performance` を使います。
+## 5. 禁止・注意
 
-`test:release:performance` の対象例:
+- `logic` を `workflow` だけで守らない。
+- 内部呼び出し回数だけのテストにしない。
+- 実装をなぞるだけの snapshot を追加しない。
+- ソース文字列を読み、CSS/HTML の断片だけを assert しない。
+- 特別な要件がない限り、ログ文言や `mock_logger` 呼び出しを assert しない。
+- 戻り値で確認できるユースケースは、戻り値の性質を assert し、内部 repository 呼び出しに寄せない。
+- 設定ファイルのチューニング値をテストにハードコードしない。構造やパースを確認する。
+- `backend/tests/logic/**` に `pytest.mark.contract` や `pytest.mark.perf` を置かない。
+- 同じ振る舞いを複数ファイルで重複検証しない。必要なら parametrize / each でまとめる。
+- 失敗するテストを、根拠なく `skip`、期待値緩和、広い例外許容、marker 変更で「通る」状態にしない。
 
-- 画像認識
-- フレーム解析
-- 録画開始/停止判定
-- replay 入力の時間評価
-- 性能閾値に関係する実装変更
+偽合格防止:
 
-## 5.3. テスト実装の到達基準
+- `skip` は合格ではありません。外部バイナリやハードウェアなど実行前提が無い場合だけ使い、skip した保証を完了報告に書く。
+- ファイル全体を `skip` しない。実バイナリが必要なケースだけに絞り、同じファイル内の stub で検証できる分岐は実行し続ける。
+- テスト対象の代表 fixture が無い場合、主要導線テストは無言で skip しない。安定した fixture を明示的に選ぶか、前提不足として失敗させる。
+- `perf` から `benchmark` へ marker を変えると release gate から外れます。閾値付き assert があるなら `perf`、観測記録だけなら `benchmark` とし、分類変更で保証を失っていないかを確認する。
+- 処理が遅い、または現実装が外部ツールに依存することだけを理由に `benchmark` へ落とさない。実行時導線の時間予算を満たすべき処理なら、遅さは実装改善対象として `perf` で検知する。
+- `contract smoke` は route 存在確認だけを保証します。これを API 契約全体の合格として扱わない。
+- テスト名と assert が一致しないテストは、テスト名を変えるのではなく、まず保証したい性質を確認し、必要なら観測可能な assert を追加する。
+- テストを削る場合は、削除後もどの既存テストが同じ保証を持つかを確認する。代替保証が無い削除は行わない。
 
-### 5.3.1. 変更種類ごとの最低ライン
+Flaky 防止:
 
-- バグ修正
-  - 失敗を再現する回帰テストを、最も安定した下位レイヤへ追加する
-  - API や UI に症状が出る不具合なら、`contract` または `workflow` も追加する
-- 新機能
-  - happy path だけでなく、主要な分岐、入力異常、状態不整合のいずれかを fast test で守る
-  - 外部公開境界が増えるなら `contract`、主要導線が増えるなら `workflow:smoke` を追加する
-- リファクタ
-  - 既存テスト green だけで完了とせず、新しい責務境界で壊れやすい分岐が増えたなら `logic` を追加する
-  - 振る舞い不変で分岐も増えない純粋移動だけは、新規テスト不要とする
-- 永続化、ファイル操作、非同期処理
-  - 成功系
-  - 代表的な失敗系
-  - cleanup、rollback、state reset のいずれかを確認する
-- 認識、解析、閾値
-  - `logic` で代表入力を固定し、release 前は `performance` を追加する
+- async テスト内で `threading.Event.wait()` などの同期ブロッキング待機を直接呼ばない。
+- 実行順制御に `sleep` を使わず、`asyncio.Event` など明示的な同期を使う。
+- 固定時間の `sleep` は避け、シグナリング待機とタイムアウトを使う。Playwright では `expect.poll` のように条件と失敗理由が残る待機を使う。
+- Tesseract、NDI、OBS など外部環境依存は stub 化する。実バイナリが必要なら `skipif` を使うが、依存しない分岐まで巻き込まない。
 
-### 5.3.2. Definition of Done
+Contract:
 
-- Done と見なす条件
-  - 変更で増えた意思決定分岐に対して、最低 1 つは fast test がある
-  - 外部契約変更には `contract` がある
-  - ユーザー主要導線変更には `workflow` guard がある
-  - バグ修正には再発防止テストがある
-  - rollback や cleanup がある処理は失敗系も検証している
-- Done と見なさない例
-  - happy path のみ
-  - 内部呼び出し回数だけを確認する
-  - 実装をなぞるだけの snapshot
-  - `logic` を `workflow` だけで守る
-  - assertion が曖昧で、何を保証したいかが読めない
+- 正常系 contract テストは期待ステータスを 1 つに絞る。
+- 複数ステータスを許すのは、状態依存が仕様として許容される場合だけ。
+- ルート存在スイープは `contract smoke` と明記し、schema / status / body 契約テストの代替にしない。
+- `404 以外ならよい`、`200/400/500 のどれでもよい` という正常系 contract は避ける。状態を fixture / monkeypatch で固定し、正常系と失敗系を分ける。
 
-### 5.3.3. 中途半端なテストを避ける原則
+Performance:
 
-- 1 bug fix 1 regression test を原則にする
-- 1 public contract change 1 contract update を原則にする
-- 1 user-visible flow change 1 workflow guard を原則にする
-- 類似ケースの大量追加より、branch、boundary、failure の代表点を優先する
-- 速い層で守れるものは速い層で守り、`workflow` は統合確認に絞る
+- `performance` は閾値付き回帰テストにする。
+- 単に時間を記録するだけなら `benchmark` と呼び、release 判定から分ける。
+- 閾値には理由を書く。
+- 録画ループ、フレーム判定、録画終了直後の結果抽出、メタデータ確定、録画中バックグラウンド認識は `performance` の候補にする。
+- 診断レポート出力、将来の閾値設計のための探索、ユーザー導線の時間予算をまだ置けない測定だけを `benchmark` にする。
 
-### 5.3.4. 不要なテストを書かない原則
+Workflow:
 
-- **フレームワーク/言語の標準動作を再テストしない**
-  - Python `enum.Enum` の `==`, `is`, `list()` や、
-    JavaScript `Array.prototype.map()` 等の言語組込み動作はテスト不要
-  - テストすべきは、その上に構築した独自ロジック（`Match.equal()` 等）
-- **ソースコード文字列のスナップショット検査は原則禁止**
-  - ソースファイルを `readFileSync` で読み込んで CSS/HTML の文字列パターンをアサートする手法は、
-    実際のレンダリング動作を保証しない
-  - レイアウト回帰は component テストまたは visual regression testing で検証する
-- **E2E で自然にカバーされる初期化コードの mock テストは不要**
-  - 数行の初期化コード（エントリポイント等）を全面モックして呼び出し回数だけ確認するテストは、
-    実装と強結合し保守コストが高い
-  - 初期化の正常動作は E2E テストで間接的に保証される
-- **同型の検証は parametrize / each で統合する**
-  - N 個の Enum に対する同一ロジックの検証は 1 テスト + parametrize にまとめる
-  - 重複テストの保守コストを減らし、新しいバリアント追加時の手間を最小化する
+- `workflow:smoke` は軽量でも、代表的なユーザー主要導線を実際に守る必要があります。
+- smoke 用 fixture の選択で対象導線が全て skip される場合は偽合格です。recordable / no-video / error recovery など、導線ごとの前提に合う fixture を明示的に選ぶ。
+- `test:e2e -- --list` は spec の読み込みとテスト列挙だけを確認する入口です。workflow の成功として扱わない。
+- E2E を通すためだけに sidecar 期待値を緩めない。sidecar の変更は、仕様変更または実 fixture の source of truth 更新として説明できる場合だけ行う。
 
-## 6. AI エージェント向け運用ルール
+## 6. カバレッジ
 
-### 6.1. 基本動作
+カバレッジは補助指標です。固定目標値は置きません。
 
-- 最初にこの文書を読み、変更の意味を分類してから着手する
-- まず変更ファイルではなく、変更の意味を `static / logic / contract / workflow / performance`
-  のどれに当たるかで分類する
-- frontend 変更では必要に応じて `logic / component / integration / workflow`
-  へ細分化する
-- raw command を直接記憶するのではなく、意味ベース入口を優先する
-- 重い `workflow:full` を初手で回さない
-- 判断に迷う場合は `.codex/skills/test-ops/SKILL.md` を運用入口として使う
-- 未確認の点は `未確認`、判断を置いた点は `暫定` と明記する
+- Backend は主に `splat_replay/domain/` と `splat_replay/application/` の重要分岐を見る。
+- `splat_replay/infrastructure/` は外部依存が強いため、数値低下だけで追加テストを要求しない。
+- Frontend は純粋ロジック、mapper、state 整形、ユーザー可視の状態遷移を見る。
+- カバレッジ率だけで新規テストを追加しない。
 
-### 6.2. frontend 固有ルール
+入口:
 
-- すべての frontend テストは Vitest + @testing-library/svelte で実行する（テストフレームワークの統一）
-- logic テスト: `.test.ts` （純粋 TS ロジック）
-- component テスト: `.component.test.ts` （UI コンポーネント単体）
-- integration テスト: `.integration.test.ts` （複数コンポーネント連携）
-- workflow テスト: `.spec.ts` （Playwright E2E）
-- selector は `data-testid` を契約として扱う
-- `frontend/test-results/` は失敗成果物であり、コミット対象にしない
+- `task.exe coverage`
+- `task.exe coverage:backend`
+- `task.exe coverage:frontend`
 
-### 6.3. replay asset / sidecar 運用
+## 7. 更新時のルール
 
-- replay asset を増やすと `workflow:full` の実行時間が増える
-- sidecar JSON の期待値変更は、UI 表示と仕様変更の両方を確認してから行う
-- 「E2E を通すためだけの緩い期待値」へ変更しない
-
-### 6.4. マルチエージェント運用
-
-- メインエージェントは目的、成功条件、優先順位、停止条件を管理する
-- サブエージェントは、責務が分離されたファイル単位または論点単位で割り当てる
-- 読み取り系の探索を先に行い、実装系は境界が固まってから動かす
-- 共通の実行計画がある場合は、それを single source of truth として参照する
-
-### 6.5. 完了報告
-
-- AI エージェントの完了報告には、少なくとも変更分類、実行した意味ベース入口、未確認事項、追加で必要な検証を含める
-- 「何を変えたか」だけでなく、「何を保証したか」を短く添える
-
-## 7. 将来変更時の更新点
-
-### 7.1. 変更しても維持すべきもの
-
-- `static / logic / contract / workflow / performance` の分類
-- `task.exe test:contract` など意味ベース入口の名前
-- 親文書と子文書の責務分離
-
-### 7.2. 変更時に見直すべきもの
-
-- Taskfile の各入口が何を実行するか
-- 現在の実装への対応表
-- replay asset の smoke/full 切り分け方法
-- frontend の component/integration 基盤や replay workflow の対象が変わった場合の分類表
-- AI エージェント向け運用ルールで前提にしている入口名や報告形式
-- 親文書と `docs/e2e_replay_test.md` の責務境界
-
-### 7.3. 追加ルール
-
-- 新しい test layer を追加する場合は、既存分類へ割り当てられるかを先に検討する
-- 既存分類へ収まらない場合だけ、新分類追加を検討する
-- runner や配置を変える場合は、まず Taskfile の意味ベース入口を維持し、その後で対応表を更新する
-- 分類を増やすときは、README、Taskfile、スキル、関連ドキュメントを同一変更で更新する
+- `static / logic / component / integration / contract / workflow / performance` の分類を維持する。
+- 新しい test layer は、まず既存分類へ割り当てられるか検討する。
+- runner や配置を変える場合は、分類の意味を保ち、Taskfile と対応表を同時に更新する。
+- 分類を増やすときは、README、Taskfile、repo-local skill、関連ドキュメントを同一変更で更新する。
 
 ## 8. 関連ドキュメント
 
 - [動画リプレイ入力による E2E 回帰テスト](./e2e_replay_test.md)
 - `AGENTS.md`
+- `frontend/AGENTS.md`
+- `.codex/skills/test-ops/SKILL.md`
 - `Taskfile.yml`
 - `backend/pyproject.toml`
 - `frontend/package.json`
-
-## 9. このドキュメントを参照しているファイル
-
-このドキュメントは、テスト戦略の詳細版（Single Source of Truth）として以下から参照されています：
-
-- `.codex/skills/test-ops/SKILL.md` - test-ops スキルの一次参照
-- `frontend/AGENTS.md` - フロントエンド固有のテスト実装ガイド
-- `backend/src/splat_replay/domain/AGENTS.md` - ドメイン層ガイドライン
-- `backend/src/splat_replay/application/AGENTS.md` - アプリケーション層ガイドライン
-- `backend/src/splat_replay/interface/AGENTS.md` - インターフェース層ガイドライン
-- `backend/src/splat_replay/infrastructure/AGENTS.md` - インフラストラクチャ層ガイドライン

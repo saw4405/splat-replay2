@@ -43,13 +43,6 @@ function jsonResponse(body: unknown): Response {
   });
 }
 
-async function flushAsyncWork(): Promise<void> {
-  for (let index = 0; index < 10; index += 1) {
-    await Promise.resolve();
-  }
-  await tick();
-}
-
 describe('VideoPreview.svelte', () => {
   let fetchMock: ReturnType<typeof vi.fn>;
   let getUserMediaMock: ReturnType<typeof vi.fn>;
@@ -115,16 +108,18 @@ describe('VideoPreview.svelte', () => {
 
     render(VideoPreview);
 
-    await flushAsyncWork();
-
-    expect(fetchMock).toHaveBeenCalledWith('/api/recorder/preview-frame', {
-      cache: 'no-store',
+    await vi.waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith('/api/recorder/preview-frame', {
+        cache: 'no-store',
+      });
     });
     expect(getUserMediaMock).not.toHaveBeenCalled();
-    expect(screen.getByTestId('video-file-preview-image')).toHaveAttribute(
-      'src',
-      'blob:preview-frame'
-    );
+    await vi.waitFor(() => {
+      expect(screen.getByTestId('video-file-preview-image')).toHaveAttribute(
+        'src',
+        'blob:preview-frame'
+      );
+    });
   });
 
   it('loopback origin keeps using the OBS virtual camera for live capture', async () => {
@@ -148,11 +143,11 @@ describe('VideoPreview.svelte', () => {
 
     render(VideoPreview);
 
-    await flushAsyncWork();
-
-    expect(getUserMediaMock).toHaveBeenCalledWith({
-      video: { deviceId: { exact: 'camera-1' } },
-      audio: false,
+    await vi.waitFor(() => {
+      expect(getUserMediaMock).toHaveBeenCalledWith({
+        video: { deviceId: { exact: 'camera-1' } },
+        audio: false,
+      });
     });
     expect(fetchMock).not.toHaveBeenCalledWith('/api/recorder/preview-frame', {
       cache: 'no-store',

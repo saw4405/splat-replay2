@@ -24,36 +24,41 @@ const earlyAbortReplayAssets = replayAssets(e2eEnvironment).filter(
   (asset) => expectedRecordedVideoCount(asset) === 0
 );
 
-async function stopAutoRecordingForNextSpec(): Promise<void> {
-  const deadline = Date.now() + 10_000;
-
-  while (Date.now() < deadline) {
-    try {
-      const stateResponse = await fetch('http://127.0.0.1:8000/api/recorder/state');
-      if (stateResponse.ok) {
-        const body = (await stateResponse.json()) as { state?: string | null };
-        if (body.state === 'STOPPED') {
-          return;
-        }
-      }
-    } catch {
-      return;
+async function fetchRecorderState(): Promise<string | null | undefined> {
+  try {
+    const stateResponse = await fetch('http://127.0.0.1:8000/api/recorder/state');
+    if (!stateResponse.ok) {
+      return null;
     }
 
-    try {
-      await fetch('http://127.0.0.1:8000/api/recorder/stop', { method: 'POST' });
-    } catch {
-      return;
-    }
-
-    try {
-      await fetch('http://127.0.0.1:8000/api/recorder/disable-auto', { method: 'POST' });
-    } catch {
-      return;
-    }
-
-    await new Promise((resolve) => setTimeout(resolve, 500));
+    const body = (await stateResponse.json()) as { state?: string | null };
+    return body.state;
+  } catch {
+    return undefined;
   }
+}
+
+async function stopAutoRecordingForNextSpec(): Promise<void> {
+  const initialState = await fetchRecorderState();
+  if (initialState === undefined || initialState === 'STOPPED') {
+    return;
+  }
+
+  await expect
+    .poll(
+      async () => {
+        await fetch('http://127.0.0.1:8000/api/recorder/stop', { method: 'POST' }).catch(
+          () => undefined
+        );
+        await fetch('http://127.0.0.1:8000/api/recorder/disable-auto', {
+          method: 'POST',
+        }).catch(() => undefined);
+
+        return (await fetchRecorderState()) ?? 'UNREACHABLE';
+      },
+      { intervals: [500], timeout: 10_000 }
+    )
+    .toBe('STOPPED');
 }
 
 test.afterAll(async () => {

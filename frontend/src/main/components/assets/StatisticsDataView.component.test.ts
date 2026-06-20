@@ -72,9 +72,8 @@ describe('StatisticsDataView', () => {
 
     await fireEvent.click(screen.getByRole('button', { name: /ナワバリバトル/ }));
 
-    const stageRow = screen.getByText('ユノハナ大渓谷').closest('.stage-row');
+    const stageRow = screen.getByRole('listitem', { name: 'ユノハナ大渓谷' });
 
-    expect(stageRow).not.toBeNull();
     expect(stageRow).toHaveTextContent('2勝1敗');
   });
 });

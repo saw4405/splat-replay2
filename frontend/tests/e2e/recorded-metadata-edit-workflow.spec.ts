@@ -14,6 +14,7 @@ test.setTimeout(process.env.SPLAT_REPLAY_E2E_MODE === 'full' ? 1_200_000 : 600_0
 const e2eEnvironment = environment();
 const firstAsset = recordableReplayAssets(e2eEnvironment)[0];
 let enableAutoRequestCount = 0;
+const editableRuleValues = ['TURF_WAR', 'SPLAT_ZONES', 'TOWER_CONTROL', 'RAINMAKER', 'CLAM_BLITZ'];
 
 async function openSeededRecordedVideo(page: Page): Promise<Locator> {
   if (!firstAsset) {
@@ -46,11 +47,9 @@ async function selectDifferentRule(ruleSelect: Locator): Promise<void> {
     .not.toBe('');
 
   const initialRuleValue = await ruleSelect.inputValue();
-  const options = await ruleSelect.locator('option').all();
 
-  for (const option of options) {
-    const value = await option.getAttribute('value');
-    if (value && value !== initialRuleValue && value !== '') {
+  for (const value of editableRuleValues) {
+    if (value !== initialRuleValue) {
       await ruleSelect.selectOption(value);
       await expect(ruleSelect).toHaveValue(value);
       return;

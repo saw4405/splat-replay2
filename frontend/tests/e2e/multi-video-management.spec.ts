@@ -8,21 +8,25 @@ import {
   prepareRecordedSeedAssets,
   recordableReplayAssets,
 } from './support/appHelpers';
+import { listReplayAssets } from './support/e2eEnv';
 
 test.setTimeout(process.env.SPLAT_REPLAY_E2E_MODE === 'full' ? 1_800_000 : 900_000);
 
 const e2eEnvironment = environment();
-const firstAsset = recordableReplayAssets(e2eEnvironment)[0];
+const seedAssetEnvironment = {
+  ...e2eEnvironment,
+  replayAssets: listReplayAssets(e2eEnvironment.autoRecordingReplayDir),
+};
+const firstAsset = recordableReplayAssets(seedAssetEnvironment)[0];
+if (!firstAsset) {
+  throw new Error('multi-video-management requires at least one recordable replay asset.');
+}
 const primaryKill = String(expectedSidecarMetadata(firstAsset)?.kill ?? 13);
 const secondaryKill = '28';
 const editedSecondaryKill = '35';
 let enableAutoRequestCount = 0;
 
 function seedMultiVideoAssets(): void {
-  if (!firstAsset) {
-    return;
-  }
-
   prepareRecordedSeedAssets(e2eEnvironment, [
     {
       asset: firstAsset,
@@ -53,7 +57,7 @@ async function openSeededMultiVideoList(page: Page): Promise<void> {
 
 function recordedVideoByKill(page: Page, kill: string) {
   return page.getByTestId('recorded-video-item').filter({
-    has: page.locator('[data-testid="recorded-video-kill"]', {
+    has: page.getByTestId('recorded-video-kill').filter({
       hasText: new RegExp(`^${kill}$`),
     }),
   });
@@ -74,11 +78,6 @@ test.afterEach(() => {
 });
 
 test('複数動画でもメタデータ編集は対象動画だけに反映される', async ({ page }) => {
-  if (!firstAsset) {
-    test.skip();
-    return;
-  }
-
   await openSeededMultiVideoList(page);
 
   const firstVideo = recordedVideoByKill(page, primaryKill);

@@ -1,4 +1,4 @@
-﻿<script lang="ts">
+<script lang="ts">
   import { onMount } from 'svelte';
   import type { RecordedVideo } from '../../api/types';
   import type { EditableMetadata } from '../../metadata/editable';
@@ -199,6 +199,7 @@
         <!-- 削除ボタン (フローティング右上) -->
         <button
           class="delete-button glass-icon-button"
+          data-testid="recorded-video-delete-button"
           class:deleting={actions.deletingVideoId === video.id}
           disabled={actions.deletingVideoId === video.id}
           onclick={(e) => actions.handleDeleteVideo(e, video)}
@@ -260,6 +261,7 @@
                 <div class="thumbnail-overlay">
                   <button
                     class="overlay-button play-button"
+                    data-testid="recorded-video-play-button"
                     onclick={() => handlePlayVideo(video)}
                     title="動画を再生"
                   >
@@ -275,6 +277,7 @@
                   </button>
                   <button
                     class="overlay-button zoom-button"
+                    data-testid="recorded-video-zoom-button"
                     onclick={() => handleZoomThumbnail(video)}
                     title="拡大表示"
                   >

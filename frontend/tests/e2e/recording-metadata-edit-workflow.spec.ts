@@ -6,7 +6,7 @@ import {
   environment,
   gotoMain,
   prepareReplayAssetWithScenario,
-  replayAssets,
+  recordableReplayAssets,
   stopRecordingForTeardown,
   waitForRecordingLifecycle,
 } from './support/appHelpers';
@@ -14,7 +14,8 @@ import {
 test.setTimeout(process.env.SPLAT_REPLAY_E2E_MODE === 'full' ? 1_200_000 : 600_000);
 
 const e2eEnvironment = environment();
-const firstAsset = replayAssets(e2eEnvironment)[0];
+const firstAsset = recordableReplayAssets(e2eEnvironment)[0];
+const editableStageValues = ['SCORCH_GORGE', 'EELTAIL_ALLEY', 'HAGGLEFISH_MARKET'];
 const autoRecordingBootstrapScenario = {
   replay_bootstrap: {
     phase: 'in_game',
@@ -24,8 +25,7 @@ const autoRecordingBootstrapScenario = {
 
 test('録画中メタデータ編集ワークフロー', async ({ page }) => {
   if (!firstAsset) {
-    test.skip();
-    return;
+    throw new Error('Recording metadata edit test requires at least one recordable replay asset.');
   }
 
   prepareReplayAssetWithScenario(e2eEnvironment, firstAsset, autoRecordingBootstrapScenario);
@@ -46,12 +46,10 @@ test('録画中メタデータ編集ワークフロー', async ({ page }) => {
   await specialInput.fill('2');
 
   const initialStage = await stageSelect.inputValue();
-  const options = await stageSelect.locator('option').all();
   let nextStageValue: string | null = null;
 
-  for (const option of options) {
-    const value = await option.getAttribute('value');
-    if (value && value !== initialStage && value !== '') {
+  for (const value of editableStageValues) {
+    if (value !== initialStage) {
       nextStageValue = value;
       break;
     }

@@ -688,7 +688,7 @@ describe('SettingsDialog.svelte', () => {
       json: async () => ({ sections: mockSections }),
     });
 
-    const { component } = render(SettingsDialog, { props: { open: true } });
+    render(SettingsDialog, { props: { open: true } });
 
     await waitFor(() => {
       expect(screen.getByTestId('settings-section-general')).toBeInTheDocument();
@@ -697,7 +697,9 @@ describe('SettingsDialog.svelte', () => {
     const cancelButton = screen.getByRole('button', { name: 'キャンセル' });
     await user.click(cancelButton);
 
-    expect(component.open).toBe(false);
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    });
   });
 
   it('保存ボタンをクリックすると設定が保存される', async () => {
@@ -847,7 +849,7 @@ describe('SettingsDialog.svelte', () => {
       })
     );
 
-    const { component } = render(SettingsDialog, { props: { open: true } });
+    render(SettingsDialog, { props: { open: true } });
 
     await waitFor(() => {
       expect(screen.getByTestId('settings-section-general')).toBeInTheDocument();
@@ -867,7 +869,7 @@ describe('SettingsDialog.svelte', () => {
     });
 
     await waitFor(() => {
-      expect(component.open).toBe(false);
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     });
   });
 
@@ -915,7 +917,7 @@ describe('SettingsDialog.svelte', () => {
       json: async () => ({ status: 'ok' }),
     });
 
-    const { component } = render(SettingsDialog, { props: { open: true } });
+    render(SettingsDialog, { props: { open: true } });
 
     await waitFor(() => {
       expect(screen.getByText('描画モード')).toBeInTheDocument();
@@ -931,7 +933,7 @@ describe('SettingsDialog.svelte', () => {
     await user.click(saveButton);
 
     await waitFor(() => {
-      expect(component.open).toBe(false);
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     });
 
     expect(document.documentElement.dataset.renderMode).toBe('gpu');
@@ -980,8 +982,7 @@ describe('SettingsDialog.svelte', () => {
       expect(screen.getByTestId('settings-section-general')).toBeInTheDocument();
     });
 
-    // user_editable=trueのフィールドは表示されない
-    // FieldItem のラベルは複雑なので、ここでは簡易的に確認
-    // より詳細なテストは integration テストで行う
+    expect(screen.getByText('フィールド1')).toBeInTheDocument();
+    expect(screen.queryByText('フィールド2（非表示）')).not.toBeInTheDocument();
   });
 });

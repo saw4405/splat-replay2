@@ -227,7 +227,7 @@
             🎬
             {#if recordedCount > 0}<span class="tab-badge">{recordedCount}</span>{/if}
           </span>
-          <div class="tab-info">
+          <div class="tab-info" data-testid="tab-info">
             <span class="tab-label">録画</span>
             <span class="tab-count" data-testid="recorded-count">{recordedCount}</span>
           </div>
@@ -246,7 +246,7 @@
             ✨
             {#if editedCount > 0}<span class="tab-badge">{editedCount}</span>{/if}
           </span>
-          <div class="tab-info">
+          <div class="tab-info" data-testid="tab-info">
             <span class="tab-label">編集</span>
             <span class="tab-count" data-testid="edited-count">{editedCount}</span>
           </div>
@@ -265,7 +265,7 @@
             📊
             {#if battleCount > 0}<span class="tab-badge">{battleCount}</span>{/if}
           </span>
-          <div class="tab-info">
+          <div class="tab-info" data-testid="tab-info">
             <span class="tab-label">戦績</span>
             <span class="tab-count">{battleCount}</span>
           </div>
