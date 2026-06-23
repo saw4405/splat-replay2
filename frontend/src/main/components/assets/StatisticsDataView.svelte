@@ -227,8 +227,10 @@
     flex-direction: column;
     gap: 1.5rem;
     height: 100%;
+    min-height: 0;
     color: rgba(var(--theme-rgb-white), 0.9);
     overflow: auto;
+    overscroll-behavior: contain;
     scrollbar-color: rgba(var(--theme-rgb-accent), 0.35) rgba(var(--theme-rgb-black), 0.2);
     scrollbar-width: thin;
   }
@@ -372,7 +374,8 @@
     flex-direction: column;
     gap: 0.75rem;
     min-height: 0;
-    overflow: hidden;
+    flex: 0 0 auto;
+    overflow: visible;
   }
 
   .detail-title {
@@ -385,8 +388,8 @@
   }
 
   .scroll-list {
-    overflow-y: auto;
-    flex: 1;
+    overflow: visible;
+    flex: 0 0 auto;
     scrollbar-width: thin;
     scrollbar-color: rgba(var(--theme-rgb-accent), 0.3) rgba(var(--theme-rgb-black), 0.2);
   }
@@ -443,8 +446,11 @@
 
   .rule-name {
     flex: 1;
+    min-width: 0;
     color: rgba(var(--theme-rgb-white), 0.85);
     font-weight: 500;
+    word-break: keep-all;
+    overflow-wrap: normal;
   }
 
   .rule-meta,
@@ -494,6 +500,61 @@
   }
 
   .stage-name {
+    min-width: 0;
     color: rgba(var(--theme-rgb-white), 0.7);
+    word-break: keep-all;
+    overflow-wrap: normal;
+  }
+
+  @media (max-width: 480px) {
+    .rule-header {
+      display: grid;
+      grid-template-columns: 1rem minmax(0, 1fr);
+      align-items: start;
+      column-gap: 0.5rem;
+      row-gap: 0.35rem;
+      padding: 0.6rem;
+    }
+
+    .chevron {
+      grid-column: 1;
+      grid-row: 1 / span 2;
+      margin-top: 0.1rem;
+    }
+
+    .rule-name {
+      grid-column: 2;
+      line-height: 1.35;
+    }
+
+    .rule-meta,
+    .stage-meta {
+      width: 100%;
+      display: grid;
+      grid-template-columns: auto auto minmax(3.4rem, 1fr);
+      align-items: baseline;
+      gap: 0.2rem 0.35rem;
+    }
+
+    .rule-meta {
+      grid-column: 2;
+    }
+
+    .rule-meta .win-rate-badge,
+    .stage-meta .win-rate-badge {
+      min-width: 3.4rem;
+      justify-self: end;
+    }
+
+    .stage-list {
+      padding-left: 1.2rem;
+    }
+
+    .stage-row {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr);
+      align-items: start;
+      gap: 0.25rem;
+    }
   }
 </style>
