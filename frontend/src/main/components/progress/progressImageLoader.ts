@@ -168,10 +168,12 @@ export class ProgressImageLoader implements ProgressImageLoaderContract {
         this.revokeObjectUrl(entry.objectUrl);
         entry.objectUrl = null;
       }
+      entry.desiredSlots.clear();
+      entry.displayedSlots.clear();
+      entry.errorNotifiedSlots.clear();
     }
     this.slots.clear();
     this.entries.clear();
-    this.runningEntry = null;
   }
 
   dispose(): void {
@@ -209,7 +211,10 @@ export class ProgressImageLoader implements ProgressImageLoaderContract {
   private cleanupEntry(entry: QueueEntry, abortIfOrphaned: boolean): void {
     if (entry.desiredSlots.size > 0 || entry.displayedSlots.size > 0) return;
     if (entry.status === 'loading') {
-      if (abortIfOrphaned) entry.controller.abort();
+      if (abortIfOrphaned) {
+        entry.controller.abort();
+        this.deleteEntryIfCurrent(entry);
+      }
       return;
     }
     if (entry.status === 'queued' && abortIfOrphaned) {
@@ -219,7 +224,13 @@ export class ProgressImageLoader implements ProgressImageLoaderContract {
       this.revokeObjectUrl(entry.objectUrl);
       entry.objectUrl = null;
     }
-    this.entries.delete(entry.sourceUrl);
+    this.deleteEntryIfCurrent(entry);
+  }
+
+  private deleteEntryIfCurrent(entry: QueueEntry): void {
+    if (this.entries.get(entry.sourceUrl) === entry) {
+      this.entries.delete(entry.sourceUrl);
+    }
   }
 
   private entryRank(entry: QueueEntry): readonly [number, number] {

@@ -241,6 +241,84 @@ describe('ProgressImageLoader', () => {
     loader.dispose();
   });
 
+  it('abortした旧generationのsettle後に同じURLの新generationを取得する', async () => {
+    const oldResponse = deferred<Response>();
+    let oldSignal: AbortSignal | undefined;
+    const fetchFn = vi
+      .fn<typeof fetch>()
+      .mockImplementationOnce((_input, init) => {
+        oldSignal = init?.signal ?? undefined;
+        return oldResponse.promise;
+      })
+      .mockResolvedValueOnce(pngResponse());
+    const oldReady = vi.fn<(image: ProgressImageReady) => void>();
+    const newReady = vi.fn<(image: ProgressImageReady) => void>();
+    const onError = vi.fn<(error: Error) => void>();
+    const loader = new ProgressImageLoader({
+      fetchFn,
+      decodeImage: vi.fn().mockResolvedValue(undefined),
+      createObjectUrl: vi.fn(() => 'blob:new-generation'),
+      revokeObjectUrl: vi.fn(),
+      sleep: vi.fn().mockResolvedValue(undefined),
+    });
+
+    loader.request(requestFor({ url: '/same', onReady: oldReady, onError }));
+    await vi.waitFor(() => expect(fetchFn).toHaveBeenCalledTimes(1));
+    loader.releaseSlot('owner', 'slot');
+    expect(oldSignal?.aborted).toBe(true);
+
+    loader.request(requestFor({ url: '/same', onReady: newReady, onError }));
+    expect(fetchFn).toHaveBeenCalledTimes(1);
+    oldResponse.reject(new DOMException('Aborted', 'AbortError'));
+
+    await vi.waitFor(() => expect(fetchFn).toHaveBeenCalledTimes(2));
+    await vi.waitFor(() => expect(newReady).toHaveBeenCalledTimes(1));
+    expect(fetchFn.mock.calls.map(([url]) => url)).toEqual(['/same', '/same']);
+    expect(oldReady).not.toHaveBeenCalled();
+    expect(onError).not.toHaveBeenCalled();
+    loader.dispose();
+  });
+
+  it('clearした旧generationのsettleが同じURLの新generationを削除しない', async () => {
+    const oldResponse = deferred<Response>();
+    let oldSignal: AbortSignal | undefined;
+    const fetchFn = vi
+      .fn<typeof fetch>()
+      .mockImplementationOnce((_input, init) => {
+        oldSignal = init?.signal ?? undefined;
+        return oldResponse.promise;
+      })
+      .mockResolvedValueOnce(pngResponse());
+    const onReady = vi.fn<(image: ProgressImageReady) => void>();
+    const onError = vi.fn<(error: Error) => void>();
+    const revokeObjectUrl = vi.fn();
+    const loader = new ProgressImageLoader({
+      fetchFn,
+      decodeImage: vi.fn().mockResolvedValue(undefined),
+      createObjectUrl: vi.fn(() => 'blob:after-clear'),
+      revokeObjectUrl,
+      sleep: vi.fn().mockResolvedValue(undefined),
+    });
+
+    loader.request(requestFor({ url: '/same', onReady: vi.fn(), onError }));
+    await vi.waitFor(() => expect(fetchFn).toHaveBeenCalledTimes(1));
+    loader.clear();
+    expect(oldSignal?.aborted).toBe(true);
+
+    loader.request(requestFor({ url: '/same', onReady, onError }));
+    expect(fetchFn).toHaveBeenCalledTimes(1);
+    oldResponse.reject(new DOMException('Aborted', 'AbortError'));
+
+    await vi.waitFor(() => expect(fetchFn).toHaveBeenCalledTimes(2));
+    await vi.waitFor(() => expect(onReady).toHaveBeenCalledTimes(1));
+    expect(onError).not.toHaveBeenCalled();
+    loader.releaseSlot('owner', 'slot');
+    expect(revokeObjectUrl).toHaveBeenCalledTimes(1);
+    expect(revokeObjectUrl).toHaveBeenCalledWith('blob:after-clear');
+    loader.dispose();
+    expect(revokeObjectUrl).toHaveBeenCalledTimes(1);
+  });
+
   it('共有Object URLは最後の購読者を解放した時だけ一度解放する', async () => {
     const revokeObjectUrl = vi.fn();
     const loader = new ProgressImageLoader({
