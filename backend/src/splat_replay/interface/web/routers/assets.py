@@ -12,7 +12,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, List
 
 from fastapi import APIRouter, HTTPException, Query, status
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, Response
 
 from splat_replay.application.dto.assets import EditUploadStatusDTO
 from splat_replay.interface.web.converters import to_recorded_video_item
@@ -25,7 +25,12 @@ from splat_replay.interface.web.schemas import (
 )
 
 if TYPE_CHECKING:
+    from pathlib import Path
+
     from splat_replay.interface.web.server import WebAPIServer
+
+
+FRAME_RESPONSE_HEADERS = {"Cache-Control": "no-store"}
 
 
 def create_assets_router(server: WebAPIServer) -> APIRouter:
@@ -50,6 +55,29 @@ def create_assets_router(server: WebAPIServer) -> APIRouter:
             sleep_after_upload_overridden=dto.sleep_after_upload_overridden,
         )
 
+    def _resolve_recorded_video_path(video_id: str) -> Path:
+        if not video_id.startswith("recorded/"):
+            if not video_id.endswith(".mkv") and not video_id.endswith(".mp4"):
+                video_path = server.base_dir / "recorded" / f"{video_id}.mkv"
+                if not video_path.exists():
+                    video_path = (
+                        server.base_dir / "recorded" / f"{video_id}.mp4"
+                    )
+            else:
+                video_path = server.base_dir / "recorded" / video_id
+        else:
+            video_path = server.base_dir / video_id
+
+        video_path = video_path.resolve()
+        base_resolved = server.base_dir.resolve()
+        try:
+            video_path.relative_to(base_resolved)
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=400, detail="Invalid path"
+            ) from exc
+        return video_path
+
     # === 録画済みアセット ===
 
     @router.get(
@@ -66,6 +94,71 @@ def create_assets_router(server: WebAPIServer) -> APIRouter:
                 "録画一覧取得エラー", error=str(e), exc_info=True
             )
             raise
+
+    @router.get("/assets/recorded/{video_id:path}/frame")
+    async def get_recorded_frame(
+        video_id: str,
+        t: float = Query(0.0, description="切り出す時間（秒）"),
+        w: int | None = Query(
+            None,
+            ge=1,
+            le=3840,
+            description="返却画像の最大幅（px）",
+        ),
+    ) -> Response:
+        """指定された秒数のフレーム画像を元動画から切り出す。"""
+        try:
+            try:
+                video_path = _resolve_recorded_video_path(video_id)
+            except HTTPException as exc:
+                if exc.status_code == 400:
+                    raise HTTPException(
+                        status_code=404,
+                        detail="Video file not found",
+                    ) from exc
+                raise
+            if not video_path.is_file():
+                raise HTTPException(
+                    status_code=404,
+                    detail="Video file not found",
+                )
+
+            frame = await server.frame_preview.extract_frame(
+                video_path, t, max_width=w
+            )
+            if frame is None:
+                server.logger.error(
+                    "フレーム切り出し失敗",
+                    path=str(video_path),
+                    seconds=t,
+                    width=w,
+                )
+                raise HTTPException(
+                    status_code=500,
+                    detail="Failed to extract frame",
+                )
+
+            return Response(
+                content=frame,
+                media_type="image/png",
+                headers=FRAME_RESPONSE_HEADERS,
+            )
+
+        except HTTPException:
+            raise
+        except Exception as exc:
+            server.logger.error(
+                "フレーム切り出しエラー",
+                video_id=video_id,
+                seconds=t,
+                width=w,
+                error=str(exc),
+                exc_info=True,
+            )
+            raise HTTPException(
+                status_code=500,
+                detail="Failed to extract frame",
+            ) from exc
 
     @router.delete("/assets/recorded/{video_id:path}")
     async def delete_recorded_asset(video_id: str) -> JSONResponse:

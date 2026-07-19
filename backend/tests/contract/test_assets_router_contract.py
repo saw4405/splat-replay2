@@ -376,6 +376,151 @@ class TestAssetsErrorHandling:
         ]
 
 
+class _FramePreviewStub:
+    def __init__(
+        self,
+        result: bytes | None = b"png-bytes",
+        error: Exception | None = None,
+    ) -> None:
+        self.result = result
+        self.error = error
+        self.calls: list[tuple[str, float, int | None]] = []
+
+    async def extract_frame(
+        self,
+        video: Any,
+        seconds: float,
+        *,
+        max_width: int | None = None,
+    ) -> bytes | None:
+        self.calls.append((str(video), seconds, max_width))
+        if self.error is not None:
+            raise self.error
+        return self.result
+
+
+def _create_frame_test_app(
+    base_dir: Any,
+    frame_preview: _FramePreviewStub,
+) -> FastAPI:
+    app = FastAPI()
+    app.include_router(
+        create_assets_router(
+            cast(
+                Any,
+                SimpleNamespace(
+                    base_dir=base_dir,
+                    frame_preview=frame_preview,
+                    logger=SimpleNamespace(error=lambda *args, **kwargs: None),
+                ),
+            )
+        )
+    )
+    return app
+
+
+class TestRecordedFrameEndpoint:
+    """進捗表示用フレームAPIの契約テスト。"""
+
+    def test_recorded_frame_returns_requested_png_with_no_store(
+        self, tmp_path: Any
+    ) -> None:
+        base_dir = tmp_path / "videos"
+        recorded_dir = base_dir / "recorded"
+        recorded_dir.mkdir(parents=True)
+        (recorded_dir / "sample.mkv").write_bytes(b"video")
+        frame_preview = _FramePreviewStub()
+
+        with TestClient(
+            _create_frame_test_app(base_dir, frame_preview)
+        ) as client:
+            response = client.get(
+                "/api/assets/recorded/sample.mkv/frame?t=60&w=960"
+            )
+
+        assert response.status_code == 200
+        assert response.headers["content-type"] == "image/png"
+        assert response.headers["cache-control"] == "no-store"
+        assert response.content == b"png-bytes"
+        assert frame_preview.calls == [
+            (str((recorded_dir / "sample.mkv").resolve()), 60.0, 960)
+        ]
+
+    def test_recorded_frame_returns_404_when_source_video_is_missing(
+        self, tmp_path: Any
+    ) -> None:
+        base_dir = tmp_path / "videos"
+        (base_dir / "recorded").mkdir(parents=True)
+        frame_preview = _FramePreviewStub(result=b"stale-cache")
+
+        with TestClient(
+            _create_frame_test_app(base_dir, frame_preview)
+        ) as client:
+            response = client.get(
+                "/api/assets/recorded/missing.mkv/frame?t=0&w=960"
+            )
+
+        assert response.status_code == 404
+        assert frame_preview.calls == []
+
+    def test_recorded_frame_returns_500_when_extraction_fails(
+        self, tmp_path: Any
+    ) -> None:
+        base_dir = tmp_path / "videos"
+        recorded_dir = base_dir / "recorded"
+        recorded_dir.mkdir(parents=True)
+        (recorded_dir / "sample.mkv").write_bytes(b"video")
+        (recorded_dir / "sample.png").write_bytes(b"sidecar-fallback")
+        frame_preview = _FramePreviewStub(result=None)
+
+        with TestClient(
+            _create_frame_test_app(base_dir, frame_preview)
+        ) as client:
+            response = client.get(
+                "/api/assets/recorded/sample.mkv/frame?t=60&w=960"
+            )
+
+        assert response.status_code == 500
+        assert response.content != b"sidecar-fallback"
+
+    def test_recorded_frame_does_not_fallback_to_unrelated_png_on_exception(
+        self, tmp_path: Any
+    ) -> None:
+        base_dir = tmp_path / "videos"
+        recorded_dir = base_dir / "recorded"
+        recorded_dir.mkdir(parents=True)
+        (recorded_dir / "sample.mkv").write_bytes(b"video")
+        (recorded_dir / "other.png").write_bytes(b"unrelated-fallback")
+        frame_preview = _FramePreviewStub(error=RuntimeError("ffmpeg failed"))
+
+        with TestClient(
+            _create_frame_test_app(base_dir, frame_preview)
+        ) as client:
+            response = client.get(
+                "/api/assets/recorded/sample.mkv/frame?t=60&w=960"
+            )
+
+        assert response.status_code == 500
+        assert response.content != b"unrelated-fallback"
+
+    def test_recorded_frame_returns_404_for_disallowed_path(
+        self, tmp_path: Any
+    ) -> None:
+        base_dir = tmp_path / "videos"
+        (base_dir / "recorded").mkdir(parents=True)
+        frame_preview = _FramePreviewStub()
+
+        with TestClient(
+            _create_frame_test_app(base_dir, frame_preview)
+        ) as client:
+            response = client.get(
+                "/api/assets/recorded/..%2F..%2Foutside.mkv/frame?t=0&w=960"
+            )
+
+        assert response.status_code == 404
+        assert frame_preview.calls == []
+
+
 class _PatchStartEditUploadUseCaseStub:
     def __init__(self) -> None:
         self.updated_values: list[bool] = []

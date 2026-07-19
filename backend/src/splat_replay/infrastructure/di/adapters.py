@@ -22,6 +22,7 @@ from splat_replay.application.interfaces import (
     EventBusPort,
     EventPublisher,
     FramePublisher,
+    FramePreviewPort,
     ImageSelector,
     LoggerPort,
     MicrophoneEnumeratorPort,
@@ -133,6 +134,11 @@ def register_adapters(container: punq.Container) -> None:
         scope=punq.Scope.singleton,
     )
     container.register(VideoEditorPort, FFmpegProcessor)
+    container.register(
+        FramePreviewPort,
+        FFmpegProcessor,
+        scope=punq.Scope.singleton,
+    )
 
     # ImageEditorFactory: Frameごとに新しいImageEditorを生成するFactory関数
     from splat_replay.infrastructure.adapters.image.image_editor import (

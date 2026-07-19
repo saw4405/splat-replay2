@@ -6,7 +6,7 @@ from typing import Any, AsyncGenerator, Dict, Literal
 
 import punq
 from fastapi import FastAPI
-from splat_replay.application.interfaces import EventBusPort
+from splat_replay.application.interfaces import EventBusPort, FramePreviewPort
 from splat_replay.application.services import (
     AutoRecorder,
     DeviceChecker,
@@ -73,6 +73,7 @@ def build_web_api_server(container: punq.Container) -> WebAPIServer:
     settings_service = resolve(container, SettingsService)
     event_bus_port = resolve(container, EventBusPort)
     frame_source = resolve(container, GuiRuntimePortAdapter)
+    frame_preview = resolve(container, FramePreviewPort)
     upload_use_case = resolve(container, UploadUseCase)
 
     def auto_recording_use_case_factory() -> AutoRecordingUseCase:
@@ -214,6 +215,7 @@ def build_web_api_server(container: punq.Container) -> WebAPIServer:
         progress_store=progress_store,
         event_bus=event_bus_port,
         frame_source=frame_source,
+        frame_preview=frame_preview,
         preview_mode_resolver=preview_mode_resolver,
         project_root=PROJECT_ROOT,
         runtime_root=RUNTIME_ROOT,
