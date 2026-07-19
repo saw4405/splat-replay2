@@ -9,6 +9,20 @@ from splat_replay.application.interfaces.data import FileStats
 from splat_replay.domain.models import Frame, RecordingMetadata, VideoAsset
 
 
+class FramePreviewPort(Protocol):
+    """進捗表示用フレーム画像を提供するポート。"""
+
+    async def extract_frame(
+        self,
+        video: Path,
+        seconds: float,
+        *,
+        max_width: int | None = None,
+    ) -> bytes | None:
+        """元動画から指定秒数のPNGフレームを抽出する。"""
+        ...
+
+
 class VideoEditorPort(Protocol):
     """動画編集処理を提供するポート。"""
 

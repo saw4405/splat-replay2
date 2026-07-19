@@ -98,6 +98,7 @@ from splat_replay.application.interfaces.upload import (
     UploadPort,
 )
 from splat_replay.application.interfaces.video import (
+    FramePreviewPort,
     VideoAssetRepositoryPort,
     VideoEditorPort,
 )
@@ -164,6 +165,7 @@ __all__ = [
     "SpeechTranscriberPort",
     "TextToSpeechPort",
     # Video
+    "FramePreviewPort",
     "VideoAssetRepositoryPort",
     "VideoEditorPort",
     "WeaponCandidateScore",

@@ -11,13 +11,16 @@ from pathlib import Path
 from subprocess import CompletedProcess
 from typing import Dict, List, Literal, Optional, Sequence, TypeVar
 
-from splat_replay.application.interfaces import VideoEditorPort
+from splat_replay.application.interfaces import (
+    FramePreviewPort,
+    VideoEditorPort,
+)
 from structlog.stdlib import BoundLogger
 
 ResultT = TypeVar("ResultT", str, bytes)
 
 
-class FFmpegProcessor(VideoEditorPort):
+class FFmpegProcessor(VideoEditorPort, FramePreviewPort):
     """Provides high-level helpers around ffmpeg/ffprobe commands."""
 
     def __init__(self, logger: BoundLogger) -> None:
@@ -25,6 +28,7 @@ class FFmpegProcessor(VideoEditorPort):
         # 動画長のキャッシュ (GUI リスト表示時の ffprobe 過多を防止)
         self._length_cache: dict[Path, float | None] = {}
         self._subprocess_fallback_logged = False
+        self._frame_preview_semaphore = asyncio.Semaphore(1)
 
     # ------------------------------------------------------------------
     # Helpers
@@ -123,6 +127,7 @@ class FFmpegProcessor(VideoEditorPort):
         command: Sequence[str],
         *,
         input_bytes: bytes | None = None,
+        timeout: float | None = None,
     ) -> CompletedProcess[bytes]:
         try:
             process = await asyncio.create_subprocess_exec(
@@ -140,10 +145,25 @@ class FFmpegProcessor(VideoEditorPort):
                 )
                 self._subprocess_fallback_logged = True
             return await self._run_binary_fallback(
-                command, input_bytes=input_bytes
+                command, input_bytes=input_bytes, timeout=timeout
             )
         try:
-            stdout_bytes, stderr_bytes = await process.communicate(input_bytes)
+            if timeout is None:
+                stdout_bytes, stderr_bytes = await process.communicate(
+                    input_bytes
+                )
+            else:
+                try:
+                    stdout_bytes, stderr_bytes = await asyncio.wait_for(
+                        process.communicate(input_bytes), timeout=timeout
+                    )
+                except asyncio.TimeoutError as exc:
+                    process.kill()
+                    with contextlib.suppress(Exception):
+                        await process.communicate()
+                    raise subprocess.TimeoutExpired(
+                        list(command), timeout
+                    ) from exc
         except asyncio.CancelledError:
             process.kill()
             with contextlib.suppress(Exception):
@@ -163,6 +183,7 @@ class FFmpegProcessor(VideoEditorPort):
         command: Sequence[str],
         *,
         input_bytes: bytes | None = None,
+        timeout: float | None = None,
     ) -> CompletedProcess[bytes]:
         def _run() -> CompletedProcess[bytes]:
             return subprocess.run(
@@ -170,6 +191,7 @@ class FFmpegProcessor(VideoEditorPort):
                 input=input_bytes,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
+                timeout=timeout,
             )
 
         return await asyncio.to_thread(_run)
@@ -194,6 +216,54 @@ class FFmpegProcessor(VideoEditorPort):
     # ------------------------------------------------------------------
     # VideoEditorPort implementation
     # ------------------------------------------------------------------
+    async def extract_frame(
+        self,
+        video: Path,
+        seconds: float,
+        *,
+        max_width: int | None = None,
+    ) -> bytes | None:
+        """元動画から進捗表示用PNGフレームを抽出する。"""
+        abs_video = video.resolve()
+        normalized_seconds = max(0, int(seconds))
+        normalized_width = (
+            max_width if max_width is not None and max_width > 0 else None
+        )
+        if not abs_video.is_file():
+            return None
+
+        command = [
+            "ffmpeg",
+            "-y",
+            "-ss",
+            str(normalized_seconds),
+            "-i",
+            str(abs_video),
+            "-vframes",
+            "1",
+        ]
+        if normalized_width is not None:
+            command.extend(["-vf", f"scale={normalized_width}:-2"])
+        command.extend(["-f", "image2", "-vcodec", "png", "pipe:1"])
+
+        try:
+            async with self._frame_preview_semaphore:
+                result = await self._run_binary(command, timeout=8)
+        except (OSError, subprocess.TimeoutExpired) as exc:
+            self.logger.warning(
+                "FFmpeg preview frame extraction failed",
+                path=str(abs_video),
+                seconds=normalized_seconds,
+                width=normalized_width,
+                error=str(exc),
+            )
+            return None
+
+        if result.returncode != 0 or not result.stdout:
+            self._log_failure("FFmpeg preview frame extraction failed", result)
+            return None
+        return result.stdout
+
     async def merge(self, clips: list[Path], output: Path) -> Path:
         abs_clips = [clip.resolve() for clip in clips]
         self.logger.info(
