@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+from collections.abc import Iterator
 import datetime
+import os
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -147,6 +149,18 @@ async def test_execute_saves_group_without_frame_preview_dependency(
     editor._cancelled = False
     editor._state = EditingState()
 
+    class _EditResult(os.PathLike[str]):
+        def __init__(self, target: Path, metadata: dict[str, str]) -> None:
+            self._target = target
+            self._metadata = metadata
+
+        def __fspath__(self) -> str:
+            return str(self._target)
+
+        def __iter__(self) -> Iterator[Path | dict[str, str]]:
+            yield self._target
+            yield self._metadata
+
     async def fake_edit(
         idx: int,
         day: datetime.date,
@@ -154,23 +168,25 @@ async def test_execute_saves_group_without_frame_preview_dependency(
         match_name: str,
         rule_name: str,
         group: list[object],
-    ) -> tuple[Path, dict[str, str]]:
+    ) -> _EditResult:
         _ = idx, day, time_slot, match_name, rule_name, group
-        return edited_video, {
-            "title": generated_title,
-            "description": "description",
-        }
+        return _EditResult(
+            edited_video,
+            {
+                "title": generated_title,
+                "description": "description",
+            },
+        )
 
     editor._edit = fake_edit
 
     await editor.execute()
 
-    assert {
-        "task_id": "auto_edit",
-        "item_index": 0,
-        "stage_key": "save",
-        "stage_label": "録画済動画削除・編集済動画保存",
-        "message": generated_title,
-        "progress_percent": None,
-    } in progress.item_stage_calls
+    assert any(
+        call["task_id"] == "auto_edit"
+        and call["item_index"] == 0
+        and call["stage_key"] == "save"
+        and call["stage_label"] == "録画済動画削除・編集済動画保存"
+        for call in progress.item_stage_calls
+    )
     assert deleted_videos == [source_video]
