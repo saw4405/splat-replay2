@@ -52,7 +52,7 @@ class AutoEditor:
         repo: VideoAssetRepositoryPort,
         file_system: FileSystemPort,
         progress: ProgressReporter,
-    ):
+    ) -> None:
         self.repo = repo
         self.logger = logger
         self.config = config
