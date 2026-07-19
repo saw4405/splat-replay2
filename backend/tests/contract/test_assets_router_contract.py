@@ -481,6 +481,7 @@ class TestRecordedFrameEndpoint:
             )
 
         assert response.status_code == 500
+        assert response.json() == {"detail": "Failed to extract frame"}
         assert response.content != b"sidecar-fallback"
 
     def test_recorded_frame_does_not_fallback_to_unrelated_png_on_exception(
@@ -501,6 +502,7 @@ class TestRecordedFrameEndpoint:
             )
 
         assert response.status_code == 500
+        assert response.json() == {"detail": "Failed to extract frame"}
         assert response.content != b"unrelated-fallback"
 
     def test_recorded_frame_returns_404_for_disallowed_path(
@@ -515,6 +517,27 @@ class TestRecordedFrameEndpoint:
         ) as client:
             response = client.get(
                 "/api/assets/recorded/..%2F..%2Foutside.mkv/frame?t=0&w=960"
+            )
+
+        assert response.status_code == 404
+        assert frame_preview.calls == []
+
+    def test_recorded_frame_returns_404_for_recorded_sibling_traversal(
+        self, tmp_path: Any
+    ) -> None:
+        base_dir = tmp_path / "videos"
+        (base_dir / "recorded").mkdir(parents=True)
+        edited_dir = base_dir / "edited"
+        edited_dir.mkdir()
+        (edited_dir / "secret.mkv").write_bytes(b"secret")
+        frame_preview = _FramePreviewStub()
+
+        with TestClient(
+            _create_frame_test_app(base_dir, frame_preview)
+        ) as client:
+            response = client.get(
+                "/api/assets/recorded/"
+                "recorded%2F..%2Fedited%2Fsecret.mkv/frame?t=0&w=960"
             )
 
         assert response.status_code == 404

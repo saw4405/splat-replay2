@@ -69,9 +69,9 @@ def create_assets_router(server: WebAPIServer) -> APIRouter:
             video_path = server.base_dir / video_id
 
         video_path = video_path.resolve()
-        base_resolved = server.base_dir.resolve()
+        recorded_root = (server.base_dir / "recorded").resolve()
         try:
-            video_path.relative_to(base_resolved)
+            video_path.relative_to(recorded_root)
         except ValueError as exc:
             raise HTTPException(
                 status_code=400, detail="Invalid path"
