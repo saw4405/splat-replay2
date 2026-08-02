@@ -172,6 +172,28 @@ export type ProgressEventKind =
   | 'item_stage'
   | 'item_finish';
 
+export interface VideoAssetPayload {
+  video_id: string;
+  duration_seconds: number;
+  judgement: string;
+  stage_name: string;
+  kill: number;
+  death: number;
+  special: number;
+  gold_medals: number;
+  silver_medals: number;
+  rate: { type: string; value: string } | null;
+}
+
+export interface GroupPayload {
+  group_index: number;
+  date_label: string;
+  match_name: string;
+  rule_name: string;
+  thumbnail_filename?: string | null;
+  video_assets: VideoAssetPayload[];
+}
+
 export interface ProgressEvent {
   task_id: string;
   kind: ProgressEventKind;
@@ -188,4 +210,6 @@ export interface ProgressEvent {
   item_index: number | null;
   item_key: string | null;
   item_label: string | null;
+  progress_percent: number | null;
+  clips: GroupPayload[] | null;
 }

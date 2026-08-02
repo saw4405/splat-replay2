@@ -29,6 +29,8 @@ function makeEvent(
     item_index: overrides.item_index ?? null,
     item_key: overrides.item_key ?? null,
     item_label: overrides.item_label ?? null,
+    progress_percent: overrides.progress_percent ?? null,
+    clips: overrides.clips ?? null,
   };
 }
 
@@ -298,6 +300,49 @@ describe('ProgressStateMachine', () => {
       const step = item.steps.find((s) => s.key === 'subtitle');
       expect(step?.status).toBe('active');
     });
+
+    it('進捗率なしでステージが切り替わった場合は前ステージの進捗率を引き継がない', () => {
+      sm.applyEvent(
+        makeEvent({
+          task_id: 'auto_edit',
+          kind: 'item_stage',
+          item_index: 0,
+          item_key: 'concat',
+          item_label: '動画結合',
+          progress_percent: 100,
+        })
+      );
+      expect(sm.tasks['auto_edit'].progressPercent).toBe(100);
+
+      sm.applyEvent(
+        makeEvent({
+          task_id: 'auto_edit',
+          kind: 'item_stage',
+          item_index: 0,
+          item_key: 'thumbnail',
+          item_label: 'サムネイル編集',
+          message: 'サムネイル画像を生成中',
+          progress_percent: null,
+        })
+      );
+
+      expect(sm.tasks['auto_edit'].progressPercent).toBeNull();
+    });
+
+    it('auto_edit の保存ステージでは message を完了カード用タイトルとして保持する', () => {
+      sm.applyEvent(
+        makeEvent({
+          task_id: 'auto_edit',
+          kind: 'item_stage',
+          item_index: 0,
+          item_key: 'save',
+          item_label: '保存・整理',
+          message: '【ガチヤグラ】海女美術大学の軌跡',
+        })
+      );
+
+      expect(sm.tasks['auto_edit'].items[0].title).toBe('【ガチヤグラ】海女美術大学の軌跡');
+    });
   });
 
   // =========================================================
@@ -402,6 +447,27 @@ describe('ProgressStateMachine', () => {
 
       expect(sm.tasks['auto_edit'].items[0].status).toBe('success');
       expect(sm.tasks['auto_edit'].activeIndex).toBe(1);
+    });
+
+    it('advance で成功したアイテムの dismissed が true になる', () => {
+      sm.applyEvent(makeEvent({ task_id: 'auto_edit', kind: 'advance', completed: 1 }));
+
+      expect(sm.tasks['auto_edit'].items[0].dismissed).toBe(true);
+    });
+
+    it('進捗率だけの advance ではアクティブアイテムを完了扱いにしない', () => {
+      sm.applyEvent(
+        makeEvent({
+          task_id: 'auto_edit',
+          kind: 'advance',
+          completed: 0,
+          progress_percent: 50,
+        })
+      );
+
+      expect(sm.tasks['auto_edit'].items[0].status).toBe('active');
+      expect(sm.tasks['auto_edit'].items[0].dismissed).toBeUndefined();
+      expect(sm.tasks['auto_edit'].activeIndex).toBe(0);
     });
   });
 
@@ -743,6 +809,68 @@ describe('ProgressStateMachine', () => {
       sm.applyEvent(makeEvent({ task_id: 'auto_upload', kind: 'start', total: 2, completed: 1 }));
 
       expect(sm.totalItemsProcessed).toBe(3);
+    });
+
+    it('start イベントで clips が与えられたとき対応するアイテムにバインドされる', () => {
+      const mockClips = [
+        {
+          group_index: 0,
+          date_label: '6/27\n11:00～',
+          match_name: 'バンカラマッチ',
+          rule_name: 'ガチエリア',
+          video_assets: [
+            {
+              video_id: 'recorded/video1.mp4',
+              duration_seconds: 300,
+              judgement: 'WIN',
+              stage_name: 'ザトウマーケット',
+              kill: 12,
+              death: 4,
+              special: 3,
+              gold_medals: 2,
+              silver_medals: 1,
+              rate: { type: 'XP', value: '2100.5' },
+            },
+          ],
+        },
+      ];
+
+      sm.applyEvent(
+        makeEvent({
+          task_id: 'auto_edit',
+          kind: 'start',
+          items: ['グループ1'],
+          // @ts-expect-error - テストで clips を渡す
+          clips: mockClips,
+        })
+      );
+
+      const item = sm.tasks['auto_edit'].items[0];
+      expect(item.clips).toBeDefined();
+      expect(item.clips?.match_name).toBe('バンカラマッチ');
+      expect(item.clips?.video_assets[0].video_id).toBe('recorded/video1.mp4');
+    });
+
+    it('item_finish で成功したアイテムの dismissed が true になる', () => {
+      sm.applyEvent(
+        makeEvent({
+          task_id: 'auto_edit',
+          kind: 'start',
+          items: ['動画A', '動画B'],
+          total: 2,
+        })
+      );
+
+      sm.applyEvent(
+        makeEvent({
+          task_id: 'auto_edit',
+          kind: 'item_finish',
+          item_index: 0,
+          success: true,
+        })
+      );
+
+      expect(sm.tasks['auto_edit'].items[0].dismissed).toBe(true);
     });
   });
 });

@@ -12,6 +12,7 @@
     maxWidth?: string;
     maxHeight?: string;
     minHeight?: string;
+    mobileFullscreen?: boolean;
     disablePrimaryButton?: boolean;
     disableSecondaryButton?: boolean;
     allowBackdropClose?: boolean;
@@ -36,6 +37,7 @@
     maxWidth = '60rem',
     maxHeight = '90vh',
     minHeight = undefined,
+    mobileFullscreen = false,
     disablePrimaryButton = false,
     disableSecondaryButton = false,
     allowBackdropClose = false,
@@ -90,16 +92,19 @@
   <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
   <div
     class="dialog-overlay"
+    class:mobile-fullscreen={mobileFullscreen}
     role="presentation"
     onclick={allowBackdropClose ? closeDialog : undefined}
   >
     <div
       class="dialog-container"
+      class:mobile-fullscreen={mobileFullscreen}
       role="dialog"
       tabindex="-1"
       aria-modal="true"
       aria-labelledby={showHeader ? 'dialog-title' : undefined}
       onclick={(e) => e.stopPropagation()}
+      style:--max-width={maxWidth}
       style:max-width={maxWidth}
       style:max-height={maxHeight}
       style:min-height={resolvedMinHeight}
@@ -447,6 +452,46 @@
 
     .actions {
       flex-wrap: nowrap;
+    }
+  }
+
+  @media (max-width: 40rem) {
+    .dialog-overlay.mobile-fullscreen {
+      padding: 0;
+    }
+
+    .dialog-container.mobile-fullscreen {
+      box-sizing: border-box;
+      width: 100%;
+      height: 100vh;
+      height: 100dvh;
+      max-width: none !important;
+      max-height: 100vh !important;
+      max-height: 100dvh !important;
+      min-height: 0 !important;
+      border-radius: 0;
+    }
+
+    .dialog-container.mobile-fullscreen .dialog-header {
+      padding: calc(0.75rem + env(safe-area-inset-top)) calc(1rem + env(safe-area-inset-right))
+        0.75rem calc(1rem + env(safe-area-inset-left));
+    }
+
+    .dialog-container.mobile-fullscreen .dialog-header :global(h2) {
+      font-size: 1.125rem;
+    }
+
+    .dialog-container.mobile-fullscreen .dialog-body {
+      padding: 0;
+      padding-right: env(safe-area-inset-right);
+      padding-left: env(safe-area-inset-left);
+    }
+
+    .dialog-container.mobile-fullscreen .dialog-footer {
+      padding: 0;
+      padding-right: env(safe-area-inset-right);
+      padding-bottom: env(safe-area-inset-bottom);
+      padding-left: env(safe-area-inset-left);
     }
   }
 </style>

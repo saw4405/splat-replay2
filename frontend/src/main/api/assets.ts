@@ -167,3 +167,19 @@ export async function deleteEditedVideo(videoId: string): Promise<void> {
     throw new Error(detail || 'Failed to delete edited video');
   }
 }
+
+/**
+ * 編集・アップロードプロセスをキャンセル
+ */
+export async function cancelEditUploadProcess(): Promise<EditUploadStatus> {
+  const response = await fetch('/api/process/edit-upload', {
+    method: 'DELETE',
+    headers: JSON_HEADERS,
+  });
+  if (!response.ok) {
+    const detail = await safeReadText(response);
+    throw new Error(detail || 'Failed to cancel edit/upload process');
+  }
+  const body = await response.json();
+  return mapEditUploadStatus(body);
+}

@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 
-import { updateEditUploadProcessOptions } from './assets.ts';
+import { cancelEditUploadProcess, updateEditUploadProcessOptions } from './assets.ts';
 
 describe('assets API', () => {
   let originalFetch: typeof globalThis.fetch;
@@ -65,5 +65,38 @@ describe('assets API', () => {
         sleepAfterUpload: false,
       })
     ).rejects.toThrow('編集中ではありません');
+  });
+
+  it('cancelEditUploadProcess は DELETE して状態を変換する', async () => {
+    globalThis.fetch = async (input, init) => {
+      expect(input).toBe('/api/process/edit-upload');
+      expect(init?.method).toBe('DELETE');
+
+      return new Response(
+        JSON.stringify({
+          state: 'failed',
+          started_at: null,
+          finished_at: null,
+          error: '編集・アップロード処理をキャンセルしました',
+          sleep_after_upload_default: false,
+          sleep_after_upload_effective: false,
+          sleep_after_upload_overridden: false,
+        }),
+        {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        }
+      );
+    };
+
+    await expect(cancelEditUploadProcess()).resolves.toEqual({
+      state: 'failed',
+      startedAt: null,
+      finishedAt: null,
+      error: '編集・アップロード処理をキャンセルしました',
+      sleepAfterUploadDefault: false,
+      sleepAfterUploadEffective: false,
+      sleepAfterUploadOverridden: false,
+    });
   });
 });

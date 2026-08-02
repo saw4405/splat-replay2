@@ -25,6 +25,14 @@ describe('BaseDialog.svelte', () => {
     expect(heading).toBeInTheDocument();
   });
 
+  it('maxWidth prop を実幅用のCSS変数にも反映する', () => {
+    render(BaseDialog, { props: { open: true, title: 'テスト', maxWidth: '72rem' } });
+
+    const dialog = screen.getByRole('dialog');
+    expect(dialog.getAttribute('style')).toContain('--max-width: 72rem');
+    expect(dialog.getAttribute('style')).toContain('max-width: 72rem');
+  });
+
   it('プライマリボタンをクリックすると onPrimaryClick が呼ばれる', async () => {
     const user = userEvent.setup();
     const mockPrimaryClick = vi.fn();

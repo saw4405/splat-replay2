@@ -5,7 +5,7 @@
  * Svelte ランタイムに依存しないため、単体テストが可能。
  */
 
-import type { ProgressEvent } from '../../api/types';
+import type { ProgressEvent, GroupPayload, VideoAssetPayload } from '../../api/types';
 
 // --- 型定義 ---
 
@@ -27,6 +27,8 @@ export interface ItemState {
   steps: StepState[];
   activeStepKey: string | null;
   expanded: boolean;
+  clips?: GroupPayload | null;
+  dismissed?: boolean;
 }
 
 export interface TaskState {
@@ -41,6 +43,7 @@ export interface TaskState {
   successMessage: string | null;
   lastUpdated: number;
   startedAt: number | null;
+  progressPercent: number | null;
 }
 
 export type PhaseStatus = 'pending' | 'active' | 'completed' | 'failed';
@@ -191,12 +194,27 @@ export class ProgressStateMachine {
       default:
         break;
     }
+
+    // イベントに進捗率が含まれていればタスク状態に反映
+    if (event.progress_percent !== undefined && event.progress_percent !== null) {
+      const task = this._tasks[event.task_id];
+      if (task) {
+        task.progressPercent = event.progress_percent;
+        task.lastUpdated = Date.now();
+      }
+    }
   }
 
   /** タスクの進捗率（0〜100）を返す */
   taskProgress(taskId: string): number {
     const task = this._tasks[taskId];
-    if (!task || task.total <= 0) {
+    if (!task) {
+      return 0;
+    }
+    if (task.progressPercent !== undefined && task.progressPercent !== null) {
+      return task.progressPercent;
+    }
+    if (task.total <= 0) {
       return 0;
     }
     const ratio = Math.max(0, Math.min(1, task.completed / task.total));
@@ -250,9 +268,15 @@ export class ProgressStateMachine {
     const taskId = event.task_id;
     const title = this._formatTaskTitle(taskId, event.task_name);
     const items = Array.isArray(event.items) ? event.items : [];
-    const createdItems = items.map((itemTitle, index) =>
-      this._makeItem(taskId, itemTitle, index === 0)
-    );
+    const clips = Array.isArray(event.clips) ? event.clips : [];
+    const createdItems = items.map((itemTitle, index) => {
+      const item = this._makeItem(taskId, itemTitle, index === 0);
+      const matchedClip = clips.find((c) => c.group_index === index);
+      if (matchedClip) {
+        item.clips = matchedClip;
+      }
+      return item;
+    });
     const total =
       typeof event.total === 'number' && Number.isFinite(event.total)
         ? Math.max(0, event.total)
@@ -273,6 +297,7 @@ export class ProgressStateMachine {
       successMessage: event.message ?? null,
       lastUpdated: Date.now(),
       startedAt: Date.now(),
+      progressPercent: event.progress_percent ?? null,
     };
     this._tasks = { ...this._tasks, [taskId]: task };
     this.startElapsedTimer(taskId);
@@ -316,7 +341,13 @@ export class ProgressStateMachine {
       const stepKey = mapped?.key ?? event.item_key ?? `step_${item.steps.length}`;
       const stepLabel = mapped?.label ?? event.item_label ?? this._defaultStepLabel(stepKey);
       this._setActiveStep(item, stepKey, stepLabel, event.message ?? null);
+      if (taskId === 'auto_edit' && stepKey === 'save' && event.message?.trim()) {
+        item.title = event.message.trim();
+      }
       draft.status = 'running';
+      if (event.progress_percent === undefined || event.progress_percent === null) {
+        draft.progressPercent = null;
+      }
     });
   }
 
@@ -334,6 +365,8 @@ export class ProgressStateMachine {
       const success = event.success !== false;
       if (success) {
         this._markItemSuccess(item);
+        // 保存・整理フェーズが完了したことを表すために退場フラグを立てる
+        item.dismissed = true;
       } else {
         this._markItemFailure(item, event.message ?? null);
       }
@@ -381,6 +414,9 @@ export class ProgressStateMachine {
       const stepKey = mapped?.key ?? stageKey;
       const stepLabel = mapped?.label ?? event.stage_label ?? this._defaultStepLabel(stepKey);
       this._setActiveStep(current, stepKey, stepLabel, event.message ?? null);
+      if (event.progress_percent === undefined || event.progress_percent === null) {
+        draft.progressPercent = null;
+      }
     });
   }
 
@@ -396,13 +432,20 @@ export class ProgressStateMachine {
   private _handleAdvance(event: ProgressEvent): void {
     const taskId = event.task_id;
     this._updateTask(taskId, event.task_name ?? undefined, (draft) => {
+      const previousCompleted = draft.completed;
       if (typeof event.completed === 'number' && Number.isFinite(event.completed)) {
         draft.completed = Math.max(0, event.completed);
-      } else if (draft.total > 0) {
+      } else if (
+        draft.total > 0 &&
+        (event.progress_percent === undefined || event.progress_percent === null)
+      ) {
         draft.completed = Math.min(draft.total, draft.completed + 1);
       }
-      if (draft.activeIndex !== null && draft.items[draft.activeIndex]) {
-        this._markItemSuccess(draft.items[draft.activeIndex]);
+      const completedAdvanced = draft.completed > previousCompleted;
+      if (completedAdvanced && draft.activeIndex !== null && draft.items[draft.activeIndex]) {
+        const item = draft.items[draft.activeIndex];
+        this._markItemSuccess(item);
+        item.dismissed = true;
         draft.activeIndex = this._pickNextIndex(draft, draft.activeIndex);
       }
     });
@@ -615,6 +658,13 @@ export class ProgressStateMachine {
       items: task.items.map((item) => ({
         ...item,
         steps: item.steps.map((step) => ({ ...step })),
+        clips: item.clips
+          ? {
+              ...item.clips,
+              video_assets: item.clips.video_assets.map((v: VideoAssetPayload) => ({ ...v })),
+            }
+          : null,
+        dismissed: item.dismissed,
       })),
     };
   }
@@ -636,7 +686,9 @@ export class ProgressStateMachine {
       successMessage: null,
       lastUpdated: Date.now(),
       startedAt: null,
+      progressPercent: null,
     };
+
     const draft = this._cloneTask(current);
     if ((!draft.title || draft.title === current.title) && fallbackTitle) {
       draft.title = this._formatTaskTitle(taskId, fallbackTitle);
