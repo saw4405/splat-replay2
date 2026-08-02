@@ -6,10 +6,11 @@ import asyncio
 import contextlib
 import json
 import subprocess
+import threading
 from asyncio import subprocess as asyncio_subprocess
 from pathlib import Path
 from subprocess import CompletedProcess
-from typing import Dict, List, Literal, Optional, Sequence, TypeVar
+from typing import Callable, Dict, List, Literal, Optional, Sequence, TypeVar
 
 from splat_replay.application.interfaces import (
     FramePreviewPort,
@@ -121,6 +122,156 @@ class FFmpegProcessor(VideoEditorPort, FramePreviewPort):
             )
 
         return await asyncio.to_thread(run_subprocess)
+
+    async def _run_with_progress(
+        self,
+        command: Sequence[str],
+        total_duration: float,
+        on_progress: Callable[[float, Optional[str]], None],
+        *,
+        cwd: Path | None = None,
+        input_bytes: bytes | None = None,
+        progress_message: str = "動画を結合中",
+        named_message_prefix: str | None = "結合中",
+    ) -> CompletedProcess[str]:
+        """FFmpegコマンドを実行し、stderrの出力をリアルタイムにパースして進捗を報告する。"""
+        import re
+        import subprocess
+
+        # Opening '...' for reading パターン
+        opening_re = re.compile(r"Opening '([^']+)' for reading")
+        # time=hh:mm:ss.xx パターン (ミリ秒部分の桁数変動に対応)
+        time_re = re.compile(r"time=(\d{2}):(\d{2}):(\d{2})(?:\.(\d+))?")
+
+        current_clip_name = ""
+
+        def run_and_parse() -> CompletedProcess[str]:
+            nonlocal current_clip_name
+            # stderrをアンバッファド(bufsize=0)かつバイナリモードで実行
+            process = subprocess.Popen(
+                list(command),
+                cwd=str(cwd) if cwd else None,
+                stdin=subprocess.PIPE if input_bytes is not None else None,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                bufsize=0,
+            )
+
+            stdout_lines: list[bytes] = []
+            stderr_lines: list[bytes] = []
+            last_percent = -1.0
+            stdin_thread: threading.Thread | None = None
+
+            stdin = process.stdin
+            if input_bytes is not None and stdin is not None:
+
+                def write_stdin() -> None:
+                    try:
+                        stdin.write(input_bytes)
+                    except BrokenPipeError:
+                        pass
+                    finally:
+                        with contextlib.suppress(Exception):
+                            stdin.close()
+
+                stdin_thread = threading.Thread(
+                    target=write_stdin, daemon=True
+                )
+                stdin_thread.start()
+
+            if process.stderr:
+                line_bytes = bytearray()
+                while True:
+                    chunk = process.stderr.read(1)
+                    if not chunk:
+                        break
+
+                    char_byte = chunk[0]
+                    # \r または \n で改行とみなす
+                    if char_byte == ord("\r") or char_byte == ord("\n"):
+                        if line_bytes:
+                            line = line_bytes.decode("utf-8", errors="replace")
+                            stderr_lines.append(bytes(line_bytes) + chunk)
+                            line_bytes.clear()
+
+                            # A. 処理中のクリップ名検出
+                            opening_match = opening_re.search(line)
+                            if opening_match:
+                                full_path = opening_match.group(1)
+                                current_clip_name = Path(full_path).name
+
+                            # B. 現在のタイムスタンプ検出と進捗計算
+                            time_match = time_re.search(line)
+                            if time_match and total_duration > 0:
+                                hh = int(time_match.group(1))
+                                mm = int(time_match.group(2))
+                                ss = int(time_match.group(3))
+                                cs = 0.0
+                                if time_match.group(4):
+                                    cs_str = time_match.group(4)
+                                    cs = int(cs_str) / (10 ** len(cs_str))
+                                current_seconds = hh * 3600 + mm * 60 + ss + cs
+
+                                percent = min(
+                                    100.0,
+                                    (current_seconds / total_duration) * 100.0,
+                                )
+
+                                # 頻度制御: 0.5%以上進捗が進んだ場合、または完了時のみ発行
+                                if (
+                                    percent - last_percent >= 0.5
+                                    or percent >= 100.0
+                                ):
+                                    last_percent = percent
+                                    msg = (
+                                        f"{named_message_prefix}: {current_clip_name}"
+                                        if current_clip_name
+                                        and named_message_prefix is not None
+                                        else "動画を結合中"
+                                    )
+                                    if (
+                                        not current_clip_name
+                                        or named_message_prefix is None
+                                    ):
+                                        msg = progress_message
+                                    # スレッド安全にコールバックをディスパッチ
+                                    loop.call_soon_threadsafe(
+                                        on_progress, percent, msg
+                                    )
+                        else:
+                            stderr_lines.append(chunk)
+                    else:
+                        line_bytes.append(char_byte)
+
+                if line_bytes:
+                    line = line_bytes.decode("utf-8", errors="replace")
+                    stderr_lines.append(bytes(line_bytes))
+                    # 必要であれば最後の端数行もパース
+
+            # 残りの stdout を回収
+            stdout_data = process.stdout.read() if process.stdout else b""
+            if stdin_thread is not None:
+                stdin_thread.join()
+            process.wait()
+            if stdout_data:
+                stdout_lines.append(stdout_data)
+
+            stdout_str = b"".join(stdout_lines).decode(
+                "utf-8", errors="replace"
+            )
+            stderr_str = b"".join(stderr_lines).decode(
+                "utf-8", errors="replace"
+            )
+
+            return CompletedProcess(
+                args=list(command),
+                returncode=process.returncode,
+                stdout=stdout_str,
+                stderr=stderr_str,
+            )
+
+        loop = asyncio.get_running_loop()
+        return await asyncio.to_thread(run_and_parse)
 
     async def _run_binary(
         self,
@@ -264,7 +415,13 @@ class FFmpegProcessor(VideoEditorPort, FramePreviewPort):
             return None
         return result.stdout
 
-    async def merge(self, clips: list[Path], output: Path) -> Path:
+    async def merge(
+        self,
+        clips: list[Path],
+        output: Path,
+        *,
+        on_progress: Optional[Callable[[float, Optional[str]], None]] = None,
+    ) -> Path:
         abs_clips = [clip.resolve() for clip in clips]
         self.logger.info(
             "FFmpeg: クリップ結合", clips=[str(c) for c in abs_clips]
@@ -278,22 +435,39 @@ class FFmpegProcessor(VideoEditorPort, FramePreviewPort):
             encoding="utf-8",
         )
 
-        result = await self._run_text(
-            [
-                "ffmpeg",
-                "-y",
-                "-f",
-                "concat",
-                "-safe",
-                "0",
-                "-i",
-                str(filelist),
-                "-c",
-                "copy",
-                str(output.resolve()),
-            ],
-            cwd=abs_clips[0].parent,
-        )
+        command = [
+            "ffmpeg",
+            "-y",
+            "-f",
+            "concat",
+            "-safe",
+            "0",
+            "-i",
+            str(filelist),
+            "-c",
+            "copy",
+            str(output.resolve()),
+        ]
+
+        if on_progress is not None:
+            # 各クリップの動画の長さを事前集計して総秒数を算出
+            total_duration = 0.0
+            for clip in abs_clips:
+                dur = await self.get_video_length(clip) or 0.0
+                total_duration += dur
+
+            result = await self._run_with_progress(
+                command,
+                total_duration,
+                on_progress,
+                cwd=abs_clips[0].parent,
+            )
+        else:
+            result = await self._run_text(
+                command,
+                cwd=abs_clips[0].parent,
+            )
+
         filelist.unlink(missing_ok=True)
         if result.returncode != 0:
             self._log_failure("FFmpeg: 結合に失敗", result)
@@ -330,6 +504,67 @@ class FFmpegProcessor(VideoEditorPort, FramePreviewPort):
             temp.rename(abs_path)
         if result.returncode != 0:
             self._log_failure("FFmpeg: メタデータ埋め込み失敗", result)
+
+    async def embed_metadata_and_thumbnail(
+        self,
+        path: Path,
+        metadata: Dict[str, str],
+        thumbnail: bytes,
+        *,
+        on_progress: Optional[Callable[[float, Optional[str]], None]] = None,
+    ) -> None:
+        abs_path = path.resolve()
+        self.logger.info(
+            "FFmpeg: メタデータ・サムネイル埋め込み",
+            path=str(abs_path),
+            metadata=metadata,
+        )
+
+        temp = abs_path.with_name(f"temp{abs_path.suffix}")
+        metadata_args: list[str] = []
+        for key, value in metadata.items():
+            if value:
+                metadata_args.extend(["-metadata", f"{key}={value}"])
+
+        command = [
+            "ffmpeg",
+            "-y",
+            "-i",
+            str(abs_path),
+            "-i",
+            "-",
+            "-map",
+            "0",
+            "-map",
+            "1",
+            *metadata_args,
+            "-c",
+            "copy",
+            str(temp),
+        ]
+
+        if on_progress is not None:
+            total_duration = await self.get_video_length(abs_path) or 0.0
+            result = await self._run_with_progress(
+                command,
+                total_duration,
+                on_progress,
+                input_bytes=thumbnail,
+                progress_message="メタデータ・サムネイルを埋め込み中",
+                named_message_prefix=None,
+            )
+            if result.returncode == 0:
+                on_progress(100.0, "メタデータ・サムネイルを埋め込み中")
+        else:
+            result = await self._run_binary(command, input_bytes=thumbnail)
+
+        if temp.exists():
+            abs_path.unlink(missing_ok=True)
+            temp.rename(abs_path)
+        if result.returncode != 0:
+            self._log_failure(
+                "FFmpeg: メタデータ・サムネイル埋め込み失敗", result
+            )
 
     async def get_metadata(self, path: Path) -> Dict[str, str]:
         abs_path = path.resolve()

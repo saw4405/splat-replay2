@@ -74,6 +74,7 @@ class AutoUploader:
         self._cancelled = True
 
     async def execute(self) -> None:
+        self._cancelled = False
         self.logger.info("自動アップロードを開始します")
         self._cached_settings = self.config.get_upload_settings()
 
@@ -148,6 +149,10 @@ class AutoUploader:
                 "アップロード中",
                 message=path.name,
             )
+
+            def on_progress(percent: float) -> None:
+                self.progress.progress(task_id, percent)
+
             await asyncio.to_thread(
                 self.uploader.upload,
                 path,
@@ -163,6 +168,7 @@ class AutoUploader:
                 if temp_subtitle
                 else None,
                 playlist_id=self._settings.playlist_id,
+                progress_callback=on_progress,
             )
             self.logger.info("動画アップロードを完了しました")
             if temp_subtitle:

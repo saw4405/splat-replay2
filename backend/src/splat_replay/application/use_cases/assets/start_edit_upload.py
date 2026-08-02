@@ -46,6 +46,7 @@ class StartEditUploadUseCase:
         self._config = config
         self._logger = logger
         self._task: asyncio.Task[None] | None = None
+        self._cancel_requested = False
         self._state: EditUploadState = "idle"
         self._message: str = ""
         self._sleep_after_upload_default = False
@@ -61,6 +62,7 @@ class StartEditUploadUseCase:
         if self._task is not None and not self._task.done():
             raise RuntimeError("編集・アップロード処理が既に実行中です")
 
+        self._cancel_requested = False
         self._reset_runtime_options()
         self._state = "running"
         self._message = "編集・アップロード処理を開始しました"
@@ -77,7 +79,13 @@ class StartEditUploadUseCase:
         """編集→アップロードを順次実行（内部メソッド）。"""
         try:
             await self._editor.execute()
+            if self._cancel_requested:
+                self._publish_cancelled(trigger)
+                return
             await self._uploader.execute()
+            if self._cancel_requested:
+                self._publish_cancelled(trigger)
+                return
             self._state = "succeeded"
             self._message = "編集・アップロード処理が完了しました"
             self._logger.info("編集・アップロード処理が完了しました")
@@ -107,6 +115,27 @@ class StartEditUploadUseCase:
             )
         )
         self._schedule_auto_sleep(trigger)
+
+    def cancel(self) -> None:
+        """実行中の編集・アップロード処理をキャンセル。"""
+        if self._task is not None and not self._task.done():
+            self._logger.info("編集・アップロード処理をキャンセルします")
+            self._cancel_requested = True
+            self._editor.request_cancel()
+            self._uploader.request_cancel()
+            self._state = "failed"
+            self._message = "編集・アップロード処理をキャンセルしました"
+
+    def _publish_cancelled(self, trigger: EditUploadTrigger) -> None:
+        """安全な処理境界でキャンセル完了を通知する。"""
+        self._event_bus.publish_domain_event(
+            EditUploadCompleted(
+                success=False,
+                message="編集・アップロード処理をキャンセルしました",
+                sleep_after_upload=False,
+                trigger=trigger,
+            )
+        )
 
     def get_state(self) -> EditUploadState:
         """現在の状態を取得する。"""

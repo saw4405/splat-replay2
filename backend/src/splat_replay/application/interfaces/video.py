@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Optional, Protocol
+from typing import Callable, Optional, Protocol
 
 from splat_replay.application.interfaces.data import FileStats
 from splat_replay.domain.models import Frame, RecordingMetadata, VideoAsset
@@ -26,7 +26,13 @@ class FramePreviewPort(Protocol):
 class VideoEditorPort(Protocol):
     """動画編集処理を提供するポート。"""
 
-    async def merge(self, clips: list[Path], output: Path) -> Path:
+    async def merge(
+        self,
+        clips: list[Path],
+        output: Path,
+        *,
+        on_progress: Optional[Callable[[float, Optional[str]], None]] = None,
+    ) -> Path:
         """Merge multiple video clips into one."""
         ...
 
@@ -34,6 +40,17 @@ class VideoEditorPort(Protocol):
         self, path: Path, metadata: dict[str, str]
     ) -> None:
         """Embed metadata into video file."""
+        ...
+
+    async def embed_metadata_and_thumbnail(
+        self,
+        path: Path,
+        metadata: dict[str, str],
+        thumbnail: bytes,
+        *,
+        on_progress: Optional[Callable[[float, Optional[str]], None]] = None,
+    ) -> None:
+        """Embed metadata and thumbnail into video file in one pass."""
         ...
 
     async def get_metadata(self, path: Path) -> dict[str, str]:

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import List, Optional, Protocol
+from typing import Callable, List, Optional, Protocol
 
 from splat_replay.application.interfaces.data import Caption, PrivacyStatus
 
@@ -21,6 +21,7 @@ class UploadPort(Protocol):
         thumb: Optional[Path] = None,
         caption: Optional[Caption] = None,
         playlist_id: str = "",
+        progress_callback: Optional[Callable[[float], None]] = None,
     ) -> None:
         """Upload video to platform."""
         ...

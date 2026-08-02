@@ -115,7 +115,7 @@ class ImageDrawerPort(Protocol):
 
 # Image selector function type
 ImageSelector = Callable[
-    [List[Path], Tuple[float, float, float, float]], ImageDrawerPort
+    [List[Path], Tuple[float, float, float, float]], Optional[ImageDrawerPort]
 ]
 
 

@@ -5,6 +5,7 @@ import datetime
 import os
 from pathlib import Path
 from types import SimpleNamespace
+from typing import Any
 
 import pytest
 
@@ -12,6 +13,68 @@ from splat_replay.application.services.editing.auto_editor import AutoEditor
 from splat_replay.application.services.editing.editing_state import (
     EditingState,
 )
+
+
+class _FakeThumbnailGenerator:
+    def __init__(self, thumbnail: Path) -> None:
+        self.thumbnail = thumbnail
+
+    def create(self, assets: list[Any]) -> Path:
+        _ = assets
+        self.thumbnail.write_bytes(b"thumbnail-data")
+        return self.thumbnail
+
+
+class _FakeFileSystem:
+    def is_file(self, path: Path) -> bool:
+        return path.is_file()
+
+    def read_bytes(self, path: Path) -> bytes:
+        return path.read_bytes()
+
+    def unlink(self, path: Path, *, missing_ok: bool = False) -> None:
+        path.unlink(missing_ok=missing_ok)
+
+
+class _FakeVideoEditor:
+    def __init__(self) -> None:
+        self.combined_calls: list[tuple[Path, dict[str, str], bytes]] = []
+        self.metadata_only_calls: list[tuple[Path, dict[str, str]]] = []
+
+    async def embed_metadata_and_thumbnail(
+        self,
+        path: Path,
+        metadata: dict[str, str],
+        thumbnail: bytes,
+        *,
+        on_progress,
+    ) -> None:
+        self.combined_calls.append((path, metadata, thumbnail))
+        on_progress(33.0, "埋め込み中")
+
+    async def embed_metadata(
+        self, path: Path, metadata: dict[str, str]
+    ) -> None:
+        self.metadata_only_calls.append((path, metadata))
+
+
+class _FakeRepo:
+    def __init__(self, edited_dir: Path) -> None:
+        self.edited_dir = edited_dir
+        self.metadata_calls: list[tuple[Path, dict[str, str]]] = []
+        self.thumbnail_calls: list[tuple[Path, bytes]] = []
+
+    def get_edited_dir(self) -> Path:
+        return self.edited_dir
+
+    def save_edited_metadata_dict(
+        self, target: Path, metadata: dict[str, str]
+    ) -> None:
+        self.metadata_calls.append((target, metadata))
+
+    def save_edited_thumbnail(self, target: Path, data: bytes) -> bool:
+        self.thumbnail_calls.append((target, data))
+        return True
 
 
 class _FakeProgress:
@@ -70,6 +133,54 @@ class _FakeProgress:
         self.finish_calls.append(
             {"task_id": task_id, "success": success, "message": message}
         )
+
+
+@pytest.mark.asyncio
+async def test_save_thumbnail_embeds_metadata_and_thumbnail_once_with_progress(
+    tmp_path: Path,
+) -> None:
+    target = tmp_path / "edited.mkv"
+    thumbnail = tmp_path / "source.thumb.png"
+    metadata = {"title": "title", "description": "description"}
+    editor = AutoEditor.__new__(AutoEditor)
+    video_editor = _FakeVideoEditor()
+    repo = _FakeRepo(tmp_path / "edited")
+    progress = _FakeProgress()
+    editor.thumbnail_generator = _FakeThumbnailGenerator(thumbnail)
+    editor._file_system = _FakeFileSystem()
+    editor.video_editor = video_editor
+    editor.repo = repo
+    editor.progress = progress
+
+    await editor._save_thumbnail(target, [], 2, metadata)
+
+    assert video_editor.combined_calls == [
+        (target, metadata, b"thumbnail-data")
+    ]
+    assert video_editor.metadata_only_calls == []
+    assert repo.metadata_calls == [(target, metadata)]
+    assert repo.thumbnail_calls == [
+        (tmp_path / "edited" / target.name, b"thumbnail-data")
+    ]
+    assert progress.item_stage_calls == [
+        {
+            "task_id": "auto_edit",
+            "item_index": 2,
+            "stage_key": "thumbnail",
+            "stage_label": "サムネイル編集",
+            "message": None,
+            "progress_percent": 0.0,
+        },
+        {
+            "task_id": "auto_edit",
+            "item_index": 2,
+            "stage_key": "thumbnail",
+            "stage_label": "サムネイル編集",
+            "message": "埋め込み中",
+            "progress_percent": 33.0,
+        },
+    ]
+    assert not thumbnail.exists()
 
 
 @pytest.mark.asyncio
@@ -146,7 +257,7 @@ async def test_execute_saves_group_without_frame_preview_dependency(
     editor.grouping = _Grouping()
     editor.video_editor = _VideoEditor()
     editor.progress = progress
-    editor._cancelled = False
+    editor._cancelled = True
     editor._state = EditingState()
 
     class _EditResult(os.PathLike[str]):
@@ -182,6 +293,7 @@ async def test_execute_saves_group_without_frame_preview_dependency(
 
     await editor.execute()
 
+    assert editor._cancelled is False
     assert any(
         call["task_id"] == "auto_edit"
         and call["item_index"] == 0

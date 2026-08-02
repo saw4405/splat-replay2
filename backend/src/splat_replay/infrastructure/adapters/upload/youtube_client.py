@@ -5,7 +5,8 @@ from __future__ import annotations
 import gc
 import pickle
 from pathlib import Path
-from typing import Any, List, Optional, Union, cast
+from typing import Any, Callable, List, Optional, Union, cast
+
 
 import google.auth.exceptions
 from google.auth.external_account_authorized_user import (
@@ -153,10 +154,17 @@ class YouTubeClient(UploadPort, AuthenticatedClientPort):
         thumb: Optional[Path] = None,
         caption: Optional[Caption] = None,
         playlist_id: str = "",
+        progress_callback: Optional[Callable[[float], None]] = None,
     ) -> None:
         video_id = self.upload_video(
-            path, title, description, tags, privacy_status=privacy_status
+            path,
+            title,
+            description,
+            tags,
+            privacy_status=privacy_status,
+            progress_callback=progress_callback,
         )
+
         if not video_id:
             raise ResourceNotFoundError(
                 "動画のアップロードに失敗しました",
@@ -193,8 +201,10 @@ class YouTubeClient(UploadPort, AuthenticatedClientPort):
         tags: List[str] = [],
         category: int = 20,
         privacy_status: PrivacyStatus = "private",
+        progress_callback: Optional[Callable[[float], None]] = None,
     ) -> Optional[str]:
         """動画をアップロードし ID を返す。"""
+
         self.logger.info("動画アップロード実行", path=str(path))
         self._ensure_credentials()
         if self._youtube is None:
@@ -218,7 +228,14 @@ class YouTubeClient(UploadPort, AuthenticatedClientPort):
                 },
                 media_body=media_file,
             )
-            response = request.execute()
+            response = None
+            while response is None:
+                status, response = request.next_chunk()
+                if status:
+                    percent = status.progress() * 100
+                    self.logger.info("Upload progress", percent=percent)
+                    if progress_callback:
+                        progress_callback(percent)
             # response の型を明示的にキャスト
             response_dict = cast(dict[str, Any], response)
             response_id: Optional[str] = response_dict.get("id")

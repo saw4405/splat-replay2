@@ -217,3 +217,31 @@ def test_thumbnail_keeps_x_power_range_for_x_match(tmp_path: Path) -> None:
 
     assert out is not None
     assert "XP: 2105.7 ~ 2180.0" in selector.drawer.drawn_texts
+
+
+def test_thumbnail_returns_none_when_no_source_thumbnail_is_available(
+    tmp_path: Path,
+) -> None:
+    source = _asset(
+        tmp_path=tmp_path,
+        name="missing-thumbnail",
+        match=Match.X,
+        rate=XP(2105.7),
+    )
+    asset = VideoAsset(video=source.video, metadata=source.metadata)
+
+    def select_missing_image(
+        thumbnails: list[Path], crop: tuple[float, float, float, float]
+    ) -> None:
+        assert thumbnails == []
+        _ = crop
+        return None
+
+    generator = ThumbnailGenerator(
+        logger=cast(LoggerPort, _Logger()),
+        paths=cast(PathsPort, _Paths(tmp_path)),
+        image_selector=cast(ImageSelector, select_missing_image),
+        file_system=cast(FileSystemPort, _FileSystem()),
+    )
+
+    assert generator.create([asset]) is None

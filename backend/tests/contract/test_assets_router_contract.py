@@ -204,6 +204,51 @@ class TestEditUploadProcessEndpoints:
         assert "accepted" in data
         assert "status" in data
 
+    def test_cancel_edit_upload(self) -> None:
+        """DELETE /api/process/edit-upload - 実行中処理のキャンセル。"""
+
+        class CancelUseCaseStub:
+            def __init__(self) -> None:
+                self.cancelled = False
+
+            def cancel(self) -> None:
+                self.cancelled = True
+
+        class GetStatusUseCaseStub:
+            async def execute(self) -> EditUploadStatusDTO:
+                return EditUploadStatusDTO(
+                    state="failed",
+                    message="編集・アップロード処理をキャンセルしました",
+                    progress=0,
+                    sleep_after_upload_default=False,
+                    sleep_after_upload_effective=False,
+                    sleep_after_upload_overridden=False,
+                )
+
+        cancel_use_case = CancelUseCaseStub()
+        app = FastAPI()
+        app.include_router(
+            create_assets_router(
+                cast(
+                    Any,
+                    SimpleNamespace(
+                        start_edit_upload_uc=cancel_use_case,
+                        get_edit_upload_status_uc=GetStatusUseCaseStub(),
+                    ),
+                )
+            )
+        )
+
+        with TestClient(app) as test_client:
+            response = test_client.delete("/api/process/edit-upload")
+
+        assert response.status_code == status.HTTP_200_OK
+        assert cancel_use_case.cancelled is True
+        assert response.json()["state"] == "failed"
+        assert response.json()["error"] == (
+            "編集・アップロード処理をキャンセルしました"
+        )
+
     def test_update_edit_upload_options_valid(
         self, client: TestClient
     ) -> None:
@@ -461,6 +506,7 @@ class TestRecordedFrameEndpoint:
             )
 
         assert response.status_code == 404
+        assert response.headers["cache-control"] == "no-store"
         assert frame_preview.calls == []
 
     def test_recorded_frame_returns_500_when_extraction_fails(
@@ -481,6 +527,7 @@ class TestRecordedFrameEndpoint:
             )
 
         assert response.status_code == 500
+        assert response.headers["cache-control"] == "no-store"
         assert response.json() == {"detail": "Failed to extract frame"}
         assert response.content != b"sidecar-fallback"
 
@@ -502,6 +549,7 @@ class TestRecordedFrameEndpoint:
             )
 
         assert response.status_code == 500
+        assert response.headers["cache-control"] == "no-store"
         assert response.json() == {"detail": "Failed to extract frame"}
         assert response.content != b"unrelated-fallback"
 
@@ -520,6 +568,7 @@ class TestRecordedFrameEndpoint:
             )
 
         assert response.status_code == 404
+        assert response.headers["cache-control"] == "no-store"
         assert frame_preview.calls == []
 
     def test_recorded_frame_returns_404_for_recorded_sibling_traversal(
@@ -541,6 +590,7 @@ class TestRecordedFrameEndpoint:
             )
 
         assert response.status_code == 404
+        assert response.headers["cache-control"] == "no-store"
         assert frame_preview.calls == []
 
 

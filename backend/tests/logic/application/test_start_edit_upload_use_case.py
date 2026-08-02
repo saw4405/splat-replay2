@@ -9,6 +9,7 @@
 分類: logic
 """
 
+import asyncio
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -160,6 +161,33 @@ class TestStartEditUploadStateManagement:
 
         assert use_case.get_state() == "failed"
         assert not use_case.is_running()
+
+    @pytest.mark.asyncio
+    async def test_cancel_requests_service_cancellation(
+        self, use_case, mock_editor, mock_uploader
+    ):
+        """キャンセルは各サービスへ伝播し、安全な処理境界で停止する。"""
+        blocker = asyncio.Event()
+        mock_editor.execute.side_effect = blocker.wait
+        mock_editor.request_cancel = MagicMock()
+        mock_uploader.request_cancel = MagicMock()
+
+        await use_case.execute()
+        use_case.cancel()
+
+        assert use_case._task is not None
+        assert not use_case._task.done()
+        blocker.set()
+        await use_case._task
+
+        assert use_case.get_state() == "failed"
+        assert use_case.get_message() == (
+            "編集・アップロード処理をキャンセルしました"
+        )
+        mock_editor.request_cancel.assert_called_once_with()
+        mock_uploader.request_cancel.assert_called_once_with()
+        mock_uploader.execute.assert_not_awaited()
+        assert not use_case._task.cancelled()
 
 
 class TestStartEditUploadDuplicatePrevention:

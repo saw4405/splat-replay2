@@ -183,8 +183,15 @@ class ThumbnailGenerator:
         high_score_thumbnails = high_score_thumbnails[:3]
 
         out = assets[0].video.with_suffix(".thumb.png")
+        drawer = self.image_selector(thumbnails, (0, 0, 750, 1.0))
+        if drawer is None:
+            self.logger.warning(
+                "元画像がないためサムネイル生成をスキップしました"
+            )
+            return None
+
         (
-            self.image_selector(thumbnails, (0, 0, 750, 1.0))
+            drawer
             # 勝敗を記載
             .draw_text_with_outline(
                 win_lose,

@@ -106,6 +106,7 @@ class AutoEditor:
 
     async def execute(self) -> list[Path]:
         """編集を実行し、編集済み動画のパスリストを返す。"""
+        self._cancelled = False
         self.settings = self.config.get_video_edit_settings()
         self.logger.info("自動編集を開始します")
         self._state = self._state.with_running("編集処理を開始しています", 0)
@@ -116,14 +117,87 @@ class AutoEditor:
 
         task_id = "auto_edit"
         items: list[str] = []
+        clips_payload: list[dict[str, object]] = []
+
         for idx, (key, group) in enumerate(groups.items()):
             if not group:
                 continue
             day, time_slot, match_name, rule_name = key
-            items.append(
-                f"{day.strftime('%m/%d')} {time_slot.strftime('%H')}時～ {match_name} {rule_name}"
+            label = f"{day.strftime('%m/%d')} {time_slot.strftime('%H')}時～ {match_name} {rule_name}"
+            items.append(label)
+
+            group_clips = []
+            for asset in group:
+                length = await self.video_editor.get_video_length(asset.video)
+                duration_seconds = (
+                    int(length) if (length is not None and length > 0) else 300
+                )
+
+                judgement = (
+                    asset.metadata.judgement.value
+                    if (asset.metadata and asset.metadata.judgement)
+                    else "WIN"
+                )
+
+                stage_name = ""
+                kill = 0
+                death = 0
+                special = 0
+                gold_medals = 0
+                silver_medals = 0
+                if asset.metadata and asset.metadata.result:
+                    res = asset.metadata.result
+                    if hasattr(res, "stage") and res.stage:
+                        stage_name = res.stage.value
+                    if hasattr(res, "kill"):
+                        kill = res.kill
+                    if hasattr(res, "death"):
+                        death = res.death
+                    if hasattr(res, "special"):
+                        special = res.special
+                    if hasattr(res, "gold_medals"):
+                        gold_medals = res.gold_medals
+                    if hasattr(res, "silver_medals"):
+                        silver_medals = res.silver_medals
+
+                rate_info = None
+                if asset.metadata and asset.metadata.rate:
+                    rate = asset.metadata.rate
+                    rate_info = {"type": rate.label, "value": str(rate)}
+
+                video_id = f"recorded/{asset.video.name}"
+                group_clips.append(
+                    {
+                        "video_id": video_id,
+                        "duration_seconds": duration_seconds,
+                        "judgement": judgement,
+                        "stage_name": stage_name,
+                        "kill": kill,
+                        "death": death,
+                        "special": special,
+                        "gold_medals": gold_medals,
+                        "silver_medals": silver_medals,
+                        "rate": rate_info,
+                    }
+                )
+
+            clips_payload.append(
+                {
+                    "group_index": len(items) - 1,
+                    "date_label": f"{day.strftime('%m/%d')} {time_slot.strftime('%H:%M')}～",
+                    "match_name": match_name,
+                    "rule_name": rule_name,
+                    "thumbnail_filename": (
+                        f"{day.strftime('%Y%m%d')}_{time_slot.strftime('%H')}_"
+                        f"{match_name}_{rule_name}.png"
+                    ),
+                    "video_assets": group_clips,
+                }
             )
-        self.progress.start_task(task_id, "自動編集", len(items), items=items)
+
+        self.progress.start_task(
+            task_id, "自動編集", len(items), items=items, clips=clips_payload
+        )
 
         total_groups = len([g for g in groups.values() if g])
         completed_groups = 0
@@ -159,7 +233,7 @@ class AutoEditor:
             )
 
             try:
-                target = await self._edit(
+                target, metadata = await self._edit(
                     idx, day, time_slot, match_name, rule_name, group
                 )
                 self.logger.info("動画編集を開始します", path=str(target))
@@ -175,7 +249,7 @@ class AutoEditor:
                     idx,
                     "save",
                     "録画済動画削除・編集済動画保存",
-                    message=target.name,
+                    message=metadata.get("title") or target.name,
                 )
                 self.progress.advance(task_id)
                 completed_groups += 1
@@ -212,7 +286,7 @@ class AutoEditor:
         match_name: str,
         rule_name: str,
         group: List[VideoAsset],
-    ) -> Path:
+    ) -> tuple[Path, dict[str, str]]:
         """1つのグループを編集する。"""
         target = self._make_filename(
             group, day, time_slot, match_name, rule_name
@@ -227,7 +301,7 @@ class AutoEditor:
             "動画結合",
             message=f"{len(group)}本の動画を結合",
         )
-        await self._merge_videos(target, group)
+        await self._merge_videos(idx, target, group)
 
         # 字幕編集
         self.progress.item_stage(
@@ -245,7 +319,7 @@ class AutoEditor:
             "metadata",
             "メタデータ編集",
         )
-        await self._save_metadata(target, group, day, time_slot)
+        metadata = await self._prepare_metadata(group, day, time_slot)
 
         # サムネイル編集
         self.progress.item_stage(
@@ -253,8 +327,9 @@ class AutoEditor:
             idx,
             "thumbnail",
             "サムネイル編集",
+            message="サムネイル画像を生成中",
         )
-        await self._save_thumbnail(target, group)
+        await self._save_thumbnail(target, group, idx, metadata)
 
         # 音量調整
         if self.settings.volume_multiplier != 1.0:
@@ -267,7 +342,7 @@ class AutoEditor:
             )
             await self._change_volume(target, self.settings.volume_multiplier)
 
-        return target
+        return target, metadata
 
     def _make_filename(
         self,
@@ -284,7 +359,7 @@ class AutoEditor:
         return target
 
     async def _merge_videos(
-        self, target: Path, group: List[VideoAsset]
+        self, idx: int, target: Path, group: List[VideoAsset]
     ) -> None:
         """動画を結合する。
 
@@ -306,7 +381,20 @@ class AutoEditor:
             raise ValueError("No valid video files to merge")
 
         if len(valid_videos) > 1:
-            await self.video_editor.merge(valid_videos, target)
+
+            def on_progress(percent: float, message: str | None) -> None:
+                self.progress.item_stage(
+                    "auto_edit",
+                    idx,
+                    "concat",
+                    "動画結合",
+                    message=message or f"{len(valid_videos)}本の動画を結合中",
+                    progress_percent=percent,
+                )
+
+            await self.video_editor.merge(
+                valid_videos, target, on_progress=on_progress
+            )
             return
 
         # 単一ファイルの場合はコピー
@@ -315,14 +403,13 @@ class AutoEditor:
         )
         await asyncio.to_thread(self._file_system.write_bytes, target, data)
 
-    async def _save_metadata(
+    async def _prepare_metadata(
         self,
-        target: Path,
         group: List[VideoAsset],
         day: datetime.date,
         time_slot: datetime.time,
-    ) -> None:
-        """メタデータをJSONファイルとして保存する。"""
+    ) -> dict[str, str]:
+        """動画に埋め込むメタデータを作成する。"""
         title, description = await self.title_generator.generate(
             group,
             day,
@@ -336,20 +423,21 @@ class AutoEditor:
             "description": description,
         }
 
-        await self.video_editor.embed_metadata(target, metadata)
-
-        # メタデータをリポジトリ経由で保存
-        await asyncio.to_thread(
-            self.repo.save_edited_metadata_dict, target, metadata
-        )
+        return metadata
 
     async def _save_thumbnail(
-        self, target: Path, group: List[VideoAsset]
+        self,
+        target: Path,
+        group: List[VideoAsset],
+        idx: int,
+        metadata: dict[str, str],
     ) -> None:
-        """サムネイルを作成して動画とリポジトリに保存する。"""
+        """サムネイルを作成し、メタデータと一緒に動画へ保存する。"""
         thumb = await asyncio.to_thread(self.thumbnail_generator.create, group)
         if not thumb or not self._file_system.is_file(thumb):
             self.logger.warning("Thumbnail generation failed")
+            await self.video_editor.embed_metadata(target, metadata)
+            await self._save_metadata_sidecar(target, metadata)
             return
 
         try:
@@ -357,15 +445,55 @@ class AutoEditor:
             thumb_data = await asyncio.to_thread(
                 self._file_system.read_bytes, thumb
             )
-            await self.video_editor.embed_thumbnail(target, thumb_data)
-            await asyncio.to_thread(
-                self.repo.save_edited_thumbnail, target, thumb_data
+            edited_thumbnail_target = self.repo.get_edited_dir() / target.name
+            saved_preview_thumbnail = await asyncio.to_thread(
+                self.repo.save_edited_thumbnail,
+                edited_thumbnail_target,
+                thumb_data,
             )
+            if saved_preview_thumbnail:
+                self.progress.item_stage(
+                    "auto_edit",
+                    idx,
+                    "thumbnail",
+                    "サムネイル編集",
+                    progress_percent=0.0,
+                )
+
+            def on_progress(percent: float, message: str | None) -> None:
+                self.progress.item_stage(
+                    "auto_edit",
+                    idx,
+                    "thumbnail",
+                    "サムネイル編集",
+                    message=message or "メタデータ・サムネイルを埋め込み中",
+                    progress_percent=percent,
+                )
+
+            await self.video_editor.embed_metadata_and_thumbnail(
+                target,
+                metadata,
+                thumb_data,
+                on_progress=on_progress,
+            )
+            await self._save_metadata_sidecar(target, metadata)
+            if not saved_preview_thumbnail:
+                await asyncio.to_thread(
+                    self.repo.save_edited_thumbnail, target, thumb_data
+                )
         finally:
             # 一時ファイルを削除
             await asyncio.to_thread(
                 self._file_system.unlink, thumb, missing_ok=True
             )
+
+    async def _save_metadata_sidecar(
+        self, target: Path, metadata: dict[str, str]
+    ) -> None:
+        """メタデータをリポジトリ経由で保存する。"""
+        await asyncio.to_thread(
+            self.repo.save_edited_metadata_dict, target, metadata
+        )
 
     async def _change_volume(self, target: Path, multiplier: float) -> None:
         """動画の音量を調整する。"""

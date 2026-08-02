@@ -132,14 +132,25 @@ class _HistorySpy:
 
 
 class _DummyVideoEditor:
-    async def merge(self, clips: list[Path], output: Path) -> Path:
-        _ = clips
+    async def merge(
+        self, clips: list[Path], output: Path, **kwargs: object
+    ) -> Path:
+        _ = clips, kwargs
         return output
 
     async def embed_metadata(
         self, path: Path, metadata: dict[str, str]
     ) -> None:
         _ = path, metadata
+
+    async def embed_metadata_and_thumbnail(
+        self,
+        path: Path,
+        metadata: dict[str, str],
+        thumbnail: bytes,
+        **kwargs: object,
+    ) -> None:
+        _ = path, metadata, thumbnail, kwargs
 
     async def get_metadata(self, path: Path) -> dict[str, str]:
         _ = path

@@ -38,6 +38,8 @@ class ProgressEvent:
     item_index: Optional[int] = None
     item_key: Optional[str] = None
     item_label: Optional[str] = None
+    progress_percent: Optional[float] = None
+    clips: Optional[List[dict[str, object]]] = None
 
 
 class ProgressListener(Protocol):
@@ -73,6 +75,7 @@ class ProgressReporter:
         task_name: str,
         total: Optional[int],
         items: Optional[List[str]] = None,
+        clips: Optional[List[dict[str, object]]] = None,
     ) -> None:
         self._totals[task_id] = total
         self._completed[task_id] = 0
@@ -84,6 +87,7 @@ class ProgressReporter:
                 total=total,
                 completed=0,
                 items=list(items) if items is not None else None,
+                clips=clips,
             )
         )
 
@@ -151,6 +155,18 @@ class ProgressReporter:
             )
         )
 
+    def progress(self, task_id: str, percent: float) -> None:
+        self._emit(
+            ProgressEvent(
+                task_id=task_id,
+                kind="advance",
+                task_name="",
+                total=self._totals.get(task_id),
+                completed=self._completed.get(task_id),
+                progress_percent=percent,
+            )
+        )
+
     # structured API
     def init_items(self, task_id: str, items: List[str]) -> None:
         self._emit(
@@ -172,6 +188,7 @@ class ProgressReporter:
         stage_label: str,
         *,
         message: Optional[str] = None,
+        progress_percent: Optional[float] = None,
     ) -> None:
         self._emit(
             ProgressEvent(
@@ -182,6 +199,7 @@ class ProgressReporter:
                 item_key=stage_key,
                 item_label=stage_label,
                 message=message,
+                progress_percent=progress_percent,
                 total=self._totals.get(task_id),
                 completed=self._completed.get(task_id),
             )
@@ -256,6 +274,8 @@ def build_progress_payload(event: ProgressEvent) -> dict[str, object]:
         "item_index": event.item_index,
         "item_key": event.item_key,
         "item_label": event.item_label,
+        "progress_percent": event.progress_percent,
+        "clips": event.clips,
     }
 
 

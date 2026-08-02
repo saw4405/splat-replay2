@@ -133,7 +133,7 @@ class TestYouTubeClientUpload:
 
         # アップロードレスポンスのモック
         mock_request = MagicMock()
-        mock_request.execute.return_value = {"id": "video123"}
+        mock_request.next_chunk.return_value = (None, {"id": "video123"})
         mock_youtube.videos().insert.return_value = mock_request
 
         # テスト実行
@@ -166,7 +166,7 @@ class TestYouTubeClientUpload:
 
         # アップロードで認証エラーを発生
         mock_request = MagicMock()
-        mock_request.execute.side_effect = GoogleAuthError("Auth failed")
+        mock_request.next_chunk.side_effect = GoogleAuthError("Auth failed")
         mock_youtube.videos().insert.return_value = mock_request
 
         # テスト実行

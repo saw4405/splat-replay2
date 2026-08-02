@@ -115,12 +115,14 @@ def create_assets_router(server: WebAPIServer) -> APIRouter:
                     raise HTTPException(
                         status_code=404,
                         detail="Video file not found",
+                        headers=FRAME_RESPONSE_HEADERS,
                     ) from exc
                 raise
             if not video_path.is_file():
                 raise HTTPException(
                     status_code=404,
                     detail="Video file not found",
+                    headers=FRAME_RESPONSE_HEADERS,
                 )
 
             frame = await server.frame_preview.extract_frame(
@@ -136,6 +138,7 @@ def create_assets_router(server: WebAPIServer) -> APIRouter:
                 raise HTTPException(
                     status_code=500,
                     detail="Failed to extract frame",
+                    headers=FRAME_RESPONSE_HEADERS,
                 )
 
             return Response(
@@ -158,6 +161,7 @@ def create_assets_router(server: WebAPIServer) -> APIRouter:
             raise HTTPException(
                 status_code=500,
                 detail="Failed to extract frame",
+                headers=FRAME_RESPONSE_HEADERS,
             ) from exc
 
     @router.delete("/assets/recorded/{video_id:path}")
@@ -257,6 +261,16 @@ def create_assets_router(server: WebAPIServer) -> APIRouter:
                     "status": _to_edit_upload_status(status_dto).dict(),
                 },
             )
+
+    @router.delete(
+        "/process/edit-upload",
+        response_model=EditUploadStatus,
+    )
+    async def cancel_edit_upload() -> EditUploadStatus:
+        """編集・アップロード処理をキャンセル。"""
+        server.start_edit_upload_uc.cancel()
+        status_dto = await server.get_edit_upload_status_uc.execute()
+        return _to_edit_upload_status(status_dto)
 
     @router.get(
         "/process/status",
