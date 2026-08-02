@@ -82,7 +82,9 @@ async def test_extract_frame_returns_none_after_source_video_is_removed(
 
 
 @pytest.mark.asyncio
-async def test_extract_frame_serializes_preview_requests(tmp_path: Path) -> None:
+async def test_extract_frame_serializes_preview_requests(
+    tmp_path: Path,
+) -> None:
     processor = _FramePreviewProcessor()
     video = tmp_path / "videos" / "recorded" / "sample.mkv"
     video.parent.mkdir(parents=True)
