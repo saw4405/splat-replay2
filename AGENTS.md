@@ -15,6 +15,7 @@
 - `backend/`: Python バックエンド（Clean Architecture）。
 - `frontend/`: Svelte + Vite のフロントエンド。
 - `docs/`: 開発・運用ドキュメント。
+- `.codex/agents/`: プロジェクト固有のカスタムエージェント定義。
 - `.codex/skills/`: repo 固有の反復ワークフロー。
 - `Taskfile.yml`: 主要コマンドの統合窓口。
 
@@ -30,6 +31,21 @@
 - 一時ファイルやデバッグコードは、作成時に削除方法を明記し、作業終了前に撤去する。
 - 秘密情報・認証情報は**絶対にコミットしない**。
 - 失敗モード（破壊的変更・外部依存）を明示する。
+
+## 設計判断
+
+- 設計判断の記録・助言は、プロジェクト固有エージェント `design_steward` と
+  `docs/architecture/decisions/README.md` の実行契約に従う。
+- 新しい設計判断、既存指針との矛盾、重要なトレードオフ、または設計上の迷いがある場合は、
+  判断前に `design_steward` を `ADVISE` モード・推論強度 `xhigh` で呼び出す。
+- ユーザーまたはメインエージェントが記録対象の設計判断を確定した場合は、
+  `design_steward` を `RECORD` モード・推論強度 `medium` で呼び出す。
+- 呼び出しにはカスタムエージェント選択子（現在の Codex では `agent_type`）を使う。
+  `task_name` を `design_steward` にしただけの一般エージェントへ退化させない。
+  選択子を利用できない場合は、各モードの失敗として扱う。
+- 既存指針の機械的な適用、局所的かつ容易に取り消せる選択、命名・整形だけの選択は記録しない。
+- `ADVISE` に失敗した場合はユーザーへ判断を確認する。`RECORD` に失敗した場合は、
+  保存できなかったことだけを通知し、元の作業を続行する。代替保存や再実装は行わない。
 
 ## テストと検証
 
@@ -52,6 +68,9 @@
 - `frontend/AGENTS.md`: frontend 固有の実装ルールを書く。
 - `docs/test_strategy.md`: テスト選定、意味分類、AI エージェントの完了報告を定義する。
 - `.codex/skills/*`: release 作成、test 選定、worktree 作成などの**反復ワークフロー**を定義する。
+- `.codex/agents/*`: プロジェクト固有の専門エージェントの責務と権限を定義する。
+- `docs/architecture/decisions/README.md`: 設計判断の助言・記録・矛盾検出の実行契約を定義する。
+- `docs/architecture/principles/`: 現在有効な設計指針と、その目的・手段の関係を定義する。
 
 ## Ask First（例）
 
