@@ -78,19 +78,31 @@
     isLoadingData = true;
     try {
       console.log('[BottomDrawer] Loading asset data...');
-      const [recorded, edited, history] = await Promise.all([
-        fetchRecordedVideos(),
-        fetchEditedVideos(),
-        fetchBattleHistory(),
+      const [recordedResult, editedResult, historyResult] = await Promise.allSettled([
+        fetchRecordedVideos().then((recorded) => {
+          recordedVideos = recorded;
+        }),
+        fetchEditedVideos().then((edited) => {
+          editedVideos = edited;
+        }),
+        fetchBattleHistory().then((history) => {
+          battleHistory = history;
+        }),
       ]);
-      recordedVideos = recorded;
-      editedVideos = edited;
-      battleHistory = history;
+
+      if (recordedResult.status === 'rejected') {
+        console.error('録画データ取得エラー:', recordedResult.reason);
+      }
+      if (editedResult.status === 'rejected') {
+        console.error('編集データ取得エラー:', editedResult.reason);
+      }
+      if (historyResult.status === 'rejected') {
+        console.error('戦績データ取得エラー:', historyResult.reason);
+      }
+
       console.log(
-        `[BottomDrawer] Asset data loaded: ${recorded.length} recorded, ${edited.length} edited, ${history.length} battle history`
+        `[BottomDrawer] Asset data loaded: ${recordedVideos.length} recorded, ${editedVideos.length} edited, ${battleHistory.length} battle history`
       );
-    } catch (error) {
-      console.error('データ取得エラー:', error);
     } finally {
       isLoadingData = false;
       if (pendingDataReload) {

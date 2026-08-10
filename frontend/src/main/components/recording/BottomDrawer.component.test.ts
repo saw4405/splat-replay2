@@ -125,6 +125,7 @@ describe('BottomDrawer.svelte', () => {
     processStatuses: Array<Record<string, unknown>>,
     options: {
       editedAssets?: Array<Record<string, unknown>>;
+      editedResponse?: Promise<Response>;
     } = {}
   ): void {
     fetchMock.mockImplementation(async (input: string | URL | Request) => {
@@ -162,6 +163,9 @@ describe('BottomDrawer.svelte', () => {
         ]);
       }
       if (url.includes('/api/assets/edited')) {
+        if (options.editedResponse) {
+          return options.editedResponse;
+        }
         return jsonResponse(options.editedAssets ?? []);
       }
       if (url.includes('/api/history/battle')) {
@@ -430,6 +434,24 @@ describe('BottomDrawer.svelte', () => {
     await waitFor(() => {
       expect(screen.getByTestId('stub-component')).toHaveAttribute('data-is-loading', 'false');
     });
+  });
+
+  it('起動時は編集プレビュー取得の完了を待たず録画件数と録画データを表示する', async () => {
+    const editedResponse = createDeferred<Response>();
+    installDefaultResponses([], { editedResponse: editedResponse.promise });
+
+    render(BottomDrawer);
+
+    await fireEvent.click(screen.getByTitle('録画 (0件)'));
+
+    await waitFor(() => {
+      expect(screen.getByTestId('recorded-count')).toHaveTextContent('1');
+      expect(screen.getByTestId('stub-component')).toHaveAttribute('data-videos-length', '1');
+    });
+
+    expect(screen.getByTestId('edited-count')).toHaveTextContent('0');
+
+    editedResponse.resolve(jsonResponse([]));
   });
 
   it('編集アップロード成功ダイアログを閉じると自動録画の再有効化を要求する', async () => {
