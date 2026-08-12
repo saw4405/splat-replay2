@@ -103,7 +103,7 @@ task.exe doctor:json
 ```
 
 `doctor` は通常開発の主入口ではなく、修復を行わない非破壊の診断コマンドです。
-通常の開発フローは `task.exe install` / `task.exe test` / `task.exe verify` と Git hooks です。
+通常の開発フローは `task.exe install`、変更分類に応じた検証入口、Git hooks です。
 `doctor` は、その前提がこの checkout で崩れていないかを `fail` / `warn` / `pass` で報告します。
 `fail` が 1 件でもあれば終了コードは non-zero です。`warn` は通常フロー自体を壊さない注意事項です。
 たとえば dirty worktree は `warn` として扱い、依存関係や hooks の故障とは分けて報告します。
@@ -127,7 +127,7 @@ Git hooks では次を確認します。
 - `pre-push` では frontend 全体の `type-check` / `svelte-check` と、backend の `import-lint` を走らせます。
 - `task.exe test` は自動では走りません。
 - Git hooks は commit / push 前の必須品質 gate です。失敗した場合は握りつぶさず、原因を直してください。
-- 完了前の総合品質確認は、引き続き `task.exe verify` と CI で担保します。
+- `task.exe verify` は無条件の完了 gate ではありません。適用条件は [`docs/test_strategy.md`](./test_strategy.md) に従います。
 
 ### workflow E2E を使う場合
 
@@ -199,35 +199,37 @@ task.exe dev:frontend
 1. 依存関係や lockfile が変わっていれば `task.exe install`
 2. `task.exe dev` を実行
    必要に応じて `task.exe dev:backend` と `task.exe dev:frontend` を個別起動
-3. 実装後、まず `task.exe test`
-4. 変更内容に応じて追加の入口を実行
-5. 完了前に `task.exe verify`
+3. 実装前に変更分類、守る保証、最小の検証対象を決める
+4. 実装後、変更分類に応じた最小の入口から実行する
+5. 狭い対象では守れない保証がある場合だけ、根拠を示して広い入口を追加する
 6. commit / push 時は Git hooks を通し、失敗した場合は原因を直す
 7. Codex worktree と親 repo で挙動が違う場合は `task.exe doctor` で checkout 状態を診断する
 
 原則:
 
-- まず Taskfile の意味ベース入口を使います。
-- 生の `npm` / `uv` / `pytest` コマンドは、Task がない場合か、低レベルの切り分け時だけ使います。
+- 適切な粒度の既存 Task があれば、Taskfile の意味ベース入口を使います。
+- 既存 Task が過広い場合は、repo 管理ラッパーまたは package script に対象ファイルや node ID を渡します。
+- 生の `npm` / `uv` / `pytest` コマンドは、既存の入口やラッパーでも表現できない低レベルの切り分け時だけ使います。
 - テスト選定に迷ったら [`docs/test_strategy.md`](./test_strategy.md) を優先してください。
 
 ### backend pytest の一時ディレクトリ
 
 backend pytest の Taskfile 入口は `scripts/run-backend-pytest.ps1` を通し、
 worktree 内の一時ディレクトリと pytest cache 無効化を指定して実行します。
-低レベル切り分け以外では、生の `pytest` ではなく Taskfile 入口を使ってください。
+Taskfile 入口が保証対象より過広い場合は、この repo 管理ラッパーへ対象ファイルや node ID を渡します。
+低レベル切り分け以外では、生の `pytest` を直接使わないでください。
 
 ## 検証とテスト
 
 ### 基本入口
 
-| 目的                 | コマンド                 | 補足                                                            |
-| -------------------- | ------------------------ | --------------------------------------------------------------- |
-| checkout 状態診断    | `task.exe doctor`        | 親 repo と同じ通常フローに入る前提の診断                        |
-| 日常の基本テスト     | `task.exe test`          | backend の既定テスト + frontend unit                            |
-| 完了前の最低入口     | `task.exe verify`        | `format:check` / `lint` / `type-check` / `import-lint` / `test` |
-| backend の既定テスト | `task.exe test:backend`  | `pytest` 既定設定に従い `perf` は除外                           |
-| frontend unit 一括   | `task.exe test:frontend` | `logic + component + integration`                               |
+| 目的                         | コマンド                 | 補足                                                                    |
+| ---------------------------- | ------------------------ | ----------------------------------------------------------------------- |
+| checkout 状態診断            | `task.exe doctor`        | 親 repo と同じ通常フローに入る前提の診断                                |
+| backend + frontend unit 一括 | `task.exe test`          | 複数層をまとめて確認する根拠がある場合                                   |
+| リポジトリ既定品質 gate      | `task.exe verify`        | 適用条件は `docs/test_strategy.md`。コミット・完了だけでは実行理由にしない |
+| backend の既定テスト         | `task.exe test:backend`  | backend 全体を確認する根拠がある場合。`perf` は除外                      |
+| frontend unit 一括           | `task.exe test:frontend` | `logic + component + integration` をまとめて確認する根拠がある場合      |
 
 ### 変更内容ごとの追加入口
 

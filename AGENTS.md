@@ -55,9 +55,9 @@
 - テスト実装では `docs/test_strategy.md` を最上位の判断基準とし、汎用 TDD スキルやカバレッジ目標より優先する。
 - 新規テストは「変更で増えた意思決定分岐・外部契約・主要導線・再発防止」を守る場合に限り、関数やメソッドを追加しただけでは作成しない。
 - `superpowers:test-driven-development` などの汎用指示が「全新規関数にテストを書く」「先にテストを書く」ことを要求しても、本リポジトリではテスト方針に照らして不要なテストを作らない。
-- `task.exe verify` は完了判定の**最低入口**とする。
-- `task.exe test` は backend + frontend unit の**基本テスト入口**とする。
-- 振る舞い変更時は、まず `task.exe test` を起点にし、`docs/test_strategy.md` に従って追加の意味ベース入口を選ぶ。
+- 検証範囲は `docs/test_strategy.md` の変更分類に従い、守る保証を満たす最小対象と必要な静的検証を選ぶ。
+- コミット、完了、振る舞い変更という事実だけでは、`task.exe test` / `task.exe verify` を実行する根拠にしない。
+- 広い入口を追加する場合は、狭い対象では守れない保証を実行前に説明する。`task.exe verify` の適用条件も `docs/test_strategy.md` に従う。
 - frontend の UI 変更では、`task.exe test:frontend:component` / `task.exe test:frontend:integration` / `task.exe test:workflow:smoke` の要否を必ず確認する。
 - リリース前の総合確認は `task.exe test:release`、性能影響がある場合は `task.exe test:release:performance` を使う。
 
