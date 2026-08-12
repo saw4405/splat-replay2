@@ -116,6 +116,39 @@ class TestSettingsEndpoints:
         assert isinstance(enabled["value"], bool)
         assert enabled["user_editable"] is True
 
+    def test_get_settings_exposes_requirement_and_display_level(
+        self, client: TestClient
+    ) -> None:
+        """GET /api/settings - 必須性と表示レベルを別の契約として返す。"""
+        response = client.get("/api/settings")
+        assert response.status_code == status.HTTP_200_OK
+
+        sections = response.json()["sections"]
+        capture_section = next(
+            section
+            for section in sections
+            if section["id"] == "capture_device"
+        )
+        capture_name = next(
+            field
+            for field in capture_section["fields"]
+            if field["id"] == "name"
+        )
+        obs_section = next(
+            section for section in sections if section["id"] == "obs"
+        )
+        obs_host = next(
+            field
+            for field in obs_section["fields"]
+            if field["id"] == "websocket_host"
+        )
+
+        assert capture_name["requirement"] == "required"
+        assert capture_name["display_level"] == "basic"
+        assert "recommended" not in capture_name
+        assert obs_host["requirement"] == "optional"
+        assert obs_host["display_level"] == "advanced"
+
     def test_get_webview_render_mode(self, client: TestClient) -> None:
         """GET /api/settings/webview-render-mode - 描画モードだけを軽量取得できる。"""
         response = client.get("/api/settings/webview-render-mode")

@@ -14,7 +14,6 @@ class RemoteAccessSettings(BaseModel):
             "有効化後はアプリを再起動すると反映されます。"
             "無認証のため、信頼できる家庭内ネットワークでだけ使用してください。"
         ),
-        recommended=False,
         user_editable=True,
     )
 

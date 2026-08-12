@@ -7,7 +7,9 @@ from typing import TYPE_CHECKING, Any, Dict, List, Mapping, cast
 from pydantic import BaseModel, SecretStr
 from splat_replay.application.interfaces import (
     SectionUpdate,
+    SettingDisplayLevel,
     SettingFieldData,
+    SettingRequirement,
     SettingSectionData,
     SettingsRepositoryPort,
 )
@@ -128,8 +130,16 @@ class TomlSettingsRepository(SettingsRepositoryPort):
         for field_name, model_field in model_cls.__fields__.items():
             label = model_field.field_info.title or field_name
             description = model_field.field_info.description or ""
-            recommended = bool(
-                model_field.field_info.extra.get("recommended", False)
+            requirement = cast(
+                SettingRequirement,
+                model_field.field_info.extra.get("requirement", "optional"),
+            )
+            display_level = cast(
+                SettingDisplayLevel,
+                model_field.field_info.extra.get("display_level", "advanced"),
+            )
+            requirement_note = model_field.field_info.extra.get(
+                "requirement_note"
             )
             user_editable = bool(
                 model_field.field_info.extra.get("user_editable", False)
@@ -154,11 +164,14 @@ class TomlSettingsRepository(SettingsRepositoryPort):
                     "label": label,
                     "description": description,
                     "type": "group",
-                    "recommended": recommended,
+                    "requirement": requirement,
+                    "display_level": display_level,
                     "user_editable": group_editable,
                     "children": child_fields,
                     "value": self._group_value_from_children(child_fields),
                 }
+                if isinstance(requirement_note, str):
+                    field_data["requirement_note"] = requirement_note
                 fields.append(field_data)
                 continue
 
@@ -168,9 +181,12 @@ class TomlSettingsRepository(SettingsRepositoryPort):
                 label=label,
                 description=description,
                 type=field_type,
-                recommended=recommended,
+                requirement=requirement,
+                display_level=display_level,
                 user_editable=user_editable,
             )
+            if isinstance(requirement_note, str):
+                field_data["requirement_note"] = requirement_note
 
             # キャプチャデバイスの場合は動的に選択肢を追加
             should_add_device_choices = (

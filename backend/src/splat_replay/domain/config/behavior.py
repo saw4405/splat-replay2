@@ -8,15 +8,15 @@ class BehaviorSettings(BaseModel):
         default=True,
         title="電源オフ後に編集開始する",
         description="Switchの電源オフ後に自動的に編集・アップロード処理を開始するかどうか",
-        recommended=False,
         user_editable=True,
+        display_level="basic",
     )
     sleep_after_upload: bool = Field(
         default=False,
         title="アップロード終了後にスリープする",
         description="アップロード終了後にPCをスリープさせるかどうか",
-        recommended=False,
         user_editable=True,
+        display_level="basic",
     )
     record_battle_history: bool = Field(
         default=True,
@@ -24,7 +24,6 @@ class BehaviorSettings(BaseModel):
         description=(
             "ブキ判別結果と対戦メタデータを集計用の履歴として累積保存するかどうか"
         ),
-        recommended=True,
         user_editable=True,
     )
 

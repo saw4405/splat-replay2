@@ -10,7 +10,6 @@ class VideoStorageSettings(BaseModel):
         default=Path("videos"),
         title="動画保存先フォルダ",
         description="動画・字幕・サムネイル・メタデータを保存するフォルダ",
-        recommended=False,
     )
 
     @property

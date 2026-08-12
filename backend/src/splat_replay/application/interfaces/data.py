@@ -93,12 +93,18 @@ class OBSSettingsView(Protocol):
 # TypedDict definitions for settings UI
 
 
+SettingRequirement = Literal["required", "conditional", "optional"]
+SettingDisplayLevel = Literal["basic", "advanced"]
+
+
 class SettingFieldData(TypedDict):
     id: Required[str]
     label: Required[str]
     description: Required[str]
     type: Required[str]
-    recommended: Required[bool]
+    requirement: Required[SettingRequirement]
+    requirement_note: NotRequired[str]
+    display_level: Required[SettingDisplayLevel]
     user_editable: NotRequired[bool]
     value: NotRequired[Any]
     choices: NotRequired[List[str]]

@@ -100,6 +100,7 @@ async function openSettings(page: Page): Promise<void> {
 
 async function openBehaviorSettings(page: Page): Promise<void> {
   await openSettings(page);
+  await page.getByRole('radio', { name: 'すべての設定' }).click();
   await page.getByTestId('settings-section-behavior').click();
   await expect(behaviorEditAfterPowerOffField(page)).toBeVisible();
 }

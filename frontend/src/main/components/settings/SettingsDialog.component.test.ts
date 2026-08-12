@@ -70,11 +70,101 @@ describe('SettingsDialog.svelte', () => {
     expect(heading).toBeInTheDocument();
   });
 
+  it('タイトル行の切替は基本設定を初期選択し、すべての設定で追加項目を表示する', async () => {
+    const user = userEvent.setup();
+    const mockSections: SettingsSection[] = [
+      {
+        id: 'general',
+        label: '一般設定',
+        fields: [
+          {
+            id: 'required_field',
+            label: '必須項目',
+            description: '',
+            type: 'string',
+            requirement: 'required',
+            display_level: 'basic',
+            value: '基本値',
+            user_editable: true,
+          },
+          {
+            id: 'advanced_field',
+            label: '詳細項目',
+            description: '',
+            type: 'string',
+            requirement: 'optional',
+            display_level: 'advanced',
+            value: '詳細値',
+            user_editable: true,
+          },
+        ],
+      },
+    ];
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ sections: mockSections }),
+    });
+
+    render(SettingsDialog, { props: { open: true } });
+
+    const displayModeGroup = screen.getByRole('group', { name: '設定項目の表示範囲' });
+    const basicRadio = within(displayModeGroup).getByRole('radio', { name: '基本設定' });
+    const allRadio = within(displayModeGroup).getByRole('radio', { name: 'すべての設定' });
+    await waitFor(() => {
+      expect(screen.getByRole('textbox', { name: '必須項目 必須' })).toBeInTheDocument();
+    });
+
+    expect(basicRadio).toBeChecked();
+    expect(screen.queryByRole('textbox', { name: '詳細項目' })).not.toBeInTheDocument();
+
+    await user.click(allRadio);
+
+    expect(allRadio).toBeChecked();
+    expect(screen.getByRole('textbox', { name: '必須項目 必須' })).toBeInTheDocument();
+    expect(screen.getByRole('textbox', { name: '詳細項目' })).toBeInTheDocument();
+  });
+
+  it('基本設定がないタブからすべての設定へ切り替えられる', async () => {
+    const user = userEvent.setup();
+    const mockSections: SettingsSection[] = [
+      {
+        id: 'general',
+        label: '一般設定',
+        fields: [
+          {
+            id: 'advanced_field',
+            label: '詳細項目',
+            description: '',
+            type: 'string',
+            requirement: 'optional',
+            display_level: 'advanced',
+            value: '詳細値',
+            user_editable: true,
+          },
+        ],
+      },
+    ];
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ sections: mockSections }),
+    });
+
+    render(SettingsDialog, { props: { open: true } });
+
+    const showAllButton = await screen.findByRole('button', { name: 'すべての設定を表示' });
+    expect(screen.getByText('基本設定に表示する項目はありません。')).toBeInTheDocument();
+
+    await user.click(showAllButton);
+
+    expect(screen.getByRole('radio', { name: 'すべての設定' })).toBeChecked();
+    expect(screen.getByRole('textbox', { name: '詳細項目' })).toBeInTheDocument();
+  });
+
   // ========================================
   // 読み込みテスト
   // ========================================
 
-  it('読み込み中は"読み込み中です..."と表示される', () => {
+  it('読み込み中は進行中と分かるインジケーターと文言を表示する', () => {
     // fetch を遅延させる
     fetchMock.mockReturnValueOnce(
       new Promise((resolve) => {
@@ -89,7 +179,9 @@ describe('SettingsDialog.svelte', () => {
 
     render(SettingsDialog, { props: { open: true } });
 
-    expect(screen.getByText('読み込み中です...')).toBeInTheDocument();
+    const loadingStatus = screen.getByRole('status');
+    expect(loadingStatus).toHaveTextContent('読み込み中です...');
+    expect(screen.getByTestId('settings-loading-spinner')).toBeInTheDocument();
   });
 
   it('設定の取得に失敗した場合はエラーメッセージが表示される', async () => {
@@ -117,7 +209,8 @@ describe('SettingsDialog.svelte', () => {
             label: 'フィールド1',
             description: '説明1',
             type: 'string',
-            recommended: false,
+            requirement: 'optional',
+            display_level: 'basic',
             value: 'test',
             user_editable: true,
           },
@@ -148,7 +241,8 @@ describe('SettingsDialog.svelte', () => {
             label: '描画モード',
             description: '',
             type: 'select',
-            recommended: false,
+            requirement: 'optional',
+            display_level: 'basic',
             value: 'gpu',
             choices: ['cpu', 'gpu'],
             user_editable: true,
@@ -164,7 +258,8 @@ describe('SettingsDialog.svelte', () => {
             label: 'LAN 公開',
             description: '家庭内LANからスマホで同じ画面を開けます。',
             type: 'boolean',
-            recommended: false,
+            requirement: 'optional',
+            display_level: 'basic',
             value: true,
             user_editable: true,
           },
@@ -218,7 +313,8 @@ describe('SettingsDialog.svelte', () => {
             label: 'LAN 公開',
             description: '家庭内LANからスマホで同じ画面を開けます。',
             type: 'boolean',
-            recommended: false,
+            requirement: 'optional',
+            display_level: 'basic',
             value: false,
             user_editable: true,
           },
@@ -235,7 +331,7 @@ describe('SettingsDialog.svelte', () => {
 
     await waitFor(() => {
       expect(
-        screen.getByTestId('settings-field-display-display-remote_access')
+        screen.getByTestId('settings-field-display-remote_access-enabled')
       ).toBeInTheDocument();
     });
     expect(screen.queryByTestId('remote-access-summary')).not.toBeInTheDocument();
@@ -247,7 +343,61 @@ describe('SettingsDialog.svelte', () => {
     });
   });
 
-  it('LAN 公開が反映済みの場合はLAN公開グループ内にスマホ用URL候補と接続準備を表示する', async () => {
+  it('表示タブはsource区分を見出しにせず設定項目のラベルを直接表示する', async () => {
+    const user = userEvent.setup();
+    const mockSections: SettingsSection[] = [
+      {
+        id: 'webview',
+        label: '表示',
+        fields: [
+          {
+            id: 'render_mode',
+            label: '描画モード',
+            description: '',
+            type: 'select',
+            requirement: 'optional',
+            display_level: 'basic',
+            value: 'gpu',
+            choices: ['cpu', 'gpu'],
+            choice_labels: { cpu: 'CPU', gpu: 'GPU' },
+            user_editable: true,
+          },
+        ],
+      },
+      {
+        id: 'remote_access',
+        label: 'LAN アクセス',
+        fields: [
+          {
+            id: 'enabled',
+            label: 'LAN 公開',
+            description: '',
+            type: 'boolean',
+            requirement: 'optional',
+            display_level: 'basic',
+            value: false,
+            user_editable: true,
+          },
+        ],
+      },
+    ];
+
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ sections: mockSections }),
+    });
+
+    render(SettingsDialog, { props: { open: true } });
+
+    await user.click(screen.getByRole('radio', { name: 'すべての設定' }));
+    const panel = await screen.findByRole('tabpanel');
+    expect(within(panel).getByRole('combobox', { name: '描画モード' })).toBeInTheDocument();
+    expect(within(panel).getByRole('checkbox', { name: 'LAN 公開' })).toBeInTheDocument();
+    expect(within(panel).queryByRole('group', { name: '表示' })).not.toBeInTheDocument();
+    expect(within(panel).queryByRole('group', { name: 'LAN 公開' })).not.toBeInTheDocument();
+  });
+
+  it('LAN 公開が反映済みの場合は通常フィールドの後にスマホ用URL候補と接続準備を表示する', async () => {
     const mockSections: SettingsSection[] = [
       {
         id: 'remote_access',
@@ -258,7 +408,8 @@ describe('SettingsDialog.svelte', () => {
             label: 'LAN 公開',
             description: '家庭内LANからスマホで同じ画面を開けます。',
             type: 'boolean',
-            recommended: false,
+            requirement: 'optional',
+            display_level: 'basic',
             value: true,
             user_editable: true,
           },
@@ -291,10 +442,10 @@ describe('SettingsDialog.svelte', () => {
 
     let summary: HTMLElement | null = null;
     await waitFor(() => {
-      const remoteAccessGroup = screen.getByTestId('settings-field-display-display-remote_access');
-      summary = within(remoteAccessGroup).getByTestId('remote-access-summary');
+      summary = screen.getByTestId('remote-access-summary');
       expect(summary).toBeInTheDocument();
     });
+    expect(screen.queryByRole('group', { name: 'LAN 公開' })).not.toBeInTheDocument();
     const summaryQueries = within(summary as HTMLElement);
     expect(summaryQueries.getByText('http://192.168.1.20:8000/')).toBeInTheDocument();
     expect(summaryQueries.getByText('現在、家庭内LANから接続できます。')).toBeInTheDocument();
@@ -326,7 +477,8 @@ describe('SettingsDialog.svelte', () => {
             label: 'LAN 公開',
             description: '家庭内LANからスマホで同じ画面を開けます。',
             type: 'boolean',
-            recommended: false,
+            requirement: 'optional',
+            display_level: 'basic',
             value: true,
             user_editable: true,
           },
@@ -384,7 +536,8 @@ describe('SettingsDialog.svelte', () => {
               'プレビュー更新頻度の変更は保存後すぐに反映されます。 ' +
               '描画モードの切り替えは再起動後に反映されます。',
             type: 'select',
-            recommended: false,
+            requirement: 'optional',
+            display_level: 'basic',
             value: 'cpu',
             choices: ['cpu', 'gpu'],
             choice_labels: { cpu: 'CPU', gpu: 'GPU' },
@@ -416,6 +569,7 @@ describe('SettingsDialog.svelte', () => {
   // ========================================
 
   it('複数のセクションが表示される', async () => {
+    const user = userEvent.setup();
     const mockSections: SettingsSection[] = [
       {
         id: 'general',
@@ -426,7 +580,8 @@ describe('SettingsDialog.svelte', () => {
             label: 'フィールド1',
             description: '説明1',
             type: 'string',
-            recommended: false,
+            requirement: 'optional',
+            display_level: 'basic',
             value: 'test',
             user_editable: true,
           },
@@ -441,7 +596,8 @@ describe('SettingsDialog.svelte', () => {
             label: 'フィールド2',
             description: '説明2',
             type: 'string',
-            recommended: false,
+            requirement: 'optional',
+            display_level: 'basic',
             value: 'test2',
             user_editable: true,
           },
@@ -460,6 +616,28 @@ describe('SettingsDialog.svelte', () => {
       expect(screen.getByTestId('settings-section-general')).toBeInTheDocument();
       expect(screen.getByTestId('settings-section-advanced')).toBeInTheDocument();
     });
+
+    expect(screen.queryByRole('tablist', { name: '設定カテゴリ' })).not.toBeInTheDocument();
+    expect(screen.getByRole('region', { name: '基本設定' })).toBeInTheDocument();
+
+    await user.click(screen.getByRole('radio', { name: 'すべての設定' }));
+
+    const tablist = screen.getByRole('tablist', { name: '設定カテゴリ' });
+    const generalTab = within(tablist).getByRole('tab', { name: '一般設定' });
+    const advancedTab = within(tablist).getByRole('tab', { name: '詳細設定' });
+
+    expect(generalTab).toHaveAttribute('aria-selected', 'true');
+    expect(generalTab).toHaveAttribute('tabindex', '0');
+    expect(advancedTab).toHaveAttribute('aria-selected', 'false');
+    expect(advancedTab).toHaveAttribute('tabindex', '-1');
+
+    generalTab.focus();
+    await user.keyboard('{ArrowRight}');
+
+    expect(advancedTab).toHaveFocus();
+    expect(advancedTab).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('tabpanel')).toHaveAttribute('aria-labelledby', advancedTab.id);
+    expect(screen.getByText('フィールド2')).toBeInTheDocument();
   });
 
   it('既存設定セクションを5つのタブに集約して表示する', async () => {
@@ -474,7 +652,8 @@ describe('SettingsDialog.svelte', () => {
             label: '電源オフ後に編集開始する',
             description: '',
             type: 'boolean',
-            recommended: false,
+            requirement: 'optional',
+            display_level: 'basic',
             value: true,
             user_editable: true,
           },
@@ -489,7 +668,8 @@ describe('SettingsDialog.svelte', () => {
             label: '描画モード',
             description: '',
             type: 'select',
-            recommended: false,
+            requirement: 'optional',
+            display_level: 'basic',
             value: 'gpu',
             choices: ['cpu', 'gpu'],
             choice_labels: { cpu: 'CPU', gpu: 'GPU' },
@@ -506,7 +686,8 @@ describe('SettingsDialog.svelte', () => {
             label: 'キャプチャデバイス名',
             description: '',
             type: 'text',
-            recommended: true,
+            requirement: 'required',
+            display_level: 'basic',
             value: 'Capture Device',
             user_editable: true,
           },
@@ -521,7 +702,8 @@ describe('SettingsDialog.svelte', () => {
             label: 'OBS WebSocket ホスト',
             description: '',
             type: 'text',
-            recommended: false,
+            requirement: 'optional',
+            display_level: 'basic',
             value: 'localhost',
             user_editable: true,
           },
@@ -536,7 +718,8 @@ describe('SettingsDialog.svelte', () => {
             label: '文字起こしを有効にする',
             description: '',
             type: 'boolean',
-            recommended: true,
+            requirement: 'required',
+            display_level: 'basic',
             value: true,
             user_editable: true,
           },
@@ -551,7 +734,8 @@ describe('SettingsDialog.svelte', () => {
             label: 'タイトルテンプレート',
             description: '',
             type: 'text',
-            recommended: false,
+            requirement: 'optional',
+            display_level: 'basic',
             value: '{BATTLE}',
             user_editable: true,
           },
@@ -566,7 +750,8 @@ describe('SettingsDialog.svelte', () => {
             label: '公開範囲',
             description: '',
             type: 'select',
-            recommended: false,
+            requirement: 'optional',
+            display_level: 'basic',
             value: 'private',
             choices: ['public', 'unlisted', 'private'],
             user_editable: true,
@@ -581,6 +766,19 @@ describe('SettingsDialog.svelte', () => {
     });
 
     render(SettingsDialog, { props: { open: true } });
+
+    const basicRecordingSection = await screen.findByTestId('settings-section-recording');
+    expect(screen.queryByRole('tablist', { name: '設定カテゴリ' })).not.toBeInTheDocument();
+    expect(
+      within(basicRecordingSection).getByRole('heading', { name: '録画' })
+    ).toBeInTheDocument();
+    expect(
+      within(basicRecordingSection).queryByRole('group', { name: 'キャプチャデバイス' })
+    ).not.toBeInTheDocument();
+    expect(within(basicRecordingSection).getByText('キャプチャデバイス名')).toBeInTheDocument();
+    expect(within(basicRecordingSection).getByText('OBS WebSocket ホスト')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('radio', { name: 'すべての設定' }));
 
     await waitFor(() => {
       expect(screen.getByTestId('settings-section-behavior')).toHaveTextContent('動作');
@@ -597,13 +795,65 @@ describe('SettingsDialog.svelte', () => {
     await user.click(screen.getByTestId('settings-section-recording'));
 
     await waitFor(() => {
-      expect(screen.getByText('キャプチャデバイス')).toBeInTheDocument();
-      expect(screen.getByText('OBS 接続')).toBeInTheDocument();
-      expect(screen.getByText('文字起こし')).toBeInTheDocument();
+      expect(
+        within(screen.getByRole('group', { name: 'キャプチャデバイス' })).getByRole('heading', {
+          name: 'キャプチャデバイス',
+        })
+      ).toBeInTheDocument();
+      expect(
+        within(screen.getByRole('group', { name: 'OBS接続' })).getByRole('heading', {
+          name: 'OBS接続',
+        })
+      ).toBeInTheDocument();
+      expect(
+        within(screen.getByRole('group', { name: '文字起こし' })).getByRole('heading', {
+          name: '文字起こし',
+        })
+      ).toBeInTheDocument();
       expect(screen.getByText('キャプチャデバイス名')).toBeInTheDocument();
       expect(screen.getByText('OBS WebSocket ホスト')).toBeInTheDocument();
       expect(screen.getByText('文字起こしを有効にする')).toBeInTheDocument();
     });
+    expect(screen.getAllByText('必須')).toHaveLength(2);
+  });
+
+  it('boolean設定は現在状態を可視テキストでも表示する', async () => {
+    const user = userEvent.setup();
+    const mockSections: SettingsSection[] = [
+      {
+        id: 'behavior',
+        label: '動作',
+        fields: [
+          {
+            id: 'edit_after_power_off',
+            label: '電源オフ後に編集開始する',
+            description: '自動処理を開始するかどうか',
+            type: 'boolean',
+            requirement: 'required',
+            display_level: 'basic',
+            value: true,
+            user_editable: true,
+          },
+        ],
+      },
+    ];
+
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ sections: mockSections }),
+    });
+
+    render(SettingsDialog, { props: { open: true } });
+
+    const checkbox = await screen.findByRole('checkbox', {
+      name: '電源オフ後に編集開始する 必須',
+    });
+    expect(screen.getByText('必須')).toBeInTheDocument();
+    expect(screen.getByText('オン')).toBeInTheDocument();
+
+    await user.click(checkbox);
+
+    expect(screen.getByText('オフ')).toBeInTheDocument();
   });
 
   it('セクションをクリックすると切り替わる', async () => {
@@ -618,7 +868,8 @@ describe('SettingsDialog.svelte', () => {
             label: 'フィールド1',
             description: '説明1',
             type: 'string',
-            recommended: false,
+            requirement: 'optional',
+            display_level: 'basic',
             value: 'test',
             user_editable: true,
           },
@@ -633,7 +884,8 @@ describe('SettingsDialog.svelte', () => {
             label: 'フィールド2',
             description: '説明2',
             type: 'string',
-            recommended: false,
+            requirement: 'optional',
+            display_level: 'basic',
             value: 'test2',
             user_editable: true,
           },
@@ -647,6 +899,8 @@ describe('SettingsDialog.svelte', () => {
     });
 
     render(SettingsDialog, { props: { open: true } });
+
+    await user.click(screen.getByRole('radio', { name: 'すべての設定' }));
 
     await waitFor(() => {
       expect(screen.getByTestId('settings-section-general')).toBeInTheDocument();
@@ -675,7 +929,8 @@ describe('SettingsDialog.svelte', () => {
             label: 'フィールド1',
             description: '説明1',
             type: 'string',
-            recommended: false,
+            requirement: 'optional',
+            display_level: 'basic',
             value: 'test',
             user_editable: true,
           },
@@ -714,7 +969,8 @@ describe('SettingsDialog.svelte', () => {
             label: 'フィールド1',
             description: '説明1',
             type: 'string',
-            recommended: false,
+            requirement: 'optional',
+            display_level: 'basic',
             value: 'test',
             user_editable: true,
           },
@@ -765,7 +1021,8 @@ describe('SettingsDialog.svelte', () => {
             label: 'フィールド1',
             description: '説明1',
             type: 'string',
-            recommended: false,
+            requirement: 'optional',
+            display_level: 'basic',
             value: 'test',
             user_editable: true,
           },
@@ -819,7 +1076,8 @@ describe('SettingsDialog.svelte', () => {
             label: 'フィールド1',
             description: '説明1',
             type: 'string',
-            recommended: false,
+            requirement: 'optional',
+            display_level: 'basic',
             value: 'test',
             user_editable: true,
           },
@@ -889,7 +1147,8 @@ describe('SettingsDialog.svelte', () => {
               'プレビュー更新頻度の変更は保存後すぐに反映されます。 ' +
               '描画モードの切り替えは再起動後に反映されます。',
             type: 'select',
-            recommended: false,
+            requirement: 'optional',
+            display_level: 'basic',
             value: 'cpu',
             choices: ['cpu', 'gpu'],
             choice_labels: { cpu: 'CPU', gpu: 'GPU' },
@@ -954,7 +1213,8 @@ describe('SettingsDialog.svelte', () => {
             label: 'フィールド1',
             description: '説明1',
             type: 'string',
-            recommended: false,
+            requirement: 'optional',
+            display_level: 'basic',
             value: 'test',
             user_editable: true,
           },
@@ -963,7 +1223,8 @@ describe('SettingsDialog.svelte', () => {
             label: 'フィールド2（非表示）',
             description: '説明2',
             type: 'string',
-            recommended: false,
+            requirement: 'optional',
+            display_level: 'basic',
             value: 'test2',
             user_editable: false,
           },

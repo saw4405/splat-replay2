@@ -82,6 +82,17 @@ async function expectNoHorizontalDocumentOverflow(page: Page): Promise<void> {
   );
 }
 
+async function expectNoHorizontalOverflow(locator: Locator, label: string): Promise<void> {
+  const metrics = await locator.evaluate((element) => ({
+    clientWidth: element.clientWidth,
+    scrollWidth: element.scrollWidth,
+  }));
+
+  expect(metrics.scrollWidth, `${label} should not overflow horizontally`).toBeLessThanOrEqual(
+    metrics.clientWidth
+  );
+}
+
 async function expectPreviewKeepsSixteenByNine(page: Page): Promise<void> {
   const previewBox = await visibleBox(page.getByTestId('preview-container'), 'preview');
   const ratio = previewBox.width / previewBox.height;
@@ -279,6 +290,181 @@ test('main responsive layout: narrow controls keep accessible names', async ({ p
     'aria-label',
     '録画データの編集とYouTubeアップロードを開始'
   );
+});
+
+test('settings dialog reflows without horizontal scrolling on narrow phones', async ({ page }) => {
+  resetReplayTestState(e2eEnvironment);
+  const viewport = { width: 320, height: 568 };
+  await page.setViewportSize(viewport);
+  await gotoMain(page);
+
+  await page.getByTestId('settings-button').click();
+  const dialog = page.getByRole('dialog', { name: '設定' });
+  await expect(dialog).toBeVisible();
+
+  const dialogBox = await visibleBox(dialog, 'settings dialog');
+  expectBoxInsideViewport(dialogBox, viewport, 'settings dialog');
+  expect(dialogBox.x, 'settings dialog should use the full phone width').toBeLessThanOrEqual(1);
+  expect(dialogBox.y, 'settings dialog should use the full phone height').toBeLessThanOrEqual(1);
+
+  const displayMode = dialog.getByRole('group', { name: '設定項目の表示範囲' });
+  await expectNoHorizontalOverflow(displayMode, 'settings display mode');
+  await expect(displayMode.getByRole('radio', { name: '基本設定' })).toBeChecked();
+  await expect(dialog.getByRole('tablist', { name: '設定カテゴリ' })).toHaveCount(0);
+  const basicGrid = dialog.getByTestId('settings-basic-grid');
+  await expectNoHorizontalOverflow(basicGrid, 'basic settings grid');
+  for (const sectionName of ['動作', '録画', 'アップロード']) {
+    await expect(basicGrid.getByRole('heading', { name: sectionName, exact: true })).toBeAttached();
+  }
+  const narrowSectionNames = await basicGrid.getByRole('heading').allTextContents();
+  expect(narrowSectionNames).toEqual(['動作', '録画', 'アップロード']);
+  for (const emptySectionName of ['表示', '編集']) {
+    await expect(
+      basicGrid.getByRole('heading', { name: emptySectionName, exact: true })
+    ).toHaveCount(0);
+  }
+
+  const fields = page.getByTestId('settings-fields');
+  const fieldsScroll = page.getByTestId('settings-fields-scroll');
+  await expectNoHorizontalOverflow(fields, 'settings panel');
+  await expectNoHorizontalOverflow(fieldsScroll, 'settings field list');
+
+  await displayMode.getByRole('radio', { name: 'すべての設定' }).click();
+  const tabs = page.getByTestId('settings-tabs');
+  await expectNoHorizontalOverflow(tabs, 'settings tabs');
+  for (const tabName of ['動作', '表示', '録画', '編集', 'アップロード']) {
+    await expect(dialog.getByRole('tab', { name: tabName, exact: true })).toBeVisible();
+  }
+
+  await dialog.getByRole('tab', { name: '録画', exact: true }).click();
+  await expectNoHorizontalOverflow(fields, 'settings panel');
+  await expectNoHorizontalOverflow(fieldsScroll, 'settings field list');
+  await expect(dialog.getByRole('group', { name: 'キャプチャデバイス' })).toBeVisible();
+  await expect(dialog.getByRole('group', { name: 'OBS接続' })).toBeAttached();
+  await expect(dialog.getByRole('group', { name: '文字起こし' })).toBeAttached();
+
+  await expect(dialog.getByRole('button', { name: 'キャンセル', exact: true })).toBeVisible();
+  await expect(dialog.getByRole('button', { name: '保存', exact: true })).toBeVisible();
+});
+
+test('settings dialog keeps one frame size and places group headings inside cards', async ({
+  page,
+}) => {
+  resetReplayTestState(e2eEnvironment);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await gotoMain(page);
+
+  await page.getByTestId('settings-button').click();
+  const dialog = page.getByRole('dialog', { name: '設定' });
+  await expect(dialog).toBeVisible();
+  await dialog.evaluate(async (element) => {
+    await Promise.all(
+      element
+        .getAnimations({ subtree: true })
+        .map((animation) => animation.finished.catch(() => {}))
+    );
+  });
+
+  const initialBox = await visibleBox(dialog, 'settings dialog');
+  const displayMode = dialog.getByRole('group', { name: '設定項目の表示範囲' });
+  const headingBox = await visibleBox(
+    dialog.getByRole('heading', { name: '設定' }),
+    'settings title'
+  );
+  const displayModeBox = await visibleBox(displayMode, 'settings display mode');
+  expect(
+    Math.abs(headingBox.y + headingBox.height / 2 - (displayModeBox.y + displayModeBox.height / 2)),
+    'settings display mode should share the title row'
+  ).toBeLessThanOrEqual(8);
+
+  const behaviorSectionBox = await visibleBox(
+    dialog.getByTestId('settings-section-behavior'),
+    'basic behavior section'
+  );
+  const recordingSectionBox = await visibleBox(
+    dialog.getByTestId('settings-section-recording'),
+    'basic recording section'
+  );
+  const uploadSectionBox = await visibleBox(
+    dialog.getByTestId('settings-section-upload'),
+    'basic upload section'
+  );
+  expect(
+    Math.abs(behaviorSectionBox.y - recordingSectionBox.y),
+    'wide basic settings should place the first two sections in one grid row'
+  ).toBeLessThanOrEqual(1);
+  expect(
+    recordingSectionBox.x,
+    'recording section should occupy the second grid column'
+  ).toBeGreaterThan(behaviorSectionBox.x + behaviorSectionBox.width);
+  expect(uploadSectionBox.x, 'upload section should remain in the first grid column').toBeCloseTo(
+    behaviorSectionBox.x,
+    0
+  );
+  expect(
+    uploadSectionBox.y - (behaviorSectionBox.y + behaviorSectionBox.height),
+    'upload section should follow behavior by the column gap, independent of recording height'
+  ).toBeLessThanOrEqual(20);
+  expect(
+    uploadSectionBox.y - (behaviorSectionBox.y + behaviorSectionBox.height),
+    'upload section should not overlap behavior'
+  ).toBeGreaterThanOrEqual(12);
+
+  await displayMode.getByRole('radio', { name: 'すべての設定' }).click();
+  await expect(displayMode.getByRole('radio', { name: 'すべての設定' })).toBeChecked();
+
+  for (const tabName of ['動作', '表示', '録画', '編集', 'アップロード']) {
+    const tab = dialog.getByRole('tab', { name: tabName, exact: true });
+    await tab.click();
+    await expect(tab).toHaveAttribute('aria-selected', 'true');
+    const currentBox = await visibleBox(dialog, `settings dialog in all mode on ${tabName}`);
+    expect(
+      Math.abs(currentBox.width - initialBox.width),
+      `${tabName} should keep width`
+    ).toBeLessThanOrEqual(1);
+    expect(
+      Math.abs(currentBox.height - initialBox.height),
+      `${tabName} should keep height`
+    ).toBeLessThanOrEqual(1);
+    expect(Math.abs(currentBox.x - initialBox.x), `${tabName} should keep x`).toBeLessThanOrEqual(
+      1
+    );
+    expect(Math.abs(currentBox.y - initialBox.y), `${tabName} should keep y`).toBeLessThanOrEqual(
+      1
+    );
+  }
+
+  await displayMode.getByRole('radio', { name: '基本設定' }).click();
+  await expect(dialog.getByRole('tablist', { name: '設定カテゴリ' })).toHaveCount(0);
+  const basicModeBox = await visibleBox(dialog, 'settings dialog after returning to basic mode');
+  expect(Math.abs(basicModeBox.width - initialBox.width)).toBeLessThanOrEqual(1);
+  expect(Math.abs(basicModeBox.height - initialBox.height)).toBeLessThanOrEqual(1);
+
+  await displayMode.getByRole('radio', { name: 'すべての設定' }).click();
+
+  await dialog.getByRole('tab', { name: '表示', exact: true }).click();
+  const displayPanel = dialog.getByRole('tabpanel');
+  await expect(displayPanel.getByRole('combobox', { name: '描画モード' })).toBeVisible();
+  await expect(displayPanel.getByRole('checkbox', { name: 'LAN 公開' })).toBeAttached();
+  await expect(displayPanel.getByRole('group', { name: '表示' })).toHaveCount(0);
+  await expect(displayPanel.getByRole('group', { name: 'LAN 公開' })).toHaveCount(0);
+
+  await dialog.getByRole('tab', { name: '録画', exact: true }).click();
+  for (const groupName of ['キャプチャデバイス', 'OBS接続', '文字起こし']) {
+    const group = dialog.getByRole('group', { name: groupName });
+    await group.scrollIntoViewIfNeeded();
+    const heading = group.getByRole('heading', { name: groupName });
+    const groupBox = await visibleBox(group, `${groupName} group`);
+    const headingBox = await visibleBox(heading, `${groupName} heading`);
+    expect(
+      headingBox.y - groupBox.y,
+      `${groupName} heading should clear the top border`
+    ).toBeGreaterThan(8);
+    expect(
+      headingBox.x - groupBox.x,
+      `${groupName} heading should clear the left border`
+    ).toBeGreaterThan(8);
+  }
 });
 
 test('main responsive layout: drawer labels collapse before the overlap threshold', async ({

@@ -1,5 +1,4 @@
 <script lang="ts">
-  import type { Snippet } from 'svelte';
   import { Eye, EyeOff } from 'lucide-svelte';
   import FieldItem from './FieldItem.svelte';
   import SelectField from './SelectField.svelte';
@@ -9,24 +8,24 @@
     field: SettingField;
     sectionId: string;
     path?: string[];
+    variant?: 'card' | 'flat';
     updateField: (field: SettingField, value: FieldValue) => void;
     updateGroupField: (group: SettingField, child: SettingField, value: FieldValue) => void;
     parentGroup?: SettingField | null;
     onCalibrateAudio?: (field: SettingField, parentGroup: SettingField | null) => Promise<void>;
     onTestSpeech?: () => void;
-    groupAddon?: Snippet<[SettingField]>;
   }
 
   let {
     field,
     sectionId,
     path = [],
+    variant = 'card',
     updateField,
     updateGroupField,
     parentGroup = null,
     onCalibrateAudio,
     onTestSpeech,
-    groupAddon,
   }: Props = $props();
 
   const pathTokens = $derived([...path, field.id]);
@@ -125,8 +124,24 @@
 </script>
 
 {#if field.type === 'group' && field.children}
-  <fieldset class="field-group" data-testid={`settings-field-${sectionId}-${pathTokens.join('-')}`}>
-    <legend class:recommended={field.recommended}>{field.label}</legend>
+  <div
+    class="field-group"
+    role="group"
+    aria-labelledby={labelElementId}
+    data-testid={`settings-field-${sectionId}-${pathTokens.join('-')}`}
+  >
+    <h3
+      id={labelElementId}
+      class="field-group-heading"
+      class:required={field.requirement === 'required'}
+    >
+      <span>{field.label}</span>
+      {#if field.requirement === 'required'}
+        <span class="requirement-badge">必須</span>
+      {:else if field.requirement === 'conditional'}
+        <span class="requirement-badge">{field.requirement_note ?? '条件付き必須'}</span>
+      {/if}
+    </h3>
     {#if field.description}
       <p class="field-description">{field.description}</p>
     {/if}
@@ -141,13 +156,9 @@
           parentGroup={field}
           {onCalibrateAudio}
           {onTestSpeech}
-          {groupAddon}
         />
       {/each}
     </div>
-    {#if groupAddon}
-      {@render groupAddon(field)}
-    {/if}
     {#if field.id === 'speech_transcriber' && onTestSpeech}
       <button
         type="button"
@@ -158,32 +169,43 @@
         音声認識をテスト
       </button>
     {/if}
-  </fieldset>
+  </div>
 {:else}
   <div
     class="field-item"
+    class:boolean-field={field.type === 'boolean'}
+    class:group-child={parentGroup !== null}
+    class:flat-field={variant === 'flat'}
     data-type={field.type}
     data-testid={`settings-field-${sectionId}-${pathTokens.join('-')}`}
   >
     <div class="field-header">
-      <label id={labelElementId} for={elementId} class:recommended={field.recommended}>
-        {field.label}
+      <label id={labelElementId} for={elementId} class:required={field.requirement === 'required'}>
+        <span>{field.label}</span>
+        {#if field.requirement === 'required'}
+          <span class="requirement-badge">必須</span>
+        {:else if field.requirement === 'conditional'}
+          <span class="requirement-badge">{field.requirement_note ?? '条件付き必須'}</span>
+        {/if}
       </label>
       {#if field.description}
         <p id={descriptionId} class="field-description">{field.description}</p>
       {/if}
     </div>
     {#if field.type === 'boolean'}
-      <label class="toggle-switch" for={elementId}>
-        <input
-          id={elementId}
-          aria-describedby={field.description ? descriptionId : undefined}
-          type="checkbox"
-          checked={Boolean(field.value)}
-          onchange={commitCheckbox}
-        />
-        <span class="toggle-slider"></span>
-      </label>
+      <div class="boolean-control">
+        <span class="toggle-state" aria-hidden="true">{field.value ? 'オン' : 'オフ'}</span>
+        <label class="toggle-switch" for={elementId}>
+          <input
+            id={elementId}
+            aria-describedby={field.description ? descriptionId : undefined}
+            type="checkbox"
+            checked={Boolean(field.value)}
+            onchange={commitCheckbox}
+          />
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
     {:else if field.type === 'integer'}
       <div class="integer-field-container">
         <input
@@ -310,6 +332,25 @@
       inset 0 1px 0 rgba(var(--theme-rgb-white), 0.12);
   }
 
+  .field-item.group-child,
+  .field-item.group-child:hover,
+  .field-item.flat-field,
+  .field-item.flat-field:hover {
+    padding: 1rem 0;
+    border: 0;
+    border-bottom: 1px solid rgba(var(--theme-rgb-white), 0.1);
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+  }
+
+  .field-item.boolean-field {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    column-gap: 1.5rem;
+  }
+
   .field-header {
     display: flex;
     flex-direction: column;
@@ -318,12 +359,31 @@
   }
 
   label {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.55rem;
+    flex-wrap: wrap;
     font-weight: 600;
     color: rgba(var(--theme-rgb-light-bg-alt), 0.92);
   }
 
-  label.recommended {
-    color: var(--theme-status-info-soft);
+  label.required {
+    color: rgba(var(--theme-rgb-light-bg-alt), 0.92);
+  }
+
+  .requirement-badge {
+    display: inline-flex;
+    align-items: center;
+    min-height: 1.35rem;
+    padding: 0.1rem 0.45rem;
+    border: 1px solid rgba(var(--theme-rgb-accent), 0.38);
+    border-radius: 999px;
+    background: rgba(var(--theme-rgb-accent), 0.12);
+    color: var(--accent-color);
+    font-size: 0.72rem;
+    font-weight: 700;
+    line-height: 1;
+    letter-spacing: 0.04em;
   }
 
   input[type='text'],
@@ -381,6 +441,21 @@
     width: 3.5rem;
     height: 2rem;
     cursor: pointer;
+  }
+
+  .boolean-control {
+    display: inline-flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 0.7rem;
+  }
+
+  .toggle-state {
+    min-width: 2rem;
+    color: rgba(var(--theme-rgb-light-slate), 0.78);
+    font-size: 0.82rem;
+    font-weight: 600;
+    text-align: right;
   }
 
   .toggle-slider {
@@ -498,20 +573,28 @@
     gap: 0.75rem;
   }
 
-  .field-group legend {
-    padding: 0 0.75rem;
+  .field-group-heading {
+    display: flex;
+    align-items: center;
+    gap: 0.55rem;
+    width: 100%;
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0 0 0.5rem;
+    font-size: 1rem;
     font-weight: 600;
     color: rgba(var(--theme-rgb-light-bg-alt), 0.94);
+    text-align: left;
   }
 
-  .field-group legend.recommended {
-    color: var(--theme-status-info-soft);
+  .field-group-heading.required {
+    color: rgba(var(--theme-rgb-light-bg-alt), 0.94);
   }
 
   .field-group-children {
     display: flex;
     flex-direction: column;
-    gap: 0.85rem;
+    gap: 0;
   }
 
   .field-group .field-description {
@@ -616,5 +699,33 @@
 
   .speech-test-button:active {
     background: rgba(var(--theme-rgb-accent), 0.16);
+  }
+
+  @media (max-width: 40rem) {
+    .field-item {
+      padding: 1rem;
+    }
+
+    .field-item.boolean-field {
+      grid-template-columns: minmax(0, 1fr);
+      row-gap: 0.85rem;
+    }
+
+    .boolean-control {
+      justify-content: flex-start;
+    }
+
+    .field-group {
+      padding: 1rem;
+    }
+
+    .integer-field-container {
+      align-items: stretch;
+      flex-direction: column;
+    }
+
+    .calibrate-button {
+      align-self: flex-start;
+    }
   }
 </style>

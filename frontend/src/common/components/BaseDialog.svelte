@@ -129,7 +129,7 @@
       </section>
 
       {#if showFooter}
-        <footer class="dialog-footer">
+        <footer class="dialog-footer" class:simple-footer={footerVariant === 'simple'}>
           {@render footerStatus?.()}
 
           {#if footerVariant === 'simple'}
@@ -470,6 +470,7 @@
       max-height: 100dvh !important;
       min-height: 0 !important;
       border-radius: 0;
+      animation: none;
     }
 
     .dialog-container.mobile-fullscreen .dialog-header {
@@ -492,6 +493,11 @@
       padding-right: env(safe-area-inset-right);
       padding-bottom: env(safe-area-inset-bottom);
       padding-left: env(safe-area-inset-left);
+    }
+
+    .dialog-container.mobile-fullscreen .dialog-footer.simple-footer {
+      padding: 0.75rem calc(1rem + env(safe-area-inset-right))
+        calc(0.75rem + env(safe-area-inset-bottom)) calc(1rem + env(safe-area-inset-left));
     }
   }
 </style>

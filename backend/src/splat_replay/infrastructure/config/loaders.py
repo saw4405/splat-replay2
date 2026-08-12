@@ -178,7 +178,8 @@ def get_setting_structure() -> Dict[str, object]:
             "type": "UIタイプ",
             "choices": ["選択肢1", "選択肢2", ...] | None,
             "default": 値,
-            "recommended": True/False
+            "requirement": "required" | "conditional" | "optional",
+            "display_level": "basic" | "advanced"
           }, ...
         }
       }, ...
@@ -196,7 +197,10 @@ def get_setting_structure() -> Dict[str, object]:
                 label = f.field_info.title or f_id
                 help_text = f.field_info.description or ""
                 ui_type, choices = _ui_type_of(f)
-                recommended = f.field_info.extra.get("recommended", False)
+                requirement = f.field_info.extra.get("requirement", "optional")
+                display_level = f.field_info.extra.get(
+                    "display_level", "advanced"
+                )
 
                 default = f.default
                 if isinstance(default, SecretStr):
@@ -210,7 +214,8 @@ def get_setting_structure() -> Dict[str, object]:
                     "type": ui_type,
                     "choices": choices,
                     "default": default,
-                    "recommended": recommended,
+                    "requirement": requirement,
+                    "display_level": display_level,
                 }
 
         result[sec_id] = {"display": sec_display, "fields": fields_meta}

@@ -21,7 +21,6 @@ class WebViewSettings(BaseModel):
         ),
         choices=["cpu", "gpu"],
         choice_labels={"cpu": "CPU", "gpu": "GPU"},
-        recommended=False,
         user_editable=True,
     )
 

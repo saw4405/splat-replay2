@@ -2,12 +2,18 @@ export type PrimitiveValue = string | number | boolean | string[];
 
 export type FieldValue = PrimitiveValue | Record<string, PrimitiveValue | Record<string, unknown>>;
 
+export type SettingRequirement = 'required' | 'conditional' | 'optional';
+
+export type SettingDisplayLevel = 'basic' | 'advanced';
+
 export type SettingField = {
   id: string;
   label: string;
   description: string;
   type: string;
-  recommended: boolean;
+  requirement: SettingRequirement;
+  requirement_note?: string;
+  display_level: SettingDisplayLevel;
   user_editable?: boolean;
   value?: FieldValue | null;
   choices?: string[] | null;
