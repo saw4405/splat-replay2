@@ -797,20 +797,15 @@
   }
 
   .data-section {
-    background: rgba(var(--theme-rgb-white), 0.03);
-    border-radius: 12px;
-    padding: 1.5rem;
-    border: 1px solid rgba(var(--theme-rgb-white), 0.08);
     overflow-wrap: break-word; /* 長い単語を折り返す */
     word-wrap: break-word; /* 古いブラウザ対応 */
     display: flex;
     flex-direction: column;
     flex: 1 1 auto; /* 親の残领域を全て使う（データなし時も100%高さ） */
     min-height: 0;
-    overflow: hidden; /* コンテンツがはみ出さないようにする */
     align-self: stretch; /* ensure grid item fills the grid cell vertically/horizontally */
     width: 100%;
-    gap: 1.5rem;
+    gap: 1rem;
   }
 
   .section-title {
