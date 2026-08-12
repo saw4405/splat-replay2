@@ -181,14 +181,17 @@ function Invoke-GitText {
 
     $stderrFile = [System.IO.Path]::GetTempFileName()
     $previousErrorActionPreference = $ErrorActionPreference
+    $previousConsoleOutputEncoding = [Console]::OutputEncoding
     try {
         $ErrorActionPreference = "Continue"
+        [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)
         $output = & git -C $WorkingTree @Arguments 2> $stderrFile
         $exitCode = $LASTEXITCODE
         $stderr = Get-Content -LiteralPath $stderrFile -Raw -Encoding UTF8
     }
     finally {
         $ErrorActionPreference = $previousErrorActionPreference
+        [Console]::OutputEncoding = $previousConsoleOutputEncoding
         Remove-Item -LiteralPath $stderrFile -Force -ErrorAction SilentlyContinue
     }
 
@@ -212,7 +215,13 @@ function Invoke-GitText {
 function Get-UntrackedEntries {
     param([Parameter(Mandatory = $true)][string]$WorkingTree)
 
-    $raw = Invoke-GitText -WorkingTree $WorkingTree -Arguments @("ls-files", "--others", "--exclude-standard")
+    $raw = Invoke-GitText -WorkingTree $WorkingTree -Arguments @(
+        "-c",
+        "core.quotePath=false",
+        "ls-files",
+        "--others",
+        "--exclude-standard"
+    )
     if ([string]::IsNullOrWhiteSpace($raw)) {
         return @()
     }
