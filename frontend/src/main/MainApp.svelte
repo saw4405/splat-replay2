@@ -6,6 +6,7 @@
   import AutoProcessNotification from './components/AutoProcessNotification.svelte';
   import { onMount } from 'svelte';
   import { api } from './api';
+  import { cancelEditUploadProcess } from './api/assets';
   import { subscribeDomainEvents } from './domainEvents';
   import { notifyRecordingStarted, notifyRecordingStopped } from './notification';
   import type {
@@ -19,7 +20,6 @@
   let autoSleepPayload = $state<AutoSleepPendingPayload | null>(null);
   let bottomDrawerRef = $state<BottomDrawer | null>(null);
   let recordedDataCount = $state(0);
-  let autoRecordingRearmRequest = $state(0);
   const drawerButtonLabel = $derived(
     recordedDataCount > 0 ? `データ一覧（録画 ${recordedDataCount}件）` : 'データ一覧'
   );
@@ -111,16 +111,10 @@
   </div>
 
   <div class="preview-container">
-    <VideoPreviewContainer rearmAutoRecordingRequest={autoRecordingRearmRequest} />
+    <VideoPreviewContainer />
   </div>
 
-  <BottomDrawer
-    bind:this={bottomDrawerRef}
-    onRecordedCountChange={updateRecordedDataCount}
-    onAutoRecordingRearmRequest={() => {
-      autoRecordingRearmRequest += 1;
-    }}
-  />
+  <BottomDrawer bind:this={bottomDrawerRef} onRecordedCountChange={updateRecordedDataCount} />
 
   <SettingsDialog bind:open={isSettingsOpen} />
 
@@ -128,10 +122,8 @@
     <AutoProcessNotification
       payload={autoProcessPayload}
       title="自動処理の開始予告"
-      onStart={() => {
-        if (bottomDrawerRef && typeof bottomDrawerRef.startAutoProcessing === 'function') {
-          bottomDrawerRef.startAutoProcessing();
-        }
+      onCancel={async () => {
+        await cancelEditUploadProcess();
       }}
       onDismiss={() => {
         autoProcessPayload = null;
@@ -143,9 +135,7 @@
     <AutoProcessNotification
       payload={autoSleepPayload}
       title="スリープの開始予告"
-      onStart={() => {
-        return api.process.startSleep();
-      }}
+      onCancel={() => api.process.cancelSleep()}
       onDismiss={() => {
         autoSleepPayload = null;
       }}

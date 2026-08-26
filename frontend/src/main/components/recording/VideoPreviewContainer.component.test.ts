@@ -4,15 +4,15 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 const {
   subscribeDomainEventsMock,
   recoverCaptureDeviceMock,
+  getAutoRecorderStateMock,
   getRecorderPreviewModeMock,
-  notifyRecordingReadyMock,
   getMetadataOptionsMock,
   buildMetadataOptionMapMock,
 } = vi.hoisted(() => ({
   subscribeDomainEventsMock: vi.fn(),
   recoverCaptureDeviceMock: vi.fn(),
+  getAutoRecorderStateMock: vi.fn(),
   getRecorderPreviewModeMock: vi.fn(),
-  notifyRecordingReadyMock: vi.fn(),
   getMetadataOptionsMock: vi.fn(),
   buildMetadataOptionMapMock: vi.fn(),
 }));
@@ -25,14 +25,11 @@ vi.mock('../../api/recording', async () => {
   const actual = await vi.importActual<typeof import('../../api/recording')>('../../api/recording');
   return {
     ...actual,
+    getAutoRecorderState: getAutoRecorderStateMock,
     getRecorderPreviewMode: getRecorderPreviewModeMock,
     recoverCaptureDevice: recoverCaptureDeviceMock,
   };
 });
-
-vi.mock('../../notification', () => ({
-  notifyRecordingReady: notifyRecordingReadyMock,
-}));
 
 vi.mock('../../renderMode', async () => {
   const { writable } = await import('svelte/store');
@@ -48,7 +45,7 @@ vi.mock('../../api/metadata', () => ({
 }));
 
 vi.mock('./VideoPreview.svelte', async () => {
-  const module = await import('../../../test-utils/StubComponent.svelte');
+  const module = await import('./VideoPreviewTestStub.svelte');
   return { default: module.default };
 });
 
@@ -106,6 +103,11 @@ describe('VideoPreviewContainer.svelte', () => {
 
     getRecorderPreviewModeMock.mockReset();
     getRecorderPreviewModeMock.mockResolvedValue('live_capture');
+    getAutoRecorderStateMock.mockReset();
+    getAutoRecorderStateMock.mockResolvedValue({
+      state: 'running',
+      power_state: 'armed',
+    });
 
     recoverCaptureDeviceMock.mockReset();
     recoverCaptureDeviceMock.mockResolvedValue({
@@ -114,9 +116,6 @@ describe('VideoPreviewContainer.svelte', () => {
       message: 'recover failed',
       action: 'restart-device',
     });
-
-    notifyRecordingReadyMock.mockReset();
-    notifyRecordingReadyMock.mockResolvedValue(undefined);
 
     getMetadataOptionsMock.mockReset();
     getMetadataOptionsMock.mockResolvedValue({
@@ -180,7 +179,7 @@ describe('VideoPreviewContainer.svelte', () => {
     });
   });
 
-  it('接続中から切断へ遷移したら idle_auto 回復を呼び出す', async () => {
+  it('接続時は録画準備だけを行い、自動録画の開始をブラウザから要求しない', async () => {
     vi.useFakeTimers();
     const deviceStatuses = [true, false];
     fetchMock.mockImplementation(async (input: string | URL | Request) => {
@@ -210,11 +209,9 @@ describe('VideoPreviewContainer.svelte', () => {
       '/api/recorder/prepare',
       expect.objectContaining({ method: 'POST' })
     );
-    expect(fetchMock).toHaveBeenCalledWith(
-      '/api/recorder/enable-auto',
-      expect.objectContaining({ method: 'POST' })
-    );
-    expect(notifyRecordingReadyMock).toHaveBeenCalled();
+    expect(
+      fetchMock.mock.calls.some(([input]) => input.toString().includes('/api/recorder/enable-auto'))
+    ).toBe(false);
 
     recoverCaptureDeviceMock.mockClear();
     await vi.advanceTimersByTimeAsync(650);
@@ -286,7 +283,7 @@ describe('VideoPreviewContainer.svelte', () => {
     await vi.runOnlyPendingTimersAsync();
 
     expect(fetchMock).toHaveBeenCalledWith(
-      '/api/recorder/enable-auto',
+      '/api/recorder/prepare',
       expect.objectContaining({ method: 'POST' })
     );
 
@@ -360,7 +357,7 @@ describe('VideoPreviewContainer.svelte', () => {
 
     await waitFor(() => {
       expect(fetchMock).toHaveBeenCalledWith(
-        '/api/recorder/enable-auto',
+        '/api/recorder/prepare',
         expect.objectContaining({ method: 'POST' })
       );
     });
@@ -423,7 +420,11 @@ describe('VideoPreviewContainer.svelte', () => {
     );
   });
 
-  it('再有効化リクエストを受けたら準備済みでも prepare してから enable-auto を呼ぶ', async () => {
+  it('Switch電源OFF中はON待機状態を表示し、再有効化APIを呼ばない', async () => {
+    getAutoRecorderStateMock.mockResolvedValue({
+      state: 'running',
+      power_state: 'waiting_for_power_on',
+    });
     fetchMock.mockImplementation(async (input: string | URL | Request) => {
       const url = input.toString();
       if (url.includes('/api/device/status')) {
@@ -441,35 +442,44 @@ describe('VideoPreviewContainer.svelte', () => {
       throw new Error(`Unexpected fetch: ${url}`);
     });
 
-    const { rerender } = render(VideoPreviewContainer, {
-      props: { rearmAutoRecordingRequest: 0 },
+    render(VideoPreviewContainer);
+
+    expect(await screen.findByTestId('video-preview-stub')).toHaveAttribute(
+      'data-switch-power-state',
+      'waiting_for_power_on'
+    );
+    expect(screen.queryByText('Switch 電源ON待機中')).not.toBeInTheDocument();
+    expect(
+      fetchMock.mock.calls.some(([input]) => input.toString().includes('/api/recorder/enable-auto'))
+    ).toBe(false);
+  });
+
+  it('キャプチャーデバイス切断をSwitch電源OFFと別表示する', async () => {
+    getAutoRecorderStateMock.mockResolvedValue({
+      state: 'running',
+      power_state: 'capture_disconnected',
+    });
+    fetchMock.mockImplementation(async (input: string | URL | Request) => {
+      const url = input.toString();
+      if (url.includes('/api/device/status')) {
+        return jsonResponse(true);
+      }
+      if (url.includes('/api/settings/camera-permission-dialog')) {
+        return jsonResponse({ shown: true });
+      }
+      if (url.includes('/api/recorder/prepare')) {
+        return jsonResponse({ success: true });
+      }
+      throw new Error(`Unexpected fetch: ${url}`);
     });
 
-    await waitFor(() => {
-      expect(fetchMock).toHaveBeenCalledWith(
-        '/api/recorder/enable-auto',
-        expect.objectContaining({ method: 'POST' })
-      );
-    });
-    await waitFor(() => {
-      expect(notifyRecordingReadyMock).toHaveBeenCalled();
-    });
+    render(VideoPreviewContainer);
 
-    fetchMock.mockClear();
-    notifyRecordingReadyMock.mockClear();
-
-    await rerender({ rearmAutoRecordingRequest: 1 });
-
-    await waitFor(() => {
-      expect(fetchMock).toHaveBeenCalledWith(
-        '/api/recorder/prepare',
-        expect.objectContaining({ method: 'POST' })
-      );
-      expect(fetchMock).toHaveBeenCalledWith(
-        '/api/recorder/enable-auto',
-        expect.objectContaining({ method: 'POST' })
-      );
-    });
-    expect(notifyRecordingReadyMock).toHaveBeenCalledTimes(1);
+    expect(await screen.findByTestId('video-preview-stub')).toHaveAttribute(
+      'data-switch-power-state',
+      'capture_disconnected'
+    );
+    expect(screen.queryByText('キャプチャーデバイス再接続待機中')).not.toBeInTheDocument();
+    expect(screen.queryByText('Switch 電源ON待機中')).not.toBeInTheDocument();
   });
 });

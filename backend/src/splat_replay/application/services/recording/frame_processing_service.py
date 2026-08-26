@@ -77,14 +77,11 @@ class FrameProcessingService:
         Returns:
             (更新後のoff_count, 更新後のlast_check, 電源OFFフラグ)
         """
-        import time
-
-        now = time.time()
-        if now - last_check < POWER_OFF_CHECK_INTERVAL:
+        last_check, power_is_off = await self.observe_power_off(
+            frame, last_check
+        )
+        if power_is_off is None:
             return off_count, last_check, False
-
-        last_check = now
-        power_is_off = await self.analyzer.detect_power_off(frame)
 
         if power_is_off:
             off_count += 1
@@ -94,6 +91,20 @@ class FrameProcessingService:
 
         detected = off_count >= POWER_OFF_COUNT_THRESHOLD
         return off_count, last_check, detected
+
+    async def observe_power_off(
+        self,
+        frame: Frame,
+        last_check: float,
+        check_interval_seconds: float = POWER_OFF_CHECK_INTERVAL,
+    ) -> tuple[float, bool | None]:
+        """判定間隔を満たす場合だけ一回の電源観測結果を返す。"""
+        import time
+
+        now = time.time()
+        if now - last_check < check_interval_seconds:
+            return last_check, None
+        return now, await self.analyzer.detect_power_off(frame)
 
     # ================================================================
     # イベント通知

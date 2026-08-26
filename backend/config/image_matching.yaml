@@ -5,7 +5,7 @@ composite_detection:
   power_off:
     or:
       - matcher: black_screen
-      - matcher: poswer_off_template
+      - matcher: power_off_template
 
   match_select:
     or:

@@ -19,6 +19,8 @@ __all__ = [
     "Judgement",
     "SetupState",
     "SetupStep",
+    "SwitchPowerMonitor",
+    "SwitchPowerState",
 ]
 
 from .aliases import Frame, as_frame
@@ -31,5 +33,6 @@ from .recording_metadata import RecordingMetadata
 from .result import BattleResult, Result, SalmonResult
 from .rule import Rule
 from .stage import Stage
+from .switch_power import SwitchPowerMonitor, SwitchPowerState
 from .time_schedule import TIME_RANGES
 from .video_asset import VideoAsset

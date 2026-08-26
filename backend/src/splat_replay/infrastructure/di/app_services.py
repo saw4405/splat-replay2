@@ -10,6 +10,7 @@ from punq import Container
 
 from splat_replay.application.interfaces import (
     BattleHistoryRepositoryPort,
+    CaptureDevicePort,
     CapturePort,
     ClockPort,
     ConfigPort,
@@ -123,6 +124,7 @@ def register_app_services(container: Container) -> None:
     def auto_recording_use_case_factory() -> AutoRecordingUseCase:
         auto_recorder = container.resolve(AutoRecorder)
         capture = container.resolve(CapturePort)
+        capture_device = container.resolve(CaptureDevicePort)
         logger = container.resolve(LoggerPort)
         replay_bootstrap_resolver = container.resolve(
             ReplayBootstrapResolverPort
@@ -138,6 +140,7 @@ def register_app_services(container: Container) -> None:
             publisher_worker=auto_recorder.publisher_worker,
             logger=logger,
             replay_bootstrap_resolver=replay_bootstrap_resolver,
+            capture_device=capture_device,
         )
 
     container.register(

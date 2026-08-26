@@ -28,4 +28,10 @@ def create_process_router(server: WebAPIServer) -> APIRouter:
             ) from e
         return {"status": "ok"}
 
+    @router.delete("/sleep")
+    async def cancel_auto_sleep() -> dict[str, str]:
+        """猶予中の自動スリープをキャンセルする。"""
+        server.auto_process_service.cancel_pending_sleep()
+        return {"status": "cancelled"}
+
     return router

@@ -11,12 +11,14 @@
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import {
+  getAutoRecorderState,
   getRecorderPreviewMode,
   getRecorderState,
   recoverCaptureDevice,
   startRecorder,
 } from './recording.ts';
 import type {
+  AutoRecorderStateResponse,
   CaptureDeviceRecoveryResponse,
   RecorderPreviewModeResponse,
   RecorderStateResponse,
@@ -79,6 +81,24 @@ describe('recording API', () => {
     });
   });
 
+  describe('getAutoRecorderState', () => {
+    it('常駐録画とSwitch電源状態を取得する', async () => {
+      const body: AutoRecorderStateResponse = {
+        state: 'running',
+        power_state: 'waiting_for_power_on',
+      };
+      fetchMock.mockResolvedValueOnce({
+        ok: true,
+        json: async () => body,
+      });
+
+      await expect(getAutoRecorderState()).resolves.toEqual(body);
+      expect(fetchMock).toHaveBeenCalledWith('/api/recorder/auto-state', {
+        headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
+      });
+    });
+  });
+
   // ========================================
   // getRecorderState()
   // ========================================
@@ -86,7 +106,7 @@ describe('recording API', () => {
   describe('getRecorderState', () => {
     it('成功時は状態文字列を返す', async () => {
       const mockResponse: RecorderStateResponse = {
-        state: 'recording',
+        state: 'RECORDING',
       };
 
       fetchMock.mockResolvedValueOnce({
@@ -96,7 +116,7 @@ describe('recording API', () => {
 
       const result = await getRecorderState();
 
-      expect(result).toBe('recording');
+      expect(result).toBe('RECORDING');
       expect(fetchMock).toHaveBeenCalledWith('/api/recorder/state', {
         headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
       });
@@ -104,7 +124,7 @@ describe('recording API', () => {
 
     it('停止状態を正しく返す', async () => {
       const mockResponse: RecorderStateResponse = {
-        state: 'stopped',
+        state: 'STOPPED',
       };
 
       fetchMock.mockResolvedValueOnce({
@@ -114,7 +134,7 @@ describe('recording API', () => {
 
       const result = await getRecorderState();
 
-      expect(result).toBe('stopped');
+      expect(result).toBe('STOPPED');
     });
 
     it('エラーレスポンスでエラーを投げる', async () => {

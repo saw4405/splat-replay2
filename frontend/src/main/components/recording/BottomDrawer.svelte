@@ -18,10 +18,9 @@
 
   interface Props {
     onRecordedCountChange?: (count: number) => void;
-    onAutoRecordingRearmRequest?: () => void;
   }
 
-  let { onRecordedCountChange, onAutoRecordingRearmRequest }: Props = $props();
+  let { onRecordedCountChange }: Props = $props();
 
   let drawerState = $state<DrawerState>('closed');
   let activeTab = $state<'recorded' | 'edited' | 'statistics'>('recorded');
@@ -42,7 +41,6 @@
 
   const processFlow = createProcessFlow({
     onDataReload: () => void loadData(),
-    onAutoRecordingRearmRequest: () => onAutoRecordingRearmRequest?.(),
   });
 
   const isProcessing = $derived(processFlow.isProcessing);

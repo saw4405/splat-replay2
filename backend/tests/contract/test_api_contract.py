@@ -66,6 +66,7 @@ FRONTEND_API_CONTRACT: list[tuple[str, str, int | list[int] | None]] = [
     ("POST", "/api/recorder/resume", None),
     ("POST", "/api/recorder/stop", None),
     ("GET", "/api/recorder/state", 200),
+    ("GET", "/api/recorder/auto-state", 200),
     ("GET", "/api/recorder/preview-mode", 200),
     ("GET", "/api/recorder/preview-frame", [200, 204]),
     # Recording metadata
@@ -89,6 +90,7 @@ FRONTEND_API_CONTRACT: list[tuple[str, str, int | list[int] | None]] = [
     # Edit/Upload process
     ("POST", "/api/process/edit-upload", None),
     ("GET", "/api/process/status", 200),
+    ("DELETE", "/api/process/sleep", 200),
     # Permission dialogs
     ("GET", "/api/settings/youtube-permission-dialog", None),
     ("PUT", "/api/settings/youtube-permission-dialog", None),
@@ -190,6 +192,17 @@ def test_prepare_recording_response_has_no_audio_warning_when_healthy(
         "error": None,
         "state": None,
         "audio_health_warning": None,
+    }
+
+
+def test_auto_recorder_state_response_contract(client: TestClient) -> None:
+    """GET /api/recorder/auto-state の状態値契約を保証する。"""
+    response = client.get("/api/recorder/auto-state")
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "state": "idle",
+        "power_state": "unknown",
     }
 
 

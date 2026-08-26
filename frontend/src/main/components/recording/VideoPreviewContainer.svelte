@@ -11,16 +11,15 @@
     type RecordingAudioHealthCheckedPayload,
   } from '../../domainEvents';
   import { buildMetadataOptionMap, getMetadataOptions } from '../../api/metadata';
-  import { getRecorderPreviewMode, recoverCaptureDevice } from '../../api/recording';
-  import { notifyRecordingReady } from '../../notification';
+  import {
+    getAutoRecorderState,
+    getRecorderPreviewMode,
+    recoverCaptureDevice,
+  } from '../../api/recording';
+  import type { SwitchPowerState } from '../../api/types';
   import { getDeviceStatusPollIntervalMs, renderMode } from '../../renderMode';
 
   type PreviewState = 'checking' | 'connected' | 'disconnected' | 'error';
-
-  type StartRecordingResponse = {
-    success: boolean;
-    error?: string;
-  };
 
   type AudioHealthWarningResponse = {
     input_name?: string;
@@ -52,14 +51,9 @@
   };
 
   const NOTIFICATION_DURATION_MS = 5000;
+  const AUTO_RECORDER_STATE_POLL_INTERVAL_MS = 1500;
   const DEFAULT_AUDIO_HEALTH_SHORT_MESSAGE = '音声注意';
   const DEFAULT_AUDIO_HEALTH_DETAILS = 'OBS の音声入力状態を確認してください。録画は継続します。';
-
-  interface Props {
-    rearmAutoRecordingRequest?: number;
-  }
-
-  let { rearmAutoRecordingRequest = 0 }: Props = $props();
 
   let isRecording = $state(false);
   let isPaused = $state(false);
@@ -69,6 +63,7 @@
   let deviceState = $state<PreviewState>('checking');
   let deviceErrorMessage = $state('');
   let deviceStatusTimer: number | null = null;
+  let autoRecorderStateTimer: number | null = null;
   let isPrepared = $state(false);
   let isMetadataOpen = $state(false);
   let isRefreshingDeviceStatus = $state(false); // 多重実行防止フラグ
@@ -79,7 +74,7 @@
   let isVideoFileInput = $state(false);
   let audioHealthWarning = $state<AudioHealthWarning | null>(null);
   let deviceStatusPollIntervalMs = getDeviceStatusPollIntervalMs('cpu');
-  let handledAutoRecordingRearmRequest = 0;
+  let switchPowerState = $state<SwitchPowerState>('unknown');
   type MetadataValue = string | number | string[] | null | undefined;
   type MetadataFieldKey =
     | 'game_mode'
@@ -193,17 +188,6 @@
       deviceStatusPollIntervalMs = next;
       restartDeviceStatusPolling();
     }
-  });
-
-  $effect(() => {
-    if (
-      rearmAutoRecordingRequest <= 0 ||
-      rearmAutoRecordingRequest === handledAutoRecordingRearmRequest
-    ) {
-      return;
-    }
-    handledAutoRecordingRearmRequest = rearmAutoRecordingRequest;
-    void rearmAutoRecording();
   });
 
   function restartDeviceStatusPolling(): void {
@@ -654,111 +638,14 @@
     }
   }
 
-  async function enableAutoRecording(): Promise<void> {
-    if (isRecording || startPending) {
-      console.log('enableAutoRecording: すでに録画中またはペンディング中', {
-        isRecording,
-        startPending,
-      });
-      return;
-    }
-    console.log('enableAutoRecording: 開始');
-    startPending = true;
+  async function refreshAutoRecorderState(): Promise<void> {
     try {
-      _status = '自動録画機能 ON 準備中...';
-      const response = await fetch('/api/recorder/enable-auto', {
-        method: 'POST',
-      });
-      if (!response.ok) {
-        const message = await readApiErrorMessage(response);
-        throw new Error(message);
-      }
-      const result = (await response.json()) as StartRecordingResponse;
-      console.log('enable_auto_recording result:', result);
-      if (result.success) {
-        _status = '自動録画機能 ON（バトル開始を検知中...）';
-        console.log('自動録画機能 ON 成功');
-        // 録画準備完了の通知を表示
-        await notifyRecordingReady();
-      } else {
-        _status = `エラー: ${result.error ?? '原因不明のエラー'}`;
-        console.error('自動録画有効化失敗:', result.error);
-      }
-    } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : '原因不明のエラー';
-      _status = `エラー: ${message}`;
-      console.error('自動録画有効化エラー:', error);
-    } finally {
-      startPending = false;
+      const state = await getAutoRecorderState();
+      switchPowerState = state.power_state;
+    } catch (error) {
+      console.error('自動録画状態取得エラー:', error);
     }
   }
-
-  async function rearmAutoRecording(): Promise<void> {
-    if (isRecording || startPending || preparePending) {
-      console.log('rearmAutoRecording: 録画中または準備中のためスキップ', {
-        isRecording,
-        startPending,
-        preparePending,
-      });
-      return;
-    }
-
-    console.log('rearmAutoRecording: 自動録画を再有効化します');
-    await refreshPreviewMode();
-    await refreshDeviceStatus();
-    if (deviceState !== 'connected') {
-      console.warn('rearmAutoRecording: デバイス未接続のため自動録画を有効化できません', {
-        deviceState,
-      });
-      return;
-    }
-
-    await prepareRecording({ force: true });
-    if (isPrepared) {
-      await enableAutoRecording();
-    } else {
-      console.warn('rearmAutoRecording: 録画準備が完了していないため自動録画を有効化できません');
-    }
-  }
-
-  async function _startRecording(): Promise<void> {
-    if (isRecording || startPending) {
-      console.log('startRecording: すでに録画中またはペンディング中', {
-        isRecording,
-        startPending,
-      });
-      return;
-    }
-    console.log('startRecording: 開始');
-    startPending = true;
-    try {
-      _status = '自動録画機能 ON 準備中...';
-      const response = await fetch('/api/recorder/start', {
-        method: 'POST',
-      });
-      if (!response.ok) {
-        const message = await readApiErrorMessage(response);
-        throw new Error(message);
-      }
-      const result = (await response.json()) as StartRecordingResponse;
-      console.log('start_recording result:', result);
-      if (result.success) {
-        isRecording = true;
-        _status = '自動録画機能 ON';
-        console.log('自動録画機能 ON 成功');
-      } else {
-        _status = `エラー: ${result.error ?? '原因不明のエラー'}`;
-        console.error('自動録画開始失敗:', result.error);
-      }
-    } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : '原因不明のエラー';
-      _status = `エラー: ${message}`;
-      console.error('自動録画開始エラー:', error);
-    } finally {
-      startPending = false;
-    }
-  }
-
   function canAutoRecover(): boolean {
     return (
       !isVideoFileInput && !isRecording && !startPending && !preparePending && !recoveryPending
@@ -882,17 +769,8 @@
       console.log('デバイス接続を検出 - 録画準備を開始');
       // デバイス接続時にカメラ許可ダイアログをチェック
       void checkAndShowCameraPermissionDialog();
-      // デバイス接続後、録画準備を実行
-      void prepareRecording().then(() => {
-        console.log('prepareRecording完了 - isPrepared:', isPrepared);
-        if (isPrepared) {
-          // 録画準備完了 - 自動録画モードを有効化
-          console.log('enableAutoRecording を呼び出します');
-          void enableAutoRecording();
-        } else {
-          console.warn('isPreparedがfalseのため自動録画を有効化できません');
-        }
-      });
+      // 録画機能はバックエンド常駐。ここでは音声状態を含む準備結果だけを表示する。
+      void prepareRecording();
       return;
     }
 
@@ -925,6 +803,7 @@
   onMount(() => {
     void loadMetadataOptions();
     void (async () => {
+      await refreshAutoRecorderState();
       await refreshPreviewMode();
       await refreshDeviceStatus();
       if (!hasTriedStartupRecovery && deviceState === 'disconnected' && canAutoRecover()) {
@@ -933,6 +812,9 @@
       }
     })();
     restartDeviceStatusPolling();
+    autoRecorderStateTimer = window.setInterval(() => {
+      void refreshAutoRecorderState();
+    }, AUTO_RECORDER_STATE_POLL_INTERVAL_MS);
 
     // ドメインイベントを購読
     const domainEventSource = subscribeDomainEvents((event: DomainEvent) => {
@@ -974,6 +856,10 @@
       if (deviceStatusTimer !== null) {
         window.clearInterval(deviceStatusTimer);
         deviceStatusTimer = null;
+      }
+      if (autoRecorderStateTimer !== null) {
+        window.clearInterval(autoRecorderStateTimer);
+        autoRecorderStateTimer = null;
       }
       clearMetadataNotifications();
       domainEventSource.close();
@@ -1029,7 +915,7 @@
   {/if}
 
   {#if deviceState === 'connected'}
-    <VideoPreview />
+    <VideoPreview {switchPowerState} />
   {:else if deviceState === 'checking'}
     <VideoPreviewMessage message="キャプチャーデバイスの接続状態を確認しています..." />
   {:else if deviceState === 'disconnected'}

@@ -9,7 +9,11 @@ from typing import Any
 
 import pytest
 
-from splat_replay.application.services.editing.auto_editor import AutoEditor
+from splat_replay.application.services.editing.auto_editor import (
+    AutoEditor,
+    EditedCommitCleanupError,
+    SOURCE_RECORDINGS_METADATA_KEY,
+)
 from splat_replay.application.services.editing.editing_state import (
     EditingState,
 )
@@ -69,8 +73,9 @@ class _FakeRepo:
 
     def save_edited_metadata_dict(
         self, target: Path, metadata: dict[str, str]
-    ) -> None:
+    ) -> bool:
         self.metadata_calls.append((target, metadata))
+        return True
 
     def save_edited_thumbnail(self, target: Path, data: bytes) -> bool:
         self.thumbnail_calls.append((target, data))
@@ -225,11 +230,18 @@ async def test_execute_saves_group_without_frame_preview_dependency(
         def list_recordings(self) -> list[object]:
             return [asset]
 
+        def get_edited_dir(self) -> Path:
+            return tmp_path / "committed"
+
+        def list_edited(self) -> list[Path]:
+            return []
+
         def save_edited(self, target: Path) -> Path:
             return target
 
-        def delete_recording(self, video: Path) -> None:
+        def delete_recording(self, video: Path) -> bool:
             deleted_videos.append(video)
+            return True
 
     class _Grouping:
         def group_by_timeslot(
@@ -302,3 +314,167 @@ async def test_execute_saves_group_without_frame_preview_dependency(
         for call in progress.item_stage_calls
     )
     assert deleted_videos == [source_video]
+
+
+def test_make_filename_is_stable_for_same_inputs(tmp_path: Path) -> None:
+    editor = AutoEditor.__new__(AutoEditor)
+    assets = [
+        SimpleNamespace(video=tmp_path / "b.mkv"),
+        SimpleNamespace(video=tmp_path / "a.mkv"),
+    ]
+
+    first = editor._make_filename(
+        assets,
+        datetime.date(2026, 8, 13),
+        datetime.time(20, 0),
+        "Xマッチ",
+        "ガチエリア",
+    )
+    second = editor._make_filename(
+        list(reversed(assets)),
+        datetime.date(2026, 8, 13),
+        datetime.time(20, 0),
+        "Xマッチ",
+        "ガチエリア",
+    )
+
+    assert first.name == second.name
+    assert first.name.startswith("20260813_20_Xマッチ_ガチエリア_")
+    assert first.suffix == ".mkv"
+
+
+@pytest.mark.asyncio
+async def test_committed_manifest_recovers_partial_cleanup_without_reediting(
+    tmp_path: Path,
+) -> None:
+    remaining = SimpleNamespace(
+        video=tmp_path / "recorded" / "second.mkv",
+        metadata=None,
+    )
+    committed = tmp_path / "edited" / "combined.mkv"
+    deleted: list[Path] = []
+
+    class _Logger:
+        def info(self, *args: object, **kwargs: object) -> None:
+            _ = args, kwargs
+
+    class _Config:
+        def get_video_edit_settings(self) -> object:
+            return object()
+
+    class _Grouping:
+        def group_by_timeslot(
+            self, assets: list[object]
+        ) -> dict[object, object]:
+            assert assets == []
+            return {}
+
+    class _Repo:
+        def list_recordings(self) -> list[object]:
+            return [remaining]
+
+        def list_edited(self) -> list[Path]:
+            return [committed]
+
+        def get_edited_metadata(self, video: Path) -> dict[str, str]:
+            assert video == committed
+            return {
+                SOURCE_RECORDINGS_METADATA_KEY: ('["first.mkv", "second.mkv"]')
+            }
+
+        def delete_recording(self, video: Path) -> bool:
+            deleted.append(video)
+            return True
+
+    editor = AutoEditor.__new__(AutoEditor)
+    editor.logger = _Logger()
+    editor.config = _Config()
+    editor.repo = _Repo()
+    editor.grouping = _Grouping()
+    editor.progress = _FakeProgress()
+    editor._cancelled = False
+    editor._state = EditingState()
+
+    result = await editor.execute()
+
+    assert result == [committed]
+    assert deleted == [remaining.video]
+
+
+@pytest.mark.asyncio
+async def test_metadata_save_failure_is_reported(tmp_path: Path) -> None:
+    class _Repo:
+        def save_edited_metadata_dict(
+            self, target: Path, metadata: dict[str, str]
+        ) -> bool:
+            _ = target, metadata
+            return False
+
+    editor = AutoEditor.__new__(AutoEditor)
+    editor.repo = _Repo()
+    target = tmp_path / "edited.mkv"
+
+    with pytest.raises(RuntimeError, match="メタデータを保存できませんでした"):
+        await editor._save_metadata_sidecar(target, {"title": "title"})
+
+
+@pytest.mark.asyncio
+async def test_committed_edit_cleanup_failure_stops_before_upload(
+    tmp_path: Path,
+) -> None:
+    source_video = tmp_path / "source.mkv"
+    asset = SimpleNamespace(video=source_video, metadata=None)
+    key = (
+        datetime.date(2026, 8, 13),
+        datetime.time(20, 0),
+        "Xマッチ",
+        "ガチエリア",
+    )
+
+    class _Logger:
+        def info(self, *args: object, **kwargs: object) -> None:
+            _ = args, kwargs
+
+    class _Config:
+        def get_video_edit_settings(self) -> object:
+            return object()
+
+    class _Grouping:
+        def group_by_timeslot(
+            self, assets: list[object]
+        ) -> dict[tuple[object, ...], list[object]]:
+            return {key: assets}
+
+    editor = AutoEditor.__new__(AutoEditor)
+    editor.logger = _Logger()
+    editor.config = _Config()
+    editor.grouping = _Grouping()
+    editor.progress = _FakeProgress()
+    editor._cancelled = False
+    editor._state = EditingState()
+    committed = tmp_path / "edited" / editor._make_filename([asset], *key).name
+
+    class _Repo:
+        def list_recordings(self) -> list[object]:
+            return [asset]
+
+        def get_edited_dir(self) -> Path:
+            return committed.parent
+
+        def list_edited(self) -> list[Path]:
+            return [committed]
+
+        def get_edited_metadata(self, video: Path) -> dict[str, str] | None:
+            _ = video
+            return None
+
+        def delete_recording(self, video: Path) -> bool:
+            _ = video
+            return False
+
+    editor.repo = _Repo()
+
+    with pytest.raises(EditedCommitCleanupError):
+        await editor.execute()
+
+    assert editor.progress.start_task_calls == []

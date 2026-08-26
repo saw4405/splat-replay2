@@ -16,7 +16,7 @@ from typing import (
     cast,
 )
 
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, Field, root_validator, validator
 
 
 class MatchExpression(BaseModel):
@@ -69,6 +69,19 @@ class MatchExpression(BaseModel):
 
         return False
 
+    def matcher_references(self) -> set[str]:
+        """式木が参照している単純マッチャー名を返す。"""
+        references: set[str] = set()
+        if self.matcher is not None:
+            references.add(self.matcher)
+        if self.not_ is not None:
+            references.update(self.not_.matcher_references())
+        for expressions in (self.and_, self.or_):
+            if expressions is not None:
+                for expression in expressions:
+                    references.update(expression.matcher_references())
+        return references
+
 
 MatchExpression.update_forward_refs()
 
@@ -112,6 +125,37 @@ class ImageMatchingSettings(BaseModel):
     matchers: Dict[str, MatcherConfig] = {}
     composites: Dict[str, CompositeMatcherConfig] = {}
     matcher_groups: Dict[str, List[str]] = {}
+
+    @root_validator
+    def _validate_matcher_references(
+        cls, values: Dict[str, object]
+    ) -> Dict[str, object]:
+        matchers = cast(Dict[str, MatcherConfig], values.get("matchers", {}))
+        composites = cast(
+            Dict[str, CompositeMatcherConfig], values.get("composites", {})
+        )
+        groups = cast(Dict[str, List[str]], values.get("matcher_groups", {}))
+
+        simple_names = set(matchers)
+        for composite_name, composite in composites.items():
+            unknown = composite.rule.matcher_references() - simple_names
+            if unknown:
+                names = ", ".join(sorted(unknown))
+                raise ValueError(
+                    f"composite_detection.{composite_name} が未知の"
+                    f"マッチャーを参照しています: {names}"
+                )
+
+        available_names = simple_names | set(composites)
+        for group_name, group_members in groups.items():
+            unknown = set(group_members) - available_names
+            if unknown:
+                names = ", ".join(sorted(unknown))
+                raise ValueError(
+                    f"matcher_groups.{group_name} が未知の"
+                    f"マッチャーを参照しています: {names}"
+                )
+        return values
 
     @classmethod
     def load_from_yaml(cls, path: Path) -> "ImageMatchingSettings":

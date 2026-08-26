@@ -68,11 +68,16 @@ def create_app(server: WebAPIServer, enable_lifespan: bool = True) -> FastAPI:
         auto_process_task = asyncio.create_task(
             server.auto_process_service.start()
         )
-        yield
-        # Shutdown
-        auto_process_task.cancel()
-        with contextlib.suppress(Exception):
-            await auto_process_task
+        auto_recording_use_case = server.auto_recording_use_case_factory()
+        await auto_recording_use_case.start_background()
+        try:
+            yield
+        finally:
+            # Shutdown
+            await auto_recording_use_case.stop_background()
+            auto_process_task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await auto_process_task
 
     # テスト時は lifespan を無効化
     if enable_lifespan:

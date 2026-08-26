@@ -13,6 +13,8 @@ from __future__ import annotations
 
 import asyncio
 import datetime
+import hashlib
+import json
 from pathlib import Path
 from typing import List
 
@@ -35,6 +37,13 @@ from .subtitle_processor import SubtitleProcessor
 from .thumbnail_generator import ThumbnailGenerator
 from .title_description_generator import TitleDescriptionGenerator
 from .video_grouping_service import VideoGroupingService
+
+
+class EditedCommitCleanupError(RuntimeError):
+    """編集成果物確定後の元録画cleanupに失敗した。"""
+
+
+SOURCE_RECORDINGS_METADATA_KEY = "splat_replay_source_recordings"
 
 
 class AutoEditor:
@@ -110,20 +119,45 @@ class AutoEditor:
         self.settings = self.config.get_video_edit_settings()
         self.logger.info("自動編集を開始します")
         self._state = self._state.with_running("編集処理を開始しています", 0)
-        edited: list[Path] = []
-
         assets = self.repo.list_recordings()
+        edited, recovered_source_names = self._recover_committed_inputs(assets)
+        assets = [
+            asset
+            for asset in assets
+            if asset.video.name not in recovered_source_names
+        ]
         groups = self.grouping.group_by_timeslot(assets)
 
         task_id = "auto_edit"
         items: list[str] = []
         clips_payload: list[dict[str, object]] = []
+        committed_group_indexes: set[int] = set()
 
         for idx, (key, group) in enumerate(groups.items()):
             if not group:
                 continue
             day, time_slot, match_name, rule_name = key
             label = f"{day.strftime('%m/%d')} {time_slot.strftime('%H')}時～ {match_name} {rule_name}"
+
+            committed_target = (
+                self.repo.get_edited_dir()
+                / self._make_filename(
+                    group, day, time_slot, match_name, rule_name
+                ).name
+            )
+            if committed_target in self.repo.list_edited():
+                self.logger.info(
+                    "確定済み編集動画を検出したため元録画の削除から再開します",
+                    path=str(committed_target),
+                )
+                for asset in group:
+                    if not self.repo.delete_recording(asset.video):
+                        raise EditedCommitCleanupError(
+                            f"録画済み動画を削除できませんでした: {asset.video}"
+                        )
+                edited.append(committed_target)
+                committed_group_indexes.add(idx)
+                continue
             items.append(label)
 
             group_clips = []
@@ -199,7 +233,13 @@ class AutoEditor:
             task_id, "自動編集", len(items), items=items, clips=clips_payload
         )
 
-        total_groups = len([g for g in groups.values() if g])
+        total_groups = len(
+            [
+                group
+                for idx, group in enumerate(groups.values())
+                if group and idx not in committed_group_indexes
+            ]
+        )
         completed_groups = 0
 
         for idx, (key, group) in enumerate(groups.items()):
@@ -211,6 +251,8 @@ class AutoEditor:
                 self._state = self._state.with_cancelled()
                 return edited
             if not group:
+                continue
+            if idx in committed_group_indexes:
                 continue
             day, time_slot, match_name, rule_name = key
             label = f"{day.strftime('%m/%d')} {time_slot.strftime('%H')}時～ {match_name} {rule_name}"
@@ -242,7 +284,10 @@ class AutoEditor:
                     self.logger.info(
                         "録画済み動画を削除します", path=str(asset.video)
                     )
-                    self.repo.delete_recording(asset.video)
+                    if not self.repo.delete_recording(asset.video):
+                        raise EditedCommitCleanupError(
+                            f"録画済み動画を削除できませんでした: {asset.video}"
+                        )
                 # 保存ステップを通知し、全体の進捗を 1 進める
                 self.progress.item_stage(
                     task_id,
@@ -264,6 +309,14 @@ class AutoEditor:
                 )
                 # 失敗したグループをスキップして次へ
                 self.progress.advance(task_id)
+                if isinstance(e, EditedCommitCleanupError):
+                    self.progress.finish(
+                        task_id,
+                        False,
+                        "編集成果物確定後の元録画削除に失敗しました",
+                    )
+                    self._state = self._state.with_failed(str(e))
+                    raise
                 continue
 
         if self._cancelled:
@@ -354,9 +407,70 @@ class AutoEditor:
     ) -> Path:
         """編集後のファイル名を生成する。"""
         ext = group[0].video.suffix
-        filename = f"{day.strftime('%Y%m%d')}_{time_slot.strftime('%H')}_{match_name}_{rule_name}{ext}"
+        source_identity = "\n".join(self._source_recording_names(group))
+        source_id = hashlib.sha256(
+            source_identity.encode("utf-8")
+        ).hexdigest()[:12]
+        filename = (
+            f"{day.strftime('%Y%m%d')}_{time_slot.strftime('%H')}_"
+            f"{match_name}_{rule_name}_{source_id}{ext}"
+        )
         target = group[0].video.with_name(filename)
         return target
+
+    def _recover_committed_inputs(
+        self, assets: List[VideoAsset]
+    ) -> tuple[list[Path], set[str]]:
+        """commit済み成果物のmanifestから未完了cleanupを再開する。"""
+        assets_by_name = {asset.video.name: asset for asset in assets}
+        recovered: list[Path] = []
+        recovered_source_names: set[str] = set()
+
+        for committed in self.repo.list_edited():
+            metadata = self.repo.get_edited_metadata(committed) or {}
+            source_names = self._parse_source_recording_names(
+                metadata.get(SOURCE_RECORDINGS_METADATA_KEY)
+            )
+            pending_names = [
+                name for name in source_names if name in assets_by_name
+            ]
+            if not pending_names:
+                continue
+
+            self.logger.info(
+                "編集成果物manifestを検出したため元録画の削除から再開します",
+                path=str(committed),
+                source_count=len(pending_names),
+            )
+            for source_name in pending_names:
+                source = assets_by_name[source_name].video
+                if not self.repo.delete_recording(source):
+                    raise EditedCommitCleanupError(
+                        f"録画済み動画を削除できませんでした: {source}"
+                    )
+                recovered_source_names.add(source_name)
+            recovered.append(committed)
+
+        return recovered, recovered_source_names
+
+    @staticmethod
+    def _source_recording_names(group: List[VideoAsset]) -> list[str]:
+        """保存先の移動後も安定する入力録画識別子を返す。"""
+        return sorted(asset.video.name for asset in group)
+
+    @staticmethod
+    def _parse_source_recording_names(value: str | None) -> list[str]:
+        if value is None:
+            return []
+        try:
+            decoded = json.loads(value)
+        except (TypeError, json.JSONDecodeError):
+            return []
+        if not isinstance(decoded, list) or not all(
+            isinstance(item, str) for item in decoded
+        ):
+            return []
+        return decoded
 
     async def _merge_videos(
         self, idx: int, target: Path, group: List[VideoAsset]
@@ -421,6 +535,10 @@ class AutoEditor:
         metadata = {
             "title": title,
             "description": description,
+            SOURCE_RECORDINGS_METADATA_KEY: json.dumps(
+                self._source_recording_names(group),
+                ensure_ascii=False,
+            ),
         }
 
         return metadata
@@ -491,9 +609,13 @@ class AutoEditor:
         self, target: Path, metadata: dict[str, str]
     ) -> None:
         """メタデータをリポジトリ経由で保存する。"""
-        await asyncio.to_thread(
+        saved = await asyncio.to_thread(
             self.repo.save_edited_metadata_dict, target, metadata
         )
+        if not saved:
+            raise RuntimeError(
+                f"編集済み動画のメタデータを保存できませんでした: {target}"
+            )
 
     async def _change_volume(self, target: Path, multiplier: float) -> None:
         """動画の音量を調整する。"""

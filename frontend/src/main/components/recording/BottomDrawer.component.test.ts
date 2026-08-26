@@ -454,7 +454,7 @@ describe('BottomDrawer.svelte', () => {
     editedResponse.resolve(jsonResponse([]));
   });
 
-  it('編集アップロード成功ダイアログを閉じると自動録画の再有効化を要求する', async () => {
+  it('編集アップロード成功ダイアログを閉じても自動録画APIを呼ばない', async () => {
     installDefaultResponses([
       {
         state: 'idle',
@@ -466,9 +466,7 @@ describe('BottomDrawer.svelte', () => {
         sleep_after_upload_overridden: false,
       },
     ]);
-    const onAutoRecordingRearmRequest = vi.fn();
-
-    render(BottomDrawer, { props: { onAutoRecordingRearmRequest } });
+    render(BottomDrawer);
 
     await waitFor(() => {
       expect(domainEventHandler).not.toBeNull();
@@ -487,10 +485,12 @@ describe('BottomDrawer.svelte', () => {
     await screen.findByTestId('notification-dialog-stub');
     await screen.getByTestId('notification-dialog-close').click();
 
-    expect(onAutoRecordingRearmRequest).toHaveBeenCalledTimes(1);
+    expect(
+      fetchMock.mock.calls.some(([input]) => input.toString().includes('/api/recorder/enable-auto'))
+    ).toBe(false);
   });
 
-  it('編集アップロード失敗ダイアログを閉じても自動録画の再有効化を要求しない', async () => {
+  it('編集アップロード失敗ダイアログを閉じても自動録画APIを呼ばない', async () => {
     installDefaultResponses([
       {
         state: 'idle',
@@ -502,9 +502,7 @@ describe('BottomDrawer.svelte', () => {
         sleep_after_upload_overridden: false,
       },
     ]);
-    const onAutoRecordingRearmRequest = vi.fn();
-
-    render(BottomDrawer, { props: { onAutoRecordingRearmRequest } });
+    render(BottomDrawer);
 
     await waitFor(() => {
       expect(domainEventHandler).not.toBeNull();
@@ -523,6 +521,8 @@ describe('BottomDrawer.svelte', () => {
     await screen.findByTestId('notification-dialog-stub');
     await screen.getByTestId('notification-dialog-close').click();
 
-    expect(onAutoRecordingRearmRequest).not.toHaveBeenCalled();
+    expect(
+      fetchMock.mock.calls.some(([input]) => input.toString().includes('/api/recorder/enable-auto'))
+    ).toBe(false);
   });
 });

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import queue
 import threading
+from collections.abc import Callable
 
 import numpy as np
 
@@ -77,6 +78,40 @@ class _EventFramePublisher:
         self.event.set()
 
 
+class _FakeClock:
+    def __init__(self) -> None:
+        self._now = 0.0
+
+    def monotonic(self) -> float:
+        return self._now
+
+    def wait(self, timeout: float) -> bool:
+        self._now += timeout
+        return False
+
+
+class _TimedCapture:
+    def __init__(self, monotonic: Callable[[], float]) -> None:
+        self._monotonic = monotonic
+        self.capture_started_at: list[float] = []
+        self.on_capture: Callable[[int], None] | None = None
+
+    def setup(self) -> None:
+        return None
+
+    def capture(self) -> Frame | None:
+        self.capture_started_at.append(self._monotonic())
+        if self.on_capture is not None:
+            self.on_capture(len(self.capture_started_at))
+        return _frame(len(self.capture_started_at))
+
+    def current_time_seconds(self) -> float | None:
+        return None
+
+    def teardown(self) -> None:
+        return None
+
+
 def test_start_discards_stale_frame_from_previous_run() -> None:
     capture = _QueuedCapture()
     publish_event = threading.Event()
@@ -135,3 +170,65 @@ def test_late_frame_from_stopped_thread_is_discarded_after_restart() -> None:
 
     assert frame is not None
     assert np.array_equal(frame, new_frame)
+
+
+def test_capture_interval_throttles_waiting_and_releases_when_armed() -> None:
+    clock = _FakeClock()
+    capture = _TimedCapture(clock.monotonic)
+    producer = FrameCaptureProducer(
+        capture,
+        frame_publisher=None,
+        monotonic=clock.monotonic,
+        schedule_wait=clock.wait,
+    )
+    producer.set_capture_interval(1.0)
+
+    def update_schedule(capture_count: int) -> None:
+        if capture_count == 3:
+            producer.set_capture_interval(0.0)
+        elif capture_count == 5:
+            producer._running.clear()
+
+    capture.on_capture = update_schedule
+    producer._running.set()
+    generation = producer._next_generation()
+
+    producer._loop(generation)
+
+    assert capture.capture_started_at[:3] == [0.0, 1.0, 2.0]
+    assert capture.capture_started_at[3:] == [2.0, 2.0]
+
+
+def test_capture_interval_added_during_run_delays_next_attempt() -> None:
+    clock = _FakeClock()
+    capture = _TimedCapture(clock.monotonic)
+    producer = FrameCaptureProducer(
+        capture,
+        frame_publisher=None,
+        monotonic=clock.monotonic,
+        schedule_wait=clock.wait,
+    )
+
+    def update_schedule(capture_count: int) -> None:
+        if capture_count == 1:
+            producer.set_capture_interval(1.0)
+        elif capture_count == 3:
+            producer._running.clear()
+
+    capture.on_capture = update_schedule
+    producer._running.set()
+    generation = producer._next_generation()
+
+    producer._loop(generation)
+
+    assert capture.capture_started_at == [0.0, 1.0, 2.0]
+
+
+def test_capture_interval_rejects_negative_value() -> None:
+    producer = FrameCaptureProducer(
+        _QueuedCapture(),
+        frame_publisher=None,
+    )
+
+    with np.testing.assert_raises(ValueError):
+        producer.set_capture_interval(-0.1)

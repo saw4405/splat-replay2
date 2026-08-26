@@ -1,22 +1,27 @@
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
-  import { Circle, Pause, Square, Play, Mic } from 'lucide-svelte';
+  import { Mic } from 'lucide-svelte';
   import {
     subscribeDomainEvents,
     type DomainEvent,
     type SpeechRecognizedPayload,
   } from '../../domainEvents';
-  import { getRecorderPreviewMode } from '../../api/recording';
+  import { getRecorderPreviewMode, getRecorderState } from '../../api/recording';
+  import type { RecorderState, SwitchPowerState } from '../../api/types';
   import { getPreviewFramePollIntervalMs, renderMode } from '../../renderMode';
   import { shouldUseBackendPreviewFrame } from '../../clientEnvironment';
+  import CaptureControl from './CaptureControl.svelte';
+
+  let { switchPowerState = 'unknown' }: { switchPowerState?: SwitchPowerState } = $props();
 
   let eventSource: EventSource | null = null;
   let videoEl = $state<HTMLVideoElement | null>(null);
   let mediaStream: MediaStream | null = null;
   let devices = $state<MediaDeviceInfo[]>([]);
   let selectedDeviceId = $state<string | null>(null);
-  let recorderState = $state<string>('STOPPED'); // STOPPED, RECORDING, PAUSED
-  let isHovered = $state(false);
+  let recorderState = $state<RecorderState>('STOPPED');
+  let recorderStatePollTimer: number | null = null;
+  let recorderStateFetchInFlight = false;
   let cameraStartInFlight = $state<boolean>(false);
   let usesBackendPreviewFrame = $state(false);
   let previewImageUrl = $state<string | null>(null);
@@ -40,6 +45,7 @@
 
   const CAMERA_START_MAX_ATTEMPTS = 3;
   const CAMERA_START_RETRY_DELAY_MS = 500;
+  const RECORDER_STATE_POLL_INTERVAL_MS = 1000;
 
   function sleep(ms: number): Promise<void> {
     return new Promise((resolve) => {
@@ -258,6 +264,30 @@
     };
   }
 
+  async function refreshRecorderState(): Promise<void> {
+    if (recorderStateFetchInFlight) {
+      return;
+    }
+    recorderStateFetchInFlight = true;
+    try {
+      recorderState = await getRecorderState();
+    } catch (error) {
+      console.error('Failed to refresh recorder state:', error);
+    } finally {
+      recorderStateFetchInFlight = false;
+    }
+  }
+
+  function startRecorderStatePolling(): void {
+    if (recorderStatePollTimer !== null) {
+      return;
+    }
+    void refreshRecorderState();
+    recorderStatePollTimer = window.setInterval(() => {
+      void refreshRecorderState();
+    }, RECORDER_STATE_POLL_INTERVAL_MS);
+  }
+
   async function enumerateVideoDevices(): Promise<void> {
     if (!navigator?.mediaDevices?.enumerateDevices) {
       devices = [];
@@ -424,6 +454,7 @@
   onMount(() => {
     (async () => {
       connectRecorderStateEvents();
+      startRecorderStatePolling();
 
       try {
         await syncPreviewConfiguration();
@@ -436,6 +467,10 @@
   onDestroy(() => {
     if (eventSource) {
       eventSource.close();
+    }
+    if (recorderStatePollTimer !== null) {
+      window.clearInterval(recorderStatePollTimer);
+      recorderStatePollTimer = null;
     }
     if (speechFadeTimeout) {
       clearTimeout(speechFadeTimeout);
@@ -491,47 +526,18 @@
     }
   });
 
-  // 録画状態に応じた表示設定
-  type RecorderVisuals = {
-    dotColor: string;
-    label: string;
-    borderColor: string;
-  };
+  const recorderBorderColor = $derived(getRecorderBorderColor(recorderState));
 
-  const defaultVisuals: RecorderVisuals = {
-    dotColor: 'var(--theme-preview-neutral-soft)',
-    label: 'Stopped',
-    borderColor: 'var(--theme-preview-neutral)',
-  };
-
-  let recorderVisuals = $state<RecorderVisuals>(defaultVisuals);
-
-  $effect(() => {
-    recorderVisuals = getRecorderVisuals(recorderState);
-  });
-
-  function getRecorderVisuals(state: string): RecorderVisuals {
+  function getRecorderBorderColor(state: RecorderState): string {
     switch (state) {
       case 'RECORDING':
-        return {
-          dotColor: 'var(--theme-preview-danger)',
-          label: 'Recording',
-          borderColor: 'var(--theme-preview-danger)',
-        };
+        return 'var(--theme-preview-danger)';
       case 'PAUSED':
-        return {
-          dotColor: 'var(--theme-preview-warning)',
-          label: 'Paused',
-          borderColor: 'var(--theme-preview-warning)',
-        };
+        return 'var(--theme-preview-warning)';
       case 'STOPPED':
-        return {
-          dotColor: 'var(--theme-preview-neutral-soft)',
-          label: 'Stopped',
-          borderColor: 'var(--theme-preview-neutral)',
-        };
+        return 'var(--theme-preview-neutral)';
       default:
-        return defaultVisuals;
+        return 'var(--theme-preview-neutral)';
     }
   }
 
@@ -583,47 +589,17 @@
 
 <div
   class="video-preview"
-  style={`--preview-border-color: ${recorderVisuals.borderColor};`}
-  role="button"
-  aria-label="ビデオプレビューと録画コントロール"
-  tabindex="0"
+  style={`--preview-border-color: ${recorderBorderColor};`}
   data-testid="video-preview"
-  onmouseenter={() => (isHovered = true)}
-  onmouseleave={() => (isHovered = false)}
-  onfocus={() => (isHovered = true)}
-  onblur={() => (isHovered = false)}
 >
-  <!-- 録画状態表示とコントロール -->
-  <div class="status-control-bar" class:hovered={isHovered}>
-    <div class="status-section">
-      <Circle size={16} fill={recorderVisuals.dotColor} strokeWidth={0} />
-      <span class="status-label" data-testid="video-preview-status">{recorderVisuals.label}</span>
-    </div>
-
-    <div class="controls-section" class:visible={isHovered}>
-      <div class="divider"></div>
-
-      {#if recorderState === 'STOPPED'}
-        <button class="control-btn start" onclick={handleStartRecording} title="録画開始">
-          <Circle size={12} fill="currentColor" />
-        </button>
-      {:else if recorderState === 'RECORDING'}
-        <button class="control-btn pause" onclick={handlePauseRecording} title="一時停止">
-          <Pause size={12} />
-        </button>
-        <button class="control-btn stop" onclick={handleStopRecording} title="停止">
-          <Square size={12} fill="currentColor" />
-        </button>
-      {:else if recorderState === 'PAUSED'}
-        <button class="control-btn resume" onclick={handleResumeRecording} title="再開">
-          <Play size={12} fill="currentColor" />
-        </button>
-        <button class="control-btn stop" onclick={handleStopRecording} title="停止">
-          <Square size={12} fill="currentColor" />
-        </button>
-      {/if}
-    </div>
-  </div>
+  <CaptureControl
+    {recorderState}
+    {switchPowerState}
+    onStart={handleStartRecording}
+    onPause={handlePauseRecording}
+    onResume={handleResumeRecording}
+    onStop={handleStopRecording}
+  />
 
   {#if !usesBackendPreviewFrame}
     <video bind:this={videoEl} class="preview-canvas" playsinline muted></video>
@@ -682,112 +658,6 @@
       var(--glass-shadow, 0 20px 60px rgba(var(--theme-rgb-shadow-deep), 0.5)),
       inset 0 0 40px rgba(var(--theme-rgb-black), 0.35);
     transition: border-color 0.3s ease;
-  }
-
-  .status-control-bar {
-    position: absolute;
-    top: 0.5rem;
-    left: 0.5rem;
-    display: flex;
-    align-items: center;
-    gap: 1rem;
-    padding: 0.5rem;
-    background: rgba(var(--theme-rgb-black), 0.65);
-    backdrop-filter: var(--glass-blur);
-    -webkit-backdrop-filter: var(--glass-blur);
-    border-radius: 12px;
-    border: 1px solid rgba(var(--theme-rgb-white), 0.05);
-    z-index: 10;
-    transition:
-      opacity 0.25s ease,
-      background 0.25s ease,
-      border-color 0.25s ease;
-  }
-
-  .status-control-bar.hovered {
-    opacity: 1;
-  }
-
-  .status-section {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-  }
-
-  .status-label {
-    color: var(--theme-color-white);
-    font-size: 1rem;
-    font-weight: 500;
-    white-space: nowrap;
-  }
-
-  .controls-section {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    max-width: 0;
-    opacity: 0;
-    overflow: visible;
-    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  }
-
-  .controls-section.visible {
-    max-width: 200px;
-    opacity: 1;
-  }
-
-  .divider {
-    width: 1px;
-    height: 24px;
-    background: rgba(var(--theme-rgb-white), 0.1);
-    margin: 0 4px;
-  }
-
-  .control-btn {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 1.5rem;
-    height: 1.5rem;
-    padding: 0;
-    border: none;
-    border-radius: 0.5rem;
-    color: var(--theme-color-white);
-    cursor: pointer;
-    transition: all 0.2s ease;
-    flex-shrink: 0;
-  }
-
-  .control-btn.start {
-    background: rgba(var(--theme-rgb-red-preview), 0.8);
-  }
-
-  .control-btn.start:hover {
-    background: rgba(var(--theme-rgb-red-preview), 1);
-  }
-
-  .control-btn.pause {
-    background: rgba(var(--theme-rgb-amber-preview), 0.8);
-  }
-
-  .control-btn.pause:hover {
-    background: rgba(var(--theme-rgb-amber-preview), 1);
-  }
-
-  .control-btn.resume {
-    background: rgba(var(--theme-rgb-green-preview), 0.8);
-  }
-
-  .control-btn.resume:hover {
-    background: rgba(var(--theme-rgb-green-preview), 1);
-  }
-
-  .control-btn.stop {
-    background: rgba(var(--theme-rgb-gray), 0.8);
-  }
-
-  .control-btn.stop:hover {
-    background: rgba(var(--theme-rgb-gray), 1);
   }
 
   .preview-canvas {

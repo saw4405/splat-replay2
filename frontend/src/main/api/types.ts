@@ -6,8 +6,15 @@
  */
 
 // 録画制御
-export type RecorderState = 'stopped' | 'recording' | 'paused';
+export type RecorderState = 'STOPPED' | 'RECORDING' | 'PAUSED';
 export type RecorderPreviewMode = 'live_capture' | 'video_file';
+export type AutoRecorderState = 'idle' | 'running' | 'stopped';
+export type SwitchPowerState =
+  | 'unknown'
+  | 'armed'
+  | 'waiting_for_power_on'
+  | 'capture_disconnected'
+  | 'stopped';
 export type CaptureDeviceRecoveryTrigger = 'manual' | 'startup_auto' | 'idle_auto';
 
 export interface RecorderStateResponse {
@@ -16,6 +23,11 @@ export interface RecorderStateResponse {
 
 export interface RecorderPreviewModeResponse {
   mode: RecorderPreviewMode;
+}
+
+export interface AutoRecorderStateResponse {
+  state: AutoRecorderState;
+  power_state: SwitchPowerState;
 }
 
 export interface CaptureDeviceRecoveryResponse {

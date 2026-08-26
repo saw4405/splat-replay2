@@ -141,23 +141,19 @@ async function requestAutoRecordingEnable(page: Page): Promise<AutoRecordingEnab
 
 export async function waitForRecordingLifecycle(page: Page): Promise<void> {
   await waitForVideoPreviewReady(page);
-  const statusLabel = page.getByTestId('video-preview-status');
+  const recordingTrigger = page.getByRole('button', {
+    name: '現在録画中です。手動録画操作を開く',
+  });
 
   await expect
     .poll(
       async () => {
         try {
-          const isVisible = await statusLabel.isVisible();
-          if (!isVisible) {
-            await requestAutoRecordingEnable(page);
-            return 'not_visible';
-          }
-          const text = await statusLabel.textContent();
-          if (text?.trim() === 'Recording') {
+          if (await recordingTrigger.isVisible()) {
             return 'Recording';
           }
           await requestAutoRecordingEnable(page);
-          return text?.trim() ?? 'unknown';
+          return 'not_visible';
         } catch {
           await requestAutoRecordingEnable(page);
           return 'error';
@@ -213,9 +209,9 @@ async function disableAutoRecording(page: Page): Promise<void> {
 }
 
 export async function waitForRecordingStopped(page: Page): Promise<void> {
-  await expect(page.getByTestId('video-preview-status')).toHaveText('Stopped', {
-    timeout: LONG_RECORDING_TIMEOUT_MS,
-  });
+  await expect
+    .poll(() => recorderState(page), { timeout: LONG_RECORDING_TIMEOUT_MS })
+    .toBe('STOPPED');
 }
 
 export async function waitForRecordedVideoReady(page: Page, expectedCount: number): Promise<void> {

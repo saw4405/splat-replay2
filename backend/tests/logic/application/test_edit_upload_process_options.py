@@ -131,6 +131,9 @@ class _DummyVideoAssetRepository:
     def list_recordings(self) -> list[object]:
         return []
 
+    def list_edited(self) -> list[object]:
+        return []
+
 
 def _build_start_use_case(
     *,
@@ -332,3 +335,86 @@ async def test_start_auto_sleep_executes_power_sleep_when_runtime_override_enabl
 
     assert power.sleep_calls == 1
     assert _has_event(event_bus.events, AutoSleepStarted)
+
+
+@pytest.mark.asyncio
+async def test_pending_sleep_runs_without_browser_request() -> None:
+    event_bus = _DummyEventBus()
+    use_case, _, _ = _build_start_use_case(
+        sleep_after_upload=True,
+        event_bus=event_bus,
+    )
+    power = _PowerSpy()
+    release_sleep = asyncio.Event()
+
+    async def _controlled_sleep(_seconds: float) -> None:
+        await release_sleep.wait()
+
+    service = AutoProcessService(
+        event_bus=cast(EventBusPort, event_bus),
+        start_edit_upload_uc=use_case,
+        power_manager=PowerManager(
+            power=cast(PowerPort, power),
+            config=cast(ConfigPort, _DummyConfig(sleep_after_upload=True)),
+            logger=cast(LoggerPort, _DummyLogger()),
+        ),
+        config=cast(ConfigPort, _DummyConfig(sleep_after_upload=True)),
+        logger=cast(LoggerPort, _DummyLogger()),
+        repo=cast(VideoAssetRepositoryPort, _DummyVideoAssetRepository()),
+        sleep_func=_controlled_sleep,
+    )
+
+    service.handle_auto_sleep_pending(
+        SimpleNamespace(
+            payload={"timeout_seconds": 15.0, "sleep_after_upload": True}
+        )
+    )
+    release_sleep.set()
+    task = service._sleep_task
+    assert task is not None
+    await asyncio.wait_for(task, timeout=1)
+
+    assert power.sleep_calls == 1
+    assert _has_event(event_bus.events, AutoSleepStarted)
+
+
+@pytest.mark.asyncio
+async def test_pending_sleep_cancel_prevents_power_sleep() -> None:
+    event_bus = _DummyEventBus()
+    use_case, _, _ = _build_start_use_case(
+        sleep_after_upload=True,
+        event_bus=event_bus,
+    )
+    power = _PowerSpy()
+    release_sleep = asyncio.Event()
+
+    async def _controlled_sleep(_seconds: float) -> None:
+        await release_sleep.wait()
+
+    service = AutoProcessService(
+        event_bus=cast(EventBusPort, event_bus),
+        start_edit_upload_uc=use_case,
+        power_manager=PowerManager(
+            power=cast(PowerPort, power),
+            config=cast(ConfigPort, _DummyConfig(sleep_after_upload=True)),
+            logger=cast(LoggerPort, _DummyLogger()),
+        ),
+        config=cast(ConfigPort, _DummyConfig(sleep_after_upload=True)),
+        logger=cast(LoggerPort, _DummyLogger()),
+        repo=cast(VideoAssetRepositoryPort, _DummyVideoAssetRepository()),
+        sleep_func=_controlled_sleep,
+    )
+
+    service.handle_auto_sleep_pending(
+        SimpleNamespace(
+            payload={"timeout_seconds": 15.0, "sleep_after_upload": True}
+        )
+    )
+    task = service._sleep_task
+    assert task is not None
+    service.cancel_pending_sleep()
+    release_sleep.set()
+    with pytest.raises(asyncio.CancelledError):
+        await task
+
+    assert power.sleep_calls == 0

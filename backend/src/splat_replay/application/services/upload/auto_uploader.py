@@ -100,7 +100,10 @@ class AutoUploader:
 
             await self._upload(idx, video)
             self.progress.item_stage(task_id, idx, "delete", "ファイル削除中")
-            self.repo.delete_edited(video)
+            if not self.repo.delete_edited(video):
+                raise RuntimeError(
+                    f"アップロード済み動画を削除できませんでした: {video}"
+                )
 
             self.progress.advance(task_id)
 

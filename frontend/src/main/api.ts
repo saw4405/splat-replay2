@@ -8,6 +8,9 @@
 export type {
   RecorderState,
   RecorderStateResponse,
+  AutoRecorderState,
+  AutoRecorderStateResponse,
+  SwitchPowerState,
   EditUploadState,
   EditUploadStatus,
   EditUploadTriggerResponse,
@@ -20,7 +23,7 @@ export type {
   ProgressEvent,
 } from './api/types.ts';
 // 録画制御API
-export { startRecorder, getRecorderState } from './api/recording.ts';
+export { startRecorder, getRecorderState, getAutoRecorderState } from './api/recording.ts';
 
 // アセットAPI
 export {
@@ -30,6 +33,7 @@ export {
   fetchEditUploadStatus,
   deleteRecordedVideo,
   deleteEditedVideo,
+  cancelEditUploadProcess,
 } from './api/assets.ts';
 
 // メタデータ・字幕API

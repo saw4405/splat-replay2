@@ -6,6 +6,7 @@
  */
 
 import type {
+  AutoRecorderStateResponse,
   CaptureDeviceRecoveryResponse,
   CaptureDeviceRecoveryTrigger,
   RecorderPreviewMode,
@@ -42,6 +43,20 @@ export async function getRecorderState(): Promise<RecorderState> {
   }
   const body: RecorderStateResponse = await response.json();
   return body.state;
+}
+
+/**
+ * 常駐自動録画とSwitch電源監視の状態を取得
+ */
+export async function getAutoRecorderState(): Promise<AutoRecorderStateResponse> {
+  const response = await fetch('/api/recorder/auto-state', {
+    headers: JSON_HEADERS,
+  });
+  if (!response.ok) {
+    const detail = await safeReadText(response);
+    throw new Error(detail || 'Failed to fetch auto recorder state');
+  }
+  return (await response.json()) as AutoRecorderStateResponse;
 }
 
 /**

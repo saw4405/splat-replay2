@@ -225,7 +225,15 @@ class TestEditUploadProcessEndpoints:
                     sleep_after_upload_overridden=False,
                 )
 
+        class AutoProcessServiceStub:
+            def __init__(self) -> None:
+                self.cancelled = False
+
+            def cancel_pending_process(self) -> None:
+                self.cancelled = True
+
         cancel_use_case = CancelUseCaseStub()
+        auto_process_service = AutoProcessServiceStub()
         app = FastAPI()
         app.include_router(
             create_assets_router(
@@ -234,6 +242,7 @@ class TestEditUploadProcessEndpoints:
                     SimpleNamespace(
                         start_edit_upload_uc=cancel_use_case,
                         get_edit_upload_status_uc=GetStatusUseCaseStub(),
+                        auto_process_service=auto_process_service,
                     ),
                 )
             )
@@ -244,6 +253,7 @@ class TestEditUploadProcessEndpoints:
 
         assert response.status_code == status.HTTP_200_OK
         assert cancel_use_case.cancelled is True
+        assert auto_process_service.cancelled is True
         assert response.json()["state"] == "failed"
         assert response.json()["error"] == (
             "編集・アップロード処理をキャンセルしました"

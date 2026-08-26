@@ -13,9 +13,10 @@
 - **Neon Cyan** (#2ff6e3): Primary buttons, active states, glows `--theme-rgb-accent`.
 - **Neo Teal** (#14c9b8): Alternate accent, heavy borders `--theme-rgb-accent-strong`.
 - **Info** (#6eb5ff): Loading states, neutral system alerts `--theme-rgb-info`.
-- **Success** (#5de1a4): Completion marks, active recordings `--theme-rgb-success`.
+- **Success** (#5de1a4): Completion marks `--theme-rgb-success`.
 - **Warning** (#ffc86a): Paused states, caution alerts `--theme-rgb-warning`.
 - **Danger** (#ff5f88): Errors, deletion, destructive actions `--theme-rgb-danger`.
+- **Capture Recording** (#ff5f88): Preview Capture Control の録画中表示（赤い録画点と `REC`）`--theme-preview-danger`。エラー状態ではなく、録画中であることを示す専用表現として扱う。
 
 ## Typography
 - **Headline Font**: system-ui, -apple-system, 'Segoe UI', sans-serif (Weight 600, Semibold).

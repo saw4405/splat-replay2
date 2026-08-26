@@ -1,11 +1,14 @@
-import { cleanup, render, screen } from '@testing-library/svelte';
+import { cleanup, fireEvent, render, screen } from '@testing-library/svelte';
 import { tick } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { subscribeDomainEventsMock, getRecorderPreviewModeMock } = vi.hoisted(() => ({
-  subscribeDomainEventsMock: vi.fn(),
-  getRecorderPreviewModeMock: vi.fn(),
-}));
+const { subscribeDomainEventsMock, getRecorderPreviewModeMock, getRecorderStateMock } = vi.hoisted(
+  () => ({
+    subscribeDomainEventsMock: vi.fn(),
+    getRecorderPreviewModeMock: vi.fn(),
+    getRecorderStateMock: vi.fn(),
+  })
+);
 
 vi.mock('../../domainEvents', () => ({
   subscribeDomainEvents: subscribeDomainEventsMock,
@@ -16,6 +19,7 @@ vi.mock('../../api/recording', async () => {
   return {
     ...actual,
     getRecorderPreviewMode: getRecorderPreviewModeMock,
+    getRecorderState: getRecorderStateMock,
   };
 });
 
@@ -78,6 +82,8 @@ describe('VideoPreview.svelte', () => {
       readyState: 1,
     });
     getRecorderPreviewModeMock.mockReset();
+    getRecorderStateMock.mockReset();
+    getRecorderStateMock.mockResolvedValue('STOPPED');
   });
 
   afterEach(() => {
@@ -152,5 +158,65 @@ describe('VideoPreview.svelte', () => {
     expect(fetchMock).not.toHaveBeenCalledWith('/api/recorder/preview-frame', {
       cache: 'no-store',
     });
+  });
+
+  it('開始イベントを購読前に取り逃がしても現在状態APIからRecordingへ同期する', async () => {
+    getRecorderPreviewModeMock.mockResolvedValue('video_file');
+    getRecorderStateMock.mockResolvedValue('RECORDING');
+
+    render(VideoPreview);
+
+    expect(await screen.findByText('REC')).toBeInTheDocument();
+  });
+
+  it('Capture Controlの独立ボタンから既存の手動録画APIを呼び出す', async () => {
+    getRecorderPreviewModeMock.mockResolvedValue('video_file');
+    fetchMock.mockImplementation(async (input: string | URL | Request) => {
+      const url = input.toString();
+      if (url.includes('/api/recorder/preview-frame')) {
+        return new Response(null, { status: 204 });
+      }
+      if (
+        url.includes('/api/recorder/start') ||
+        url.includes('/api/recorder/pause') ||
+        url.includes('/api/recorder/resume') ||
+        url.includes('/api/recorder/stop')
+      ) {
+        return new Response(null, { status: 200 });
+      }
+      throw new Error(`Unexpected fetch: ${url}`);
+    });
+
+    getRecorderStateMock.mockResolvedValue('STOPPED');
+    render(VideoPreview, { props: { switchPowerState: 'armed' } });
+    let trigger = await screen.findByRole('button', {
+      name: '次のバトルを自動録画する準備ができています。手動録画操作を開く',
+    });
+    await fireEvent.focusIn(trigger);
+    await fireEvent.click(screen.getByRole('button', { name: '手動録画を開始' }));
+    cleanup();
+
+    getRecorderStateMock.mockResolvedValue('RECORDING');
+    render(VideoPreview, { props: { switchPowerState: 'armed' } });
+    trigger = await screen.findByRole('button', {
+      name: '現在録画中です。手動録画操作を開く',
+    });
+    await fireEvent.focusIn(trigger);
+    await fireEvent.click(screen.getByRole('button', { name: '録画を一時停止' }));
+    await fireEvent.click(screen.getByRole('button', { name: '録画を停止' }));
+    cleanup();
+
+    getRecorderStateMock.mockResolvedValue('PAUSED');
+    render(VideoPreview, { props: { switchPowerState: 'armed' } });
+    trigger = await screen.findByRole('button', {
+      name: '録画を一時停止しています。手動録画操作を開く',
+    });
+    await fireEvent.focusIn(trigger);
+    await fireEvent.click(screen.getByRole('button', { name: '録画を再開' }));
+
+    expect(fetchMock).toHaveBeenCalledWith('/api/recorder/start', { method: 'POST' });
+    expect(fetchMock).toHaveBeenCalledWith('/api/recorder/pause', { method: 'POST' });
+    expect(fetchMock).toHaveBeenCalledWith('/api/recorder/resume', { method: 'POST' });
+    expect(fetchMock).toHaveBeenCalledWith('/api/recorder/stop', { method: 'POST' });
   });
 });

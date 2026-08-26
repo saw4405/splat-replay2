@@ -19,6 +19,7 @@ from splat_replay.application.use_cases.assets.start_edit_upload import (
     StartEditUploadUseCase,
 )
 from splat_replay.domain.events import (
+    AssetRecordedSaved,
     AutoProcessPending,
     AutoSleepCancelled,
     AutoSleepPending,
@@ -61,6 +62,14 @@ class AutoProcessService:
         self._pending_sleep_after_upload: bool | None = None
         # ユーザーがトグルで明示的にスリープをキャンセルしたかどうか
         self._sleep_cancelled_by_user = False
+        self._scan_generation = 0
+        self._handled_generation = 0
+        self._cancelled_generation = 0
+        self._not_before: dict[int, float] = {}
+        self._scan_wakeup = asyncio.Event()
+        self._worker_task: asyncio.Task[None] | None = None
+        self._sleep_generation = 0
+        self._sleep_task: asyncio.Task[None] | None = None
 
         # イベント購読
         # Note: EventBusPortの実装によってはsubscribeメソッドのシグネチャが異なる可能性があるが、
@@ -76,9 +85,13 @@ class AutoProcessService:
                 PowerOffDetected.EVENT_TYPE,
                 EditUploadCompleted.EVENT_TYPE,
                 AutoSleepPending.EVENT_TYPE,
+                AssetRecordedSaved.EVENT_TYPE,
             }
         )
         self.logger.info("AutoProcessService started")
+        self._worker_task = asyncio.create_task(self._run_scan_worker())
+        if self._has_pending_assets():
+            self._request_scan(delay_seconds=0.0)
 
         try:
             while True:
@@ -98,12 +111,30 @@ class AutoProcessService:
                         await self.handle_edit_upload_completed(ev)
                     elif ev.type == AutoSleepPending.EVENT_TYPE:
                         self.handle_auto_sleep_pending(ev)
+                    elif ev.type == AssetRecordedSaved.EVENT_TYPE:
+                        if self._is_auto_processing:
+                            self._request_scan(delay_seconds=0.0)
 
-                await asyncio.sleep(1.0)
+                await asyncio.sleep(0.1)
         except asyncio.CancelledError:
             self.logger.info("AutoProcessService stopped")
-            sub.close()
             raise
+        finally:
+            sub.close()
+            sleep_task = self._cancel_sleep_task()
+            if sleep_task is not None:
+                try:
+                    await sleep_task
+                except asyncio.CancelledError:
+                    pass
+            worker_task = self._worker_task
+            self._worker_task = None
+            if worker_task is not None:
+                worker_task.cancel()
+                try:
+                    await worker_task
+                except asyncio.CancelledError:
+                    pass
 
     async def handle_power_off_detected(self, event: object) -> None:
         """電源OFF検出時の処理。"""
@@ -118,15 +149,9 @@ class AutoProcessService:
         if not settings.edit_after_power_off:
             return
 
-        if self._is_auto_processing or self.start_edit_upload_uc.is_running():
+        if not self._has_pending_assets() and not self._is_auto_processing:
             self.logger.info(
-                "編集・アップロードが実行中のため自動処理通知をスキップします"
-            )
-            return
-
-        if not self.repo.list_recordings():
-            self.logger.info(
-                "録画済み動画がないため自動処理通知をスキップします"
+                "未処理動画がないため自動処理要求をスキップします"
             )
             return
 
@@ -145,6 +170,98 @@ class AutoProcessService:
                 ),
             )
         )
+        self._request_scan(delay_seconds=timeout_seconds)
+
+    def _has_pending_assets(self) -> bool:
+        return bool(self.repo.list_recordings() or self.repo.list_edited())
+
+    def _pending_asset_ids(self) -> frozenset[str]:
+        recorded = (str(asset.video) for asset in self.repo.list_recordings())
+        edited = (str(path) for path in self.repo.list_edited())
+        return frozenset((*recorded, *edited))
+
+    def _request_scan(self, *, delay_seconds: float) -> int:
+        self._scan_generation += 1
+        generation = self._scan_generation
+        self._not_before[generation] = (
+            asyncio.get_running_loop().time() + delay_seconds
+        )
+        self._scan_wakeup.set()
+        return generation
+
+    async def _run_scan_worker(self) -> None:
+        """generationを失わず、未処理ファイルを単一workerで走査する。"""
+        while True:
+            await self._scan_wakeup.wait()
+            self._scan_wakeup.clear()
+
+            while self._handled_generation < self._scan_generation:
+                generation = self._scan_generation
+                if generation <= self._cancelled_generation:
+                    self._mark_generation_handled(generation)
+                    break
+
+                not_before = self._not_before.get(generation, 0.0)
+                remaining = not_before - asyncio.get_running_loop().time()
+                if remaining > 0:
+                    try:
+                        await asyncio.wait_for(
+                            self._scan_wakeup.wait(), timeout=remaining
+                        )
+                    except asyncio.TimeoutError:
+                        pass
+                    else:
+                        self._scan_wakeup.clear()
+                        continue
+
+                if generation <= self._cancelled_generation:
+                    self._mark_generation_handled(generation)
+                    continue
+
+                before = self._pending_asset_ids()
+                if not before:
+                    self._mark_generation_handled(generation)
+                    continue
+
+                succeeded = False
+                try:
+                    await self.start_auto_process()
+                    await self.start_edit_upload_uc.wait_until_complete()
+                    succeeded = True
+                except Exception as exc:  # noqa: BLE001
+                    self.logger.error(
+                        "自動編集・アップロードworkerが失敗しました",
+                        error=str(exc),
+                    )
+                finally:
+                    self._is_auto_processing = False
+
+                self._mark_generation_handled(generation)
+                after = self._pending_asset_ids()
+                added_during_run = after - before
+                if self._scan_generation > generation or (
+                    succeeded and bool(added_during_run)
+                ):
+                    if self._scan_generation == generation:
+                        self._request_scan(delay_seconds=0.0)
+                    continue
+
+                # 失敗して残った同じファイルは、次の外部要求か再起動まで
+                # 即時再試行しない。
+                break
+
+    def _mark_generation_handled(self, generation: int) -> None:
+        """統合済みgenerationまでの猶予時刻を破棄する。"""
+        self._handled_generation = generation
+        for handled in tuple(self._not_before):
+            if handled <= generation:
+                self._not_before.pop(handled, None)
+
+    def cancel_pending_process(self) -> None:
+        """猶予中の自動処理要求を取り消す。"""
+        self._cancelled_generation = self._scan_generation
+        self._scan_wakeup.set()
+        self.logger.info("待機中の自動編集・アップロードをキャンセルしました")
 
     async def start_auto_process(self) -> None:
         """自動処理を開始する。"""
@@ -242,14 +359,63 @@ class AutoProcessService:
             self._pending_sleep_after_upload = None
             return
         self._auto_sleep_allowed = True
+        timeout_seconds = 0.0
         ev = cast(Any, event_obj)
         if hasattr(ev, "payload") and isinstance(ev.payload, dict):
             sleep_after_upload = ev.payload.get("sleep_after_upload")
             if isinstance(sleep_after_upload, bool):
                 self._pending_sleep_after_upload = sleep_after_upload
+            timeout_value = ev.payload.get("timeout_seconds")
+            if isinstance(timeout_value, (int, float)):
+                timeout_seconds = max(0.0, float(timeout_value))
+        self._schedule_auto_sleep(timeout_seconds=timeout_seconds)
+
+    def _schedule_auto_sleep(self, *, timeout_seconds: float) -> None:
+        """ブラウザに依存しない自動スリープ猶予タスクを予約する。"""
+        self._sleep_generation += 1
+        generation = self._sleep_generation
+        self._cancel_sleep_task()
+        self._sleep_task = asyncio.create_task(
+            self._run_pending_sleep(
+                generation=generation,
+                timeout_seconds=timeout_seconds,
+            )
+        )
+
+    async def _run_pending_sleep(
+        self, *, generation: int, timeout_seconds: float
+    ) -> None:
+        try:
+            await self._sleep(timeout_seconds)
+            if (
+                generation != self._sleep_generation
+                or not self._auto_sleep_allowed
+                or self._sleep_cancelled_by_user
+            ):
+                return
+            await self.start_auto_sleep()
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:  # noqa: BLE001
+            self.logger.error(
+                "自動スリープの実行に失敗しました",
+                error=str(exc),
+            )
+        finally:
+            if self._sleep_task is asyncio.current_task():
+                self._sleep_task = None
+
+    def _cancel_sleep_task(self) -> asyncio.Task[None] | None:
+        task = self._sleep_task
+        self._sleep_task = None
+        if task is not None and not task.done():
+            task.cancel()
+        return task
 
     def cancel_pending_sleep(self) -> None:
         """ユーザー操作によるスリープキャンセル。自動スリープの予約を破棄する。"""
+        self._sleep_generation += 1
+        self._cancel_sleep_task()
         self._auto_sleep_allowed = False
         self._pending_sleep_after_upload = None
         self._sleep_cancelled_by_user = True

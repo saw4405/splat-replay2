@@ -4,6 +4,10 @@ import type { ProgressEvent } from '../../src/main/api/types';
 import { environment, gotoMain, resetReplayTestState } from './support/appHelpers';
 
 const e2eEnvironment = environment();
+const previewPng = Buffer.from(
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
+  'base64'
+);
 const captureResponsiveScreenshots =
   process.env.SPLAT_REPLAY_CAPTURE_RESPONSIVE_SCREENSHOTS === '1';
 
@@ -292,6 +296,88 @@ test('main responsive layout: narrow controls keep accessible names', async ({ p
   );
 });
 
+test('Capture Control keeps two manual actions inside its frame', async ({ page }) => {
+  resetReplayTestState(e2eEnvironment);
+  await page.setViewportSize({ width: 1024, height: 768 });
+  await page.route('**/setup/status', (route) =>
+    route.fulfill(
+      jsonResponse({
+        is_completed: true,
+        current_step: 'youtube_setup',
+        completed_steps: ['youtube_setup'],
+        step_details: {},
+      })
+    )
+  );
+  await page.route('**/api/settings/webview-render-mode', (route) =>
+    route.fulfill(jsonResponse({ render_mode: 'cpu' }))
+  );
+  await page.route('**/api/recorder/preview-mode', (route) =>
+    route.fulfill(jsonResponse({ mode: 'video_file' }))
+  );
+  await page.route('**/api/device/status', (route) =>
+    route.fulfill(jsonResponse({ connected: true }))
+  );
+  await page.route('**/api/recorder/preview-frame**', (route) => route.fulfill({ status: 204 }));
+  await page.route('**/api/recorder/auto-state', (route) =>
+    route.fulfill(
+      jsonResponse({
+        state: 'running',
+        power_state: 'armed',
+      })
+    )
+  );
+  await page.route('**/api/recorder/state', (route) =>
+    route.fulfill(jsonResponse({ state: 'PAUSED' }))
+  );
+  await gotoMain(page);
+
+  const trigger = page.getByRole('button', {
+    name: '録画を一時停止しています。手動録画操作を開く',
+  });
+  await expect(trigger).toBeVisible();
+  await expect(page.getByText('PAUSE', { exact: true })).toBeVisible();
+  await trigger.focus();
+
+  const control = page.getByTestId('capture-control');
+  const toolbar = page.getByRole('toolbar', { name: '手動録画操作' });
+  const resumeButton = toolbar.getByRole('button', { name: '録画を再開' });
+  const stopButton = toolbar.getByRole('button', { name: '録画を停止' });
+  await expect(toolbar).toBeVisible();
+  await control.evaluate(async (element) => {
+    await Promise.all(
+      element
+        .getAnimations({ subtree: true })
+        .map((animation) => animation.finished.catch(() => {}))
+    );
+  });
+
+  const controlBox = await visibleBox(control, 'Capture Control');
+  const resumeBox = await visibleBox(resumeButton, 'resume action');
+  const stopBox = await visibleBox(stopButton, 'stop action');
+
+  expect(controlBox.height, 'Capture Control should be 48px tall').toBeCloseTo(48, 0);
+  for (const [box, label] of [
+    [resumeBox, 'resume action'],
+    [stopBox, 'stop action'],
+  ] as const) {
+    expect(box.width, `${label} should keep a 40px hit area`).toBeCloseTo(40, 0);
+    expect(box.height, `${label} should keep a 40px hit area`).toBeCloseTo(40, 0);
+    expect(box.x, `${label} should stay inside the left edge`).toBeGreaterThanOrEqual(controlBox.x);
+    expect(box.y, `${label} should stay inside the top edge`).toBeGreaterThanOrEqual(controlBox.y);
+    expect(box.x + box.width, `${label} should stay inside the right edge`).toBeLessThanOrEqual(
+      controlBox.x + controlBox.width
+    );
+    expect(box.y + box.height, `${label} should stay inside the bottom edge`).toBeLessThanOrEqual(
+      controlBox.y + controlBox.height
+    );
+  }
+  expect(
+    stopBox.x - (resumeBox.x + resumeBox.width),
+    'manual actions should use a 4px gap'
+  ).toBeCloseTo(4, 0);
+});
+
 test('settings dialog reflows without horizontal scrolling on narrow phones', async ({ page }) => {
   resetReplayTestState(e2eEnvironment);
   const viewport = { width: 320, height: 568 };
@@ -567,6 +653,17 @@ async function mockRunningProcessStatus(page: Page): Promise<void> {
   );
 }
 
+async function mockProgressFrameImages(page: Page): Promise<void> {
+  await page.route('**/api/assets/recorded/**/frame?*', (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'image/png',
+      headers: { 'Cache-Control': 'no-store' },
+      body: previewPng,
+    })
+  );
+}
+
 type ProgressEventControllerWindow = Window & {
   __emitProgressEvent?: (event: ProgressEvent) => number;
 };
@@ -662,6 +759,9 @@ for (const viewportCase of progressDialogViewportCases) {
     await page.setViewportSize(viewportCase.size);
     await installControllableProgressEventSource(page);
     await mockRunningProcessStatus(page);
+    if (viewportCase.name === '900px boundary') {
+      await mockProgressFrameImages(page);
+    }
     await gotoMain(page);
 
     const dialog = page.getByRole('dialog', { name: '進捗' });

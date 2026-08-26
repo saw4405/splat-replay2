@@ -221,12 +221,12 @@ function buildReplayInputJson(videoPath: string, scenario?: ReplayScenario | nul
   );
 }
 
-function clearReplayInputFile(replayInputFile: string): void {
-  try {
-    rmSync(replayInputFile, { force: true, maxRetries: 20, retryDelay: 100 });
-  } catch {
-    writeFileSync(replayInputFile, buildReplayInputJson(''), 'utf-8');
-  }
+function writeDefaultReplayInput(environment: E2EEnvironment): void {
+  writeFileSync(
+    environment.replayInputFile,
+    buildReplayInputJson(environment.replayAssets[0].videoPath),
+    'utf-8'
+  );
 }
 
 function clearDirectoryContents(directory: string): void {
@@ -299,7 +299,10 @@ export function bootstrapE2EEnvironment(force = false): E2EEnvironment {
     );
     writeFileSync(installationStateFile, buildInstallationStateToml(), 'utf-8');
 
-    clearReplayInputFile(environment.replayInputFile);
+    // バックエンドはlifespan開始時から自動録画を常駐起動する。
+    // 最初のspecが入力を切り替える前に実OBSへフォールバックしないよう、
+    // 起動時点から代表リプレイ入力を公開しておく。
+    writeDefaultReplayInput(environment);
     process.env[BOOTSTRAP_FLAG] = '1';
   }
   return environment;
@@ -334,7 +337,9 @@ export function resetE2EState(environment: E2EEnvironment): void {
   const installationStateFile = join(dirname(environment.settingsFile), 'installation_state.toml');
   writeFileSync(installationStateFile, buildInstallationStateToml(), 'utf-8');
 
-  clearReplayInputFile(environment.replayInputFile);
+  // lifespan常駐録画はspec間も動作するため、リセット後も実OBSへ戻さない。
+  // 個別の録画workflowは、この直後にconfigureReplayAssetで入力を上書きする。
+  writeDefaultReplayInput(environment);
 }
 
 export function loadSidecarMetadata(asset: ReplayAsset): SidecarMetadata | null {

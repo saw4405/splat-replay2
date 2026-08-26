@@ -124,6 +124,28 @@ describe('process API', () => {
     });
   });
 
+  describe('processApi.cancelSleep', () => {
+    it('DELETEで自動スリープをキャンセルする', async () => {
+      fetchMock.mockResolvedValueOnce({ ok: true });
+
+      await expect(processApi.cancelSleep()).resolves.toBeUndefined();
+
+      expect(fetchMock).toHaveBeenCalledWith('/api/process/sleep', {
+        method: 'DELETE',
+        headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
+      });
+    });
+
+    it('失敗時はAPIメッセージを返す', async () => {
+      fetchMock.mockResolvedValueOnce({
+        ok: false,
+        text: async () => 'cancel failed',
+      });
+
+      await expect(processApi.cancelSleep()).rejects.toThrow('cancel failed');
+    });
+  });
+
   // ========================================
   // API 呼び出しエラーハンドリング
   // ========================================

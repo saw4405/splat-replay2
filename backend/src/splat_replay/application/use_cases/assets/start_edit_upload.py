@@ -75,6 +75,12 @@ class StartEditUploadUseCase:
         """編集・アップロードが実行中かどうかを返す。"""
         return self._task is not None and not self._task.done()
 
+    async def wait_until_complete(self) -> None:
+        """現在の編集・アップロード処理が完了するまで待つ。"""
+        task = self._task
+        if task is not None:
+            await task
+
     async def _run_edit_upload(self, trigger: EditUploadTrigger) -> None:
         """編集→アップロードを順次実行（内部メソッド）。"""
         try:

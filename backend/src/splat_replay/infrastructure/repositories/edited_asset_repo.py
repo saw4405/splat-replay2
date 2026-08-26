@@ -47,36 +47,62 @@ class EditedAssetRepository:
         dest = self.settings.edited_dir
         dest.mkdir(parents=True, exist_ok=True)
         target = dest / video.name
+        if target.exists():
+            raise FileExistsError(f"編集済み動画は既に存在します: {target}")
 
-        # 動画ファイルを移動
-        try:
-            shutil.move(str(video), target)
-        except Exception:
-            target = video
-
-        # 関連ファイル（字幕、サムネイル、メタデータ）も移動
+        moved_sidecars: list[tuple[Path, Path]] = []
+        # 関連ファイルを先に配置し、動画本体をcommit markerとして最後に公開する。
         for suffix in (".srt", ".png", ".json"):
             src_file = video.with_suffix(suffix)
             if src_file.exists():
                 dst_file = target.with_suffix(suffix)
                 try:
+                    # 動画本体が無い状態のsidecarは未commitの残骸なので置換する。
+                    dst_file.unlink(missing_ok=True)
                     shutil.move(str(src_file), dst_file)
+                    moved_sidecars.append((src_file, dst_file))
                     self.logger.info(
                         f"関連ファイル{suffix}を移動しました",
                         src=str(src_file),
                         dst=str(dst_file),
                     )
-                except Exception as exc:  # noqa: BLE001
-                    self.logger.error(
-                        f"関連ファイル{suffix}の移動に失敗しました",
-                        error=str(exc),
-                        src=str(src_file),
-                    )
+                except Exception:
+                    self._rollback_sidecars(moved_sidecars)
+                    raise
+
+        try:
+            shutil.move(str(video), target)
+        except Exception:
+            self._rollback_sidecars(moved_sidecars)
+            raise
+
+        if not target.is_file():
+            self._rollback_committed_files(video, target, moved_sidecars)
+            raise RuntimeError(
+                f"編集済み動画の保存を確認できませんでした: {target}"
+            )
 
         self.logger.info("編集後ファイル保存", path=str(target))
 
         self._event_publisher.publish_edited_saved(target)
         return target
+
+    @staticmethod
+    def _rollback_sidecars(moved: list[tuple[Path, Path]]) -> None:
+        for source, destination in reversed(moved):
+            if destination.exists():
+                shutil.move(str(destination), source)
+
+    @classmethod
+    def _rollback_committed_files(
+        cls,
+        source_video: Path,
+        committed_video: Path,
+        moved_sidecars: list[tuple[Path, Path]],
+    ) -> None:
+        if committed_video.exists():
+            shutil.move(str(committed_video), source_video)
+        cls._rollback_sidecars(moved_sidecars)
 
     def list_edited(self) -> list[Path]:
         """編集済みファイルの一覧を取得する。

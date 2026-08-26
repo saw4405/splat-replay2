@@ -16,7 +16,6 @@ import { getProcessStatusPollIntervalMs, renderMode } from '../../renderMode';
 
 export interface ProcessFlowConfig {
   onDataReload: () => void;
-  onAutoRecordingRearmRequest?: () => void;
 }
 
 export function createProcessFlow(config: ProcessFlowConfig) {
@@ -28,7 +27,6 @@ export function createProcessFlow(config: ProcessFlowConfig) {
   let alertMessage = $state('');
   let alertVariant = $state<'info' | 'success' | 'warning' | 'error'>('info');
   let showYouTubePermissionDialog = $state(false);
-  let rearmAutoRecordingOnAlertClose = $state(false);
 
   // --- 非リアクティブ内部状態 ---
   let statusPollingInterval: number | null = null;
@@ -136,7 +134,6 @@ export function createProcessFlow(config: ProcessFlowConfig) {
     };
 
     showProgressDialog = false;
-    rearmAutoRecordingOnAlertClose = payload.success;
 
     if (payload.success) {
       alertMessage = payload.message || '編集・アップロード処理が完了しました!';
@@ -175,12 +172,10 @@ export function createProcessFlow(config: ProcessFlowConfig) {
           if (status.state === 'succeeded') {
             alertMessage = '編集・アップロード処理が完了しました!';
             alertVariant = 'success';
-            rearmAutoRecordingOnAlertClose = true;
             showAlertDialog = true;
           } else if (status.state === 'failed') {
             alertMessage = `編集・アップロード処理が失敗しました: ${status.error || '不明なエラー'}`;
             alertVariant = 'error';
-            rearmAutoRecordingOnAlertClose = false;
             showAlertDialog = true;
           }
         }
@@ -233,7 +228,6 @@ export function createProcessFlow(config: ProcessFlowConfig) {
       console.error('処理開始エラー:', error);
       alertMessage = `処理開始に失敗しました: ${error}`;
       alertVariant = 'error';
-      rearmAutoRecordingOnAlertClose = false;
       showAlertDialog = true;
     }
   }
@@ -254,14 +248,12 @@ export function createProcessFlow(config: ProcessFlowConfig) {
       } else {
         alertMessage = response.message || '処理を開始できませんでした(既に実行中の可能性)';
         alertVariant = 'warning';
-        rearmAutoRecordingOnAlertClose = false;
         showAlertDialog = true;
       }
     } catch (error) {
       console.error('処理開始エラー:', error);
       alertMessage = `処理開始に失敗しました: ${error}`;
       alertVariant = 'error';
-      rearmAutoRecordingOnAlertClose = false;
       showAlertDialog = true;
     }
   }
@@ -282,12 +274,7 @@ export function createProcessFlow(config: ProcessFlowConfig) {
   }
 
   function handleAlertDialogClose(): void {
-    const shouldRearm = rearmAutoRecordingOnAlertClose;
     showAlertDialog = false;
-    rearmAutoRecordingOnAlertClose = false;
-    if (shouldRearm) {
-      config.onAutoRecordingRearmRequest?.();
-    }
   }
 
   function destroy(): void {
@@ -333,9 +320,6 @@ export function createProcessFlow(config: ProcessFlowConfig) {
     },
     set showYouTubePermissionDialog(v: boolean) {
       showYouTubePermissionDialog = v;
-    },
-    get rearmAutoRecordingOnAlertClose() {
-      return rearmAutoRecordingOnAlertClose;
     },
 
     // メソッド

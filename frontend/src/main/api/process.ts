@@ -21,4 +21,14 @@ export const processApi = {
       throw new Error(detail || '自動スリープの開始に失敗しました');
     }
   },
+  cancelSleep: async (): Promise<void> => {
+    const response = await fetch('/api/process/sleep', {
+      method: 'DELETE',
+      headers: JSON_HEADERS,
+    });
+    if (!response.ok) {
+      const detail = await safeReadText(response);
+      throw new Error(detail || '自動スリープのキャンセルに失敗しました');
+    }
+  },
 };

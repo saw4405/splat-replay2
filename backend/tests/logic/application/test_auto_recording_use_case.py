@@ -1,17 +1,25 @@
 from __future__ import annotations
 
+import asyncio
 from dataclasses import replace
 from typing import Awaitable, Callable, cast
 
 import numpy as np
 import pytest
 
-from splat_replay.application.interfaces import CapturePort, LoggerPort
+from splat_replay.application.interfaces import (
+    CaptureDevicePort,
+    CapturePort,
+    LoggerPort,
+)
 from splat_replay.application.services.recording.frame_capture_producer import (
     FrameCaptureProducer,
 )
 from splat_replay.application.services.recording.frame_processing_service import (
     FrameProcessingService,
+)
+from splat_replay.application.services.recording.commands import (
+    RecordingCommand,
 )
 from splat_replay.application.services.recording.recording_context import (
     MatchRateCandidate,
@@ -29,7 +37,13 @@ from splat_replay.application.services.recording.recording_session_service impor
 from splat_replay.application.use_cases.auto_recording_use_case import (
     AutoRecordingUseCase,
 )
-from splat_replay.domain.models import Frame, Match, RecordingMetadata, XP
+from splat_replay.domain.models import (
+    Frame,
+    Match,
+    RecordingMetadata,
+    SwitchPowerState,
+    XP,
+)
 from splat_replay.domain.services import RecordState
 
 
@@ -61,6 +75,16 @@ class _PhaseHandlersSpy:
         self._events = events
         self.drain_contexts: list[RecordingContext] = []
         self.cancel_calls = 0
+        self.handle_frame_calls = 0
+        self.handled_frames: list[Frame] = []
+
+    async def handle_frame(
+        self, frame: Frame, context: RecordingContext, state: RecordState
+    ) -> RecordingCommand:
+        _ = state
+        self.handle_frame_calls += 1
+        self.handled_frames.append(frame)
+        return RecordingCommand.none(context)
 
     async def drain_weapon_detection_completed(
         self, context: RecordingContext
@@ -72,6 +96,14 @@ class _PhaseHandlersSpy:
     def cancel_background_tasks(self) -> None:
         self._events.append("cancel")
         self.cancel_calls += 1
+
+
+class _CaptureIntervalSpy:
+    def __init__(self) -> None:
+        self.intervals: list[float] = []
+
+    def set_capture_interval(self, interval_seconds: float) -> None:
+        self.intervals.append(interval_seconds)
 
 
 class _SessionSpy:
@@ -209,21 +241,25 @@ class _DummyFrameProcessorWithException:
         on_second_call: Callable[[], None] | None = None,
     ) -> None:
         self._frames = list(frames)
-        self.check_power_off_calls = 0
+        self.observe_power_off_calls = 0
         self.on_second_call = on_second_call
 
     async def acquire_frame(self) -> Frame | None:
         return self._frames.pop(0) if self._frames else None
 
-    async def check_power_off(
-        self, frame: Frame, off_count: int, last_check: float
-    ) -> tuple[int, float, bool]:
-        self.check_power_off_calls += 1
-        if self.check_power_off_calls == 1:
+    async def observe_power_off(
+        self,
+        frame: Frame,
+        last_check: float,
+        check_interval_seconds: float = 5.0,
+    ) -> tuple[float, bool | None]:
+        _ = frame, check_interval_seconds
+        self.observe_power_off_calls += 1
+        if self.observe_power_off_calls == 1:
             raise RuntimeError("Simulated crash in OpenCV frame check")
-        if self.check_power_off_calls == 2 and self.on_second_call:
+        if self.observe_power_off_calls == 2 and self.on_second_call:
             self.on_second_call()
-        return off_count, last_check, False
+        return last_check, False
 
 
 @pytest.mark.asyncio
@@ -251,11 +287,14 @@ async def test_main_loop_recovers_from_analysis_exception() -> None:
         async def acquire_frame(self) -> Frame | None:
             return await self._impl.acquire_frame()
 
-        async def check_power_off(
-            self, frame: Frame, off_count: int, last_check: float
-        ) -> tuple[int, float, bool]:
-            return await self._impl.check_power_off(
-                frame, off_count, last_check
+        async def observe_power_off(
+            self,
+            frame: Frame,
+            last_check: float,
+            check_interval_seconds: float = 5.0,
+        ) -> tuple[float, bool | None]:
+            return await self._impl.observe_power_off(
+                frame, last_check, check_interval_seconds
             )
 
     use_case = AutoRecordingUseCase(
@@ -274,4 +313,344 @@ async def test_main_loop_recovers_from_analysis_exception() -> None:
     processor.on_second_call = lambda: use_case._stop_event.set()
     await use_case._run_main_loop()
 
-    assert processor.check_power_off_calls == 2
+    assert processor.observe_power_off_calls == 2
+
+
+class _PowerCycleFrameProcessor:
+    def __init__(self, observations: list[bool]) -> None:
+        self._observations = list(observations)
+        self._next_index = 0
+        self.power_off_events = 0
+        self.check_intervals: list[float] = []
+        self.use_case: AutoRecordingUseCase | None = None
+
+    async def acquire_frame(self) -> Frame | None:
+        return np.zeros((2, 2, 3), dtype=np.uint8)
+
+    async def observe_power_off(
+        self,
+        frame: Frame,
+        last_check: float,
+        check_interval_seconds: float = 5.0,
+    ) -> tuple[float, bool | None]:
+        _ = frame
+        self.check_intervals.append(check_interval_seconds)
+        observation = self._observations[self._next_index]
+        self._next_index += 1
+        if self._next_index == len(self._observations):
+            assert self.use_case is not None
+            self.use_case._stop_event.set()
+        return last_check, observation
+
+    def publish_power_off_detected(self, final: bool = False) -> None:
+        assert final is True
+        self.power_off_events += 1
+
+
+@pytest.mark.asyncio
+async def test_main_loop_rearms_for_three_power_cycles() -> None:
+    events: list[str] = []
+    observations = [
+        *([False] * 3),
+        *([True] * 6),
+        *([False] * 3),
+        *([True] * 3),
+        *([False] * 3),
+        *([True] * 3),
+        *([False] * 3),
+    ]
+    processor = _PowerCycleFrameProcessor(observations)
+    session = _SessionSpy(events=events)
+    session.state = RecordState.STOPPED
+    phase_handlers = _PhaseHandlersSpy(
+        drained_context=RecordingContext(), events=events
+    )
+    capture_producer = _CaptureIntervalSpy()
+    use_case = AutoRecordingUseCase(
+        session_service=cast(RecordingSessionService, session),
+        frame_processor=cast(FrameProcessingService, processor),
+        phase_handlers=cast(PhaseHandlerRegistry, phase_handlers),
+        context=RecordingContext(),
+        capture=cast(CapturePort, object()),
+        capture_producer=cast(FrameCaptureProducer, capture_producer),
+        publisher_worker=cast(PublisherWorker, object()),
+        logger=cast(LoggerPort, _LoggerStub()),
+    )
+    processor.use_case = use_case
+
+    saw_power_off = await use_case._run_main_loop()
+
+    assert saw_power_off is True
+    assert use_case.power_status() is SwitchPowerState.ARMED
+    assert processor.power_off_events == 3
+    assert phase_handlers.handle_frame_calls > 0
+    assert processor.check_intervals == [
+        *([0.0] * 3),
+        *([5.0] * 3),
+        *([0.0] * 6),
+        *([5.0] * 3),
+        *([0.0] * 3),
+        *([5.0] * 3),
+        *([0.0] * 3),
+    ]
+    assert capture_producer.intervals == [0.0, 1.0, 0.0, 1.0, 0.0, 1.0, 0.0]
+
+
+@pytest.mark.asyncio
+async def test_main_loop_replays_all_frames_used_to_confirm_power_on() -> None:
+    events: list[str] = []
+    on_candidate_frames = [
+        np.full((2, 2, 3), fill_value=value, dtype=np.uint8)
+        for value in (1, 2, 3)
+    ]
+
+    class _OnCandidateFrameProcessor:
+        def __init__(self) -> None:
+            self.frames = list(on_candidate_frames)
+            self.use_case: AutoRecordingUseCase | None = None
+
+        async def acquire_frame(self) -> Frame | None:
+            if self.frames:
+                return self.frames.pop(0)
+            assert self.use_case is not None
+            self.use_case._stop_event.set()
+            return None
+
+        async def observe_power_off(
+            self,
+            frame: Frame,
+            last_check: float,
+            check_interval_seconds: float = 5.0,
+        ) -> tuple[float, bool | None]:
+            _ = frame, check_interval_seconds
+            return last_check, False
+
+    processor = _OnCandidateFrameProcessor()
+    session = _SessionSpy(events=events)
+    session.state = RecordState.STOPPED
+    phase_handlers = _PhaseHandlersSpy(
+        drained_context=RecordingContext(), events=events
+    )
+    capture_producer = _CaptureIntervalSpy()
+    use_case = AutoRecordingUseCase(
+        session_service=cast(RecordingSessionService, session),
+        frame_processor=cast(FrameProcessingService, processor),
+        phase_handlers=cast(PhaseHandlerRegistry, phase_handlers),
+        context=RecordingContext(),
+        capture=cast(CapturePort, object()),
+        capture_producer=cast(FrameCaptureProducer, capture_producer),
+        publisher_worker=cast(PublisherWorker, object()),
+        logger=cast(LoggerPort, _LoggerStub()),
+    )
+    use_case._last_record_state = RecordState.STOPPED
+    processor.use_case = use_case
+
+    await use_case._run_main_loop()
+
+    assert len(phase_handlers.handled_frames) == 3
+    assert all(
+        handled is expected
+        for handled, expected in zip(
+            phase_handlers.handled_frames,
+            on_candidate_frames,
+            strict=True,
+        )
+    )
+    assert capture_producer.intervals == [0.0]
+
+
+@pytest.mark.asyncio
+async def test_capture_disconnect_does_not_publish_power_off() -> None:
+    events: list[str] = []
+
+    class _NoFrameProcessor:
+        def __init__(self) -> None:
+            self.power_off_events = 0
+
+        async def acquire_frame(self) -> Frame | None:
+            return None
+
+        def publish_power_off_detected(self, final: bool = False) -> None:
+            _ = final
+            self.power_off_events += 1
+
+    class _DisconnectedDevice:
+        def is_connected(self) -> bool:
+            use_case._stop_event.set()
+            return False
+
+    processor = _NoFrameProcessor()
+    session = _SessionSpy(events=events)
+    session.state = RecordState.STOPPED
+    phase_handlers = _PhaseHandlersSpy(
+        drained_context=RecordingContext(), events=events
+    )
+    capture_producer = _CaptureIntervalSpy()
+    use_case = AutoRecordingUseCase(
+        session_service=cast(RecordingSessionService, session),
+        frame_processor=cast(FrameProcessingService, processor),
+        phase_handlers=cast(PhaseHandlerRegistry, phase_handlers),
+        context=RecordingContext(),
+        capture=cast(CapturePort, object()),
+        capture_producer=cast(FrameCaptureProducer, capture_producer),
+        publisher_worker=cast(PublisherWorker, object()),
+        logger=cast(LoggerPort, _LoggerStub()),
+        capture_device=cast(CaptureDevicePort, _DisconnectedDevice()),
+    )
+
+    saw_power_off = await use_case._run_main_loop()
+
+    assert saw_power_off is False
+    assert use_case.power_status() is SwitchPowerState.CAPTURE_DISCONNECTED
+    assert processor.power_off_events == 0
+    assert capture_producer.intervals == [1.0]
+
+
+@pytest.mark.asyncio
+async def test_background_recorder_retries_after_setup_failure() -> None:
+    events: list[str] = []
+
+    class _RetrySession(_SessionSpy):
+        def __init__(self) -> None:
+            super().__init__(events=events)
+            self.state = RecordState.STOPPED
+            self.setup_calls = 0
+
+        async def setup(self) -> None:
+            self.setup_calls += 1
+            if self.setup_calls == 1:
+                raise RuntimeError("OBS unavailable")
+
+        async def teardown(self) -> None:
+            return None
+
+    class _Capture:
+        def setup(self) -> None:
+            return None
+
+        def teardown(self) -> None:
+            return None
+
+    class _Worker:
+        def set_capture_interval(self, interval_seconds: float) -> None:
+            _ = interval_seconds
+
+        def start(self) -> None:
+            return None
+
+        def stop(self) -> None:
+            return None
+
+    session = _RetrySession()
+    phase_handlers = _PhaseHandlersSpy(
+        drained_context=RecordingContext(), events=events
+    )
+    use_case = AutoRecordingUseCase(
+        session_service=cast(RecordingSessionService, session),
+        frame_processor=cast(FrameProcessingService, object()),
+        phase_handlers=cast(PhaseHandlerRegistry, phase_handlers),
+        context=RecordingContext(),
+        capture=cast(CapturePort, _Capture()),
+        capture_producer=cast(FrameCaptureProducer, _Worker()),
+        publisher_worker=cast(PublisherWorker, _Worker()),
+        logger=cast(LoggerPort, _LoggerStub()),
+        background_retry_delay_seconds=0.0,
+    )
+
+    async def stop_after_retry(*, continuous: bool = True) -> bool:
+        _ = continuous
+        use_case.force_stop()
+        return False
+
+    original_run_main_loop = use_case._run_main_loop
+
+    async def run_main_loop_after_setup(*, continuous: bool = True) -> bool:
+        if session.setup_calls >= 2:
+            return await stop_after_retry(continuous=continuous)
+        return await original_run_main_loop(continuous=continuous)
+
+    use_case._run_main_loop = (  # type: ignore[method-assign]
+        run_main_loop_after_setup
+    )
+
+    assert await use_case.start_background() is True
+    task = use_case._task
+    assert task is not None
+    await asyncio.wait_for(task, timeout=1)
+
+    assert session.setup_calls == 2
+    assert use_case.status() == "stopped"
+
+
+@pytest.mark.asyncio
+async def test_stop_background_waits_for_recorder_cleanup() -> None:
+    events: list[str] = []
+    setup_completed = asyncio.Event()
+
+    class _Session:
+        state = RecordState.STOPPED
+
+        async def setup(self) -> None:
+            events.append("session_setup")
+
+        async def teardown(self) -> None:
+            events.append("session_teardown")
+
+    class _Capture:
+        def setup(self) -> None:
+            events.append("capture_setup")
+            setup_completed.set()
+
+        def teardown(self) -> None:
+            events.append("capture_teardown")
+
+    class _Worker:
+        def __init__(self, name: str) -> None:
+            self.name = name
+
+        def set_capture_interval(self, interval_seconds: float) -> None:
+            events.append(f"{self.name}_interval_{interval_seconds:.1f}")
+
+        def start(self) -> None:
+            events.append(f"{self.name}_start")
+
+        def stop(self) -> None:
+            events.append(f"{self.name}_stop")
+
+    class _NoFrameProcessor:
+        async def acquire_frame(self) -> Frame | None:
+            return None
+
+    phase_handlers = _PhaseHandlersSpy(
+        drained_context=RecordingContext(), events=events
+    )
+    use_case = AutoRecordingUseCase(
+        session_service=cast(RecordingSessionService, _Session()),
+        frame_processor=cast(FrameProcessingService, _NoFrameProcessor()),
+        phase_handlers=cast(PhaseHandlerRegistry, phase_handlers),
+        context=RecordingContext(),
+        capture=cast(CapturePort, _Capture()),
+        capture_producer=cast(FrameCaptureProducer, _Worker("capture")),
+        publisher_worker=cast(PublisherWorker, _Worker("publisher")),
+        logger=cast(LoggerPort, _LoggerStub()),
+    )
+
+    assert await use_case.start_background() is True
+    await asyncio.wait_for(setup_completed.wait(), timeout=1)
+
+    await asyncio.wait_for(use_case.stop_background(), timeout=1)
+
+    assert use_case.status() == "stopped"
+    assert use_case.power_status() is SwitchPowerState.STOPPED
+    assert events == [
+        "session_setup",
+        "capture_setup",
+        "publisher_start",
+        "capture_interval_1.0",
+        "capture_start",
+        "cancel",
+        "capture_stop",
+        "publisher_stop",
+        "capture_teardown",
+        "session_teardown",
+    ]

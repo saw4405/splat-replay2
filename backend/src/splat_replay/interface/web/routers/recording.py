@@ -45,6 +45,19 @@ class RecorderPreviewModeResponse(BaseModel):
     mode: Literal["live_capture", "video_file"]
 
 
+class AutoRecorderStateResponse(BaseModel):
+    """常駐自動録画とSwitch電源監視の状態。"""
+
+    state: Literal["idle", "running", "stopped"]
+    power_state: Literal[
+        "unknown",
+        "armed",
+        "waiting_for_power_on",
+        "capture_disconnected",
+        "stopped",
+    ]
+
+
 class AudioHealthWarningResponse(BaseModel):
     """OBS 音声入力ヘルスチェック警告レスポンス。"""
 
@@ -145,6 +158,15 @@ def create_recording_router(server: WebAPIServer) -> APIRouter:
             error_handler.handle_error(
                 e, context="自動録画停止", log_level="warning"
             )
+
+    @router.get("/auto-state", response_model=AutoRecorderStateResponse)
+    async def get_auto_recorder_state() -> AutoRecorderStateResponse:
+        """常駐自動録画とSwitch電源監視の状態を取得する。"""
+        use_case = server.auto_recording_use_case_factory()
+        return AutoRecorderStateResponse(
+            state=use_case.status(),
+            power_state=use_case.power_status().value,
+        )
 
     @router.post("/start", response_model=StandardResponse)
     async def manual_start_recorder() -> StandardResponse:

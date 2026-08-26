@@ -10,43 +10,32 @@
     payload: CountdownPayload;
     title?: string;
     onDismiss: () => void;
-    onStart: () => void | Promise<void>;
+    onCancel: () => void | Promise<void>;
   }
 
-  let { payload, title = '自動処理の開始予告', onDismiss, onStart }: Props = $props();
+  let { payload, title = '自動処理の開始予告', onDismiss, onCancel }: Props = $props();
 
   // マウント時の初期値のみ使用（カウントダウン中に payload は変化しない）
   let remainingSeconds = $state(untrack(() => payload.timeout_seconds));
   let progress = $state(100);
   let intervalId: number;
-  let startRequested = $state(false);
+  let cancelRequested = $state(false);
   const totalSeconds = $derived(payload.timeout_seconds);
 
-  async function handleStart() {
-    if (startRequested) {
+  async function handleCancel(): Promise<void> {
+    if (cancelRequested) {
       return;
     }
-    startRequested = true;
+    cancelRequested = true;
     if (intervalId) {
       clearInterval(intervalId);
     }
     onDismiss();
     try {
-      await onStart();
+      await onCancel();
     } catch (error) {
-      console.error('開始に失敗しました:', error);
+      console.error('キャンセルに失敗しました:', error);
     }
-  }
-
-  function handleCancel(): void {
-    if (startRequested) {
-      return;
-    }
-    startRequested = true;
-    if (intervalId) {
-      clearInterval(intervalId);
-    }
-    onDismiss();
   }
 
   onMount(() => {
@@ -61,7 +50,7 @@
 
       if (left <= 0) {
         clearInterval(intervalId);
-        void handleStart();
+        onDismiss();
       }
     }, UI_COUNTDOWN_TICK_INTERVAL_MS);
   });
@@ -82,7 +71,7 @@
 
     <div class="action-row">
       <span class="timer">あと {remainingSeconds} 秒</span>
-      <button class="cancel-button" onclick={handleCancel} disabled={startRequested}>
+      <button class="cancel-button" onclick={() => void handleCancel()} disabled={cancelRequested}>
         キャンセル
       </button>
     </div>

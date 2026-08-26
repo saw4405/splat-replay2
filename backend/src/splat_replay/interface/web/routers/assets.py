@@ -268,6 +268,7 @@ def create_assets_router(server: WebAPIServer) -> APIRouter:
     )
     async def cancel_edit_upload() -> EditUploadStatus:
         """編集・アップロード処理をキャンセル。"""
+        server.auto_process_service.cancel_pending_process()
         server.start_edit_upload_uc.cancel()
         status_dto = await server.get_edit_upload_status_uc.execute()
         return _to_edit_upload_status(status_dto)

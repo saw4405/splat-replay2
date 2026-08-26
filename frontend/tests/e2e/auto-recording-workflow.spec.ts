@@ -74,9 +74,11 @@ for (const replayAsset of earlyAbortReplayAssets) {
     await gotoMain(page);
     await ensureAutoRecordingEnabled(page);
     await waitForRecordingLifecycle(page);
-    await expect(page.getByTestId('video-preview-status')).toHaveText('Stopped', {
-      timeout: 300_000,
-    });
+    await expect(
+      page.getByRole('button', {
+        name: '次のバトルを自動録画する準備ができています。手動録画操作を開く',
+      })
+    ).toBeVisible({ timeout: 300_000 });
     await page.getByTestId('metadata-toggle-button').click();
     await expect(page.getByLabel('開始時間')).toHaveValue('');
     await expect(page.getByLabel('キル数')).toHaveValue('0');
