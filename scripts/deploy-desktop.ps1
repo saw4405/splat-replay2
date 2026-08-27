@@ -43,6 +43,22 @@ function ConvertTo-Sha256Hex {
     return ([System.BitConverter]::ToString($hash) -replace "-", "").ToLowerInvariant()
 }
 
+function Get-Sha256FileHex {
+    param([Parameter(Mandatory = $true)][string]$Path)
+
+    $stream = [System.IO.File]::OpenRead($Path)
+    $sha256 = [System.Security.Cryptography.SHA256]::Create()
+    try {
+        $hash = $sha256.ComputeHash($stream)
+    }
+    finally {
+        $sha256.Dispose()
+        $stream.Dispose()
+    }
+
+    return ([System.BitConverter]::ToString($hash) -replace "-", "").ToLowerInvariant()
+}
+
 function ConvertTo-Array {
     param([Parameter()][AllowNull()][object]$Value)
 
@@ -239,7 +255,7 @@ function Get-UntrackedEntries {
 
         [ordered]@{
             path = $relativePath
-            sha256 = (Get-FileHash -LiteralPath $absolutePath -Algorithm SHA256).Hash.ToLowerInvariant()
+            sha256 = Get-Sha256FileHex -Path $absolutePath
         }
     }
 
