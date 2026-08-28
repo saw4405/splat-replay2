@@ -10,6 +10,9 @@ from typing import TYPE_CHECKING
 from splat_replay.application.use_cases import AutoUseCase, UploadUseCase
 from splat_replay.infrastructure.config import load_settings_from_toml
 from splat_replay.infrastructure.di import configure_container, resolve
+from splat_replay.infrastructure.di.runtime_profile import (
+    resolve_runtime_profile,
+)
 from splat_replay.infrastructure.filesystem import PROJECT_ROOT
 from splat_replay.interface.cli.main import CliDependencies, build_app
 
@@ -27,7 +30,9 @@ class _LazyResources:
 
     def container(self) -> punq.Container:
         if self._container is None:
-            self._container = configure_container()
+            self._container = configure_container(
+                profile=resolve_runtime_profile()
+            )
         return self._container
 
     def logger(self) -> BoundLogger:

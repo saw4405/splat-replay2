@@ -96,7 +96,8 @@ recorded seed は frontend 側 helper で E2E 用一時 storage に録画済み 
 - `*.mkv` または `*.mp4`
 - 同名の `*.json`
 
-`*.json` は replay fixture の sidecar をベースにしつつ、`scenario` を除外した recorded metadata として保存します。  
+`*.json` は replay fixture の sidecar にある `expected` だけを recorded metadata として保存します。
+`scenario` と `observations` は replay 入力専用であり、recorded seed へ混在させません。
 必要に応じて `fileStem` と `metadataOverride` を指定して、同じ replay fixture から複数の recorded seed を作れます。
 
 ## 5. replay fixture とモード
@@ -114,9 +115,22 @@ replay fixture は次のディレクトリに配置しています。
 
 既定値は `full` です。
 
-## 6. 実行コマンド
+## 6. replay 実行プロファイル
 
-### 6.1. suite 全体
+Playwright の backend は `SPLAT_REPLAY_RUNTIME_PROFILE=replay` で起動します。replay プロファイルでは、起動時から有効な replay 入力を必須とし、NDI、OBS、実機キャプチャデバイス・マイクの列挙、および OS の電源操作を利用しません。
+
+spec 実行中に `configureReplayAsset()` が replay 入力を切り替える既存の挙動は維持します。入力が無くなった場合に実機入力へ黙って戻ることはありません。
+
+WSL2 / Linux での `workflow:full` 合格は、ハードウェア非依存の replay E2E 可搬性ゲートです。将来の macOS 製品対応（ネイティブ依存、配布、実機連携）の検証を代替するものではありません。
+
+sidecar は `schema_version`、`scenario`、`observations`、`expected` を分離します。
+replay backend には `scenario` と `observations` だけを渡し、`expected` は UI の独立した期待値です。
+
+`observations` の武器認識・OCR・表彰認識は既存ポートで返します。その後の録画状態遷移、メタデータ更新、保存、API、UI は実装を通るため、workflow E2E は外部認識結果が伝播する結線を保証します。一方、実 Tesseract / 実ブキ・表彰 CV の精度・性能は固定フレームの lower integration / performance テストで別に保証します。実 OCR 統合テストを実行する場合だけ、OS 側の `tesseract` コマンドが必要です。
+
+## 7. 実行コマンド
+
+### 7.1. suite 全体
 
 ```bat
 cd /d C:\Users\shogo\repo\splat-replay2
@@ -126,7 +140,7 @@ task.exe test:workflow:smoke
 task.exe test:workflow:full
 ```
 
-### 6.2. replay を使う spec
+### 7.2. replay を使う spec
 
 ```bat
 cd /d C:\Users\shogo\repo\splat-replay2\frontend
@@ -135,7 +149,7 @@ npm run test:e2e -- tests/e2e/recording-metadata-edit-workflow.spec.ts
 npm run test:e2e -- tests/e2e/error-recovery-recording-live.spec.ts
 ```
 
-### 6.3. recorded seed の spec
+### 7.3. recorded seed の spec
 
 ```bat
 cd /d C:\Users\shogo\repo\splat-replay2\frontend
@@ -145,14 +159,14 @@ npm run test:e2e -- tests/e2e/recorded-metadata-edit-workflow.spec.ts
 npm run test:e2e -- tests/e2e/error-recovery-recorded-assets.spec.ts
 ```
 
-### 6.4. no-video の spec
+### 7.4. no-video の spec
 
 ```bat
 cd /d C:\Users\shogo\repo\splat-replay2\frontend
 npm run test:e2e -- tests/e2e/settings-persistence.spec.ts
 ```
 
-## 7. 保守ルール
+## 8. 保守ルール
 
 新しい E2E を追加するときは、先に次の基準で判定します。
 

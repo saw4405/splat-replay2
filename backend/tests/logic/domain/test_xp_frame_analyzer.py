@@ -5,7 +5,7 @@ import pytest
 from typing import cast
 
 from splat_replay.domain.models import Frame, as_frame, XP
-from splat_replay.domain.ports import ImageMatcherPort, OCRPort
+from splat_replay.domain.ports import ImageMatcherPort, OCRPort, OCRPurpose
 from splat_replay.domain.ports.image_editor import ImageEditorFactory
 from splat_replay.domain.services.analyzers.battle_analyzer import (
     BattleFrameAnalyzer,
@@ -31,8 +31,9 @@ class _OCR:
         image: Frame,
         ps_mode: str | None = None,
         whitelist: str | None = None,
+        purpose: OCRPurpose | None = None,
     ) -> str | None:
-        _ = image, ps_mode, whitelist
+        _ = image, ps_mode, whitelist, purpose
         return self._text
 
 

@@ -23,6 +23,7 @@ from splat_replay.domain.ports import (
     ImageEditorPort,
     ImageMatcherPort,
     OCRPort,
+    OCRPurpose,
 )
 
 from .analyzer_plugin import AnalyzerPlugin
@@ -95,7 +96,10 @@ class BattleFrameAnalyzer(AnalyzerPlugin):
     async def extract_xp(self, frame: Frame) -> Optional[XP]:
         """XPを取得する。"""
         xp_image = as_frame(frame[190:240, 1730:1880].copy())
-        diagnostics = await self._extract_xp_from_roi(xp_image)
+        diagnostics = await self._extract_xp_from_roi(
+            xp_image,
+            purpose=OCRPurpose.BATTLE_XP,
+        )
         return diagnostics.xp
 
     async def extract_event_power(self, frame: Frame) -> Optional[XP]:
@@ -104,7 +108,10 @@ class BattleFrameAnalyzer(AnalyzerPlugin):
             return None
         # 指定ROIの下端にOCRノイズが入るため、OCR入力はXPと同じ高さにそろえる。
         event_power_ocr_image = as_frame(frame[190:240, 1710:1860].copy())
-        diagnostics = await self._extract_xp_from_roi(event_power_ocr_image)
+        diagnostics = await self._extract_xp_from_roi(
+            event_power_ocr_image,
+            purpose=OCRPurpose.BATTLE_EVENT_POWER,
+        )
         return diagnostics.xp
 
     def _prepare_xp_editor(self, xp_image: Frame) -> ImageEditorPort:
@@ -117,12 +124,18 @@ class BattleFrameAnalyzer(AnalyzerPlugin):
         )
 
     async def _extract_xp_from_roi(
-        self, xp_image: Frame
+        self,
+        xp_image: Frame,
+        *,
+        purpose: OCRPurpose,
     ) -> XPExtractionDiagnostics:
         xp_editor = self._prepare_xp_editor(xp_image)
         xp_proc = xp_editor.image
         xp_str = await self.ocr.recognize_text(
-            xp_proc, ps_mode="SINGLE_LINE", whitelist="0123456789."
+            xp_proc,
+            ps_mode="SINGLE_LINE",
+            whitelist="0123456789.",
+            purpose=purpose,
         )
         component_count = xp_editor.count_connected_components(
             foreground_threshold=XP_FOREGROUND_THRESHOLD,
@@ -198,7 +211,10 @@ class BattleFrameAnalyzer(AnalyzerPlugin):
         )
         xp_proc = xp_editor.image
         xp_str = await self.ocr.recognize_text(
-            xp_proc, ps_mode="SINGLE_LINE", whitelist="0123456789."
+            xp_proc,
+            ps_mode="SINGLE_LINE",
+            whitelist="0123456789.",
+            purpose=OCRPurpose.BATTLE_XP,
         )
         component_count = xp_editor.count_connected_components(
             foreground_threshold=XP_FOREGROUND_THRESHOLD,

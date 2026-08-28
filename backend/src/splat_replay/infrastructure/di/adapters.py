@@ -15,6 +15,7 @@ from splat_replay.application.interfaces import (
     BattleHistoryRepositoryPort,
     CaptureDeviceEnumeratorPort,
     CaptureDevicePort,
+    CaptureDeviceSettingsView,
     CapturePort,
     ClockPort,
     DomainEventPublisher,
@@ -26,6 +27,7 @@ from splat_replay.application.interfaces import (
     ImageSelector,
     LoggerPort,
     MicrophoneEnumeratorPort,
+    OBSSettingsView,
     PowerPort,
     RecorderWithTranscriptionPort,
     ReplayBootstrapResolverPort,
@@ -57,8 +59,6 @@ from splat_replay.infrastructure import (
     AdaptiveCapture,
     AdaptiveCaptureDeviceChecker,
     AdaptiveVideoRecorder,
-    BattleMedalRecognizerAdapter,
-    CaptureDeviceEnumerator,
     EventBusPortAdapter,
     EventPublisherAdapter,
     FFmpegProcessor,
@@ -69,23 +69,28 @@ from splat_replay.infrastructure import (
     ImageDrawer,
     MatcherRegistry,
     RecorderWithTranscription,
+    ReplayOCRAdapter,
+    ReplayWeaponRecognitionAdapter,
     SetupStateFileAdapter,
     SubtitleEditor,
     SystemCommandAdapter,
-    SystemPower,
-    TesseractOCR,
     TomlSettingsRepository,
-    WeaponRecognitionAdapter,
     YouTubeClient,
 )
 from splat_replay.infrastructure.adapters.system.capture_clock import (
     CaptureClock,
+)
+from splat_replay.infrastructure.adapters.system.replay_runtime import (
+    ReplayCaptureDeviceEnumerator,
+    ReplayMicrophoneEnumerator,
+    ReplayPower,
 )
 from splat_replay.infrastructure.adapters.diagnostics import (
     FileXPDetectionDiagnostics,
 )
 from splat_replay.infrastructure.adapters.upload import NoOpUploadPort
 from splat_replay.infrastructure.config import load_settings_from_toml
+from splat_replay.infrastructure.di.runtime_profile import RuntimeProfile
 from splat_replay.infrastructure.filesystem import paths
 from splat_replay.infrastructure.runtime import AppRuntime
 from splat_replay.infrastructure.test_input import (
@@ -98,26 +103,95 @@ def _is_e2e_noop_upload_enabled(environment: EnvironmentPort) -> bool:
     return environment.get("SPLAT_REPLAY_E2E_NOOP_UPLOAD", "0") == "1"
 
 
-def register_adapters(container: punq.Container) -> None:
+def register_adapters(
+    container: punq.Container,
+    profile: RuntimeProfile = RuntimeProfile.LIVE,
+) -> None:
     """アダプターを DI コンテナに登録する。"""
-    container.register(CaptureDevicePort, AdaptiveCaptureDeviceChecker)
-    container.register(CaptureDeviceEnumeratorPort, CaptureDeviceEnumerator)
+    if profile is RuntimeProfile.REPLAY:
 
-    def _microphone_enumerator_factory() -> MicrophoneEnumeratorPort:
-        from splat_replay.infrastructure.adapters.audio.microphone_enumerator import (
-            MicrophoneEnumerator,
+        def _replay_capture_device_factory() -> CaptureDevicePort:
+            return AdaptiveCaptureDeviceChecker(
+                cast(
+                    CaptureDeviceSettingsView,
+                    container.resolve(CaptureDeviceSettingsView),
+                ),
+                cast(BoundLogger, container.resolve(BoundLogger)),
+                live_checker_factory=None,
+            )
+
+        def _replay_capture_factory() -> CapturePort:
+            return AdaptiveCapture(
+                cast(BoundLogger, container.resolve(BoundLogger)),
+                live_capture_factory=None,
+            )
+
+        def _replay_recorder_factory() -> VideoRecorderPort:
+            return AdaptiveVideoRecorder(
+                cast(OBSSettingsView, container.resolve(OBSSettingsView)),
+                cast(
+                    VideoStorageSettings,
+                    container.resolve(VideoStorageSettings),
+                ),
+                cast(BoundLogger, container.resolve(BoundLogger)),
+                live_recorder_factory=None,
+            )
+
+        container.register(
+            CaptureDevicePort, factory=_replay_capture_device_factory
+        )
+        container.register(
+            CaptureDeviceEnumeratorPort, ReplayCaptureDeviceEnumerator
+        )
+        container.register(
+            MicrophoneEnumeratorPort, ReplayMicrophoneEnumerator
+        )
+        container.register(
+            CapturePort,
+            factory=_replay_capture_factory,
+            scope=punq.Scope.singleton,
+        )
+        container.register(
+            VideoRecorderPort,
+            factory=_replay_recorder_factory,
+            scope=punq.Scope.singleton,
+        )
+        container.register(PowerPort, ReplayPower)
+    else:
+        from splat_replay.infrastructure.adapters.capture.capture_device_checker import (
+            CaptureDeviceEnumerator,
+        )
+        from splat_replay.infrastructure.adapters.system.system_power import (
+            SystemPower,
         )
 
-        return MicrophoneEnumerator(
-            cast(BoundLogger, container.resolve(BoundLogger))
+        container.register(CaptureDevicePort, AdaptiveCaptureDeviceChecker)
+        container.register(
+            CaptureDeviceEnumeratorPort, CaptureDeviceEnumerator
         )
 
-    container.register(
-        MicrophoneEnumeratorPort, factory=_microphone_enumerator_factory
-    )
-    container.register(
-        CapturePort, AdaptiveCapture, scope=punq.Scope.singleton
-    )
+        def _microphone_enumerator_factory() -> MicrophoneEnumeratorPort:
+            from splat_replay.infrastructure.adapters.audio.microphone_enumerator import (
+                MicrophoneEnumerator,
+            )
+
+            return MicrophoneEnumerator(
+                cast(BoundLogger, container.resolve(BoundLogger))
+            )
+
+        container.register(
+            MicrophoneEnumeratorPort, factory=_microphone_enumerator_factory
+        )
+        container.register(
+            CapturePort, AdaptiveCapture, scope=punq.Scope.singleton
+        )
+        container.register(
+            VideoRecorderPort,
+            AdaptiveVideoRecorder,
+            scope=punq.Scope.singleton,
+        )
+        container.register(PowerPort, SystemPower)
+
     container.register(
         ClockPort,
         factory=lambda: CaptureClock(container.resolve(CapturePort)),
@@ -126,11 +200,6 @@ def register_adapters(container: punq.Container) -> None:
     container.register(
         ReplayBootstrapResolverPort,
         ConfiguredReplayBootstrapResolver,
-        scope=punq.Scope.singleton,
-    )
-    container.register(
-        VideoRecorderPort,
-        AdaptiveVideoRecorder,
         scope=punq.Scope.singleton,
     )
     container.register(VideoEditorPort, FFmpegProcessor)
@@ -150,9 +219,29 @@ def register_adapters(container: punq.Container) -> None:
 
     container.register(ImageEditorFactory, instance=_image_editor_factory)
 
-    container.register(PowerPort, SystemPower)
-    container.register(OCRPort, TesseractOCR)
-    container.register(BattleMedalRecognizerPort, BattleMedalRecognizerAdapter)
+    if profile is RuntimeProfile.REPLAY:
+        container.register(OCRPort, ReplayOCRAdapter)
+    else:
+        from splat_replay.infrastructure import TesseractOCR
+
+        container.register(OCRPort, TesseractOCR)
+    if profile is RuntimeProfile.REPLAY:
+        from splat_replay.infrastructure.adapters.medal_detection.replay_recognizer import (
+            ReplayBattleMedalRecognizerAdapter,
+        )
+
+        container.register(
+            BattleMedalRecognizerPort,
+            ReplayBattleMedalRecognizerAdapter,
+        )
+    else:
+        from splat_replay.infrastructure.adapters.medal_detection.recognizer import (
+            BattleMedalRecognizerAdapter,
+        )
+
+        container.register(
+            BattleMedalRecognizerPort, BattleMedalRecognizerAdapter
+        )
     environment = container.resolve(EnvironmentPort)
     if _is_e2e_noop_upload_enabled(environment):
         container.register(UploadPort, NoOpUploadPort)
@@ -218,11 +307,20 @@ def register_adapters(container: punq.Container) -> None:
     container.register(
         ImageSelector, instance=ImageDrawer.select_brightest_image
     )
-    container.register(
-        WeaponRecognitionPort,
-        WeaponRecognitionAdapter,
-        scope=punq.Scope.singleton,
-    )
+    if profile is RuntimeProfile.REPLAY:
+        container.register(
+            WeaponRecognitionPort,
+            ReplayWeaponRecognitionAdapter,
+            scope=punq.Scope.singleton,
+        )
+    else:
+        from splat_replay.infrastructure import WeaponRecognitionAdapter
+
+        container.register(
+            WeaponRecognitionPort,
+            WeaponRecognitionAdapter,
+            scope=punq.Scope.singleton,
+        )
 
     def _text_to_speech_factory() -> TextToSpeechPort | None:
         try:

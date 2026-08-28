@@ -34,6 +34,7 @@ export default defineConfig({
         ...process.env,
         SPLAT_REPLAY_SETTINGS_FILE: e2eEnvironment.settingsFile,
         SPLAT_REPLAY_E2E_NOOP_UPLOAD: '1',
+        SPLAT_REPLAY_RUNTIME_PROFILE: 'replay',
       },
       timeout: 180_000,
       url: 'http://127.0.0.1:8000/api/settings',

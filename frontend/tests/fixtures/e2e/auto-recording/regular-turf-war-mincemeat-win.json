@@ -1,21 +1,76 @@
 {
-  "game_mode": "BATTLE",
-  "started_at": "2026-03-12T22:22:00.999005",
-  "rate": null,
-  "judgement": "WIN",
-  "allies": ["トライストリンガー", "52ガロン", "カーボンローラーデコ", "スパッタリー・ヒュー"],
-  "enemies": [
-    "LACT-450デコ",
-    "スプラチャージャーコラボ",
-    "ノーチラス79",
-    "ホットブラスターカスタム"
-  ],
-  "match": "REGULAR",
-  "rule": "TURF_WAR",
-  "stage": "MINCEMEAT_METALWORKS",
-  "kill": 13,
-  "death": 2,
-  "special": 3,
-  "gold_medals": 3,
-  "silver_medals": 0
+  "schema_version": 1,
+  "scenario": {},
+  "observations": {
+    "weapon_recognition": {
+      "display": {
+        "is_visible": true,
+        "should_recognize": true
+      },
+      "slots": {
+        "ally_1": {
+          "weapon": "トライストリンガー",
+          "matched": true
+        },
+        "ally_2": {
+          "weapon": "52ガロン",
+          "matched": true
+        },
+        "ally_3": {
+          "weapon": "カーボンローラーデコ",
+          "matched": true
+        },
+        "ally_4": {
+          "weapon": "スパッタリー・ヒュー",
+          "matched": true
+        },
+        "enemy_1": {
+          "weapon": "LACT-450デコ",
+          "matched": true
+        },
+        "enemy_2": {
+          "weapon": "スプラチャージャーコラボ",
+          "matched": true
+        },
+        "enemy_3": {
+          "weapon": "ノーチラス79",
+          "matched": true
+        },
+        "enemy_4": {
+          "weapon": "ホットブラスターカスタム",
+          "matched": true
+        }
+      }
+    },
+    "ocr": {
+      "battle_kill": "13",
+      "battle_death": "2",
+      "battle_special": "3"
+    },
+    "battle_medals": {
+      "gold": 3,
+      "silver": 0
+    }
+  },
+  "expected": {
+    "game_mode": "BATTLE",
+    "started_at": "2026-03-12T22:22:00.999005",
+    "rate": null,
+    "judgement": "WIN",
+    "allies": ["トライストリンガー", "52ガロン", "カーボンローラーデコ", "スパッタリー・ヒュー"],
+    "enemies": [
+      "LACT-450デコ",
+      "スプラチャージャーコラボ",
+      "ノーチラス79",
+      "ホットブラスターカスタム"
+    ],
+    "match": "REGULAR",
+    "rule": "TURF_WAR",
+    "stage": "MINCEMEAT_METALWORKS",
+    "kill": 13,
+    "death": 2,
+    "special": 3,
+    "gold_medals": 3,
+    "silver_medals": 0
+  }
 }

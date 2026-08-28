@@ -4,15 +4,11 @@ import { extname, join } from 'node:path';
 import {
   loadSidecarMetadata,
   type E2EEnvironment,
+  type ExpectedSidecarMetadata,
   type ReplayAsset,
-  type SidecarMetadata,
 } from './e2eEnv';
 
-type SeedableSidecarMetadata = SidecarMetadata & {
-  started_at?: string | null;
-};
-
-export type RecordedSeedMetadata = Omit<SeedableSidecarMetadata, 'scenario'>;
+export type RecordedSeedMetadata = ExpectedSidecarMetadata;
 
 export type RecordedSeedSource = {
   asset: ReplayAsset;
@@ -36,22 +32,23 @@ function materializeRecordedVideo(sourcePath: string, targetPath: string): void 
 }
 
 function buildRecordedSeedMetadata(source: RecordedSeedSource): RecordedSeedMetadata {
-  const sidecar = loadSidecarMetadata(source.asset) as SeedableSidecarMetadata | null;
-  if (!sidecar) {
-    throw new Error(`Recorded seed metadata was not found for replay asset: ${source.asset.name}`);
+  const metadata = loadSidecarMetadata(source.asset)?.expected;
+  if (!metadata) {
+    throw new Error(
+      `Recorded seed expected metadata was not found for replay asset: ${source.asset.name}`
+    );
   }
 
-  const { scenario: _scenario, ...baseMetadata } = sidecar;
-  const metadata = {
-    ...baseMetadata,
+  const seededMetadata = {
+    ...metadata,
     ...(source.metadataOverride ?? {}),
   } satisfies RecordedSeedMetadata;
 
-  if (!metadata.started_at) {
+  if (!seededMetadata.started_at) {
     throw new Error(`Recorded seed metadata requires started_at: ${source.asset.name}`);
   }
 
-  return metadata;
+  return seededMetadata;
 }
 
 function resolveFileStem(source: RecordedSeedSource, countsByAssetId: Map<string, number>): string {

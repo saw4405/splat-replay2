@@ -6,6 +6,7 @@ import { basename, extname, join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { bootstrapE2EEnvironment, type E2EEnvironment } from '../../tests/e2e/support/e2eEnv';
+import { expectedSidecarMetadata } from '../../tests/e2e/support/appHelpers';
 import { seedRecordedVideos } from '../../tests/e2e/support/recordedSeed';
 
 const temporaryRoots: string[] = [];
@@ -48,11 +49,12 @@ describe('recordedSeed', () => {
     }
   });
 
-  it('recorded 配下へ動画と metadata を作成し scenario を除外する', () => {
+  it('recorded 配下へ sidecar の expected だけを metadata として作成する', () => {
     const environment = bootstrapTestEnvironment();
     const asset = selectRecordedSeedAsset(environment);
 
     const [seeded] = seedRecordedVideos(environment, [{ asset }]);
+    const expected = expectedSidecarMetadata(asset);
     const metadata = JSON.parse(readFileSync(seeded.metadataPath, 'utf-8')) as Record<
       string,
       unknown
@@ -68,7 +70,15 @@ describe('recordedSeed', () => {
       judgement: 'WIN',
       started_at: '2026-03-12T22:22:00.999005',
     });
+    expect(expected).toMatchObject({
+      game_mode: 'BATTLE',
+      judgement: 'WIN',
+      allies: ['トライストリンガー', '52ガロン', 'カーボンローラーデコ', 'スパッタリー・ヒュー'],
+    });
     expect(metadata.scenario).toBeUndefined();
+    expect(metadata.observations).toBeUndefined();
+    expect(metadata.expected).toBeUndefined();
+    expect(metadata.schema_version).toBeUndefined();
   });
 
   it('fileStem と metadataOverride を適用して同一 asset を複数 seed できる', () => {
@@ -106,5 +116,23 @@ describe('recordedSeed', () => {
       game_mode: 'BATTLE',
     });
     expect(secondMetadata.scenario).toBeUndefined();
+    expect(secondMetadata.observations).toBeUndefined();
+    expect(secondMetadata.expected).toBeUndefined();
+    expect(secondMetadata.schema_version).toBeUndefined();
+  });
+
+  it('expected がない early abort asset を録画済み seed として扱わない', () => {
+    const environment = bootstrapTestEnvironment();
+    const earlyAbortAsset = environment.replayAssets.find(
+      (candidate) => candidate.id === 'early-abort-from-matching'
+    );
+    if (!earlyAbortAsset) {
+      throw new Error('early-abort-from-matching replay asset was not found.');
+    }
+
+    expect(expectedSidecarMetadata(earlyAbortAsset)).toBeNull();
+    expect(() => seedRecordedVideos(environment, [{ asset: earlyAbortAsset }])).toThrow(
+      'Recorded seed expected metadata was not found'
+    );
   });
 });

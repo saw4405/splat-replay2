@@ -3,7 +3,7 @@
 このドキュメントは、Splat Replay の**開発環境構築・日常開発フロー・検証入口**をまとめた
 how-to です。特別な注記がない限り、コマンドはリポジトリルートで実行してください。
 
-> Windows 環境では `task` ではなく **`task.exe`** を使用します。
+> Windows 環境では `task` ではなく **`task.exe`** を使用します。WSL2 / Linux では `task` を使用します。
 
 ## この文書の責務
 
@@ -26,8 +26,19 @@ how-to です。特別な注記がない限り、コマンドはリポジトリ�
 
 ## サポート環境と前提ツール
 
+### 製品の実行・配布
+
 - OS: Windows 11
 - シェル: PowerShell
+
+### 開発と replay E2E 可搬性ゲート
+
+- OS: Windows 11 または Linux（WSL2 を含む）
+- Linux では、実機 NDI / OBS を使わない replay E2E を実行できます。
+- この Linux 合格は、macOS の製品実行・配布を保証するものではありません。
+
+共通の前提ツール:
+
 - Python: `3.13`
   - 根拠: `backend/.python-version`, `backend/pyproject.toml`
 - Node.js: `>=24.12.0`
@@ -42,6 +53,8 @@ how-to です。特別な注記がない限り、コマンドはリポジトリ�
 - 推奨:
   - [pre-commit](https://pre-commit.com/)
     - backend の dev dependency として Git hooks 設定に使います。追加のグローバル導入は不要です。
+
+WSL2 の replay E2E では、Windows 側の `node_modules` や `.venv` を共有せず、Linux 側の checkout に依存関係を作成してください。
 
 以下は診断用の生コマンド例です。これらは Task 化対象外です。
 
@@ -86,6 +99,35 @@ task.exe install SKIP_HOOKS=1 SKIP_LFS=1
 この指定は一時的な切り分け用です。`SKIP_HOOKS=1` または `SKIP_LFS=1` により
 commit / push hooks や workflow E2E の前提が欠けます。切り分け後は
 `task.exe install:hooks` / `task.exe install:lfs` で通常フローに戻してください。
+
+### WSL2 で replay E2E を実行する場合
+
+WSL2 では Windows 専用の Git hooks 初期化を含む `task install` ではなく、必要な依存だけを準備します。
+
+replay workflow E2E には Linux 側の FFmpeg が必要です。OCR / ブキ / 表彰認識は fixture 観測を
+ポート境界で供給するため、workflow E2E 自体は Tesseract を必要としません。
+Ubuntu / WSL2 では一度だけ次を実行します。
+
+```bash
+sudo apt-get update
+sudo apt-get install --yes ffmpeg
+```
+
+実 Tesseract を使う固定フレームの OCR 統合テストを実行する場合だけ、追加で
+`sudo apt-get install --yes tesseract-ocr` を実行します。これは OCR の精度・性能を
+別保証として確認する入口であり、replay workflow の可搬性ゲートとは分けます。
+
+`pytesseract` の Python パッケージだけでは OCR は実行されません。`tesseract` コマンドを
+Linux 側の `PATH` から実行できることを確認してください。
+
+```bash
+git lfs pull --include="frontend/tests/fixtures/e2e/**"
+task install:backend
+task install:frontend
+task test:workflow:full
+```
+
+`task test:workflow:full` は Playwright の backend を `SPLAT_REPLAY_RUNTIME_PROFILE=replay` で起動します。replay 入力が無い場合は失敗し、NDI・OBS・実機デバイス列挙へフォールバックしません。
 
 ### checkout の状態を診断したい場合
 
@@ -214,7 +256,7 @@ task.exe dev:frontend
 
 ### backend pytest の一時ディレクトリ
 
-backend pytest の Taskfile 入口は `scripts/run-backend-pytest.ps1` を通し、
+backend pytest の Taskfile 入口は `scripts/run-backend-pytest.py` を通し、
 worktree 内の一時ディレクトリと pytest cache 無効化を指定して実行します。
 Taskfile 入口が保証対象より過広い場合は、この repo 管理ラッパーへ対象ファイルや node ID を渡します。
 低レベル切り分け以外では、生の `pytest` を直接使わないでください。

@@ -170,6 +170,7 @@ Flaky 防止:
 - 実行順制御に `sleep` を使わず、`asyncio.Event` など明示的な同期を使う。
 - 固定時間の `sleep` は避け、シグナリング待機とタイムアウトを使う。Playwright では `expect.poll` のように条件と失敗理由が残る待機を使う。
 - Tesseract、NDI、OBS など外部環境依存は stub 化する。実バイナリが必要なら `skipif` を使うが、依存しない分岐まで巻き込まない。
+- replay workflow では fixture 観測を既存ポート境界で供給し、その後の状態遷移・保存・API・UI を実経路で検証する。実 OCR / CV の精度・性能は固定入力の lower test に分離する。
 
 Contract:
 

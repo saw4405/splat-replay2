@@ -17,7 +17,7 @@ from splat_replay.infrastructure.adapters.medal_detection import (  # noqa: E402
     BattleMedalRecognizerAdapter,
 )
 
-TEMPLATE_DIR = Path(__file__).resolve().parents[3] / "fixtures" / "templates"
+TEMPLATE_DIR = Path(__file__).resolve().parents[2] / "fixtures" / "templates"
 
 
 class _DummyLogger:
@@ -47,7 +47,7 @@ def load_image() -> Callable[[str], np.ndarray]:
     def _load(filename: str) -> np.ndarray:
         image = cv2.imread(str(TEMPLATE_DIR / filename))
         if image is None:
-            pytest.skip(f"画像読み込み失敗: {filename}")
+            raise FileNotFoundError(f"画像読み込み失敗: {filename}")
         return image
 
     return _load

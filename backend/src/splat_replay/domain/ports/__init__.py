@@ -10,7 +10,7 @@ from splat_replay.domain.ports.image_editor import (
     ImageEditorPort,
 )
 from splat_replay.domain.ports.image_matcher import ImageMatcherPort
-from splat_replay.domain.ports.ocr import OCRPort
+from splat_replay.domain.ports.ocr import OCRPort, OCRPurpose
 
 __all__ = [
     "BattleMedalRecognizerPort",
@@ -18,4 +18,5 @@ __all__ = [
     "ImageEditorPort",
     "ImageMatcherPort",
     "OCRPort",
+    "OCRPurpose",
 ]

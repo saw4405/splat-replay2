@@ -8,7 +8,7 @@ from typing import Optional
 
 import numpy as np
 from splat_replay.domain.models import Frame, Match
-from splat_replay.domain.ports import ImageEditorFactory, OCRPort
+from splat_replay.domain.ports import ImageEditorFactory, OCRPort, OCRPurpose
 
 
 class KillRecordExtractor:
@@ -64,11 +64,18 @@ class KillRecordExtractor:
         ocr_tasks: list[asyncio.Task[Optional[str]]] = []
         names: list[str] = []
         fragmented_stat_names: set[str] = set()
+        raw_images: dict[str, Frame] = {}
+        purposes: dict[str, OCRPurpose] = {}
         for name, position in record_positions.items():
+            purpose = _ocr_purpose_for_stat(name)
             raw = frame[
                 position["y1"] : position["y2"],
                 position["x1"] : position["x2"],
             ]
+            if int(np.max(raw)) == int(np.min(raw)):
+                return None
+            raw_images[name] = raw
+            purposes[name] = purpose
             editor = (
                 self._image_editor_factory(raw)
                 .resize(3, 3)
@@ -164,6 +171,7 @@ class KillRecordExtractor:
                                                     cluster_img,
                                                     ps_mode="SINGLE_LINE",
                                                     whitelist="0123456789",
+                                                    purpose=purpose,
                                                 )
                                             )
                                             if cluster_text:
@@ -218,7 +226,10 @@ class KillRecordExtractor:
             if proc is not None:
                 task = asyncio.create_task(
                     self._ocr.recognize_text(
-                        proc, ps_mode="SINGLE_LINE", whitelist="0123456789"
+                        proc,
+                        ps_mode="SINGLE_LINE",
+                        whitelist="0123456789",
+                        purpose=purpose,
                     )
                 )
                 ocr_tasks.append(task)
@@ -227,16 +238,24 @@ class KillRecordExtractor:
         ocr_results = await asyncio.gather(*ocr_tasks, return_exceptions=True)
 
         for name, result in zip(names, ocr_results):
-            if (
-                isinstance(result, Exception)
-                or result is None
-                or not isinstance(result, str)
-            ):
-                return None
-            if name in fragmented_stat_names:
-                parsed = self._parse_fragmented_stat_ocr_result(result)
-            else:
-                parsed = self._parse_numeric_ocr_result(result)
+            primary_text = result if isinstance(result, str) else None
+            primary_digits = self._extract_numeric_ocr_digits(primary_text)
+            parsed = (
+                self._parse_fragmented_stat_ocr_result(primary_text)
+                if name in fragmented_stat_names
+                else self._parse_numeric_ocr_result(primary_text)
+            )
+            if parsed is None or len(primary_digits) < 2:
+                fallback_text = await self._recognize_fixed_width_stat(
+                    raw_images[name],
+                    purposes[name],
+                )
+                fallback_digits = self._extract_numeric_ocr_digits(
+                    fallback_text
+                )
+                fallback_parsed = self._parse_numeric_ocr_result(fallback_text)
+                if len(fallback_digits) == 2 and fallback_parsed is not None:
+                    parsed = fallback_parsed
             if parsed is None:
                 return None
             records[name] = parsed
@@ -280,6 +299,43 @@ class KillRecordExtractor:
         max_gap = max(gaps)
         return max_gap > max_width * 0.75 and max_width <= 24
 
+    async def _recognize_fixed_width_stat(
+        self,
+        raw: Frame,
+        purpose: OCRPurpose,
+    ) -> Optional[str]:
+        """二桁表示が途中で欠落した場合に、最小前処理で再認識する。"""
+        latest_text: Optional[str] = None
+        for scale, padding, erosion in (
+            (1, 0, 0),
+            (1, 0, 1),
+            (1, 5, 2),
+        ):
+            editor = (
+                self._image_editor_factory(raw)
+                .resize(scale, scale)
+                .padding(padding, padding, padding, padding, (0, 0, 0))
+                .binarize()
+            )
+            if erosion:
+                editor = editor.erode((2, 2), erosion)
+            latest_text = await self._ocr.recognize_text(
+                editor.invert().image,
+                ps_mode="SINGLE_LINE",
+                whitelist="0123456789",
+                purpose=purpose,
+            )
+            if len(self._extract_numeric_ocr_digits(latest_text)) == 2:
+                return latest_text
+        return latest_text
+
+    @staticmethod
+    def _extract_numeric_ocr_digits(text: Optional[str]) -> str:
+        if text is None:
+            return ""
+        match = re.search(r"(\d+)\D*$", text.strip())
+        return match.group(1) if match else ""
+
     @staticmethod
     def _parse_numeric_ocr_result(text: Optional[str]) -> Optional[int]:
         if text is None:
@@ -287,8 +343,7 @@ class KillRecordExtractor:
         stripped = text.strip()
         if not stripped:
             return None
-        match = re.search(r"(\d+)\D*$", stripped)
-        digits = match.group(1) if match else ""
+        digits = KillRecordExtractor._extract_numeric_ocr_digits(stripped)
         if not digits:
             return None
         digits = digits.lstrip("0") or "0"
@@ -310,8 +365,7 @@ class KillRecordExtractor:
         stripped = text.strip()
         if not stripped:
             return None
-        match = re.search(r"(\d+)\D*$", stripped)
-        digits = match.group(1) if match else ""
+        digits = KillRecordExtractor._extract_numeric_ocr_digits(stripped)
         if not digits:
             return None
         if len(digits) >= 2 and digits.startswith("0"):
@@ -411,7 +465,10 @@ class KillRecordExtractor:
                 return None
 
         text = await self._ocr.recognize_text(
-            stacked, ps_mode="SINGLE_COLUMN", whitelist="0123456789"
+            stacked,
+            ps_mode="SINGLE_COLUMN",
+            whitelist="0123456789",
+            purpose=OCRPurpose.BATTLE_KILL_RECORD,
         )
         if text is None:
             return None
@@ -437,3 +494,16 @@ class KillRecordExtractor:
                 return None
             vals.append(v)
         return int(vals[0]), int(vals[1]), int(vals[2])
+
+
+def _ocr_purpose_for_stat(name: str) -> OCRPurpose:
+    """キルレコード項目を OCR の意味的用途へ変換する。"""
+    purposes = {
+        "kill": OCRPurpose.BATTLE_KILL,
+        "death": OCRPurpose.BATTLE_DEATH,
+        "special": OCRPurpose.BATTLE_SPECIAL,
+    }
+    try:
+        return purposes[name]
+    except KeyError as exc:
+        raise ValueError(f"未知のキルレコード項目: {name}") from exc

@@ -58,6 +58,8 @@ class MicrophoneEnumerator(MicrophoneEnumeratorPort):
 
     def _list_windows_microphones(self) -> List[str]:
         """Windows で入力デバイスだけを列挙する。"""
+        if sys.platform != "win32":
+            return []
         try:
             import pyaudio
         except Exception as exc:  # noqa: BLE001
@@ -130,6 +132,8 @@ class MicrophoneEnumerator(MicrophoneEnumeratorPort):
         MME ホストAPI を使うため、MME 側のインデックスを返す必要がある。
         WASAPI の正規化名で照合し、対応する MME デバイスを探す。
         """
+        if sys.platform != "win32":
+            return None
         try:
             import pyaudio
         except Exception:  # noqa: BLE001

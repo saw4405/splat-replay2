@@ -7,12 +7,12 @@ pywebviewではブラウザのNotification APIが使えないため、
 
 import sys
 from pathlib import Path
-from typing import TYPE_CHECKING, Literal
+from typing import Literal
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
-if TYPE_CHECKING or sys.platform == "win32":
+if sys.platform == "win32":
     from winotify import Notification, audio
 
 

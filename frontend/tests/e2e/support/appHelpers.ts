@@ -11,6 +11,7 @@ import {
   loadSidecarMetadata,
   resetE2EState,
   type E2EEnvironment,
+  type ExpectedSidecarMetadata,
   type ReplayAsset,
   type ReplayScenario,
 } from './e2eEnv';
@@ -36,7 +37,7 @@ type RecordedVideoItemValues = {
   enemies: string[];
 };
 
-type SidecarMetadataFields = Omit<NonNullable<ReturnType<typeof loadSidecarMetadata>>, 'scenario'>;
+type SidecarMetadataFields = ExpectedSidecarMetadata;
 
 type RawMetadataOptionItem = {
   key: string;
@@ -399,7 +400,7 @@ async function readTestIdRawText(item: Locator, testId: string): Promise<string>
 
 async function expectedRecordedVideoValues(
   page: Page,
-  expected: NonNullable<ReturnType<typeof loadSidecarMetadata>>
+  expected: SidecarMetadataFields
 ): Promise<RecordedVideoItemValues> {
   const optionMaps = await getMetadataOptionMaps(page);
   return {
@@ -476,20 +477,8 @@ export function prepareRecordedSeedAsset(
   return seeded;
 }
 
-export function expectedSidecarMetadata(asset: ReplayAsset) {
-  const sidecar = loadSidecarMetadata(asset);
-  if (!sidecar) {
-    return null;
-  }
-
-  const { scenario: _scenario, ...metadata } = sidecar;
-  const hasExpectedMetadata = Object.values(metadata).some(
-    (value) => value !== null && typeof value !== 'undefined'
-  );
-  if (!hasExpectedMetadata) {
-    return null;
-  }
-  return metadata as SidecarMetadataFields;
+export function expectedSidecarMetadata(asset: ReplayAsset): SidecarMetadataFields | null {
+  return loadSidecarMetadata(asset)?.expected ?? null;
 }
 
 export async function readRecordedVideoItemValues(item: Locator): Promise<RecordedVideoItemValues> {
@@ -513,7 +502,7 @@ export async function readRecordedVideoItemValues(item: Locator): Promise<Record
 export async function expectSidecarToMatchRecordedVideoItem(
   page: Page,
   item: Locator,
-  expected: ReturnType<typeof loadSidecarMetadata>
+  expected: SidecarMetadataFields | null
 ): Promise<void> {
   if (!expected) {
     return;
@@ -581,8 +570,10 @@ export async function expectSidecarToMatchRecordedVideoItem(
   expect(actualValues.special).toBe(expectedValues.special);
   expect(actualValues.gold_medals).toBe(expectedValues.gold_medals);
   expect(actualValues.silver_medals).toBe(expectedValues.silver_medals);
-  // exact な武器識別は backend の認識器テストで担保し、workflow E2E では
-  // 録画保存後に UI へ有効な武器情報が表示されることを確認する。
+  // observations は replay 入力、expected は UI の独立期待値であるため、
+  // 保存後の武器 slot 順・値が両者を正しくつないだ結果かをここで確認する。
+  expect(actualValues.allies).toEqual(expectedValues.allies);
+  expect(actualValues.enemies).toEqual(expectedValues.enemies);
   expectRecognizedWeaponSlots(actualValues.allies, '味方武器');
   expectRecognizedWeaponSlots(actualValues.enemies, '相手武器');
 }

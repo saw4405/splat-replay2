@@ -18,6 +18,7 @@ __all__ = [
     "FFmpegProcessor",
     "YouTubeClient",
     "SystemPower",
+    "ReplayOCRAdapter",
     "TesseractOCR",
     "ImageEditor",
     "SubtitleEditor",
@@ -27,6 +28,7 @@ __all__ = [
     "SpeechTranscriber",
     "GoogleTextToSpeech",
     "BattleMedalRecognizerAdapter",
+    "ReplayBattleMedalRecognizerAdapter",
     "EventPublisherAdapter",
     "EventBusPortAdapter",
     "FramePublisherAdapter",
@@ -39,6 +41,7 @@ __all__ = [
     "LocalFileSystemAdapter",
     "ProcessEnvironmentAdapter",
     "TomlSettingsRepository",
+    "ReplayWeaponRecognitionAdapter",
     "WeaponRecognitionAdapter",
     "VideoFileCapture",
     "ReplayRecorderController",
@@ -57,6 +60,10 @@ _LAZY_EXPORTS: dict[str, tuple[str, str]] = {
     "BattleMedalRecognizerAdapter": (
         ".medal_detection",
         "BattleMedalRecognizerAdapter",
+    ),
+    "ReplayBattleMedalRecognizerAdapter": (
+        ".medal_detection",
+        "ReplayBattleMedalRecognizerAdapter",
     ),
     "Capture": (".capture.capture", "Capture"),
     "CaptureDeviceChecker": (
@@ -122,6 +129,11 @@ _LAZY_EXPORTS: dict[str, tuple[str, str]] = {
     "ReplayRecorderController": (
         ".video.replay_recorder_controller",
         "ReplayRecorderController",
+    ),
+    "ReplayOCRAdapter": (".text.replay_ocr", "ReplayOCRAdapter"),
+    "ReplayWeaponRecognitionAdapter": (
+        ".weapon_detection.replay_recognizer",
+        "ReplayWeaponRecognitionAdapter",
     ),
     "SetupStateFileAdapter": (
         ".storage.setup_state_file_adapter",

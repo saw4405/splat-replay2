@@ -8,7 +8,7 @@ import {
   statSync,
   writeFileSync,
 } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { release, tmpdir } from 'node:os';
 import { basename, dirname, extname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -54,8 +54,53 @@ export type ReplayScenario = {
   } | null;
 };
 
-export type SidecarMetadata = {
+export type ReplayWeaponSlotName =
+  | 'ally_1'
+  | 'ally_2'
+  | 'ally_3'
+  | 'ally_4'
+  | 'enemy_1'
+  | 'enemy_2'
+  | 'enemy_3'
+  | 'enemy_4';
+
+export type ReplayWeaponSlotObservation = {
+  weapon: string;
+  matched: boolean;
+};
+
+export type ReplayWeaponRecognitionObservation = {
+  display: {
+    is_visible: boolean;
+    should_recognize: boolean;
+  };
+  slots: Record<ReplayWeaponSlotName, ReplayWeaponSlotObservation>;
+};
+
+export type ReplayOcrObservationKey =
+  | 'battle_kill'
+  | 'battle_death'
+  | 'battle_special'
+  | 'battle_xp'
+  | 'battle_event_power'
+  | 'battle_kill_record';
+
+export type ReplayOcrObservations = Partial<Record<ReplayOcrObservationKey, string | null>>;
+
+export type ReplayBattleMedalObservation = {
+  gold: number;
+  silver: number;
+};
+
+export type ReplayObservations = {
+  weapon_recognition?: ReplayWeaponRecognitionObservation | null;
+  ocr?: ReplayOcrObservations | null;
+  battle_medals?: ReplayBattleMedalObservation | null;
+};
+
+export type ExpectedSidecarMetadata = {
   game_mode?: string | null;
+  started_at?: string | null;
   rate?: string | null;
   judgement?: string | null;
   match?: string | null;
@@ -68,8 +113,29 @@ export type SidecarMetadata = {
   silver_medals?: number | null;
   allies?: string[] | null;
   enemies?: string[] | null;
-  scenario?: ReplayScenario | null;
 };
+
+export type SidecarMetadata = {
+  schema_version: 1;
+  scenario: ReplayScenario | null;
+  observations: ReplayObservations;
+  expected: ExpectedSidecarMetadata | null;
+};
+
+export function isWslRuntime(
+  platform = process.platform,
+  environment: { WSL_DISTRO_NAME?: string; WSL_INTEROP?: string } = process.env,
+  kernelRelease = release()
+): boolean {
+  return (
+    platform === 'linux' &&
+    Boolean(
+      environment.WSL_DISTRO_NAME ||
+      environment.WSL_INTEROP ||
+      kernelRelease.toLowerCase().includes('microsoft')
+    )
+  );
+}
 
 function escapeTomlString(value: string): string {
   return value.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
@@ -86,10 +152,11 @@ export function normalizeInputPath(rawPath: string): string {
     if (process.platform === 'win32') {
       return trimmed;
     }
-
-    const drive = match.groups.drive.toLowerCase();
-    const rest = match.groups.rest.replace(/\\/g, '/').replace(/^\/+/, '');
-    return `/mnt/${drive}/${rest}`;
+    if (isWslRuntime()) {
+      const drive = match.groups.drive.toLowerCase();
+      const rest = match.groups.rest.replace(/\\/g, '/').replace(/^\/+/, '');
+      return `/mnt/${drive}/${rest}`;
+    }
   }
 
   const wslMatch = trimmed.match(WSL_PATH_RE);
@@ -210,11 +277,16 @@ function buildInstallationStateToml(): string {
   ].join('\n');
 }
 
-function buildReplayInputJson(videoPath: string, scenario?: ReplayScenario | null): string {
+function buildReplayInputJson(
+  videoPath: string,
+  scenario: ReplayScenario | null,
+  observations: ReplayObservations
+): string {
   return JSON.stringify(
     {
       video_path: videoPath,
       ...(scenario ? { scenario } : {}),
+      observations,
     },
     null,
     2
@@ -222,9 +294,14 @@ function buildReplayInputJson(videoPath: string, scenario?: ReplayScenario | nul
 }
 
 function writeDefaultReplayInput(environment: E2EEnvironment): void {
+  const asset = environment.replayAssets[0];
+  if (!asset) {
+    throw new Error('E2E replay asset was not found.');
+  }
+  const sidecar = requireSidecarMetadata(asset);
   writeFileSync(
     environment.replayInputFile,
-    buildReplayInputJson(environment.replayAssets[0].videoPath),
+    buildReplayInputJson(asset.videoPath, sidecar.scenario, sidecar.observations),
     'utf-8'
   );
 }
@@ -313,7 +390,8 @@ export function configureReplayAsset(
   asset: ReplayAsset,
   scenarioOverride?: ReplayScenario | null
 ): void {
-  const baseScenario = loadSidecarMetadata(asset)?.scenario ?? null;
+  const sidecar = requireSidecarMetadata(asset);
+  const baseScenario = sidecar.scenario;
   const scenario = scenarioOverride
     ? {
         ...(baseScenario ?? {}),
@@ -324,7 +402,7 @@ export function configureReplayAsset(
     : baseScenario;
   writeFileSync(
     environment.replayInputFile,
-    buildReplayInputJson(asset.videoPath, scenario),
+    buildReplayInputJson(asset.videoPath, scenario, sidecar.observations),
     'utf-8'
   );
 }
@@ -346,5 +424,126 @@ export function loadSidecarMetadata(asset: ReplayAsset): SidecarMetadata | null 
   if (!asset.sidecarPath) {
     return null;
   }
-  return JSON.parse(readFileSync(asset.sidecarPath, 'utf-8')) as SidecarMetadata;
+  const parsed: unknown = JSON.parse(readFileSync(asset.sidecarPath, 'utf-8'));
+  if (!isSidecarMetadata(parsed)) {
+    throw new Error(`Invalid replay sidecar metadata: ${asset.sidecarPath}`);
+  }
+  return parsed;
+}
+
+function requireSidecarMetadata(asset: ReplayAsset): SidecarMetadata {
+  const sidecar = loadSidecarMetadata(asset);
+  if (!sidecar) {
+    throw new Error(`Replay sidecar metadata was not found for asset: ${asset.name}`);
+  }
+  return sidecar;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function isSidecarMetadata(value: unknown): value is SidecarMetadata {
+  if (!isRecord(value) || value.schema_version !== 1) {
+    return false;
+  }
+  if (value.scenario !== null && !isRecord(value.scenario)) {
+    return false;
+  }
+  if (!isReplayObservations(value.observations)) {
+    return false;
+  }
+  return value.expected === null || isRecord(value.expected);
+}
+
+const REPLAY_OCR_OBSERVATION_KEYS = [
+  'battle_kill',
+  'battle_death',
+  'battle_special',
+  'battle_xp',
+  'battle_event_power',
+  'battle_kill_record',
+] as const satisfies readonly ReplayOcrObservationKey[];
+
+const REPLAY_WEAPON_SLOT_NAMES = [
+  'ally_1',
+  'ally_2',
+  'ally_3',
+  'ally_4',
+  'enemy_1',
+  'enemy_2',
+  'enemy_3',
+  'enemy_4',
+] as const satisfies readonly ReplayWeaponSlotName[];
+
+function isReplayWeaponRecognitionObservation(
+  value: unknown
+): value is ReplayWeaponRecognitionObservation {
+  if (!isRecord(value) || !isRecord(value.display) || !isRecord(value.slots)) {
+    return false;
+  }
+  if (
+    typeof value.display.is_visible !== 'boolean' ||
+    typeof value.display.should_recognize !== 'boolean'
+  ) {
+    return false;
+  }
+  const slots = value.slots;
+  if (Object.keys(slots).length !== REPLAY_WEAPON_SLOT_NAMES.length) {
+    return false;
+  }
+  return REPLAY_WEAPON_SLOT_NAMES.every((slot) => {
+    const observation = slots[slot];
+    return (
+      isRecord(observation) &&
+      typeof observation.weapon === 'string' &&
+      observation.weapon.trim().length > 0 &&
+      typeof observation.matched === 'boolean'
+    );
+  });
+}
+
+function isReplayBattleMedalObservation(value: unknown): value is ReplayBattleMedalObservation {
+  if (!isRecord(value)) {
+    return false;
+  }
+  const expectedKeys = ['gold', 'silver'];
+  if (Object.keys(value).length !== expectedKeys.length) {
+    return false;
+  }
+  return expectedKeys.every((key) => {
+    const count = value[key];
+    return typeof count === 'number' && Number.isInteger(count) && count >= 0;
+  });
+}
+
+function isReplayObservations(value: unknown): value is ReplayObservations {
+  if (!isRecord(value)) {
+    return false;
+  }
+  if (
+    value.weapon_recognition !== undefined &&
+    value.weapon_recognition !== null &&
+    !isReplayWeaponRecognitionObservation(value.weapon_recognition)
+  ) {
+    return false;
+  }
+  if (
+    value.battle_medals !== undefined &&
+    value.battle_medals !== null &&
+    !isReplayBattleMedalObservation(value.battle_medals)
+  ) {
+    return false;
+  }
+  if (value.ocr === undefined || value.ocr === null) {
+    return true;
+  }
+  if (!isRecord(value.ocr)) {
+    return false;
+  }
+  return Object.entries(value.ocr).every(
+    ([key, observation]) =>
+      REPLAY_OCR_OBSERVATION_KEYS.includes(key as ReplayOcrObservationKey) &&
+      (typeof observation === 'string' || observation === null)
+  );
 }

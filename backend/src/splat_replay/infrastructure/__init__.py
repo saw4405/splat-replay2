@@ -27,6 +27,7 @@ __all__ = [
     "FramePublisherAdapter",
     "GuiRuntimePortAdapter",
     "SystemPower",
+    "ReplayOCRAdapter",
     "TesseractOCR",
     "SubtitleEditor",
     "ImageDrawer",
@@ -35,6 +36,7 @@ __all__ = [
     "SpeechTranscriber",
     "GoogleTextToSpeech",
     "BattleMedalRecognizerAdapter",
+    "ReplayBattleMedalRecognizerAdapter",
     "FileBattleHistoryRepository",
     "FileVideoAssetRepository",
     "SetupStateFileAdapter",
@@ -47,6 +49,7 @@ __all__ = [
     "ProcessEnvironmentAdapter",
     "ReplayRecorderController",
     "VideoFileCapture",
+    "ReplayWeaponRecognitionAdapter",
     "WeaponRecognitionAdapter",
 ]
 
@@ -66,6 +69,10 @@ _LAZY_EXPORTS: dict[str, tuple[str, str]] = {
     "BattleMedalRecognizerAdapter": (
         ".adapters.medal_detection",
         "BattleMedalRecognizerAdapter",
+    ),
+    "ReplayBattleMedalRecognizerAdapter": (
+        ".adapters.medal_detection",
+        "ReplayBattleMedalRecognizerAdapter",
     ),
     "Capture": (".adapters.capture.capture", "Capture"),
     "CaptureDeviceChecker": (
@@ -142,6 +149,11 @@ _LAZY_EXPORTS: dict[str, tuple[str, str]] = {
     "ReplayRecorderController": (
         ".adapters.video.replay_recorder_controller",
         "ReplayRecorderController",
+    ),
+    "ReplayOCRAdapter": (".adapters.text.replay_ocr", "ReplayOCRAdapter"),
+    "ReplayWeaponRecognitionAdapter": (
+        ".adapters.weapon_detection.replay_recognizer",
+        "ReplayWeaponRecognitionAdapter",
     ),
     "SetupStateFileAdapter": (
         ".adapters.storage.setup_state_file_adapter",

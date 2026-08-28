@@ -11,6 +11,7 @@ from __future__ import annotations
 import asyncio
 import re
 import subprocess
+import sys
 import time
 from pathlib import Path
 from types import ModuleType
@@ -28,20 +29,21 @@ win32con: ModuleType | None = None
 win32gui: ModuleType | None = None
 win32process: ModuleType | None = None
 
-try:
-    import win32api as _win32api
-    import win32com.client as _win32com_client
-    import win32con as _win32con
-    import win32gui as _win32gui
-    import win32process as _win32process
+if sys.platform == "win32":
+    try:
+        import win32api as _win32api
+        import win32com.client as _win32com_client
+        import win32con as _win32con
+        import win32gui as _win32gui
+        import win32process as _win32process
 
-    win32api = _win32api
-    win32com_client = _win32com_client
-    win32con = _win32con
-    win32gui = _win32gui
-    win32process = _win32process
-except Exception:
-    pass
+        win32api = _win32api
+        win32com_client = _win32com_client
+        win32con = _win32con
+        win32gui = _win32gui
+        win32process = _win32process
+    except Exception:
+        pass
 
 UIA_TREE_SCOPE_CHILDREN = 0x2
 UIA_TREE_SCOPE_DESCENDANTS = 0x4

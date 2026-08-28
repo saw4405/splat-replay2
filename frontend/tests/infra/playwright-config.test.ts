@@ -23,7 +23,7 @@ describe('playwright config', () => {
     vi.resetModules();
   });
 
-  it('passes noop upload flag to backend webServer env', async () => {
+  it('starts the backend in the isolated replay profile', async () => {
     vi.stubEnv('CI', '');
     vi.stubEnv('SPLAT_REPLAY_E2E_MODE', 'smoke');
     vi.stubEnv('SPLAT_REPLAY_E2E_NOOP_UPLOAD', '');
@@ -33,6 +33,7 @@ describe('playwright config', () => {
     const backendServer = servers.find((server) => server.url === BACKEND_SETTINGS_URL);
 
     expect(backendServer?.env?.SPLAT_REPLAY_E2E_NOOP_UPLOAD).toBe('1');
+    expect(backendServer?.env?.SPLAT_REPLAY_RUNTIME_PROFILE).toBe('replay');
     expect(backendServer?.reuseExistingServer).toBe(false);
   });
 });

@@ -12,8 +12,14 @@ from structlog.stdlib import BoundLogger
 from splat_replay.infrastructure.adapters.capture.adaptive_capture_device_checker import (
     AdaptiveCaptureDeviceChecker,
 )
+from splat_replay.infrastructure.adapters.capture.adaptive_capture import (
+    AdaptiveCapture,
+)
 from splat_replay.infrastructure.adapters.capture.video_file_capture import (
     VideoFileCapture,
+)
+from splat_replay.infrastructure.adapters.video.adaptive_video_recorder import (
+    AdaptiveVideoRecorder,
 )
 from splat_replay.infrastructure.adapters.storage.settings_repository import (
     TomlSettingsRepository,
@@ -28,6 +34,7 @@ from splat_replay.infrastructure.config import (
 from splat_replay.infrastructure.filesystem import paths
 from splat_replay.infrastructure.test_input import (
     normalize_input_path,
+    is_wsl_runtime,
     resolve_configured_test_video,
     resolve_replay_input_file_path,
     resolve_video_input_path,
@@ -54,6 +61,7 @@ def _write_dummy_video(
     frame_count: int = 2,
     width: int = 32,
     height: int = 24,
+    initial_value: int = 0,
 ) -> None:
     writer = cv2.VideoWriter(
         str(path),
@@ -63,7 +71,9 @@ def _write_dummy_video(
     )
     assert writer.isOpened(), f"VideoWriter を開けません: {path}"
     for index in range(frame_count):
-        frame = np.full((height, width, 3), index * 60, dtype=np.uint8)
+        frame = np.full(
+            (height, width, 3), initial_value + index * 60, dtype=np.uint8
+        )
         writer.write(frame)
     writer.release()
 
@@ -88,12 +98,30 @@ def test_normalize_input_path_converts_windows_path() -> None:
     expected = (
         Path(r"C:\Users\shogo\Downloads\videos\recorded")
         if os.name == "nt"
-        else Path("/mnt/c/Users/shogo/Downloads/videos/recorded")
+        else (
+            Path("/mnt/c/Users/shogo/Downloads/videos/recorded")
+            if is_wsl_runtime()
+            else Path(r"C:\Users\shogo\Downloads\videos\recorded")
+        )
     )
     assert (
         normalize_input_path(r"C:\Users\shogo\Downloads\videos\recorded")
         == expected
     )
+
+
+def test_is_wsl_runtime_requires_linux_and_a_wsl_indicator(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import splat_replay.infrastructure.test_input as test_input
+
+    monkeypatch.setattr(test_input.sys, "platform", "linux")
+    monkeypatch.setenv("WSL_DISTRO_NAME", "Ubuntu")
+
+    assert is_wsl_runtime() is True
+
+    monkeypatch.setattr(test_input.sys, "platform", "darwin")
+    assert is_wsl_runtime() is False
 
 
 def test_resolve_video_input_path_picks_smallest_mkv_in_directory(
@@ -188,6 +216,95 @@ def test_adaptive_capture_device_checker_uses_replay_input_path(
     )
 
     assert checker.is_connected() is True
+
+
+def test_adaptive_capture_switches_replay_input_without_live_fallback(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    settings_path = tmp_path / "settings.toml"
+    first_video = tmp_path / "first.mp4"
+    second_video = tmp_path / "second.mp4"
+    _write_dummy_video(first_video, width=32, height=24)
+    _write_dummy_video(second_video, width=48, height=36, initial_value=120)
+    monkeypatch.setattr(paths, "SETTINGS_FILE", settings_path)
+    _write_replay_input(
+        replay_input_path=resolve_replay_input_file_path(),
+        video_path=str(first_video),
+    )
+    capture = AdaptiveCapture(
+        cast(BoundLogger, cast(Any, DummyLogger())),
+        live_capture_factory=None,
+    )
+
+    capture.setup()
+    first_frame = capture.capture()
+    _write_replay_input(
+        replay_input_path=resolve_replay_input_file_path(),
+        video_path=str(second_video),
+    )
+    second_frame = capture.capture()
+    capture.teardown()
+
+    assert first_frame is not None
+    assert second_frame is not None
+    assert first_frame.shape == (24, 32, 3)
+    assert second_frame.shape == (36, 48, 3)
+
+
+@pytest.mark.asyncio
+async def test_adaptive_video_recorder_switches_replay_input_without_obs(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    settings_path = tmp_path / "settings.toml"
+    first_video = tmp_path / "first.mkv"
+    second_video = tmp_path / "second.mkv"
+    first_video.write_bytes(b"first replay")
+    second_video.write_bytes(b"second replay")
+    monkeypatch.setattr(paths, "SETTINGS_FILE", settings_path)
+    _write_replay_input(
+        replay_input_path=resolve_replay_input_file_path(),
+        video_path=str(first_video),
+    )
+    settings = load_settings_from_toml(settings_path)
+    recorder = AdaptiveVideoRecorder(
+        settings.obs,
+        settings.storage,
+        cast(BoundLogger, cast(Any, DummyLogger())),
+        live_recorder_factory=None,
+    )
+
+    await recorder.setup()
+    await recorder.start()
+    first_output = await recorder.stop()
+    _write_replay_input(
+        replay_input_path=resolve_replay_input_file_path(),
+        video_path=str(second_video),
+    )
+    await recorder.setup()
+    await recorder.start()
+    second_output = await recorder.stop()
+
+    assert first_output is not None
+    assert second_output is not None
+    assert first_output.read_bytes() == first_video.read_bytes()
+    assert second_output.read_bytes() == second_video.read_bytes()
+
+
+def test_adaptive_capture_rejects_missing_input_without_live_fallback(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    settings_path = tmp_path / "settings.toml"
+    monkeypatch.setattr(paths, "SETTINGS_FILE", settings_path)
+    capture = AdaptiveCapture(
+        cast(BoundLogger, cast(Any, DummyLogger())),
+        live_capture_factory=None,
+    )
+
+    with pytest.raises(RuntimeError, match="フォールバック"):
+        capture.setup()
 
 
 def test_resolve_configured_test_video_reads_replay_bootstrap(

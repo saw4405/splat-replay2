@@ -48,6 +48,9 @@ from splat_replay.infrastructure.adapters.system.gui_runtime_port_adapter import
     GuiRuntimePortAdapter,
 )
 from splat_replay.infrastructure.di import configure_container, resolve
+from splat_replay.infrastructure.di.runtime_profile import (
+    resolve_runtime_profile,
+)
 from splat_replay.infrastructure.filesystem import (
     ASSETS_DIR,
     PROJECT_ROOT,
@@ -252,7 +255,7 @@ def create_app(
         FastAPIアプリケーション
     """
     if container is None:
-        container = configure_container()
+        container = configure_container(profile=resolve_runtime_profile())
     server = build_web_api_server(container)
     return create_web_app(server, enable_lifespan=enable_lifespan)
 

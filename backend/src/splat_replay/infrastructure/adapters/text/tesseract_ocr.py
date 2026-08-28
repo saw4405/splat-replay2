@@ -8,7 +8,7 @@ from typing import Literal, Optional
 import numpy as np
 import pytesseract
 
-from splat_replay.domain.ports import OCRPort
+from splat_replay.domain.ports import OCRPort, OCRPurpose
 
 # ps_modeの型を定義する
 PS_MODE = Literal[
@@ -62,7 +62,9 @@ class TesseractOCR(OCRPort):
         image: np.ndarray,
         ps_mode: Optional[str] = None,
         whitelist: Optional[str] = None,
+        purpose: OCRPurpose | None = None,
     ) -> str | None:
+        _ = purpose
         return await asyncio.to_thread(
             self.recognize_text_sync,
             image,

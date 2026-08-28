@@ -38,15 +38,24 @@ from splat_replay.infrastructure.di.config import (
 from splat_replay.infrastructure.di.domain_services import (
     register_domain_services,
 )
+from splat_replay.infrastructure.di.runtime_profile import RuntimeProfile
 from splat_replay.infrastructure.di.use_cases import register_app_usecases
 from splat_replay.infrastructure.logging import get_logger
 from splat_replay.infrastructure.runtime import AppRuntime
+from splat_replay.infrastructure.test_input import (
+    require_configured_test_video,
+)
 
 T = TypeVar("T")
 
 
-def configure_container() -> punq.Container:
+def configure_container(
+    profile: RuntimeProfile = RuntimeProfile.LIVE,
+) -> punq.Container:
     """アプリで利用する依存関係を登録する。"""
+    if profile is RuntimeProfile.REPLAY:
+        require_configured_test_video()
+
     container = punq.Container()
 
     # Cross-cutting concerns（横断的関心事）の登録
@@ -80,7 +89,7 @@ def configure_container() -> punq.Container:
     app_settings = register_config(container)
     container.register(AppSettings, instance=app_settings)
     register_image_matching_settings(container)
-    register_adapters(container)
+    register_adapters(container, profile=profile)
     register_domain_services(container)
     register_app_services(container)
     register_app_usecases(container)
@@ -113,4 +122,4 @@ def resolve(container: punq.Container, cls: type[T]) -> T:
     return container.resolve(cls)
 
 
-__all__ = ["configure_container", "resolve"]
+__all__ = ["RuntimeProfile", "configure_container", "resolve"]

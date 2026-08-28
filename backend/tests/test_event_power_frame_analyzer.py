@@ -29,6 +29,7 @@ from splat_replay.domain.models import (  # noqa: E402
     Match,
     as_frame,
 )
+from splat_replay.domain.ports import OCRPurpose  # noqa: E402
 from splat_replay.domain.services.analyzers import (  # noqa: E402
     BattleFrameAnalyzer,
     FrameAnalyzer,
@@ -44,8 +45,9 @@ class DummyOCR:
         image: np.ndarray,
         ps_mode: str | None = None,
         whitelist: str | None = None,
+        purpose: OCRPurpose | None = None,
     ) -> str | None:
-        _ = image, ps_mode, whitelist
+        _ = image, ps_mode, whitelist, purpose
         return None
 
     async def recognize_text(
@@ -53,8 +55,9 @@ class DummyOCR:
         image: np.ndarray,
         ps_mode: str | None = None,
         whitelist: str | None = None,
+        purpose: OCRPurpose | None = None,
     ) -> str | None:
-        _ = image, ps_mode, whitelist
+        _ = image, ps_mode, whitelist, purpose
         return None
 
 
