@@ -285,19 +285,6 @@
     margin-bottom: 1rem;
   }
 
-  .step-title {
-    margin: 0;
-    font-size: 1.5rem;
-    font-weight: 600;
-    color: var(--text-primary);
-  }
-
-  .step-description {
-    margin: 0.5rem 0 0 0;
-    font-size: 0.9rem;
-    color: var(--text-secondary);
-  }
-
   .requirements-section {
     flex: 1;
     display: flex;
@@ -361,21 +348,6 @@
     }
   }
 
-  .card-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 1rem;
-    padding-bottom: 1rem;
-    border-bottom: 1px solid rgba(var(--theme-rgb-white), 0.1);
-  }
-
-  .header-left {
-    display: flex;
-    align-items: center;
-    gap: 1rem;
-  }
-
   .requirement-icon-large {
     width: 56px;
     height: 56px;
@@ -400,34 +372,13 @@
     text-align: left;
   }
 
-  .card-body {
-    display: flex;
-    flex-direction: column;
-    gap: 1rem;
-    text-align: left;
-    overflow-y: auto;
-    flex: 1;
-    min-height: 0;
-    padding-right: 0.5rem;
-    box-sizing: border-box;
-  }
-
   .card-body::-webkit-scrollbar {
     width: 8px;
-  }
-
-  .card-body::-webkit-scrollbar-track {
-    background: rgba(var(--theme-rgb-white), 0.05);
-    border-radius: 4px;
   }
 
   .card-body::-webkit-scrollbar-thumb {
     background: rgba(var(--theme-rgb-white), 0.2);
     border-radius: 4px;
-  }
-
-  .card-body::-webkit-scrollbar-thumb:hover {
-    background: rgba(var(--theme-rgb-white), 0.3);
   }
 
   .requirement-spec-large {
@@ -549,19 +500,6 @@
     );
     border-color: rgba(var(--theme-rgb-purple-preview), 0.6);
     color: var(--theme-preview-accent);
-  }
-
-  .checkbox-indicator {
-    width: 32px;
-    height: 32px;
-    border-radius: 6px;
-    border: 2px solid rgba(var(--theme-rgb-white), 0.2);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: transparent;
-    transition: all 0.2s ease;
-    background: rgba(var(--theme-rgb-white), 0.05);
   }
 
   .checkbox-indicator.checked {

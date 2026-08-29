@@ -369,16 +369,6 @@
     color: var(--text-secondary);
   }
 
-  .setup-steps-section {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    width: 100%;
-    min-height: 0;
-  }
-
   .step-card {
     width: 100%;
     max-width: 600px;
@@ -396,29 +386,14 @@
     outline: none;
   }
 
-  .step-card:focus-visible {
-    box-shadow: 0 0 0 2px var(--accent-color);
-  }
-
   .step-card:hover {
     border-color: rgba(var(--theme-rgb-white), 0.3);
     background: rgba(var(--theme-rgb-white), 0.05);
   }
 
-  .step-card.completed {
-    border-color: var(--accent-color);
-    box-shadow: 0 0 8px rgba(var(--theme-rgb-accent), 0.06);
-    background: rgba(var(--theme-rgb-accent), 0.05);
-  }
-
   .step-card.disabled {
     cursor: default;
     opacity: 0.8;
-  }
-
-  .step-card.disabled:hover {
-    border-color: rgba(var(--theme-rgb-white), 0.1);
-    background: rgba(var(--theme-rgb-white), 0.03);
   }
 
   .step-content-wrapper {
@@ -442,44 +417,11 @@
     }
   }
 
-  .card-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 1rem;
-    padding-bottom: 1rem;
-    border-bottom: 1px solid rgba(var(--theme-rgb-white), 0.1);
-  }
-
-  .header-left {
-    display: flex;
-    align-items: center;
-    gap: 1rem;
-  }
-
-  .checkbox-indicator {
-    width: 32px;
-    height: 32px;
-    border-radius: 6px;
-    border: 2px solid rgba(var(--theme-rgb-white), 0.2);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: transparent;
-    transition: all 0.2s ease;
-    background: rgba(var(--theme-rgb-white), 0.05);
-  }
-
   .checkbox-indicator.checked {
     background: var(--accent-color);
     border-color: var(--accent-color);
     color: var(--theme-color-charcoal);
     box-shadow: 0 0 4px var(--accent-glow);
-  }
-
-  .step-card:hover .checkbox-indicator:not(.checked) {
-    border-color: rgba(var(--theme-rgb-white), 0.4);
-    background: rgba(var(--theme-rgb-white), 0.1);
   }
 
   .step-number-large {
@@ -501,13 +443,6 @@
     flex-shrink: 0;
   }
 
-  .title-wrapper {
-    display: flex;
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 0.25rem;
-  }
-
   .step-name-large {
     margin: 0;
     font-size: 1.25rem;
@@ -516,34 +451,13 @@
     text-align: left;
   }
 
-  .card-body {
-    display: flex;
-    flex-direction: column;
-    gap: 1rem;
-    text-align: left;
-    overflow-y: auto;
-    flex: 1;
-    min-height: 0; /* Allow shrinking for scroll */
-    padding-right: 0.5rem;
-    box-sizing: border-box;
-  }
-
   .card-body::-webkit-scrollbar {
     width: 8px;
-  }
-
-  .card-body::-webkit-scrollbar-track {
-    background: rgba(var(--theme-rgb-white), 0.05);
-    border-radius: 4px;
   }
 
   .card-body::-webkit-scrollbar-thumb {
     background: rgba(var(--theme-rgb-white), 0.2);
     border-radius: 4px;
-  }
-
-  .card-body::-webkit-scrollbar-thumb:hover {
-    background: rgba(var(--theme-rgb-white), 0.3);
   }
 
   .installed-badge {
@@ -556,21 +470,6 @@
     background: linear-gradient(135deg, var(--accent-color) 0%, var(--accent-color-strong) 100%);
     color: var(--theme-color-white);
     box-shadow: 0 0 4px var(--accent-glow);
-  }
-
-  .link-button {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.5rem;
-    padding: 0.5rem 1rem;
-    font-size: 1rem;
-    font-weight: 500;
-    border-radius: 6px;
-    border: 1px solid rgba(var(--theme-rgb-white), 0.2);
-    background: rgba(var(--theme-rgb-white), 0.05);
-    color: var(--text-secondary);
-    cursor: pointer;
-    transition: all 0.2s ease;
   }
 
   .link-button:hover {
@@ -611,41 +510,7 @@
     color: var(--text-secondary);
   }
 
-  .instruction-list {
-    margin: 0;
-    padding-left: 1.25rem;
-    font-size: 1rem;
-    line-height: 1.6;
-    color: var(--text-secondary);
-  }
-
   .instruction-list li + li {
     margin-top: 0.5rem;
-  }
-
-  .instruction-list code {
-    padding: 0.125rem 0.375rem;
-    background: rgba(var(--theme-rgb-accent), 0.1);
-    border: 1px solid rgba(var(--theme-rgb-accent), 0.3);
-    border-radius: 4px;
-    font-family: monospace;
-    color: var(--accent-color);
-    font-size: 0.875rem;
-  }
-
-  @media (max-width: 768px) {
-    .step-card {
-      padding: 1.5rem;
-    }
-
-    .step-name-large {
-      font-size: 1.125rem;
-    }
-  }
-
-  @media (max-height: 700px) {
-    .step-card {
-      padding: 1rem;
-    }
   }
 </style>

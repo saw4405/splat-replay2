@@ -75,12 +75,6 @@ class CaptureDeviceSettingsView(Protocol):
     parent_instance_id: str | None
 
 
-class SecretString(Protocol):
-    """Secret string abstraction to avoid tying to concrete secrets type."""
-
-    def get_secret_value(self) -> str: ...
-
-
 class OBSSettingsView(Protocol):
     """OBS settings shape passed to recorder ports."""
 

@@ -169,10 +169,6 @@ export interface BattleHistoryEntry {
   session_rate: string | null;
 }
 
-export interface BattleHistoryResponse {
-  records: BattleHistoryEntry[];
-}
-
 // 進捗イベント
 export type ProgressEventKind =
   | 'start'

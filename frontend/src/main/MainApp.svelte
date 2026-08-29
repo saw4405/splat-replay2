@@ -5,7 +5,7 @@
   import BottomDrawer from './components/recording/BottomDrawer.svelte';
   import AutoProcessNotification from './components/AutoProcessNotification.svelte';
   import { onMount } from 'svelte';
-  import { api } from './api';
+  import { processApi } from './api/process';
   import { cancelEditUploadProcess } from './api/assets';
   import { subscribeDomainEvents } from './domainEvents';
   import { notifyRecordingStarted, notifyRecordingStopped } from './notification';
@@ -135,7 +135,7 @@
     <AutoProcessNotification
       payload={autoSleepPayload}
       title="スリープの開始予告"
-      onCancel={() => api.process.cancelSleep()}
+      onCancel={() => processApi.cancelSleep()}
       onDismiss={() => {
         autoSleepPayload = null;
       }}

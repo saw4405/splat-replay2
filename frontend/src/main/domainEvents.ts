@@ -40,40 +40,6 @@ export interface DomainEvent {
   payload: Record<string, unknown>;
 }
 
-export interface BattleInterruptedPayload {
-  reason?: string;
-  event_id?: string;
-  timestamp?: string;
-}
-
-export interface BattleFinishedPayload {
-  duration_seconds?: number;
-  event_id?: string;
-  timestamp?: string;
-}
-
-export interface BattleStartedPayload {
-  game_mode?: string;
-  rate?: string | null;
-  event_id?: string;
-  timestamp?: string;
-}
-
-export interface BattleWeaponsDetectedPayload {
-  allies?: string[];
-  enemies?: string[];
-  elapsed_seconds?: number;
-  attempt?: number;
-  is_final?: boolean;
-}
-
-export interface RecordingPausedPayload {
-  session_id?: string;
-  reason?: string | null;
-  event_id?: string;
-  timestamp?: string;
-}
-
 export interface RecordingAudioHealthCheckedPayload {
   input_name?: string;
   status?: string;
@@ -109,67 +75,6 @@ export interface SpeechRecognizedPayload {
   end_seconds?: number;
   event_id?: string;
   timestamp?: string;
-}
-
-/**
- * ドメインイベントをUI通知メッセージに変換する
- *
- * @param event ドメインイベント
- * @returns UI通知メッセージ。通知不要な場合はnull。
- */
-export function getDomainEventNotification(event: DomainEvent): string | null {
-  switch (event.type) {
-    case 'domain.battle.interrupted': {
-      const payload = event.payload as BattleInterruptedPayload;
-      if (payload.reason === 'early_abort') {
-        return 'バトル中断を検出したため、録画を中止します。';
-      } else if (payload.reason === 'communication_error') {
-        return '通信エラーを検出したため、録画を中止します。';
-      }
-      return 'バトルが中断されたため、録画を中止します。';
-    }
-
-    case 'domain.battle.finished':
-      return 'バトル終了を検出したため、録画を一時停止します。';
-
-    case 'domain.battle.started':
-      return 'バトル開始を検出したため、録画を開始します。';
-
-    case 'domain.battle.matching_started':
-      return 'マッチング開始を検出しました。';
-
-    case 'domain.battle.schedule_changed':
-      return 'スケジュール変更を検出しました。';
-
-    case 'domain.recording.paused': {
-      const payload = event.payload as RecordingPausedPayload;
-      if (payload.reason === 'loading_detected') {
-        return 'ローディング画面を検出したため、録画を一時停止します。';
-      }
-      return '録画を一時停止します。';
-    }
-
-    case 'domain.battle.result_detected':
-      return 'バトル判定を検出しました。';
-
-    case 'domain.battle.weapons_detected': {
-      const payload = event.payload as BattleWeaponsDetectedPayload;
-      if (payload.is_final) {
-        return 'ブキ判別が確定しました。';
-      }
-      return 'ブキ判別結果を更新しました。';
-    }
-
-    // その他のイベントは通知不要
-    case 'domain.recording.started':
-    case 'domain.recording.resumed':
-    case 'domain.recording.stopped':
-    case 'domain.recording.cancelled':
-      return null;
-
-    default:
-      return null;
-  }
 }
 
 /**

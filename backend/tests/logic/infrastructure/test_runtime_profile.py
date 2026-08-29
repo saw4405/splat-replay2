@@ -87,6 +87,18 @@ def test_runtime_profile_rejects_unknown_value() -> None:
         resolve_runtime_profile("preview")
 
 
+def test_live_profile_resolves_adaptive_adapters() -> None:
+    container = configure_container(profile=RuntimeProfile.LIVE)
+
+    assert isinstance(resolve(container, CapturePort), AdaptiveCapture)
+    assert isinstance(
+        resolve(container, CaptureDevicePort), AdaptiveCaptureDeviceChecker
+    )
+    assert isinstance(
+        resolve(container, VideoRecorderPort), AdaptiveVideoRecorder
+    )
+
+
 def test_replay_profile_registers_only_replay_device_adapters(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

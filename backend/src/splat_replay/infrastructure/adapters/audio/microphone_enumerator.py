@@ -255,14 +255,7 @@ class MicrophoneEnumerator(MicrophoneEnumeratorPort):
 
     def _unique_preserve_order(self, devices: List[str]) -> List[str]:
         """順序を維持したまま重複を除去する。"""
-        seen = set()
-        unique: List[str] = []
-        for device in devices:
-            if device in seen:
-                continue
-            seen.add(device)
-            unique.append(device)
-        return unique
+        return list(dict.fromkeys(devices))
 
 
 class _PyAudioLike(Protocol):

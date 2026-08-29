@@ -67,11 +67,11 @@ _LAZY_EXPORTS: dict[str, tuple[str, str]] = {
         "AdaptiveVideoRecorder",
     ),
     "BattleMedalRecognizerAdapter": (
-        ".adapters.medal_detection",
+        ".adapters.medal_detection.recognizer",
         "BattleMedalRecognizerAdapter",
     ),
     "ReplayBattleMedalRecognizerAdapter": (
-        ".adapters.medal_detection",
+        ".adapters.medal_detection.replay_recognizer",
         "ReplayBattleMedalRecognizerAdapter",
     ),
     "Capture": (".adapters.capture.capture", "Capture"),
@@ -190,7 +190,7 @@ _LAZY_EXPORTS: dict[str, tuple[str, str]] = {
         "VideoFileCapture",
     ),
     "WeaponRecognitionAdapter": (
-        ".adapters.weapon_detection",
+        ".adapters.weapon_detection.recognizer",
         "WeaponRecognitionAdapter",
     ),
     "YouTubeClient": (".adapters.upload.youtube_client", "YouTubeClient"),

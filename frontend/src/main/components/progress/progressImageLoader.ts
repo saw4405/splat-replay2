@@ -32,14 +32,6 @@ export interface ProgressImageLoaderDependencies {
   sleep?: (delayMs: number, signal: AbortSignal) => Promise<void>;
 }
 
-export interface ProgressImageLoaderContract {
-  request(request: ProgressImageRequest): void;
-  releaseSlot(ownerId: string, slotId: string): void;
-  releaseOwner(ownerId: string): void;
-  clear(): void;
-  dispose(): void;
-}
-
 const RETRY_DELAYS_MS = [250, 750] as const;
 
 async function decodeImage(objectUrl: string): Promise<void> {
@@ -96,7 +88,7 @@ function isAbortError(error: unknown): boolean {
   return error instanceof DOMException && error.name === 'AbortError';
 }
 
-export class ProgressImageLoader implements ProgressImageLoaderContract {
+export class ProgressImageLoader {
   private readonly slots = new Map<string, SlotState>();
   private readonly entries = new Map<string, QueueEntry>();
   private readonly fetchFn: typeof fetch;

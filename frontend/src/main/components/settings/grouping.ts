@@ -241,14 +241,6 @@ export function groupSettingsSections(sourceSections: SettingsSection[]): Settin
   return groupedSections;
 }
 
-export function collectSectionValues(section: SettingsSection): Record<string, FieldValue> {
-  const values: Record<string, FieldValue> = {};
-  for (const field of section.fields) {
-    values[field.id] = collectFieldValue(field);
-  }
-  return values;
-}
-
 export function collectFieldValue(field: SettingField): FieldValue {
   if (field.type === 'group' && field.children) {
     return collectGroupValues(field.children);

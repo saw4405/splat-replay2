@@ -1,14 +1,7 @@
 import type { EditableMetadata } from './editable.ts';
-import {
-  normaliseMedalCount,
-  normaliseMedalPair,
-  normaliseWeaponSlots,
-  type WeaponSlots,
-} from './shared.ts';
+import { normaliseMedalPair, normaliseWeaponSlots, type WeaponSlots } from './shared.ts';
 
 export type { WeaponSlots } from './shared.ts';
-
-type MedalField = 'gold_medals' | 'silver_medals';
 
 export interface LiveMetadataState {
   game_mode: string;
@@ -134,21 +127,6 @@ export function toLiveMetadataState(metadata: EditableMetadata): LiveMetadataSta
     silver_medals: normalisedMedals.silverMedals,
     allies: [...metadata.allies] as WeaponSlots,
     enemies: [...metadata.enemies] as WeaponSlots,
-  };
-}
-
-export function normaliseEditedLiveMedalField(
-  metadata: LiveMetadataState,
-  field: MedalField
-): LiveMetadataState {
-  const otherField: MedalField = field === 'gold_medals' ? 'silver_medals' : 'gold_medals';
-  const otherValue = normaliseMedalCount(metadata[otherField]);
-  const maxCurrent = 3 - otherValue;
-  const nextValue = Math.min(normaliseMedalCount(metadata[field]), maxCurrent);
-  return {
-    ...metadata,
-    [field]: nextValue,
-    [otherField]: otherValue,
   };
 }
 

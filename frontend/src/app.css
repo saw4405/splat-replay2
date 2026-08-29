@@ -1,4 +1,5 @@
 @import './themes/neon-abyss.css';
+@import './setup/components/steps/step-common.css';
 
 :root {
   font-family: var(

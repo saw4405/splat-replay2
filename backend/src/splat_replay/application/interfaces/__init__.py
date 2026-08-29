@@ -47,7 +47,6 @@ from splat_replay.application.interfaces.data import (
     FileStats,
     OBSSettingsView,
     PrivacyStatus,
-    SecretString,
     SectionUpdate,
     SettingDisplayLevel,
     SettingFieldData,
@@ -91,7 +90,6 @@ from splat_replay.application.interfaces.system import (
     CommandExecutionError,
     CommandResult,
     EnvironmentPort,
-    InstallationStatePort,
     PowerPort,
     SystemCommandPort,
 )
@@ -143,7 +141,6 @@ __all__ = [
     "FileStats",
     "OBSSettingsView",
     "PrivacyStatus",
-    "SecretString",
     "SectionUpdate",
     "SettingDisplayLevel",
     "SettingFieldData",
@@ -194,7 +191,6 @@ __all__ = [
     "CommandExecutionError",
     "CommandResult",
     "EnvironmentPort",
-    "InstallationStatePort",
     "PowerPort",
     "SystemCommandPort",
     # Messaging

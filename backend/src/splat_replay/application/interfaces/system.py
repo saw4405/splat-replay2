@@ -75,10 +75,3 @@ class PowerPort(Protocol):
     async def sleep(self) -> None:
         """Put system to sleep."""
         ...
-
-
-class InstallationStatePort(Protocol):
-    """インストール状態管理ポート。"""
-
-    # Add methods as needed
-    pass

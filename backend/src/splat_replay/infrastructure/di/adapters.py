@@ -165,7 +165,23 @@ def register_adapters(
             SystemPower,
         )
 
-        container.register(CaptureDevicePort, AdaptiveCaptureDeviceChecker)
+        def _live_capture_device_factory() -> CaptureDevicePort:
+            return AdaptiveCaptureDeviceChecker(
+                cast(
+                    CaptureDeviceSettingsView,
+                    container.resolve(CaptureDeviceSettingsView),
+                ),
+                cast(BoundLogger, container.resolve(BoundLogger)),
+            )
+
+        def _live_capture_factory() -> CapturePort:
+            return AdaptiveCapture(
+                cast(BoundLogger, container.resolve(BoundLogger))
+            )
+
+        container.register(
+            CaptureDevicePort, factory=_live_capture_device_factory
+        )
         container.register(
             CaptureDeviceEnumeratorPort, CaptureDeviceEnumerator
         )
@@ -183,11 +199,24 @@ def register_adapters(
             MicrophoneEnumeratorPort, factory=_microphone_enumerator_factory
         )
         container.register(
-            CapturePort, AdaptiveCapture, scope=punq.Scope.singleton
+            CapturePort,
+            factory=_live_capture_factory,
+            scope=punq.Scope.singleton,
         )
+
+        def _live_recorder_factory() -> VideoRecorderPort:
+            return AdaptiveVideoRecorder(
+                cast(OBSSettingsView, container.resolve(OBSSettingsView)),
+                cast(
+                    VideoStorageSettings,
+                    container.resolve(VideoStorageSettings),
+                ),
+                cast(BoundLogger, container.resolve(BoundLogger)),
+            )
+
         container.register(
             VideoRecorderPort,
-            AdaptiveVideoRecorder,
+            factory=_live_recorder_factory,
             scope=punq.Scope.singleton,
         )
         container.register(PowerPort, SystemPower)

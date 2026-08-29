@@ -323,13 +323,9 @@ class CaptureDeviceEnumerator(CaptureDeviceEnumeratorPort):
             return []
 
         descriptors = self.list_video_device_descriptors()
-        seen: set[str] = set()
-        devices: list[str] = []
-        for descriptor in descriptors:
-            if descriptor.name in seen:
-                continue
-            seen.add(descriptor.name)
-            devices.append(descriptor.name)
+        devices = list(
+            dict.fromkeys(descriptor.name for descriptor in descriptors)
+        )
         self.logger.info("Video devices enumerated", count=len(devices))
         return devices
 

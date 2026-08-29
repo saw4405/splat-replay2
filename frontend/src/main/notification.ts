@@ -129,36 +129,8 @@ export async function notifyRecordingStarted(): Promise<void> {
 }
 
 /**
- * 録画一時停止時の通知を表示
- */
-export async function notifyRecordingPaused(): Promise<void> {
-  await showNotification('録画一時停止', 'バトルの録画を一時停止しました。');
-}
-
-/**
- * 録画再開時の通知を表示
- */
-export async function notifyRecordingResumed(): Promise<void> {
-  await showNotification('録画再開', 'バトルの録画を再開しました。');
-}
-
-/**
  * 録画終了時の通知を表示
  */
 export async function notifyRecordingStopped(): Promise<void> {
   await showNotification('録画終了', 'バトルの録画を終了しました。');
-}
-
-/**
- * 録画キャンセル時の通知を表示
- */
-export async function notifyRecordingCancelled(): Promise<void> {
-  await showNotification('録画キャンセル', 'バトルの録画をキャンセルしました。');
-}
-
-/**
- * 録画準備完了時の通知を表示
- */
-export async function notifyRecordingReady(): Promise<void> {
-  await showNotification('自動録画の準備完了', "🎮🎮🎮 Let's play! 🎮🎮🎮");
 }
