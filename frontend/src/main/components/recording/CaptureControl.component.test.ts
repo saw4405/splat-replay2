@@ -49,6 +49,7 @@ describe('CaptureControl.svelte', () => {
       },
     });
 
+    expect(screen.getByText('POWER OFF')).toBeInTheDocument();
     expect(screen.getByRole('img', { name: 'Switchの電源が入っていません' })).toBeInTheDocument();
     expect(screen.queryByRole('toolbar', { name: '手動録画操作' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button')).not.toBeInTheDocument();
@@ -124,6 +125,7 @@ describe('CaptureControl.svelte', () => {
       },
     });
 
+    expect(screen.getByText('CHECKING')).toBeInTheDocument();
     expect(screen.getByRole('img', { name: '録画状態を確認しています' })).toBeInTheDocument();
     expect(screen.queryByRole('button')).not.toBeInTheDocument();
   });

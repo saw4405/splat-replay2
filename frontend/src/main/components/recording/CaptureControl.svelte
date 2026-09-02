@@ -177,11 +177,17 @@
         {:else if captureState === 'disconnected'}
           <Unplug size={18} strokeWidth={2.2} />
         {:else}
-          <LoaderCircle class="checking-icon" size={18} strokeWidth={2.2} />
+          <span class="checking-icon">
+            <LoaderCircle size={18} strokeWidth={2.2} />
+          </span>
         {/if}
       </span>
-      {#if captureState === 'disconnected'}
+      {#if captureState === 'waiting-for-power'}
+        <span class="capture-label">POWER OFF</span>
+      {:else if captureState === 'disconnected'}
         <span class="capture-label">未接続</span>
+      {:else if captureState === 'checking'}
+        <span class="capture-label">CHECKING</span>
       {/if}
     </div>
   {/if}
@@ -430,7 +436,8 @@
   }
 
   .checking-icon {
-    animation: capture-check 700ms linear 3;
+    display: inline-flex;
+    animation: capture-check 700ms linear infinite;
   }
 
   .visually-hidden {
@@ -467,8 +474,7 @@
 
   @media (prefers-reduced-motion: reduce) {
     .manual-divider,
-    .manual-actions,
-    .checking-icon {
+    .manual-actions {
       transition: none;
       animation: none;
     }
