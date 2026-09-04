@@ -3,6 +3,7 @@
 分類: logic
 """
 
+import asyncio
 from pathlib import Path
 from typing import cast
 from unittest.mock import AsyncMock, MagicMock
@@ -22,7 +23,7 @@ from splat_replay.application.services.upload.auto_uploader import AutoUploader
 
 
 @pytest.mark.asyncio
-async def test_execute_resets_previous_cancellation_request() -> None:
+async def test_reset_cancel_allows_new_execution() -> None:
     repo = MagicMock()
     repo.list_edited.return_value = []
     progress = MagicMock()
@@ -36,6 +37,7 @@ async def test_execute_resets_previous_cancellation_request() -> None:
         progress=cast(ProgressReporter, progress),
     )
     uploader._cancelled = True
+    uploader.reset_cancel()
 
     await uploader.execute()
 
@@ -97,3 +99,84 @@ async def test_execute_deletes_edited_video_after_upload_succeeds() -> None:
     await uploader.execute()
 
     repo.delete_edited.assert_called_once_with(video)
+
+
+@pytest.mark.asyncio
+async def test_execute_keeps_edited_video_when_upload_is_cancelled() -> None:
+    video = Path("edited/cancelled.mkv")
+    repo = MagicMock()
+    repo.list_edited.return_value = [video]
+    repo.get_edited_metadata.return_value = {}
+    repo.get_edited_thumbnail.return_value = None
+    repo.get_edited_subtitle.return_value = None
+    upload_port = MagicMock()
+    video_editor = MagicMock()
+    video_editor.get_metadata = AsyncMock(return_value={"title": "cancelled"})
+    progress = MagicMock()
+    uploader = AutoUploader(
+        uploader=cast(UploadPort, upload_port),
+        video_editor=cast(VideoEditorPort, video_editor),
+        config=cast(ConfigPort, MagicMock()),
+        repo=cast(VideoAssetRepositoryPort, repo),
+        logger=cast(LoggerPort, MagicMock()),
+        file_system=cast(FileSystemPort, MagicMock()),
+        progress=cast(ProgressReporter, progress),
+    )
+
+    def cancel_upload(*args: object, **kwargs: object) -> None:
+        _ = args
+        cancel_check = kwargs["cancel_check"]
+        assert callable(cancel_check)
+        uploader.request_cancel()
+        raise asyncio.CancelledError
+
+    upload_port.upload.side_effect = cancel_upload
+
+    await uploader.execute()
+
+    repo.delete_edited.assert_not_called()
+    progress.finish.assert_called_once_with(
+        "auto_upload", False, "自動アップロードをキャンセルしました"
+    )
+
+
+@pytest.mark.asyncio
+async def test_cancel_after_upload_success_deletes_only_completed_video() -> (
+    None
+):
+    completed = Path("edited/completed.mkv")
+    pending = Path("edited/pending.mkv")
+    repo = MagicMock()
+    repo.list_edited.return_value = [completed, pending]
+    repo.get_edited_metadata.return_value = {}
+    repo.get_edited_thumbnail.return_value = None
+    repo.get_edited_subtitle.return_value = None
+    repo.delete_edited.return_value = True
+    upload_port = MagicMock()
+    video_editor = MagicMock()
+    video_editor.get_metadata = AsyncMock(
+        side_effect=[
+            {"title": "completed"},
+            {"title": "pending"},
+        ]
+    )
+    uploader = AutoUploader(
+        uploader=cast(UploadPort, upload_port),
+        video_editor=cast(VideoEditorPort, video_editor),
+        config=cast(ConfigPort, MagicMock()),
+        repo=cast(VideoAssetRepositoryPort, repo),
+        logger=cast(LoggerPort, MagicMock()),
+        file_system=cast(FileSystemPort, MagicMock()),
+        progress=cast(ProgressReporter, MagicMock()),
+    )
+
+    def complete_then_cancel(*args: object, **kwargs: object) -> None:
+        _ = args, kwargs
+        uploader.request_cancel()
+
+    upload_port.upload.side_effect = complete_then_cancel
+
+    await uploader.execute()
+
+    repo.delete_edited.assert_called_once_with(completed)
+    upload_port.upload.assert_called_once()

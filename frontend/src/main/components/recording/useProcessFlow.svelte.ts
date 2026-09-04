@@ -21,7 +21,9 @@ export interface ProcessFlowConfig {
 export function createProcessFlow(config: ProcessFlowConfig) {
   // --- リアクティブ状態 ---
   let processStatus = $state<EditUploadStatus | null>(null);
-  const isProcessing = $derived(processStatus?.state === 'running');
+  const isProcessing = $derived(
+    processStatus?.state === 'running' || processStatus?.state === 'cancelling'
+  );
   let showProgressDialog = $state(false);
   let showAlertDialog = $state(false);
   let alertMessage = $state('');
@@ -123,8 +125,9 @@ export function createProcessFlow(config: ProcessFlowConfig) {
     const sleepAfterUploadDefault = processStatus?.sleepAfterUploadDefault ?? false;
     const sleepAfterUploadEffective =
       payload.sleep_after_upload ?? processStatus?.sleepAfterUploadEffective ?? false;
+    const cancelled = payload.cancelled === true;
     processStatus = {
-      state: payload.success ? 'succeeded' : 'failed',
+      state: payload.success ? 'succeeded' : cancelled ? 'cancelled' : 'failed',
       startedAt,
       finishedAt,
       error: payload.success ? null : payload.message,
@@ -138,6 +141,9 @@ export function createProcessFlow(config: ProcessFlowConfig) {
     if (payload.success) {
       alertMessage = payload.message || '編集・アップロード処理が完了しました!';
       alertVariant = 'success';
+    } else if (cancelled) {
+      alertMessage = payload.message || '編集・アップロード処理をキャンセルしました';
+      alertVariant = 'info';
     } else {
       const detail = payload.message || '不明なエラー';
       alertMessage = `編集・アップロード処理が失敗しました: ${detail}`;
@@ -161,7 +167,11 @@ export function createProcessFlow(config: ProcessFlowConfig) {
         processStatus = status;
 
         // 処理が完了したらポーリング停止
-        if (status.state === 'succeeded' || status.state === 'failed') {
+        if (
+          status.state === 'succeeded' ||
+          status.state === 'failed' ||
+          status.state === 'cancelled'
+        ) {
           if (statusPollingInterval !== null) {
             clearInterval(statusPollingInterval);
             statusPollingInterval = null;
@@ -176,6 +186,10 @@ export function createProcessFlow(config: ProcessFlowConfig) {
           } else if (status.state === 'failed') {
             alertMessage = `編集・アップロード処理が失敗しました: ${status.error || '不明なエラー'}`;
             alertVariant = 'error';
+            showAlertDialog = true;
+          } else {
+            alertMessage = status.error || '編集・アップロード処理をキャンセルしました';
+            alertVariant = 'info';
             showAlertDialog = true;
           }
         }
@@ -198,7 +212,7 @@ export function createProcessFlow(config: ProcessFlowConfig) {
     isSyncingProcessStatus = true;
     try {
       const status = await fetchEditUploadStatus();
-      if (status.state === 'running') {
+      if (status.state === 'running' || status.state === 'cancelling') {
         applyRunningProcessStatus(status);
       }
     } catch (error) {

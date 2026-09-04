@@ -32,12 +32,17 @@ class VideoEditorPort(Protocol):
         output: Path,
         *,
         on_progress: Optional[Callable[[float, Optional[str]], None]] = None,
+        cancel_check: Optional[Callable[[], bool]] = None,
     ) -> Path:
         """Merge multiple video clips into one."""
         ...
 
     async def embed_metadata(
-        self, path: Path, metadata: dict[str, str]
+        self,
+        path: Path,
+        metadata: dict[str, str],
+        *,
+        cancel_check: Optional[Callable[[], bool]] = None,
     ) -> None:
         """Embed metadata into video file."""
         ...
@@ -49,6 +54,7 @@ class VideoEditorPort(Protocol):
         thumbnail: bytes,
         *,
         on_progress: Optional[Callable[[float, Optional[str]], None]] = None,
+        cancel_check: Optional[Callable[[], bool]] = None,
     ) -> None:
         """Embed metadata and thumbnail into video file in one pass."""
         ...
@@ -57,7 +63,13 @@ class VideoEditorPort(Protocol):
         """Get metadata from video file."""
         ...
 
-    async def embed_subtitle(self, path: Path, srt: str) -> None:
+    async def embed_subtitle(
+        self,
+        path: Path,
+        srt: str,
+        *,
+        cancel_check: Optional[Callable[[], bool]] = None,
+    ) -> None:
         """Embed subtitle into video file."""
         ...
 
@@ -65,7 +77,13 @@ class VideoEditorPort(Protocol):
         """Get subtitle from video file."""
         ...
 
-    async def embed_thumbnail(self, path: Path, thumbnail: bytes) -> None:
+    async def embed_thumbnail(
+        self,
+        path: Path,
+        thumbnail: bytes,
+        *,
+        cancel_check: Optional[Callable[[], bool]] = None,
+    ) -> None:
         """Embed thumbnail into video file."""
         ...
 
@@ -73,7 +91,13 @@ class VideoEditorPort(Protocol):
         """Get thumbnail from video file."""
         ...
 
-    async def change_volume(self, path: Path, multiplier: float) -> None:
+    async def change_volume(
+        self,
+        path: Path,
+        multiplier: float,
+        *,
+        cancel_check: Optional[Callable[[], bool]] = None,
+    ) -> None:
         """Change audio volume by multiplier."""
         ...
 
@@ -87,6 +111,7 @@ class VideoEditorPort(Protocol):
         audio: Path,
         *,
         stream_title: Optional[str] = None,
+        cancel_check: Optional[Callable[[], bool]] = None,
     ) -> None:
         """Add audio track to video."""
         ...

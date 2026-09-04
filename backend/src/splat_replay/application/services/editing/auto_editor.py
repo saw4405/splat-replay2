@@ -91,8 +91,38 @@ class AutoEditor:
         self._state = EditingState()
 
     def request_cancel(self) -> None:
-        """Request cancellation; takes effect between groups/steps."""
+        """実行中の編集処理へキャンセルを要求する。"""
         self._cancelled = True
+
+    def reset_cancel(self) -> None:
+        """新しい実行の開始前にキャンセル状態を初期化する。"""
+        self._cancelled = False
+
+    def _raise_if_cancelled(self) -> None:
+        if self._cancelled:
+            raise asyncio.CancelledError
+
+    def _mark_cancelled(self, task_id: str) -> None:
+        self.progress.finish(task_id, False, "自動編集をキャンセルしました")
+        self.logger.info("自動編集をキャンセルしました")
+        self._state = self._state.with_cancelled()
+
+    async def _cleanup_uncommitted(self, target: Path) -> None:
+        """commit 前の動画と sidecar だけを除去する。"""
+        candidates = {target}
+        candidates.update(
+            target.with_suffix(suffix) for suffix in (".srt", ".png", ".json")
+        )
+        preview_base = self.repo.get_edited_dir() / target.name
+        if not self._file_system.is_file(preview_base):
+            candidates.update(
+                preview_base.with_suffix(suffix)
+                for suffix in (".srt", ".png", ".json")
+            )
+        for path in candidates:
+            await asyncio.to_thread(
+                self._file_system.unlink, path, missing_ok=True
+            )
 
     def get_status(self) -> dict[str, object]:
         """現在の編集状態を取得する。
@@ -115,7 +145,6 @@ class AutoEditor:
 
     async def execute(self) -> list[Path]:
         """編集を実行し、編集済み動画のパスリストを返す。"""
-        self._cancelled = False
         self.settings = self.config.get_video_edit_settings()
         self.logger.info("自動編集を開始します")
         self._state = self._state.with_running("編集処理を開始しています", 0)
@@ -134,6 +163,7 @@ class AutoEditor:
         committed_group_indexes: set[int] = set()
 
         for idx, (key, group) in enumerate(groups.items()):
+            self._raise_if_cancelled()
             if not group:
                 continue
             day, time_slot, match_name, rule_name = key
@@ -162,7 +192,9 @@ class AutoEditor:
 
             group_clips = []
             for asset in group:
+                self._raise_if_cancelled()
                 length = await self.video_editor.get_video_length(asset.video)
+                self._raise_if_cancelled()
                 duration_seconds = (
                     int(length) if (length is not None and length > 0) else 300
                 )
@@ -244,11 +276,7 @@ class AutoEditor:
 
         for idx, (key, group) in enumerate(groups.items()):
             if self._cancelled:
-                self.progress.finish(
-                    task_id, False, "自動編集をキャンセルしました"
-                )
-                self.logger.info("自動編集をキャンセルしました")
-                self._state = self._state.with_cancelled()
+                self._mark_cancelled(task_id)
                 return edited
             if not group:
                 continue
@@ -274,10 +302,14 @@ class AutoEditor:
                 message=label,
             )
 
+            target = self._make_filename(
+                group, day, time_slot, match_name, rule_name
+            )
             try:
                 target, metadata = await self._edit(
                     idx, day, time_slot, match_name, rule_name, group
                 )
+                self._raise_if_cancelled()
                 self.logger.info("動画編集を開始します", path=str(target))
                 target = self.repo.save_edited(Path(target))
                 for asset in group:
@@ -299,6 +331,13 @@ class AutoEditor:
                 self.progress.advance(task_id)
                 completed_groups += 1
                 edited.append(target)
+                if self._cancelled:
+                    self._mark_cancelled(task_id)
+                    return edited
+            except asyncio.CancelledError:
+                await self._cleanup_uncommitted(target)
+                self._mark_cancelled(task_id)
+                return edited
             except Exception as e:
                 self.logger.error(
                     "Video edit failed",
@@ -320,11 +359,7 @@ class AutoEditor:
                 continue
 
         if self._cancelled:
-            self.progress.finish(
-                task_id, False, "自動編集をキャンセルしました"
-            )
-            self.logger.info("自動編集をキャンセルしました")
-            self._state = self._state.with_cancelled()
+            self._mark_cancelled(task_id)
         else:
             self.progress.finish(task_id, True, "自動編集を完了しました")
             self._state = self._state.with_succeeded("編集完了")
@@ -355,6 +390,7 @@ class AutoEditor:
             message=f"{len(group)}本の動画を結合",
         )
         await self._merge_videos(idx, target, group)
+        self._raise_if_cancelled()
 
         # 字幕編集
         self.progress.item_stage(
@@ -363,7 +399,10 @@ class AutoEditor:
             "subtitle",
             "字幕編集",
         )
-        await self.subtitle_processor.create_and_embed(target, group)
+        await self.subtitle_processor.create_and_embed(
+            target, group, cancel_check=lambda: self._cancelled
+        )
+        self._raise_if_cancelled()
 
         # メタデータ編集
         self.progress.item_stage(
@@ -373,6 +412,7 @@ class AutoEditor:
             "メタデータ編集",
         )
         metadata = await self._prepare_metadata(group, day, time_slot)
+        self._raise_if_cancelled()
 
         # サムネイル編集
         self.progress.item_stage(
@@ -383,6 +423,7 @@ class AutoEditor:
             message="サムネイル画像を生成中",
         )
         await self._save_thumbnail(target, group, idx, metadata)
+        self._raise_if_cancelled()
 
         # 音量調整
         if self.settings.volume_multiplier != 1.0:
@@ -394,6 +435,7 @@ class AutoEditor:
                 message=f"x{self.settings.volume_multiplier}",
             )
             await self._change_volume(target, self.settings.volume_multiplier)
+            self._raise_if_cancelled()
 
         return target, metadata
 
@@ -482,7 +524,9 @@ class AutoEditor:
         # 有効な動画ファイルのみをフィルタリング
         valid_videos = []
         for asset in group:
+            self._raise_if_cancelled()
             length = await self.video_editor.get_video_length(asset.video)
+            self._raise_if_cancelled()
             if length is None or length <= 0:
                 self.logger.warning(
                     "Invalid video file skipped during merge",
@@ -507,7 +551,10 @@ class AutoEditor:
                 )
 
             await self.video_editor.merge(
-                valid_videos, target, on_progress=on_progress
+                valid_videos,
+                target,
+                on_progress=on_progress,
+                cancel_check=lambda: self._cancelled,
             )
             return
 
@@ -516,6 +563,7 @@ class AutoEditor:
             self._file_system.read_bytes, valid_videos[0]
         )
         await asyncio.to_thread(self._file_system.write_bytes, target, data)
+        self._raise_if_cancelled()
 
     async def _prepare_metadata(
         self,
@@ -529,6 +577,7 @@ class AutoEditor:
             day,
             time_slot,
         )
+        self._raise_if_cancelled()
         self.logger.info("タイトル編集", title=title)
         self.logger.debug("説明編集", description=description)
 
@@ -552,9 +601,15 @@ class AutoEditor:
     ) -> None:
         """サムネイルを作成し、メタデータと一緒に動画へ保存する。"""
         thumb = await asyncio.to_thread(self.thumbnail_generator.create, group)
+        self._raise_if_cancelled()
         if not thumb or not self._file_system.is_file(thumb):
             self.logger.warning("Thumbnail generation failed")
-            await self.video_editor.embed_metadata(target, metadata)
+            await self.video_editor.embed_metadata(
+                target,
+                metadata,
+                cancel_check=lambda: self._cancelled,
+            )
+            self._raise_if_cancelled()
             await self._save_metadata_sidecar(target, metadata)
             return
 
@@ -563,6 +618,7 @@ class AutoEditor:
             thumb_data = await asyncio.to_thread(
                 self._file_system.read_bytes, thumb
             )
+            self._raise_if_cancelled()
             edited_thumbnail_target = self.repo.get_edited_dir() / target.name
             saved_preview_thumbnail = await asyncio.to_thread(
                 self.repo.save_edited_thumbnail,
@@ -593,7 +649,9 @@ class AutoEditor:
                 metadata,
                 thumb_data,
                 on_progress=on_progress,
+                cancel_check=lambda: self._cancelled,
             )
+            self._raise_if_cancelled()
             await self._save_metadata_sidecar(target, metadata)
             if not saved_preview_thumbnail:
                 await asyncio.to_thread(
@@ -621,4 +679,8 @@ class AutoEditor:
         """動画の音量を調整する。"""
         if multiplier == 1.0:
             return
-        await self.video_editor.change_volume(target, multiplier)
+        await self.video_editor.change_volume(
+            target,
+            multiplier,
+            cancel_check=lambda: self._cancelled,
+        )

@@ -22,13 +22,19 @@ from splat_replay.application.use_cases.assets.start_edit_upload import (
 @pytest.fixture
 def mock_editor():
     """AutoEditorのモック。"""
-    return AsyncMock()
+    mock = AsyncMock()
+    mock.reset_cancel = MagicMock()
+    mock.request_cancel = MagicMock()
+    return mock
 
 
 @pytest.fixture
 def mock_uploader():
     """AutoUploaderのモック。"""
-    return AsyncMock()
+    mock = AsyncMock()
+    mock.reset_cancel = MagicMock()
+    mock.request_cancel = MagicMock()
+    return mock
 
 
 @pytest.fixture
@@ -82,6 +88,18 @@ def use_case(
 
 class TestStartEditUploadHappyPath:
     """正常系のテスト。"""
+
+    @pytest.mark.asyncio
+    async def test_execute_resets_service_cancellation_before_start(
+        self, use_case, mock_editor, mock_uploader
+    ):
+        """前回のキャンセル状態を新しい実行へ持ち越さない。"""
+        await use_case.execute()
+
+        mock_editor.reset_cancel.assert_called_once_with()
+        mock_uploader.reset_cancel.assert_called_once_with()
+        if use_case._task is not None:
+            await use_case._task
 
     @pytest.mark.asyncio
     async def test_execute_starts_background_task(
@@ -164,7 +182,7 @@ class TestStartEditUploadStateManagement:
 
     @pytest.mark.asyncio
     async def test_cancel_requests_service_cancellation(
-        self, use_case, mock_editor, mock_uploader
+        self, use_case, mock_editor, mock_uploader, mock_event_bus
     ):
         """キャンセルは各サービスへ伝播し、安全な処理境界で停止する。"""
         blocker = asyncio.Event()
@@ -177,10 +195,11 @@ class TestStartEditUploadStateManagement:
 
         assert use_case._task is not None
         assert not use_case._task.done()
+        assert use_case.get_state() == "cancelling"
         blocker.set()
         await use_case._task
 
-        assert use_case.get_state() == "failed"
+        assert use_case.get_state() == "cancelled"
         assert use_case.get_message() == (
             "編集・アップロード処理をキャンセルしました"
         )
@@ -188,6 +207,16 @@ class TestStartEditUploadStateManagement:
         mock_uploader.request_cancel.assert_called_once_with()
         mock_uploader.execute.assert_not_awaited()
         assert not use_case._task.cancelled()
+
+        from splat_replay.domain.events import EditUploadCompleted
+
+        completed = [
+            event
+            for event in _published_events(mock_event_bus)
+            if isinstance(event, EditUploadCompleted)
+        ]
+        assert len(completed) == 1
+        assert completed[0].cancelled is True
 
 
 class TestStartEditUploadDuplicatePrevention:

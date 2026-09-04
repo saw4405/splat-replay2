@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from pathlib import Path
 from typing import Callable, List, Optional
 import time
@@ -32,6 +33,7 @@ class NoOpUploadPort(UploadPort):
         caption: Optional[Caption] = None,
         playlist_id: str = "",
         progress_callback: Optional[Callable[[float], None]] = None,
+        cancel_check: Optional[Callable[[], bool]] = None,
     ) -> None:
         """外部通信を行わず、呼び出し内容だけを記録し、進捗をシミュレートする。"""
         _ = description, tags
@@ -48,5 +50,7 @@ class NoOpUploadPort(UploadPort):
         if progress_callback:
             # 0%から100%まで10%刻みで進捗をシミュレート（約1秒）
             for p in range(0, 101, 10):
+                if cancel_check is not None and cancel_check():
+                    raise asyncio.CancelledError
                 progress_callback(float(p))
                 time.sleep(0.1)

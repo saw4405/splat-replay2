@@ -19,6 +19,7 @@ class EditUploadCompleted(DomainEvent):
     message: str
     sleep_after_upload: bool
     trigger: EditUploadTrigger = "manual"
+    cancelled: bool = False
 
 
 @dataclass(frozen=True, kw_only=True)

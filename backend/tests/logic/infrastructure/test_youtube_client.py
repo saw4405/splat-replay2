@@ -11,6 +11,7 @@
 注意: 実際の YouTube API は呼び出さず、Mock/Stub で検証する。
 """
 
+import asyncio
 from pathlib import Path
 from unittest.mock import MagicMock, Mock, mock_open, patch
 
@@ -149,6 +150,42 @@ class TestYouTubeClientUpload:
         # 検証
         assert video_id == "video123"
         mock_youtube.videos().insert.assert_called_once()
+        mock_media_upload.assert_called_once_with(
+            video_path,
+            mimetype="video/*",
+            chunksize=16 * 1024 * 1024,
+            resumable=True,
+        )
+
+    @patch(
+        "splat_replay.infrastructure.adapters.upload.youtube_client.MediaFileUpload"
+    )
+    def test_upload_video_stops_before_next_chunk_when_cancelled(
+        self, mock_media_upload, youtube_client, mock_credentials
+    ):
+        youtube_client._credentials = mock_credentials
+        mock_youtube = MagicMock()
+        youtube_client._youtube = mock_youtube
+        cancelled = False
+
+        def send_first_chunk():
+            nonlocal cancelled
+            cancelled = True
+            return None, None
+
+        mock_request = MagicMock()
+        mock_request.next_chunk.side_effect = send_first_chunk
+        mock_youtube.videos().insert.return_value = mock_request
+
+        with pytest.raises(asyncio.CancelledError):
+            youtube_client.upload_video(
+                path=Path("/fake/path/to/video.mp4"),
+                title="Test Video",
+                description="Test Description",
+                cancel_check=lambda: cancelled,
+            )
+
+        mock_request.next_chunk.assert_called_once_with()
 
     @patch(
         "splat_replay.infrastructure.adapters.upload.youtube_client.MediaFileUpload"

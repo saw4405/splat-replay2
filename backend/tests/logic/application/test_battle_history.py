@@ -139,9 +139,9 @@ class _DummyVideoEditor:
         return output
 
     async def embed_metadata(
-        self, path: Path, metadata: dict[str, str]
+        self, path: Path, metadata: dict[str, str], **kwargs: object
     ) -> None:
-        _ = path, metadata
+        _ = path, metadata, kwargs
 
     async def embed_metadata_and_thumbnail(
         self,
@@ -156,22 +156,28 @@ class _DummyVideoEditor:
         _ = path
         return {}
 
-    async def embed_subtitle(self, path: Path, srt: str) -> None:
-        _ = path, srt
+    async def embed_subtitle(
+        self, path: Path, srt: str, **kwargs: object
+    ) -> None:
+        _ = path, srt, kwargs
 
     async def get_subtitle(self, path: Path) -> str | None:
         _ = path
         return None
 
-    async def embed_thumbnail(self, path: Path, thumbnail: bytes) -> None:
-        _ = path, thumbnail
+    async def embed_thumbnail(
+        self, path: Path, thumbnail: bytes, **kwargs: object
+    ) -> None:
+        _ = path, thumbnail, kwargs
 
     async def get_thumbnail(self, path: Path) -> bytes | None:
         _ = path
         return None
 
-    async def change_volume(self, path: Path, multiplier: float) -> None:
-        _ = path, multiplier
+    async def change_volume(
+        self, path: Path, multiplier: float, **kwargs: object
+    ) -> None:
+        _ = path, multiplier, kwargs
 
     async def get_video_length(self, path: Path) -> float | None:
         _ = path
@@ -183,8 +189,9 @@ class _DummyVideoEditor:
         audio: Path,
         *,
         stream_title: str | None = None,
+        **kwargs: object,
     ) -> None:
-        _ = path, audio, stream_title
+        _ = path, audio, stream_title, kwargs
 
     async def list_video_devices(self) -> list[str]:
         return []

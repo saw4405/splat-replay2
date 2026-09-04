@@ -525,4 +525,38 @@ describe('BottomDrawer.svelte', () => {
       fetchMock.mock.calls.some(([input]) => input.toString().includes('/api/recorder/enable-auto'))
     ).toBe(false);
   });
+
+  it('編集アップロードの停止完了を失敗ではなくキャンセルとして表示する', async () => {
+    installDefaultResponses([
+      {
+        state: 'idle',
+        started_at: null,
+        finished_at: null,
+        error: null,
+        sleep_after_upload_default: false,
+        sleep_after_upload_effective: false,
+        sleep_after_upload_overridden: false,
+      },
+    ]);
+    render(BottomDrawer);
+
+    await waitFor(() => {
+      expect(domainEventHandler).not.toBeNull();
+    });
+
+    emitDomainEvent({
+      type: 'domain.process.edit_upload_completed',
+      payload: {
+        success: false,
+        cancelled: true,
+        message: '編集・アップロード処理をキャンセルしました',
+        sleep_after_upload: false,
+        trigger: 'manual',
+      },
+    });
+
+    const dialog = await screen.findByTestId('notification-dialog-stub');
+    expect(dialog).toHaveAttribute('data-variant', 'info');
+    expect(dialog).toHaveTextContent('編集・アップロード処理をキャンセルしました');
+  });
 });

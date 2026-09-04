@@ -49,7 +49,9 @@ def create_assets_router(server: WebAPIServer) -> APIRouter:
             state=dto.state,
             started_at=None,
             finished_at=None,
-            error=dto.message if dto.state == "failed" else None,
+            error=dto.message
+            if dto.state in ("failed", "cancelled")
+            else None,
             sleep_after_upload_default=dto.sleep_after_upload_default,
             sleep_after_upload_effective=dto.sleep_after_upload_effective,
             sleep_after_upload_overridden=dto.sleep_after_upload_overridden,

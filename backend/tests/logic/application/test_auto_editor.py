@@ -6,6 +6,7 @@ import os
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -52,13 +53,16 @@ class _FakeVideoEditor:
         thumbnail: bytes,
         *,
         on_progress,
+        cancel_check=None,
     ) -> None:
+        _ = cancel_check
         self.combined_calls.append((path, metadata, thumbnail))
         on_progress(33.0, "埋め込み中")
 
     async def embed_metadata(
-        self, path: Path, metadata: dict[str, str]
+        self, path: Path, metadata: dict[str, str], *, cancel_check=None
     ) -> None:
+        _ = cancel_check
         self.metadata_only_calls.append((path, metadata))
 
 
@@ -156,6 +160,7 @@ async def test_save_thumbnail_embeds_metadata_and_thumbnail_once_with_progress(
     editor.video_editor = video_editor
     editor.repo = repo
     editor.progress = progress
+    editor._cancelled = False
 
     await editor._save_thumbnail(target, [], 2, metadata)
 
@@ -269,7 +274,7 @@ async def test_execute_saves_group_without_frame_preview_dependency(
     editor.grouping = _Grouping()
     editor.video_editor = _VideoEditor()
     editor.progress = progress
-    editor._cancelled = True
+    editor._cancelled = False
     editor._state = EditingState()
 
     class _EditResult(os.PathLike[str]):
@@ -478,3 +483,123 @@ async def test_committed_edit_cleanup_failure_stops_before_upload(
         await editor.execute()
 
     assert editor.progress.start_task_calls == []
+
+
+def _build_cancellable_editor(
+    tmp_path: Path,
+) -> tuple[
+    AutoEditor,
+    Any,
+    Path,
+    Path,
+    tuple[datetime.date, datetime.time, str, str],
+]:
+    source = tmp_path / "recorded" / "source.mkv"
+    source.parent.mkdir()
+    source.write_bytes(b"source")
+    edited_dir = tmp_path / "edited"
+    edited_dir.mkdir()
+    asset = SimpleNamespace(video=source, metadata=None)
+    key = (
+        datetime.date(2026, 9, 4),
+        datetime.time(7, 0),
+        "Xマッチ",
+        "ガチエリア",
+    )
+
+    editor = AutoEditor.__new__(AutoEditor)
+    editor.logger = MagicMock()
+    editor.config = SimpleNamespace(
+        get_video_edit_settings=lambda: SimpleNamespace()
+    )
+    editor.grouping = SimpleNamespace(
+        group_by_timeslot=lambda assets: {key: assets}
+    )
+    editor.video_editor = SimpleNamespace(
+        get_video_length=AsyncMock(return_value=180.0)
+    )
+    editor.progress = _FakeProgress()
+    editor._file_system = _FakeFileSystem()
+    editor._cancelled = False
+    editor._state = EditingState()
+    return editor, asset, source, edited_dir, key
+
+
+@pytest.mark.asyncio
+async def test_cancel_before_commit_keeps_recording_and_removes_outputs(
+    tmp_path: Path,
+) -> None:
+    editor, asset, source, edited_dir, key = _build_cancellable_editor(
+        tmp_path
+    )
+    repo = MagicMock()
+    repo.list_recordings.return_value = [asset]
+    repo.list_edited.return_value = []
+    repo.get_edited_dir.return_value = edited_dir
+    editor.repo = repo
+    target = editor._make_filename([asset], *key)
+
+    async def cancel_before_commit(
+        *args: object,
+    ) -> tuple[Path, dict[str, str]]:
+        _ = args
+        target.write_bytes(b"uncommitted")
+        target.with_suffix(".json").write_text("{}", encoding="utf-8")
+        (edited_dir / target.name).with_suffix(".png").write_bytes(b"preview")
+        editor.request_cancel()
+        return target, {"title": "cancelled"}
+
+    editor._edit = cancel_before_commit  # type: ignore[invalid-assignment]
+
+    result = await editor.execute()
+
+    assert result == []
+    assert source.read_bytes() == b"source"
+    assert not target.exists()
+    assert not target.with_suffix(".json").exists()
+    assert not (edited_dir / target.name).with_suffix(".png").exists()
+    repo.save_edited.assert_not_called()
+    repo.delete_recording.assert_not_called()
+    assert editor.get_status()["phase"] == "cancelled"
+
+
+@pytest.mark.asyncio
+async def test_cancel_after_commit_finishes_recording_cleanup(
+    tmp_path: Path,
+) -> None:
+    editor, asset, source, edited_dir, key = _build_cancellable_editor(
+        tmp_path
+    )
+    repo = MagicMock()
+    repo.list_recordings.return_value = [asset]
+    repo.list_edited.return_value = []
+    repo.get_edited_dir.return_value = edited_dir
+    editor.repo = repo
+    target = editor._make_filename([asset], *key)
+    committed = edited_dir / target.name
+
+    async def finish_edit(*args: object) -> tuple[Path, dict[str, str]]:
+        _ = args
+        target.write_bytes(b"edited")
+        return target, {"title": "committed"}
+
+    def commit_and_cancel(path: Path) -> Path:
+        path.replace(committed)
+        editor.request_cancel()
+        return committed
+
+    def delete_recording(path: Path) -> bool:
+        path.unlink()
+        return True
+
+    editor._edit = finish_edit  # type: ignore[invalid-assignment]
+    repo.save_edited.side_effect = commit_and_cancel
+    repo.delete_recording.side_effect = delete_recording
+
+    result = await editor.execute()
+
+    assert result == [committed]
+    assert committed.read_bytes() == b"edited"
+    assert not source.exists()
+    repo.delete_recording.assert_called_once_with(source)
+    assert editor.get_status()["phase"] == "cancelled"

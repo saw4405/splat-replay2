@@ -70,11 +70,24 @@ class AutoUploader:
         )
 
     def request_cancel(self) -> None:
-        """キャンセル要求。アイテム/ステップ間で有効。"""
+        """実行中のアップロードへキャンセルを要求する。"""
         self._cancelled = True
 
-    async def execute(self) -> None:
+    def reset_cancel(self) -> None:
+        """新しい実行の開始前にキャンセル状態を初期化する。"""
         self._cancelled = False
+
+    def _raise_if_cancelled(self) -> None:
+        if self._cancelled:
+            raise asyncio.CancelledError
+
+    def _finish_cancelled(self, task_id: str) -> None:
+        self.progress.finish(
+            task_id, False, "自動アップロードをキャンセルしました"
+        )
+        self.logger.info("自動アップロードをキャンセルしました")
+
+    async def execute(self) -> None:
         self.logger.info("自動アップロードを開始します")
         self._cached_settings = self.config.get_upload_settings()
 
@@ -83,22 +96,25 @@ class AutoUploader:
         task_id = "auto_upload"
         items: list[str] = []
         for video in videos:
+            self._raise_if_cancelled()
             metadata = await self.video_editor.get_metadata(video)
+            self._raise_if_cancelled()
             items.append(metadata.get("title", video.name))
         self.progress.start_task(
             task_id, "アップロード準備", len(items), items=items
         )
         for idx, video in enumerate(videos):
             if self._cancelled:
-                self.progress.finish(
-                    task_id, False, "自動アップロードをキャンセルしました"
-                )
-                self.logger.info("自動アップロードをキャンセルしました")
+                self._finish_cancelled(task_id)
                 return
 
             self.logger.info("アップロード中", path=str(video))
 
-            await self._upload(idx, video)
+            try:
+                await self._upload(idx, video)
+            except asyncio.CancelledError:
+                self._finish_cancelled(task_id)
+                return
             self.progress.item_stage(task_id, idx, "delete", "ファイル削除中")
             if not self.repo.delete_edited(video):
                 raise RuntimeError(
@@ -106,6 +122,9 @@ class AutoUploader:
                 )
 
             self.progress.advance(task_id)
+            if self._cancelled:
+                self._finish_cancelled(task_id)
+                return
 
         self.progress.finish(task_id, True, "自動アップロードを完了しました")
         self.logger.info("自動アップロードを完了しました")
@@ -125,6 +144,7 @@ class AutoUploader:
 
             # メタデータをリポジトリ経由で読み込む
             metadata = self.repo.get_edited_metadata(path) or {}
+            self._raise_if_cancelled()
 
             # サムネイルをリポジトリ経由で読み込む
             thumb_data = self.repo.get_edited_thumbnail(path)
@@ -133,6 +153,7 @@ class AutoUploader:
                 await asyncio.to_thread(
                     self._file_system.write_bytes, temp_thumb, thumb_data
                 )
+                self._raise_if_cancelled()
 
             # 字幕をリポジトリ経由で読み込む
             srt_content = self.repo.get_edited_subtitle(path)
@@ -144,6 +165,7 @@ class AutoUploader:
                     srt_content,
                     "utf-8",
                 )
+                self._raise_if_cancelled()
 
             self.progress.item_stage(
                 task_id,
@@ -172,6 +194,7 @@ class AutoUploader:
                 else None,
                 playlist_id=self._settings.playlist_id,
                 progress_callback=on_progress,
+                cancel_check=lambda: self._cancelled,
             )
             self.logger.info("動画アップロードを完了しました")
             if temp_subtitle:

@@ -1891,8 +1891,8 @@ describe('ProgressDialog', () => {
         .mockResolvedValueOnce(
           new Response(
             JSON.stringify({
-              state: 'failed',
-              error: '編集・アップロード処理をキャンセルしました',
+              state: 'cancelling',
+              error: null,
               sleep_after_upload_default: false,
               sleep_after_upload_effective: false,
               sleep_after_upload_overridden: false,
@@ -1916,6 +1916,8 @@ describe('ProgressDialog', () => {
           expect.objectContaining({ method: 'DELETE' })
         );
       });
+      expect(await screen.findByRole('button', { name: '中断中...' })).toBeDisabled();
+      expect(screen.getByText('進捗')).toBeInTheDocument();
     });
   });
 });

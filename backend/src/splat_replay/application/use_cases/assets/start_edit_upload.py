@@ -62,6 +62,8 @@ class StartEditUploadUseCase:
         if self._task is not None and not self._task.done():
             raise RuntimeError("編集・アップロード処理が既に実行中です")
 
+        self._editor.reset_cancel()
+        self._uploader.reset_cancel()
         self._cancel_requested = False
         self._reset_runtime_options()
         self._state = "running"
@@ -95,6 +97,11 @@ class StartEditUploadUseCase:
             self._state = "succeeded"
             self._message = "編集・アップロード処理が完了しました"
             self._logger.info("編集・アップロード処理が完了しました")
+        except asyncio.CancelledError:
+            if not self._cancel_requested:
+                raise
+            self._publish_cancelled(trigger)
+            return
         except Exception as e:
             sleep_after_upload = self.get_sleep_after_upload_effective()
             self._state = "failed"
@@ -125,21 +132,29 @@ class StartEditUploadUseCase:
     def cancel(self) -> None:
         """実行中の編集・アップロード処理をキャンセル。"""
         if self._task is not None and not self._task.done():
-            self._logger.info("編集・アップロード処理をキャンセルします")
+            if self._cancel_requested:
+                return
+            self._logger.info(
+                "編集・アップロード処理のキャンセルを要求しました"
+            )
             self._cancel_requested = True
             self._editor.request_cancel()
             self._uploader.request_cancel()
-            self._state = "failed"
-            self._message = "編集・アップロード処理をキャンセルしました"
+            self._state = "cancelling"
+            self._message = "編集・アップロード処理を中断しています"
 
     def _publish_cancelled(self, trigger: EditUploadTrigger) -> None:
         """安全な処理境界でキャンセル完了を通知する。"""
+        self._state = "cancelled"
+        self._message = "編集・アップロード処理をキャンセルしました"
+        self._logger.info("編集・アップロード処理のキャンセルが完了しました")
         self._event_bus.publish_domain_event(
             EditUploadCompleted(
                 success=False,
                 message="編集・アップロード処理をキャンセルしました",
                 sleep_after_upload=False,
                 trigger=trigger,
+                cancelled=True,
             )
         )
 

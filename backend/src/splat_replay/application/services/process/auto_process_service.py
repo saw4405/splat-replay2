@@ -91,7 +91,9 @@ class AutoProcessService:
         self.logger.info("AutoProcessService started")
         self._worker_task = asyncio.create_task(self._run_scan_worker())
         if self._has_pending_assets():
-            self._request_scan(delay_seconds=0.0)
+            self.logger.info(
+                "起動時に未処理動画を検出しました。録画を優先するため自動処理は開始しません"
+            )
 
         try:
             while True:
@@ -112,7 +114,11 @@ class AutoProcessService:
                     elif ev.type == AutoSleepPending.EVENT_TYPE:
                         self.handle_auto_sleep_pending(ev)
                     elif ev.type == AssetRecordedSaved.EVENT_TYPE:
-                        if self._is_auto_processing:
+                        if (
+                            self._is_auto_processing
+                            and self.start_edit_upload_uc.get_state()
+                            not in ("cancelling", "cancelled")
+                        ):
                             self._request_scan(delay_seconds=0.0)
 
                 await asyncio.sleep(0.1)
@@ -223,11 +229,11 @@ class AutoProcessService:
                     self._mark_generation_handled(generation)
                     continue
 
-                succeeded = False
+                execution_state = "failed"
                 try:
                     await self.start_auto_process()
                     await self.start_edit_upload_uc.wait_until_complete()
-                    succeeded = True
+                    execution_state = self.start_edit_upload_uc.get_state()
                 except Exception as exc:  # noqa: BLE001
                     self.logger.error(
                         "自動編集・アップロードworkerが失敗しました",
@@ -239,8 +245,10 @@ class AutoProcessService:
                 self._mark_generation_handled(generation)
                 after = self._pending_asset_ids()
                 added_during_run = after - before
+                if execution_state == "cancelled":
+                    break
                 if self._scan_generation > generation or (
-                    succeeded and bool(added_during_run)
+                    execution_state == "succeeded" and bool(added_during_run)
                 ):
                     if self._scan_generation == generation:
                         self._request_scan(delay_seconds=0.0)

@@ -22,6 +22,7 @@ class UploadPort(Protocol):
         caption: Optional[Caption] = None,
         playlist_id: str = "",
         progress_callback: Optional[Callable[[float], None]] = None,
+        cancel_check: Optional[Callable[[], bool]] = None,
     ) -> None:
         """Upload video to platform."""
         ...

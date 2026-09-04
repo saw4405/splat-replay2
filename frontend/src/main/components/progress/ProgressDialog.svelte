@@ -184,7 +184,9 @@
   });
 
   const sleepAfterUploadEnabled = $derived(editUploadStatus?.sleepAfterUploadEffective ?? false);
-  const sleepToggleDisabled = $derived(optionLoading || optionSaving || !editUploadStatus);
+  const sleepToggleDisabled = $derived(
+    optionLoading || optionSaving || !editUploadStatus || editUploadStatus.state === 'cancelling'
+  );
 
   // auto_edit タスクとアイテム情報
   const editTask = $derived(taskList.find((t) => t.id === 'auto_edit'));
@@ -1010,6 +1012,7 @@
         optionErrorMessage = '';
         optionLoading = false;
         optionSaving = false;
+        cancelLoading = false;
       }
     }
   });
@@ -1247,12 +1250,10 @@
     if (!anyRunning || cancelLoading) return;
     cancelLoading = true;
     try {
-      await cancelEditUploadProcess();
-      isOpen = false; // キャンセル成功時は即座にダイアログを閉じる
+      editUploadStatus = await cancelEditUploadProcess();
     } catch (error) {
       optionErrorMessage =
         error instanceof Error ? error.message : 'キャンセルの要求に失敗しました。';
-    } finally {
       cancelLoading = false;
     }
   }

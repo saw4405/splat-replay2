@@ -64,6 +64,7 @@ export interface AutoSleepPendingPayload {
 
 export interface EditUploadCompletedPayload {
   success: boolean;
+  cancelled?: boolean;
   message: string;
   sleep_after_upload?: boolean;
   trigger?: 'auto' | 'manual';

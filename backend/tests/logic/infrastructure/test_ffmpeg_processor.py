@@ -1,9 +1,12 @@
+import asyncio
 import io
-import pytest
+import threading
 from pathlib import Path
 from subprocess import CompletedProcess
 from typing import cast
 from unittest.mock import MagicMock, patch
+
+import pytest
 
 from splat_replay.infrastructure.adapters.video.ffmpeg_processor import (
     FFmpegProcessor,
@@ -96,6 +99,7 @@ async def test_embed_metadata_and_thumbnail_uses_single_ffmpeg_command_with_prog
         input_bytes: bytes | None = None,
         progress_message: str = "動画を結合中",
         named_message_prefix: str | None = "結合中",
+        cancel_check=None,
     ) -> CompletedProcess[str]:
         command_calls.append(
             {
@@ -105,6 +109,7 @@ async def test_embed_metadata_and_thumbnail_uses_single_ffmpeg_command_with_prog
                 "input_bytes": input_bytes,
                 "progress_message": progress_message,
                 "named_message_prefix": named_message_prefix,
+                "cancel_check": cancel_check,
             }
         )
         video.with_name("temp.mkv").write_bytes(b"updated")
@@ -140,3 +145,75 @@ async def test_embed_metadata_and_thumbnail_uses_single_ffmpeg_command_with_prog
         (42.0, "埋め込み中"),
         (100.0, "メタデータ・サムネイルを埋め込み中"),
     ]
+
+
+@pytest.mark.asyncio
+async def test_embed_metadata_failure_keeps_original_video(
+    tmp_path: Path,
+) -> None:
+    processor = FFmpegProcessor(MagicMock())
+    video = tmp_path / "clip.mkv"
+    video.write_bytes(b"original")
+    temp = tmp_path / "temp.mkv"
+
+    async def fail_ffmpeg(
+        *args: object, **kwargs: object
+    ) -> CompletedProcess[str]:
+        _ = args, kwargs
+        temp.write_bytes(b"partial")
+        return CompletedProcess(["ffmpeg"], 1, "", "failed")
+
+    processor._run_text = fail_ffmpeg  # type: ignore[method-assign]
+
+    with pytest.raises(RuntimeError, match="FFmpeg終了コード 1"):
+        await processor.embed_metadata(video, {"title": "test"})
+
+    assert video.read_bytes() == b"original"
+    assert not temp.exists()
+
+
+@pytest.mark.asyncio
+async def test_windows_ffmpeg_process_is_terminated_on_cancel() -> None:
+    processor = FFmpegProcessor(MagicMock())
+    cancel_requested = False
+    terminated = threading.Event()
+
+    class _Process:
+        returncode: int | None = None
+
+        def poll(self) -> int | None:
+            return self.returncode
+
+        def terminate(self) -> None:
+            self.returncode = -15
+            terminated.set()
+
+        def kill(self) -> None:
+            self.returncode = -9
+            terminated.set()
+
+        def wait(self, timeout: float | None = None) -> int:
+            _ = timeout
+            assert self.returncode is not None
+            return self.returncode
+
+        def communicate(
+            self,
+            input: bytes | None = None,
+            timeout: float | None = None,
+        ) -> tuple[bytes, bytes]:
+            nonlocal cancel_requested
+            _ = input, timeout
+            cancel_requested = True
+            assert terminated.wait(timeout=1.0)
+            return b"", b"cancelled"
+
+    process = _Process()
+    with patch("subprocess.Popen", return_value=process):
+        with pytest.raises(asyncio.CancelledError):
+            await processor._run_text_windows(
+                ["ffmpeg", "-version"],
+                cancel_check=lambda: cancel_requested,
+            )
+
+    assert process.returncode == -15

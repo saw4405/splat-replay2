@@ -150,7 +150,14 @@ class TestEditUploadProcessEndpoints:
         data = response.json()
         # 必須フィールド
         assert "state" in data
-        assert data["state"] in ["idle", "running", "succeeded", "failed"]
+        assert data["state"] in [
+            "idle",
+            "running",
+            "cancelling",
+            "cancelled",
+            "succeeded",
+            "failed",
+        ]
 
         # オプショナルフィールドの型確認
         assert "started_at" in data
@@ -185,6 +192,8 @@ class TestEditUploadProcessEndpoints:
         assert status_data["state"] in [
             "idle",
             "running",
+            "cancelling",
+            "cancelled",
             "succeeded",
             "failed",
         ]
@@ -217,8 +226,8 @@ class TestEditUploadProcessEndpoints:
         class GetStatusUseCaseStub:
             async def execute(self) -> EditUploadStatusDTO:
                 return EditUploadStatusDTO(
-                    state="failed",
-                    message="編集・アップロード処理をキャンセルしました",
+                    state="cancelling",
+                    message="編集・アップロード処理を中断しています",
                     progress=0,
                     sleep_after_upload_default=False,
                     sleep_after_upload_effective=False,
@@ -254,10 +263,8 @@ class TestEditUploadProcessEndpoints:
         assert response.status_code == status.HTTP_200_OK
         assert cancel_use_case.cancelled is True
         assert auto_process_service.cancelled is True
-        assert response.json()["state"] == "failed"
-        assert response.json()["error"] == (
-            "編集・アップロード処理をキャンセルしました"
-        )
+        assert response.json()["state"] == "cancelling"
+        assert response.json()["error"] is None
 
     def test_update_edit_upload_options_valid(
         self, client: TestClient

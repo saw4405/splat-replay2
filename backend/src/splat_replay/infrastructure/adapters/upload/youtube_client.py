@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import gc
 import pickle
 from pathlib import Path
@@ -155,6 +156,7 @@ class YouTubeClient(UploadPort, AuthenticatedClientPort):
         caption: Optional[Caption] = None,
         playlist_id: str = "",
         progress_callback: Optional[Callable[[float], None]] = None,
+        cancel_check: Optional[Callable[[], bool]] = None,
     ) -> None:
         video_id = self.upload_video(
             path,
@@ -163,6 +165,7 @@ class YouTubeClient(UploadPort, AuthenticatedClientPort):
             tags,
             privacy_status=privacy_status,
             progress_callback=progress_callback,
+            cancel_check=cancel_check,
         )
 
         if not video_id:
@@ -172,9 +175,15 @@ class YouTubeClient(UploadPort, AuthenticatedClientPort):
             )
         self.logger.info("動画アップロード完了", video_id=video_id)
 
+        if cancel_check is not None and cancel_check():
+            return
+
         if thumb:
             self.upload_thumbnail(video_id, thumb)
             self.logger.info("サムネイルアップロード完了", video_id=video_id)
+
+        if cancel_check is not None and cancel_check():
+            return
 
         if caption:
             self.upload_subtitle(
@@ -184,6 +193,9 @@ class YouTubeClient(UploadPort, AuthenticatedClientPort):
                 caption.language,
             )
             self.logger.info("字幕アップロード完了", video_id=video_id)
+
+        if cancel_check is not None and cancel_check():
+            return
 
         if playlist_id:
             self.add_to_playlist(video_id, playlist_id)
@@ -202,6 +214,7 @@ class YouTubeClient(UploadPort, AuthenticatedClientPort):
         category: int = 20,
         privacy_status: PrivacyStatus = "private",
         progress_callback: Optional[Callable[[float], None]] = None,
+        cancel_check: Optional[Callable[[], bool]] = None,
     ) -> Optional[str]:
         """動画をアップロードし ID を返す。"""
 
@@ -213,7 +226,10 @@ class YouTubeClient(UploadPort, AuthenticatedClientPort):
         media_file = None
         try:
             media_file = MediaFileUpload(
-                path, mimetype="video/*", resumable=True
+                path,
+                mimetype="video/*",
+                chunksize=16 * 1024 * 1024,
+                resumable=True,
             )
             request = self._youtube.videos().insert(
                 part="snippet,status",
@@ -230,12 +246,20 @@ class YouTubeClient(UploadPort, AuthenticatedClientPort):
             )
             response = None
             while response is None:
+                if cancel_check is not None and cancel_check():
+                    raise asyncio.CancelledError
                 status, response = request.next_chunk()
                 if status:
                     percent = status.progress() * 100
                     self.logger.info("Upload progress", percent=percent)
                     if progress_callback:
                         progress_callback(percent)
+                if (
+                    response is None
+                    and cancel_check is not None
+                    and cancel_check()
+                ):
+                    raise asyncio.CancelledError
             # response の型を明示的にキャスト
             response_dict = cast(dict[str, Any], response)
             response_id: Optional[str] = response_dict.get("id")

@@ -6,7 +6,14 @@ from dataclasses import dataclass
 from typing import Literal
 
 
-EditUploadState = Literal["idle", "running", "succeeded", "failed"]
+EditUploadState = Literal[
+    "idle",
+    "running",
+    "cancelling",
+    "cancelled",
+    "succeeded",
+    "failed",
+]
 EditedVideoSource = Literal["edited", "pending"]
 EditedVideoThumbnailSource = Literal["edited", "recorded"]
 
@@ -118,7 +125,7 @@ class EditUploadStatusDTO:
     """編集・アップロード処理の状態を表すDTO。
 
     Attributes:
-        state: 状態（idle/running/succeeded/failed）
+        state: 状態（idle/running/cancelling/cancelled/succeeded/failed）
         message: 状態メッセージ
         progress: 進捗率（0-100）
         sleep_after_upload_default: 保存済み設定の既定値

@@ -429,24 +429,28 @@ describe('mapEditUploadStatus', () => {
   // State Variations
   // ========================================
 
-  it.each([['idle' as const], ['running' as const], ['succeeded' as const], ['failed' as const]])(
-    'state=%sを正しく処理する',
-    (state) => {
-      const raw: RawEditUploadStatus = {
-        state,
-        started_at: null,
-        finished_at: null,
-        error: null,
-        sleep_after_upload_default: false,
-        sleep_after_upload_effective: false,
-        sleep_after_upload_overridden: false,
-      };
+  it.each([
+    ['idle' as const],
+    ['running' as const],
+    ['cancelling' as const],
+    ['cancelled' as const],
+    ['succeeded' as const],
+    ['failed' as const],
+  ])('state=%sを正しく処理する', (state) => {
+    const raw: RawEditUploadStatus = {
+      state,
+      started_at: null,
+      finished_at: null,
+      error: null,
+      sleep_after_upload_default: false,
+      sleep_after_upload_effective: false,
+      sleep_after_upload_overridden: false,
+    };
 
-      const result = mapEditUploadStatus(raw);
+    const result = mapEditUploadStatus(raw);
 
-      expect(result.state).toBe(state);
-    }
-  );
+    expect(result.state).toBe(state);
+  });
 
   // ========================================
   // Boolean Normalization

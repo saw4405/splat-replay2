@@ -38,7 +38,13 @@ export interface CaptureDeviceRecoveryResponse {
 }
 
 // 編集・アップロード
-export type EditUploadState = 'idle' | 'running' | 'succeeded' | 'failed';
+export type EditUploadState =
+  | 'idle'
+  | 'running'
+  | 'cancelling'
+  | 'cancelled'
+  | 'succeeded'
+  | 'failed';
 
 export interface EditUploadStatus {
   state: EditUploadState;

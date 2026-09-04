@@ -45,10 +45,14 @@ class GetEditUploadStatusUseCase:
         progress = editor_status.get("progress", 0)
 
         # StartEditUploadUseCase の状態を優先する
-        if self._start_edit_upload_uc.is_running():
+        current_state = self._start_edit_upload_uc.get_state()
+        if (
+            self._start_edit_upload_uc.is_running()
+            and current_state != "cancelling"
+        ):
             state = "running"
         else:
-            state = self._start_edit_upload_uc.get_state()
+            state = current_state
             if state == "running":
                 state = "idle"
         message = self._start_edit_upload_uc.get_message()

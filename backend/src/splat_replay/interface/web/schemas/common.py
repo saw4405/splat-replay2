@@ -16,7 +16,14 @@ __all__ = [
     "EditUploadTriggerResponse",
 ]
 
-EditUploadState = Literal["idle", "running", "succeeded", "failed"]
+EditUploadState = Literal[
+    "idle",
+    "running",
+    "cancelling",
+    "cancelled",
+    "succeeded",
+    "failed",
+]
 
 
 class EditUploadStatus(BaseModel):

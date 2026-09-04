@@ -26,8 +26,9 @@ class _FramePreviewProcessor(FFmpegProcessor):
         *,
         input_bytes: bytes | None = None,
         timeout: float | None = None,
+        **kwargs: object,
     ) -> CompletedProcess[bytes]:
-        _ = input_bytes, timeout
+        _ = input_bytes, timeout, kwargs
         self.commands.append(list(command))
         self.active_runs += 1
         self.max_active_runs = max(self.max_active_runs, self.active_runs)

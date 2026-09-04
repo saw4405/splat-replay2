@@ -63,7 +63,7 @@ export type RawEditedVideo = {
 };
 
 export type RawEditUploadStatus = {
-  state: 'idle' | 'running' | 'succeeded' | 'failed';
+  state: 'idle' | 'running' | 'cancelling' | 'cancelled' | 'succeeded' | 'failed';
   started_at: string | null;
   finished_at: string | null;
   error: string | null;

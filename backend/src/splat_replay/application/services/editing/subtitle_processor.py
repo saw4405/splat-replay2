@@ -11,7 +11,7 @@ import re
 import wave
 from array import array
 from pathlib import Path
-from typing import List, Tuple
+from typing import Callable, List, Tuple
 
 from splat_replay.application.interfaces.common import (
     ConfigPort,
@@ -51,21 +51,43 @@ class SubtitleProcessor:
         self._file_system = file_system
 
     async def create_and_embed(
-        self, target: Path, group: List[VideoAsset]
+        self,
+        target: Path,
+        group: List[VideoAsset],
+        *,
+        cancel_check: Callable[[], bool] | None = None,
     ) -> None:
         """字幕を作成し、音声読み上げを動画に埋め込む。"""
         self.settings = self.config.get_video_edit_settings()
-        combined_srt = await self._create_subtitle(target, group)
+        self._raise_if_cancelled(cancel_check)
+        combined_srt = await self._create_subtitle(
+            target, group, cancel_check=cancel_check
+        )
+        self._raise_if_cancelled(cancel_check)
         if combined_srt:
-            await self._embed_subtitle_speech(target, combined_srt)
+            await self._embed_subtitle_speech(
+                target, combined_srt, cancel_check=cancel_check
+            )
+
+    @staticmethod
+    def _raise_if_cancelled(
+        cancel_check: Callable[[], bool] | None,
+    ) -> None:
+        if cancel_check is not None and cancel_check():
+            raise asyncio.CancelledError
 
     async def _create_subtitle(
-        self, target: Path, group: List[VideoAsset]
+        self,
+        target: Path,
+        group: List[VideoAsset],
+        *,
+        cancel_check: Callable[[], bool] | None = None,
     ) -> str:
         """字幕を作成してファイルに保存する。"""
         subtitles: List[Path] = []
         video_lengths: List[float] = []
         for asset in group:
+            self._raise_if_cancelled(cancel_check)
             if asset.subtitle is None:
                 continue
             if not self._file_system.is_file(asset.subtitle):
@@ -73,6 +95,7 @@ class SubtitleProcessor:
             video_length = await self.video_editor.get_video_length(
                 asset.video
             )
+            self._raise_if_cancelled(cancel_check)
             if video_length is None:
                 self.logger.warning(
                     "動画の長さを取得できませんでした", video=str(asset.video)
@@ -84,6 +107,7 @@ class SubtitleProcessor:
         combined_srt = await asyncio.to_thread(
             self.subtitle_editor.merge, subtitles, video_lengths
         )
+        self._raise_if_cancelled(cancel_check)
         if combined_srt:
             # 字幕をリポジトリ経由で保存
             await asyncio.to_thread(
@@ -92,7 +116,11 @@ class SubtitleProcessor:
         return combined_srt
 
     async def _embed_subtitle_speech(
-        self, target: Path, srt_text: str
+        self,
+        target: Path,
+        srt_text: str,
+        *,
+        cancel_check: Callable[[], bool] | None = None,
     ) -> None:
         """字幕を読み上げ、動画に音声トラックとして追加する。"""
         speech_settings = self.settings.speech
@@ -112,6 +140,7 @@ class SubtitleProcessor:
         segments: list[tuple[float, bytes]] = []
         has_text = False
         for start, _, original_text in entries:
+            self._raise_if_cancelled(cancel_check)
             sanitized = re.sub(r"<[^>]+>", "", original_text)
             normalized = sanitized.replace("\n", " ").strip()
             if not normalized:
@@ -131,6 +160,7 @@ class SubtitleProcessor:
                 result = await asyncio.to_thread(
                     self.text_to_speech.synthesize, request
                 )
+                self._raise_if_cancelled(cancel_check)
             except Exception as exc:  # noqa: BLE001
                 self.logger.error(
                     "字幕読み上げ生成に失敗しました",
@@ -176,6 +206,7 @@ class SubtitleProcessor:
                 target,
                 narration_path,
                 stream_title=speech_settings.track_title,
+                cancel_check=cancel_check,
             )
         finally:
             await asyncio.to_thread(

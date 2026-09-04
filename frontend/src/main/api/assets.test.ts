@@ -74,10 +74,10 @@ describe('assets API', () => {
 
       return new Response(
         JSON.stringify({
-          state: 'failed',
+          state: 'cancelling',
           started_at: null,
           finished_at: null,
-          error: '編集・アップロード処理をキャンセルしました',
+          error: null,
           sleep_after_upload_default: false,
           sleep_after_upload_effective: false,
           sleep_after_upload_overridden: false,
@@ -90,10 +90,10 @@ describe('assets API', () => {
     };
 
     await expect(cancelEditUploadProcess()).resolves.toEqual({
-      state: 'failed',
+      state: 'cancelling',
       startedAt: null,
       finishedAt: null,
-      error: '編集・アップロード処理をキャンセルしました',
+      error: null,
       sleepAfterUploadDefault: false,
       sleepAfterUploadEffective: false,
       sleepAfterUploadOverridden: false,
