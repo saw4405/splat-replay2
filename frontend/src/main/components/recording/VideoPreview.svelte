@@ -14,7 +14,7 @@
 
   let { switchPowerState = 'unknown' }: { switchPowerState?: SwitchPowerState } = $props();
 
-  let eventSource: EventSource | null = null;
+  let eventSource: ReturnType<typeof subscribeDomainEvents> | null = null;
   let videoEl = $state<HTMLVideoElement | null>(null);
   let mediaStream: MediaStream | null = null;
   let devices = $state<MediaDeviceInfo[]>([]);

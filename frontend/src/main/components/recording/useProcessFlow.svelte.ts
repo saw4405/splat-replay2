@@ -32,7 +32,7 @@ export function createProcessFlow(config: ProcessFlowConfig) {
 
   // --- 非リアクティブ内部状態 ---
   let statusPollingInterval: number | null = null;
-  let assetEventSource: EventSource | null = null;
+  let assetEventSource: ReturnType<typeof subscribeDomainEvents> | null = null;
   let assetEventRetryTimer: number | null = null;
   let isSyncingProcessStatus = false;
   let processStatusPollIntervalMs = getProcessStatusPollIntervalMs('cpu');

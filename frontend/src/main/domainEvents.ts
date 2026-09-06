@@ -78,27 +78,119 @@ export interface SpeechRecognizedPayload {
   timestamp?: string;
 }
 
+type DomainEventHandler = (event: DomainEvent) => void;
+type ConnectionEventHandler = (event: Event) => void;
+
+export interface DomainEventSubscription {
+  onopen: ConnectionEventHandler | null;
+  onerror: ConnectionEventHandler | null;
+  readonly readyState: number;
+  close(): void;
+}
+
+interface Subscriber extends DomainEventSubscription {
+  onEvent: DomainEventHandler;
+  openNotified: boolean;
+  closed: boolean;
+}
+
+const subscribers = new Set<Subscriber>();
+let sharedEventSource: EventSource | null = null;
+
+function notifyConnectionEvent(kind: 'onopen' | 'onerror', event: Event): void {
+  for (const subscriber of [...subscribers]) {
+    if (subscriber.closed) continue;
+    const handler = subscriber[kind];
+    if (!handler) continue;
+    if (kind === 'onopen') {
+      subscriber.openNotified = true;
+    }
+    try {
+      handler(event);
+    } catch (error) {
+      console.error(`Domain event subscriber ${kind} failed:`, error);
+    }
+  }
+}
+
+function openSharedEventSource(): EventSource {
+  const source = new EventSource('/api/events/domain-events');
+
+  source.addEventListener('domain_event', (event: MessageEvent) => {
+    let data: DomainEvent;
+    try {
+      data = JSON.parse(event.data) as DomainEvent;
+    } catch (error) {
+      console.error('Failed to parse domain event:', error);
+      return;
+    }
+
+    for (const subscriber of [...subscribers]) {
+      if (subscriber.closed) continue;
+      try {
+        subscriber.onEvent(data);
+      } catch (error) {
+        console.error('Domain event subscriber failed:', error);
+      }
+    }
+  });
+  source.addEventListener('open', (event: Event) => {
+    notifyConnectionEvent('onopen', event);
+  });
+  source.addEventListener('error', (event: Event) => {
+    console.error('Domain event SSE error:', event);
+    notifyConnectionEvent('onerror', event);
+  });
+
+  sharedEventSource = source;
+  return source;
+}
+
 /**
  * ドメインイベントのSSE購読を開始する
  *
  * @param onEvent イベントを受信したときのコールバック
- * @returns EventSourceオブジェクト（購読を停止する場合は close() を呼ぶ）
+ * @returns 共有SSEの購読（購読を停止する場合は close() を呼ぶ）
  */
-export function subscribeDomainEvents(onEvent: (event: DomainEvent) => void): EventSource {
-  const eventSource = new EventSource('/api/events/domain-events');
+export function subscribeDomainEvents(onEvent: DomainEventHandler): DomainEventSubscription {
+  const subscriber: Subscriber = {
+    onEvent,
+    onopen: null,
+    onerror: null,
+    openNotified: false,
+    closed: false,
+    get readyState() {
+      return subscriber.closed ? EventSource.CLOSED : source.readyState;
+    },
+    close() {
+      if (subscriber.closed) return;
+      subscriber.closed = true;
+      subscribers.delete(subscriber);
+      if (subscribers.size === 0) {
+        sharedEventSource?.close();
+        sharedEventSource = null;
+      }
+    },
+  };
+  subscribers.add(subscriber);
+  const source = sharedEventSource ?? openSharedEventSource();
 
-  eventSource.addEventListener('domain_event', (e: MessageEvent) => {
-    try {
-      const data = JSON.parse(e.data) as DomainEvent;
-      onEvent(data);
-    } catch (error) {
-      console.error('Failed to parse domain event:', error);
+  queueMicrotask(() => {
+    const handler = subscriber.onopen;
+    if (
+      !subscriber.closed &&
+      !subscriber.openNotified &&
+      source.readyState === EventSource.OPEN &&
+      handler
+    ) {
+      subscriber.openNotified = true;
+      try {
+        handler(new Event('open'));
+      } catch (error) {
+        console.error('Domain event subscriber onopen failed:', error);
+      }
     }
   });
 
-  eventSource.onerror = (error) => {
-    console.error('Domain event SSE error:', error);
-  };
-
-  return eventSource;
+  return subscriber;
 }

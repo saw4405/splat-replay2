@@ -30,7 +30,7 @@
   let alertVariant = $state<'info' | 'success' | 'warning' | 'error'>('info');
 
   // SSE接続
-  let domainEventSource: EventSource | null = null;
+  let domainEventSource: ReturnType<typeof subscribeDomainEvents> | null = null;
 
   // メタデータ (SSE経由で更新)
   let metadata = $state<LiveMetadataState>(createEmptyLiveMetadataState());
