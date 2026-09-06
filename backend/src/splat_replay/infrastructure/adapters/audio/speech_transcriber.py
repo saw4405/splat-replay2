@@ -79,6 +79,8 @@ class SpeechTranscriber(SpeechTranscriberPort):
             queue.Queue()
         )
         self._recording_event = threading.Event()
+        self._startup_complete = threading.Event()
+        self._startup_error: str | None = None
         self._recording_thread: Optional[threading.Thread] = None
         self._recognition_thread: Optional[threading.Thread] = None
 
@@ -102,6 +104,7 @@ class SpeechTranscriber(SpeechTranscriberPort):
     def _recording_loop(self) -> None:
         try:
             with sr.Microphone(device_index=self._microphone_index) as source:
+                self._startup_complete.set()
                 self._logger.info(
                     "マイク録音ループを開始しました",
                     energy_threshold=self._recognizer.energy_threshold,
@@ -129,14 +132,25 @@ class SpeechTranscriber(SpeechTranscriberPort):
                     end = elapsed_time
 
                     self._audio_queue.put((audio, start, end))
-        except AttributeError as e:
-            if "'NoneType'" in str(e) and "close" in str(e):
+        except Exception as exc:
+            if not self._startup_complete.is_set():
+                self._startup_error = str(exc)
+                self._startup_complete.set()
+            if (
+                isinstance(exc, AttributeError)
+                and "'NoneType'" in str(exc)
+                and "close" in str(exc)
+            ):
                 self._logger.error(
                     "マイクデバイスを開けませんでした",
                     device_index=self._microphone_index,
                 )
             else:
-                raise
+                self._logger.error(
+                    "マイク録音ループが停止しました",
+                    device_index=self._microphone_index,
+                    error=str(exc),
+                )
 
     def _recognition_loop(self) -> None:
         while not self._recording_event.is_set():
@@ -190,6 +204,8 @@ class SpeechTranscriber(SpeechTranscriberPort):
         self._stopwatch.reset()
         self._stopwatch.start()
         self._recording_event.clear()
+        self._startup_complete.clear()
+        self._startup_error = None
         self._segments.clear()
         self._recording_thread = threading.Thread(
             target=self._recording_loop, daemon=True
@@ -199,6 +215,12 @@ class SpeechTranscriber(SpeechTranscriberPort):
         )
         self._recording_thread.start()
         self._recognition_thread.start()
+
+    async def wait_until_ready(self, timeout_seconds: float) -> bool:
+        completed = await asyncio.to_thread(
+            self._startup_complete.wait, timeout_seconds
+        )
+        return completed and self._startup_error is None
 
     def pause(self) -> None:
         if not self._is_paused:

@@ -102,25 +102,8 @@ def create_recording_router(server: WebAPIServer) -> APIRouter:
     async def prepare_recording() -> StandardResponse:
         """録画準備（OBS起動・仮想カメラ有効化）。"""
         try:
-            audio_health = (
-                await server.recording_preparation_service.prepare_recording()
-            )
-            warning = (
-                AudioHealthWarningResponse(
-                    input_name=audio_health.input_name,
-                    status=audio_health.status,
-                    healthy=audio_health.healthy,
-                    short_message=audio_health.short_message,
-                    details=audio_health.details,
-                    peak_db=audio_health.peak_db,
-                )
-                if not audio_health.healthy
-                else None
-            )
-            return StandardResponse(
-                success=True,
-                audio_health_warning=warning,
-            )
+            await server.recording_preparation_service.prepare_recording()
+            return StandardResponse(success=True)
         except Exception as e:
             error_handler.handle_error(
                 e, context="録画準備", log_level="warning"

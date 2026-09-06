@@ -41,6 +41,7 @@ from splat_replay.domain.models import (
     Frame,
     Match,
     RecordingMetadata,
+    SwitchPowerMonitor,
     SwitchPowerState,
     XP,
 )
@@ -115,6 +116,8 @@ class _SessionSpy:
         self.context_at_stop: RecordingContext | None = None
         self.result_frame_at_stop: Frame | None = None
         self.state = RecordState.RECORDING
+        self.audio_health_checks = 0
+        self.transcription_preparations = 0
 
     @property
     def context(self) -> RecordingContext:
@@ -127,6 +130,12 @@ class _SessionSpy:
     def update_context(self, context: RecordingContext) -> None:
         self._events.append("update")
         self.updated_contexts.append(context)
+
+    async def check_audio_health(self) -> None:
+        self.audio_health_checks += 1
+
+    async def prepare_transcription(self) -> None:
+        self.transcription_preparations += 1
 
     async def stop(
         self, get_result_frame: Callable[[], Awaitable[Frame | None]]
@@ -325,6 +334,7 @@ class _PowerCycleFrameProcessor:
         self.use_case: AutoRecordingUseCase | None = None
 
     async def acquire_frame(self) -> Frame | None:
+        await asyncio.sleep(0)
         return np.zeros((2, 2, 3), dtype=np.uint8)
 
     async def observe_power_off(
@@ -345,6 +355,36 @@ class _PowerCycleFrameProcessor:
     def publish_power_off_detected(self, final: bool = False) -> None:
         assert final is True
         self.power_off_events += 1
+
+
+@pytest.mark.asyncio
+async def test_audio_health_refresh_failure_does_not_stop_power_monitoring() -> (
+    None
+):
+    class _FailingSession(_SessionSpy):
+        async def check_audio_health(self) -> None:
+            raise RuntimeError("OBS unavailable")
+
+    events: list[str] = []
+    session = _FailingSession(events=events)
+    use_case = AutoRecordingUseCase(
+        session_service=cast(RecordingSessionService, session),
+        frame_processor=cast(FrameProcessingService, object()),
+        phase_handlers=cast(PhaseHandlerRegistry, object()),
+        context=RecordingContext(),
+        capture=cast(CapturePort, object()),
+        capture_producer=cast(FrameCaptureProducer, object()),
+        publisher_worker=cast(PublisherWorker, object()),
+        logger=cast(LoggerPort, _LoggerStub()),
+    )
+    use_case._power_monitor = SwitchPowerMonitor(state=SwitchPowerState.ARMED)
+
+    await use_case._refresh_audio_health_for_power_state()
+    assert use_case._audio_preparation_task is not None
+    await use_case._audio_preparation_task
+
+    assert use_case.power_status() is SwitchPowerState.ARMED
+    assert session.transcription_preparations == 1
 
 
 @pytest.mark.asyncio
@@ -379,10 +419,14 @@ async def test_main_loop_rearms_for_three_power_cycles() -> None:
     processor.use_case = use_case
 
     saw_power_off = await use_case._run_main_loop()
+    assert use_case._audio_preparation_task is not None
+    await use_case._audio_preparation_task
 
     assert saw_power_off is True
     assert use_case.power_status() is SwitchPowerState.ARMED
     assert processor.power_off_events == 3
+    assert session.audio_health_checks == 7
+    assert session.transcription_preparations == 4
     assert phase_handlers.handle_frame_calls > 0
     assert processor.check_intervals == [
         *([0.0] * 3),
@@ -503,6 +547,8 @@ async def test_capture_disconnect_does_not_publish_power_off() -> None:
     assert saw_power_off is False
     assert use_case.power_status() is SwitchPowerState.CAPTURE_DISCONNECTED
     assert processor.power_off_events == 0
+    assert session.audio_health_checks == 1
+    assert session.transcription_preparations == 0
     assert capture_producer.intervals == [1.0]
 
 

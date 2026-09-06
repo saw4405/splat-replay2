@@ -138,6 +138,10 @@ class AdaptiveVideoRecorder(VideoRecorderPort):
             sample_duration_seconds=sample_duration_seconds,
         )
 
+    async def try_recover_audio_input(self) -> bool:
+        recorder = await self._select_recorder()
+        return await recorder.try_recover_audio_input()
+
     async def _forward_status(self, status: RecorderStatus) -> None:
         for listener in list(self._status_listeners):
             await listener(status)

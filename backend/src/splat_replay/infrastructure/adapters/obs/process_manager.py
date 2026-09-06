@@ -73,16 +73,20 @@ class OBSProcessManager:
         """
         self._executable_path = executable_path
         self._logger = logger
-        self._process: subprocess.Popen[bytes] | None = None
+        self._process: ManagedOBSProcess | None = None
+        self._preserve_running_on_teardown = False
         self._lifecycle_lock = asyncio.Lock()
 
-    def _has_owned_live_process(self) -> bool:
-        return self._process is not None and self._process.poll() is None
+    def _has_managed_live_process(self) -> bool:
+        return self._process is not None and self._is_managed_process_alive(
+            self._process
+        )
 
     async def _find_existing_obs_process(self) -> psutil.Process | None:
         file_name = self._executable_path.name.lower()
 
         def _impl() -> psutil.Process | None:
+            matches: list[psutil.Process] = []
             for proc in psutil.process_iter(["name", "exe"]):
                 try:
                     name_obj = proc.info.get("name")
@@ -92,19 +96,26 @@ class OBSProcessManager:
                     ):
                         continue
                     exe_obj = proc.info.get("exe")
-                    if isinstance(exe_obj, str) and exe_obj:
-                        try:
-                            if (
-                                Path(exe_obj).resolve()
-                                != self._executable_path.resolve()
-                            ):
-                                continue
-                        except OSError:
+                    if not isinstance(exe_obj, str) or not exe_obj:
+                        continue
+                    try:
+                        if (
+                            Path(exe_obj).resolve()
+                            != self._executable_path.resolve()
+                        ):
                             continue
-                    return proc
+                    except OSError:
+                        continue
+                    matches.append(proc)
                 except (psutil.NoSuchProcess, psutil.AccessDenied):
                     continue
-            return None
+            if len(matches) > 1:
+                self._logger.warning(
+                    "OBS 自動復旧対象を一意に特定できません",
+                    matching_process_count=len(matches),
+                )
+                return None
+            return matches[0] if matches else None
 
         return await asyncio.to_thread(_impl)
 
@@ -223,13 +234,49 @@ class OBSProcessManager:
         async with self._lifecycle_lock:
             await self._launch_locked()
 
+    async def restart_for_recovery(self) -> bool:
+        """管理中または設定パスと一意に一致する OBS を再起動する。"""
+        async with self._lifecycle_lock:
+            managed = self._has_managed_live_process()
+            process = (
+                self._process
+                if managed
+                else await self._find_existing_obs_process()
+            )
+            if process is None:
+                self._logger.info(
+                    "OBS 自動復旧を見送りました",
+                    reason="matching_process_not_found",
+                )
+                return False
+
+            preserve_running = (
+                self._preserve_running_on_teardown or not managed
+            )
+            self._process = process
+            await self._teardown_locked()
+            if self._is_managed_process_alive(process):
+                self._logger.error(
+                    "OBS 自動復旧を中止しました",
+                    reason="process_still_running",
+                    pid=process.pid,
+                )
+                raise DeviceError(
+                    "OBS の終了を確認できないため自動復旧を中止しました",
+                    "OBS_RECOVERY_STOP_FAILED",
+                )
+
+            await self._launch_locked()
+            self._preserve_running_on_teardown = preserve_running
+            return True
+
     async def _launch_locked(self) -> None:
         """OBSプロセスを起動。呼び出し元で lifecycle lock を保持する。"""
         self._logger.info("OBS 起動要求")
         if await self.is_running():
             self._logger.info("OBS は既に実行中")
             return
-        if self._has_owned_live_process():
+        if self._has_managed_live_process():
             self._logger.info(
                 "OBS は起動処理中またはメインウィンドウ待機中です",
                 pid=self._process.pid if self._process is not None else None,
@@ -283,12 +330,13 @@ class OBSProcessManager:
                 )
 
             # 別スレッドで起動（イベントループの制限を回避）
-            self._process = await asyncio.to_thread(_launch_process)
-            self._logger.info("OBS プロセス起動完了", pid=self._process.pid)
+            launched_process = await asyncio.to_thread(_launch_process)
+            self._process = launched_process
+            self._logger.info("OBS プロセス起動完了", pid=launched_process.pid)
 
             # プロセスがすぐに終了していないか確認
             await asyncio.sleep(0.5)
-            returncode = self._process.poll()
+            returncode = launched_process.poll()
             if returncode is not None:
                 # プロセスが既に終了している
                 self._logger.error(
@@ -320,8 +368,8 @@ class OBSProcessManager:
             if is_running:
                 self._logger.info("OBS 起動確認完了（プロセス＋ウィンドウ）")
                 return
-            if self._process is not None and self._process.poll() is None:
-                self._handle_launch_dialogs(self._process.pid)
+            if launched_process.poll() is None:
+                self._handle_launch_dialogs(launched_process.pid)
             await asyncio.sleep(1)
             if i % 5 == 0:
                 self._logger.debug(
@@ -331,7 +379,7 @@ class OBSProcessManager:
         self._logger.error(
             "OBS 起動タイムアウト（ウィンドウが表示されませんでした）"
         )
-        if self._has_owned_live_process() and self._process is not None:
+        if self._has_managed_live_process() and self._process is not None:
             self._logger.warning(
                 "OBS 起動タイムアウト後の残留プロセスを終了します",
                 pid=self._process.pid,
@@ -620,6 +668,18 @@ class OBSProcessManager:
         タイムアウトした場合は強制終了。
         """
         async with self._lifecycle_lock:
+            if (
+                self._preserve_running_on_teardown
+                and self._has_managed_live_process()
+            ):
+                self._logger.info(
+                    "アプリ起動前から存在した OBS を実行したまま残します",
+                    pid=self._process.pid
+                    if self._process is not None
+                    else None,
+                )
+                self._process = None
+                return
             await self._teardown_locked()
 
     async def _teardown_locked(self) -> None:
@@ -627,7 +687,7 @@ class OBSProcessManager:
         self._logger.info("OBS 終了要求")
 
         running = await self.is_running()
-        owned_live_process = self._has_owned_live_process()
+        owned_live_process = self._has_managed_live_process()
         existing_process: psutil.Process | None = None
         if not owned_live_process:
             existing_process = await self._find_existing_obs_process()

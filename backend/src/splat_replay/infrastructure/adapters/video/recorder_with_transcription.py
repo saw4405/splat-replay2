@@ -1,4 +1,5 @@
 import asyncio
+from contextlib import suppress
 from pathlib import Path
 from typing import Awaitable, Callable, List, Optional, Tuple
 
@@ -17,6 +18,8 @@ from splat_replay.application.interfaces import (
 class RecorderWithTranscription(RecorderWithTranscriptionPort):
     """動画・文字起こしの録画を制御するサービス。"""
 
+    TRANSCRIPTION_START_TIMEOUT_SECONDS = 1.0
+
     def __init__(
         self,
         recorder: VideoRecorderPort,
@@ -34,41 +37,73 @@ class RecorderWithTranscription(RecorderWithTranscriptionPort):
         self.logger = logger
         self._transcriber_factory = transcriber_factory
         self._transcriber_fingerprint: str | None = None
+        self._recording_started = False
+        self._transcriber_started = False
         self._status_listeners: List[
             Callable[[RecorderStatus], Awaitable[None]]
         ] = []
 
-    def _refresh_transcriber(self) -> None:
+    async def setup(self) -> None:
+        await self.recorder.setup()
+        self.recorder.add_status_listener(self._notify_status_change)
+
+    async def prepare_transcription(self) -> None:
+        """録画開始を待たせないよう、文字起こしを事前構築する。"""
         if self._transcriber_factory is None:
             return
         try:
-            transcriber, fingerprint = self._transcriber_factory()
-            if fingerprint == self._transcriber_fingerprint:
-                return
-            self.transcriber = transcriber
-            self._transcriber_fingerprint = fingerprint
+            transcriber, fingerprint = await asyncio.to_thread(
+                self._transcriber_factory
+            )
         except Exception as exc:
             self.logger.error(
                 "文字起こし設定の再読み込みに失敗しました",
                 error=str(exc),
             )
             self.transcriber = None
-
-    async def setup(self) -> None:
-        await self.recorder.setup()
-        self.recorder.add_status_listener(self._notify_status_change)
+            return
+        if fingerprint != self._transcriber_fingerprint:
+            self.transcriber = transcriber
+            self._transcriber_fingerprint = fingerprint
+        if self._recording_started:
+            await self._start_transcription()
 
     async def start(self) -> None:
-        self._refresh_transcriber()
         await self.recorder.start()
-        if self.transcriber is not None:
+        self._recording_started = True
+        await self._start_transcription()
+
+    async def _start_transcription(self) -> None:
+        if self.transcriber is None or self._transcriber_started:
+            return
+        try:
             self.transcriber.start()
+            self._transcriber_started = True
+            ready = await self.transcriber.wait_until_ready(
+                self.TRANSCRIPTION_START_TIMEOUT_SECONDS
+            )
+            if not ready:
+                self.logger.warning(
+                    "文字起こしのマイク入力を1秒以内に開始できませんでした。映像録画は継続します。"
+                )
+        except Exception as exc:
+            self.logger.warning(
+                "文字起こしを開始できませんでした。映像録画は継続します。",
+                error=str(exc),
+            )
+            with suppress(Exception):
+                self.transcriber.stop()
+            self._transcriber_started = False
 
     async def stop(self) -> Tuple[Optional[Path], Optional[Path]]:
         video_path = await self.recorder.stop()
+        self._recording_started = False
         srt_path = None
-        if self.transcriber is not None:
-            subtitle = self.transcriber.stop()
+        if self.transcriber is not None and self._transcriber_started:
+            try:
+                subtitle = self.transcriber.stop()
+            finally:
+                self._transcriber_started = False
             if video_path:
                 srt_path = video_path.parent / f"{video_path.stem}.srt"
                 await asyncio.to_thread(
@@ -78,8 +113,12 @@ class RecorderWithTranscription(RecorderWithTranscriptionPort):
 
     async def cancel(self) -> None:
         video_path = await self.recorder.stop()
-        if self.transcriber is not None:
-            self.transcriber.stop()
+        self._recording_started = False
+        if self.transcriber is not None and self._transcriber_started:
+            try:
+                self.transcriber.stop()
+            finally:
+                self._transcriber_started = False
         if video_path is None:
             self.logger.warning(
                 "録画中止時に削除対象ファイルを取得できませんでした"
@@ -99,12 +138,12 @@ class RecorderWithTranscription(RecorderWithTranscriptionPort):
 
     async def pause(self) -> None:
         await self.recorder.pause()
-        if self.transcriber is not None:
+        if self.transcriber is not None and self._transcriber_started:
             self.transcriber.pause()
 
     async def resume(self) -> None:
         await self.recorder.resume()
-        if self.transcriber is not None:
+        if self.transcriber is not None and self._transcriber_started:
             self.transcriber.resume()
 
     async def teardown(self) -> None:
@@ -123,6 +162,11 @@ class RecorderWithTranscription(RecorderWithTranscriptionPort):
         """録画状態変化をリスナーに通知する。"""
         for listener in self._status_listeners:
             await listener(status)
+        if status == "started":
+            self._recording_started = True
+            await self._start_transcription()
+        elif status == "stopped":
+            self._recording_started = False
 
     def add_status_listener(
         self, listener: Callable[[RecorderStatus], Awaitable[None]]

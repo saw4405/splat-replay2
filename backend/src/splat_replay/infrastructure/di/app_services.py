@@ -21,6 +21,7 @@ from splat_replay.application.interfaces import (
     ReplayBootstrapResolverPort,
     RecorderWithTranscriptionPort,
     VideoAssetRepositoryPort,
+    VideoRecorderPort,
     WeaponRecognitionPort,
     XPDetectionDiagnosticsPort,
 )
@@ -50,6 +51,9 @@ from splat_replay.application.services.errors.error_logger import ErrorLogger
 from splat_replay.application.services.process.auto_process_service import (
     AutoProcessService,
 )
+from splat_replay.application.services.recording.recording_audio_health import (
+    RecordingAudioHealthService,
+)
 from splat_replay.application.use_cases.auto_recording_use_case import (
     AutoRecordingUseCase,
 )
@@ -64,8 +68,29 @@ def register_app_services(container: Container) -> None:
     base_dir = app_settings.storage.base_dir
 
     container.register(DeviceChecker, DeviceChecker)
+
+    def recording_audio_health_service_factory() -> (
+        RecordingAudioHealthService
+    ):
+        return RecordingAudioHealthService(
+            recorder=container.resolve(VideoRecorderPort),
+            capture_device=container.resolve(CaptureDevicePort),
+            config=container.resolve(ConfigPort),
+            power_state=lambda: container.resolve(
+                AutoRecordingUseCase
+            ).power_status(),
+            logger=container.resolve(LoggerPort),
+        )
+
     container.register(
-        RecordingPreparationService, RecordingPreparationService
+        RecordingAudioHealthService,
+        factory=recording_audio_health_service_factory,
+        scope=punq.Scope.singleton,
+    )
+
+    container.register(
+        RecordingPreparationService,
+        RecordingPreparationService,
     )
 
     def battle_history_service_factory() -> BattleHistoryService:
@@ -96,7 +121,6 @@ def register_app_services(container: Container) -> None:
         domain_publisher = container.resolve(DomainEventPublisher)
         battle_history_service = container.resolve(BattleHistoryService)
         clock = container.resolve(ClockPort)
-        config = container.resolve(ConfigPort)
         xp_detection_diagnostics = container.resolve(
             XPDetectionDiagnosticsPort
         )
@@ -114,8 +138,8 @@ def register_app_services(container: Container) -> None:
             domain_publisher=domain_publisher,
             battle_history_service=battle_history_service,
             clock=clock,
-            config=config,
             xp_detection_diagnostics=xp_detection_diagnostics,
+            audio_health=container.resolve(RecordingAudioHealthService),
         )
 
     container.register(AutoRecorder, factory=auto_recorder_factory)

@@ -128,6 +128,7 @@ class AutoRecordingUseCase:
         self._power_monitor = SwitchPowerMonitor()
         self._background_retry_delay_seconds = background_retry_delay_seconds
         self._capture_device = capture_device
+        self._audio_preparation_task: asyncio.Task[None] | None = None
 
     # ================================================================
     # UseCase 実行
@@ -267,6 +268,7 @@ class AutoRecordingUseCase:
     async def _teardown(self) -> None:
         """自動録画のクリーンアップ。"""
         self._power_monitor = self._power_monitor.stop()
+        await self._cancel_audio_preparation()
         self._phase_handlers.cancel_background_tasks()
 
         # 録画中なら停止
@@ -358,6 +360,7 @@ class AutoRecordingUseCase:
                             current=current_power_state.value,
                         )
                         self.last_phase = None
+                        await self._refresh_audio_health_for_power_state()
                     if request_post_process:
                         saw_power_off = True
                         await self._handle_power_off_transition()
@@ -434,11 +437,57 @@ class AutoRecordingUseCase:
         self._apply_capture_interval_for_power_state()
         self.logger.warning("キャプチャーデバイス切断を検出しました")
         self.last_phase = None
+        await self._refresh_audio_health_for_power_state()
         self._phase_handlers.cancel_background_tasks()
         if self._session.state in (RecordState.RECORDING, RecordState.PAUSED):
             await self._session.cancel()
             base_context, _ = await self._snapshot_context()
             await self._sync_context_from_service(base_context=base_context)
+
+    async def _refresh_audio_health_for_power_state(self) -> None:
+        """ARMED時だけ音声復旧と文字起こし準備を開始する。"""
+        await self._cancel_audio_preparation()
+        if self._power_monitor.state is not SwitchPowerState.ARMED:
+            try:
+                await self._session.check_audio_health()
+            except Exception as exc:  # noqa: BLE001
+                self.logger.warning(
+                    "Switch電源状態変更後のOBS音声確認に失敗しました",
+                    power_state=self._power_monitor.state.value,
+                    error=str(exc),
+                )
+            return
+        self._audio_preparation_task = asyncio.create_task(
+            self._prepare_audio_for_power_on()
+        )
+
+    async def _prepare_audio_for_power_on(self) -> None:
+        audio_result, transcription_result = await asyncio.gather(
+            self._session.check_audio_health(),
+            self._session.prepare_transcription(),
+            return_exceptions=True,
+        )
+        if isinstance(audio_result, Exception):
+            self.logger.warning(
+                "Switch電源ON後のOBS音声確認に失敗しました",
+                error=str(audio_result),
+            )
+        if isinstance(transcription_result, Exception):
+            self.logger.warning(
+                "Switch電源ON後の文字起こし準備に失敗しました",
+                error=str(transcription_result),
+            )
+
+    async def _cancel_audio_preparation(self) -> None:
+        task = self._audio_preparation_task
+        self._audio_preparation_task = None
+        if task is None:
+            return
+        task.cancel()
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
 
     def _apply_capture_interval_for_power_state(self) -> None:
         """ON待機・切断中だけ実キャプチャを抑え、ARMEDでは戻す。"""

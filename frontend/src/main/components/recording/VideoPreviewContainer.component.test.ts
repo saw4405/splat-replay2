@@ -382,7 +382,7 @@ describe('VideoPreviewContainer.svelte', () => {
     );
   });
 
-  it('prepare response の音声ヘルス警告も短い文言で表示する', async () => {
+  it('Switch電源OFFのskipped通知で既存の音声警告を消す', async () => {
     fetchMock.mockImplementation(async (input: string | URL | Request) => {
       const url = input.toString();
       if (url.includes('/api/device/status')) {
@@ -392,16 +392,7 @@ describe('VideoPreviewContainer.svelte', () => {
         return jsonResponse({ shown: true });
       }
       if (url.includes('/api/recorder/prepare')) {
-        return jsonResponse({
-          success: true,
-          audio_health_warning: {
-            healthy: false,
-            input_name: 'MiraBox Capture',
-            status: 'silent',
-            short_message: '音声入力なし',
-            details: 'OBS の入力「MiraBox Capture」の音量メーターが振れていません。',
-          },
-        });
+        return jsonResponse({ success: true });
       }
       if (url.includes('/api/recorder/enable-auto')) {
         return jsonResponse({ success: true });
@@ -411,13 +402,30 @@ describe('VideoPreviewContainer.svelte', () => {
 
     render(VideoPreviewContainer);
 
-    const warning = await screen.findByTestId('audio-health-warning');
-    expect(warning).toHaveTextContent('音声入力なし');
-    expect(warning).not.toHaveTextContent('音量メーターが振れていません');
-    expect(warning).toHaveAttribute(
-      'title',
-      'OBS の入力「MiraBox Capture」の音量メーターが振れていません。'
-    );
+    emitDomainEvent({
+      type: 'domain.recording.audio_health_checked',
+      payload: {
+        healthy: false,
+        status: 'silent',
+        short_message: '音声入力なし',
+        details: '音声を確認できません。',
+      },
+    });
+    expect(await screen.findByTestId('audio-health-warning')).toBeInTheDocument();
+
+    emitDomainEvent({
+      type: 'domain.recording.audio_health_checked',
+      payload: {
+        healthy: true,
+        status: 'skipped',
+        short_message: '',
+        details: 'Switch の電源ONを待機しています。',
+      },
+    });
+
+    await waitFor(() => {
+      expect(screen.queryByTestId('audio-health-warning')).not.toBeInTheDocument();
+    });
   });
 
   it('Switch電源OFF中はON待機状態を表示し、再有効化APIを呼ばない', async () => {

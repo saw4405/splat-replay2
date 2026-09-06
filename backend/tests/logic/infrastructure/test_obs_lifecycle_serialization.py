@@ -78,6 +78,15 @@ class _PsutilProcessStub:
         self.alive = False
 
 
+class _ProcessInfoStub(_PsutilProcessStub):
+    def __init__(self, pid: int, *, name: str, exe: Path | None) -> None:
+        super().__init__(pid)
+        self.info: dict[str, object] = {
+            "name": name,
+            "exe": str(exe) if exe is not None else None,
+        }
+
+
 class _Win32ApiStub:
     def __init__(
         self,
@@ -148,6 +157,135 @@ class _Win32GuiStub:
         for child_hwnd in self._children.get(hwnd, []):
             if not callback(child_hwnd, param):
                 break
+
+
+@pytest.mark.asyncio
+async def test_process_lookup_requires_exact_executable_path(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    configured_exe = tmp_path / "configured" / "obs64.exe"
+    manager = OBSProcessManager(configured_exe, cast(Any, _LoggerStub()))
+    other = _ProcessInfoStub(
+        100, name="obs64.exe", exe=tmp_path / "other" / "obs64.exe"
+    )
+    matching = _ProcessInfoStub(200, name="obs64.exe", exe=configured_exe)
+    monkeypatch.setattr(
+        process_module.psutil,
+        "process_iter",
+        lambda attrs: [other, matching],
+    )
+
+    found = await manager._find_existing_obs_process()
+
+    assert found is matching
+
+
+@pytest.mark.asyncio
+async def test_process_lookup_rejects_multiple_matching_instances(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    configured_exe = tmp_path / "obs64.exe"
+    manager = OBSProcessManager(configured_exe, cast(Any, _LoggerStub()))
+    monkeypatch.setattr(
+        process_module.psutil,
+        "process_iter",
+        lambda attrs: [
+            _ProcessInfoStub(100, name="obs64.exe", exe=configured_exe),
+            _ProcessInfoStub(200, name="obs64.exe", exe=configured_exe),
+        ],
+    )
+
+    found = await manager._find_existing_obs_process()
+
+    assert found is None
+
+
+@pytest.mark.asyncio
+async def test_process_manager_recovery_preserves_nonmatching_process(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    manager = OBSProcessManager(
+        tmp_path / "obs64.exe", cast(Any, _LoggerStub())
+    )
+
+    async def no_matching_process() -> None:
+        return None
+
+    monkeypatch.setattr(
+        manager, "_find_existing_obs_process", no_matching_process
+    )
+
+    restarted = await manager.restart_for_recovery()
+
+    assert restarted is False
+
+
+@pytest.mark.asyncio
+async def test_process_manager_recovery_replaces_managed_process(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    manager = OBSProcessManager(
+        tmp_path / "obs64.exe", cast(Any, _LoggerStub())
+    )
+    process = _PopenStub(pid=1234)
+    manager._process = cast(Any, process)
+    calls: list[str] = []
+
+    async def _teardown_locked() -> None:
+        calls.append("teardown")
+        process.close()
+        manager._process = None
+
+    async def _launch_locked() -> None:
+        calls.append("launch")
+        manager._process = cast(Any, _PopenStub(pid=5678))
+
+    monkeypatch.setattr(manager, "_teardown_locked", _teardown_locked)
+    monkeypatch.setattr(manager, "_launch_locked", _launch_locked)
+
+    restarted = await manager.restart_for_recovery()
+
+    assert restarted is True
+    assert calls == ["teardown", "launch"]
+
+
+@pytest.mark.asyncio
+async def test_recovery_of_preexisting_obs_preserves_replacement_on_teardown(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    manager = OBSProcessManager(
+        tmp_path / "obs64.exe", cast(Any, _LoggerStub())
+    )
+    existing_process = _PsutilProcessStub(pid=1234)
+    replacement = _PopenStub(pid=5678)
+    teardown_calls = 0
+
+    async def find_existing() -> _PsutilProcessStub:
+        return existing_process
+
+    async def teardown_locked() -> None:
+        nonlocal teardown_calls
+        teardown_calls += 1
+        assert manager._process is existing_process
+        existing_process.close()
+        manager._process = None
+
+    async def launch_locked() -> None:
+        manager._process = cast(Any, replacement)
+
+    monkeypatch.setattr(manager, "_find_existing_obs_process", find_existing)
+    monkeypatch.setattr(manager, "_teardown_locked", teardown_locked)
+    monkeypatch.setattr(manager, "_launch_locked", launch_locked)
+
+    restarted = await manager.restart_for_recovery()
+    await manager.teardown()
+
+    assert restarted is True
+    assert teardown_calls == 1
+    assert replacement.poll() is None
 
 
 @pytest.mark.asyncio

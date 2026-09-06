@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import AsyncIterator, Iterable, Mapping
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, suppress
 from functools import wraps
 from pathlib import Path
 from typing import (
@@ -404,6 +404,41 @@ class OBSRecorderController(VideoRecorderPort):
                 ),
             )
 
+    @_guard_obs_operation
+    async def try_recover_audio_input(self) -> bool:
+        """設定と一致する非録画中の OBS を一度だけ再起動する。"""
+        was_connected = False
+        try:
+            active, _ = await self._get_record_status()
+            if active:
+                self._logger.info(
+                    "OBS 音声自動復旧を見送りました",
+                    reason="recording_active",
+                )
+                return False
+
+            was_connected = self._ws_client.is_connected
+            if was_connected:
+                await self._ws_client.disconnect()
+
+            restarted = await self._process_manager.restart_for_recovery()
+            if not restarted:
+                if was_connected:
+                    await self._ws_client.connect()
+                return False
+
+            await self.setup()
+            return True
+        except Exception as exc:
+            if was_connected and not self._ws_client.is_connected:
+                with suppress(Exception):
+                    await self._ws_client.connect()
+            self._logger.warning(
+                "OBS 音声自動復旧に失敗しました",
+                error=str(exc),
+            )
+            return False
+
     async def _resolve_audio_input_name(
         self, target_name: str, available_names: list[str]
     ) -> str | None:
@@ -513,7 +548,7 @@ class OBSRecorderController(VideoRecorderPort):
                 if peak_db is not None:
                     peaks_db.append(peak_db)
 
-            if not peaks_mul and not peaks_db:
+            if not events:
                 return None
             peak_mul_value = max(peaks_mul) if peaks_mul else 0.0
             peak_db_value = max(peaks_db) if peaks_db else None

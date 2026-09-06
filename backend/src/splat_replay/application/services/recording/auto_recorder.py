@@ -4,7 +4,6 @@ from typing import Awaitable, Callable, Iterable
 from splat_replay.application.interfaces import (
     CapturePort,
     ClockPort,
-    ConfigPort,
     DomainEventPublisher,
     EventBusPort,
     EventPublisher,
@@ -41,6 +40,9 @@ from splat_replay.application.services.recording.weapon_detection_service import
 )
 from splat_replay.application.services.recording.recording_session_service import (
     RecordingSessionService,
+)
+from splat_replay.application.services.recording.recording_audio_health import (
+    RecordingAudioHealthService,
 )
 from splat_replay.domain.events import DomainEvent
 from splat_replay.domain.models import RecordingMetadata
@@ -83,9 +85,9 @@ class AutoRecorder:
         frame_publisher: FramePublisher,
         domain_publisher: DomainEventPublisher,
         battle_history_service: BattleHistoryService,
+        audio_health: RecordingAudioHealthService,
         weapon_detection_window_seconds: float = DETECTION_WINDOW_SECONDS,
         clock: ClockPort | None = None,
-        config: ConfigPort | None = None,
         xp_detection_diagnostics: XPDetectionDiagnosticsPort | None = None,
     ):
         self.logger = logger
@@ -124,7 +126,7 @@ class AutoRecorder:
             domain_publisher=domain_publisher,
             battle_history_service=battle_history_service,
             clock=clock,
-            config=config,
+            audio_health=audio_health,
         )
 
         self._frame_processor = FrameProcessingService(

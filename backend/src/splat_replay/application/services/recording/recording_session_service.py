@@ -11,7 +11,6 @@ from typing import TYPE_CHECKING, Literal
 
 from splat_replay.application.interfaces import (
     ClockPort,
-    ConfigPort,
     DomainEventPublisher,
     LoggerPort,
     RecorderWithTranscriptionPort,
@@ -26,6 +25,9 @@ from splat_replay.application.services.common.battle_history_service import (
 )
 from splat_replay.application.services.recording.recording_context import (
     RecordingContext,
+)
+from splat_replay.application.services.recording.recording_audio_health import (
+    RecordingAudioHealthService,
 )
 from splat_replay.domain.events import (
     RecordingAudioHealthChecked,
@@ -83,8 +85,8 @@ class RecordingSessionService:
         domain_publisher: DomainEventPublisher | None = None,
         battle_history_service: BattleHistoryService | None = None,
         clock: ClockPort | None = None,
-        config: ConfigPort | None = None,
         metadata_merger: MetadataMerger | None = None,
+        audio_health: RecordingAudioHealthService | None = None,
     ):
         self.sm = state_machine
         self.recorder = recorder
@@ -96,7 +98,7 @@ class RecordingSessionService:
         self._battle_history_service = battle_history_service
         self._pending_stop_reason: Literal["stop", "cancel"] | None = None
         self._clock = clock or _WallClock()
-        self._config = config
+        self._audio_health = audio_health
         self._merger = metadata_merger or MetadataMerger()
 
         # StateMachine のリスナーを登録
@@ -224,20 +226,45 @@ class RecordingSessionService:
         if self.sm.state is not RecordState.STOPPED:
             self.logger.warning("Recording already started")
             return
-        await self._check_audio_health_before_start()
         self._ctx = replace(
             self._ctx,
             battle_started_at=self._clock.now(),
         )
         await self.sm.handle(RecordEvent.START)
-        await self.recorder.start()
+        try:
+            await self.recorder.start()
+        except Exception as exc:
+            await self._rollback_failed_start(exc)
+            raise
 
-    async def _check_audio_health_before_start(self) -> None:
-        if self._config is None or self._domain_publisher is None:
+    async def _rollback_failed_start(self, start_error: Exception) -> None:
+        """OBSの実状態を停止処理で照合し、確認できた時だけ戻す。"""
+        self._pending_stop_reason = "cancel"
+        try:
+            await self.recorder.cancel()
+        except Exception as rollback_error:
+            if self.sm.state is RecordState.STOPPED:
+                await self.reset()
+                return
+            self.logger.error(
+                "OBS録画の開始結果を確認できないためRECORDINGを維持します",
+                start_error=str(start_error),
+                rollback_error=str(rollback_error),
+            )
             return
-        device_settings = self._config.get_capture_device_settings()
-        result = await self.recorder.check_audio_input_health(
-            device_settings.name,
+        if self.sm.state is not RecordState.STOPPED:
+            await self.sm.handle(RecordEvent.STOP)
+        await self.reset()
+
+    async def prepare_transcription(self) -> None:
+        """Switch ARMED後に文字起こしを事前構築する。"""
+        await self.recorder.prepare_transcription()
+
+    async def check_audio_health(self) -> None:
+        """現在の実機準備状態に応じて音声を確認し、UIへ通知する。"""
+        if self._audio_health is None or self._domain_publisher is None:
+            return
+        result = await self._audio_health.check_and_recover(
             sample_duration_seconds=PRE_START_AUDIO_HEALTH_SAMPLE_SECONDS,
         )
         self._domain_publisher.publish_domain_event(

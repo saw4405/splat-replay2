@@ -119,6 +119,31 @@ class _RunningProcessStub:
         return True
 
 
+class _RecoveryProcessStub(_RunningProcessStub):
+    def __init__(self, restarted: bool) -> None:
+        self.restarted = restarted
+        self.restart_calls = 0
+
+    async def restart_for_recovery(self) -> bool:
+        self.restart_calls += 1
+        return self.restarted
+
+
+class _RecoveryWebSocketStub:
+    def __init__(self) -> None:
+        self.is_connected = True
+        self.disconnect_calls = 0
+        self.connect_calls = 0
+
+    async def disconnect(self) -> None:
+        self.disconnect_calls += 1
+        self.is_connected = False
+
+    async def connect(self) -> None:
+        self.connect_calls += 1
+        self.is_connected = True
+
+
 class _OBSWebSocketStub:
     def __init__(
         self, meter_events: list[dict[str, object]] | None = None
@@ -217,6 +242,30 @@ class _OBSRecorderControllerMeterProbe(OBSRecorderController):
         self._ws_client = cast(Any, ws_client)
 
 
+class _OBSRecorderControllerRecoveryProbe(OBSRecorderController):
+    def __init__(
+        self,
+        *,
+        record_active: bool,
+        process_manager: _RecoveryProcessStub,
+        ws_client: _RecoveryWebSocketStub,
+    ) -> None:
+        super().__init__(
+            OBSSettings(websocket_password=SecretStr("")),
+            cast(Any, _LoggerStub()),
+        )
+        self._record_active = record_active
+        self._process_manager = cast(Any, process_manager)
+        self._ws_client = cast(Any, ws_client)
+        self.setup_calls = 0
+
+    async def _get_record_status(self) -> tuple[bool, bool]:
+        return self._record_active, False
+
+    async def setup(self) -> None:
+        self.setup_calls += 1
+
+
 def _silent_result() -> AudioInputHealthCheckResult:
     return AudioInputHealthCheckResult(
         input_name="MiraBox Capture",
@@ -309,3 +358,78 @@ async def test_obs_audio_health_warns_when_meter_events_are_unavailable() -> (
     assert result.status == "unknown"
     assert result.short_message == "音声確認失敗"
     assert "音量メーターイベントを取得できなかった" in result.details
+
+
+@pytest.mark.asyncio
+async def test_obs_audio_health_treats_empty_meter_levels_as_silence() -> None:
+    controller = _OBSRecorderControllerMeterProbe(
+        _OBSWebSocketStub(
+            meter_events=[
+                {
+                    "inputName": "MiraBox",
+                    "inputLevelsMul": [],
+                }
+            ]
+        )
+    )
+
+    result = await controller.check_audio_input_health(
+        "MiraBox", sample_duration_seconds=0.1
+    )
+
+    assert result.healthy is False
+    assert result.status == "silent"
+
+
+@pytest.mark.asyncio
+async def test_obs_audio_recovery_restarts_matching_idle_process() -> None:
+    process_manager = _RecoveryProcessStub(restarted=True)
+    ws_client = _RecoveryWebSocketStub()
+    controller = _OBSRecorderControllerRecoveryProbe(
+        record_active=False,
+        process_manager=process_manager,
+        ws_client=ws_client,
+    )
+
+    restarted = await controller.try_recover_audio_input()
+
+    assert restarted is True
+    assert process_manager.restart_calls == 1
+    assert ws_client.disconnect_calls == 1
+    assert controller.setup_calls == 1
+
+
+@pytest.mark.asyncio
+async def test_obs_audio_recovery_never_restarts_while_recording() -> None:
+    process_manager = _RecoveryProcessStub(restarted=True)
+    ws_client = _RecoveryWebSocketStub()
+    controller = _OBSRecorderControllerRecoveryProbe(
+        record_active=True,
+        process_manager=process_manager,
+        ws_client=ws_client,
+    )
+
+    restarted = await controller.try_recover_audio_input()
+
+    assert restarted is False
+    assert process_manager.restart_calls == 0
+    assert ws_client.disconnect_calls == 0
+
+
+@pytest.mark.asyncio
+async def test_obs_audio_recovery_preserves_external_process() -> None:
+    process_manager = _RecoveryProcessStub(restarted=False)
+    ws_client = _RecoveryWebSocketStub()
+    controller = _OBSRecorderControllerRecoveryProbe(
+        record_active=False,
+        process_manager=process_manager,
+        ws_client=ws_client,
+    )
+
+    restarted = await controller.try_recover_audio_input()
+
+    assert restarted is False
+    assert process_manager.restart_calls == 1
+    assert ws_client.disconnect_calls == 1
+    assert ws_client.connect_calls == 1
+    assert controller.setup_calls == 0

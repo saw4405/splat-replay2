@@ -27,6 +27,10 @@ class SpeechTranscriberPort(Protocol):
         """Start transcription."""
         ...
 
+    async def wait_until_ready(self, timeout_seconds: float) -> bool:
+        """Wait until the microphone stream is open."""
+        ...
+
     def stop(self) -> str:
         """Stop transcription and return transcript."""
         ...

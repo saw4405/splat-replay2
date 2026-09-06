@@ -95,6 +95,9 @@ class ReplayRecorderController(VideoRecorderPort):
             peak_db=None,
         )
 
+    async def try_recover_audio_input(self) -> bool:
+        return False
+
     async def _notify(self, status: RecorderStatus) -> None:
         for listener in list(self._status_listeners):
             await listener(status)

@@ -121,7 +121,9 @@ def _query_pnp_metadata(
     command = (
         "$ErrorActionPreference='Stop';"
         f"$instanceId='{escaped_instance_id}';"
-        "$props=Get-PnpDeviceProperty -InstanceId $instanceId -ErrorAction Stop;"
+        "$props=Get-PnpDeviceProperty -InstanceId $instanceId "
+        "-KeyName 'DEVPKEY_Device_LocationPaths','DEVPKEY_Device_Parent' "
+        "-ErrorAction Stop;"
         "$locationPaths=@("
         "$props | Where-Object KeyName -eq 'DEVPKEY_Device_LocationPaths' "
         "| Select-Object -ExpandProperty Data -ErrorAction SilentlyContinue"

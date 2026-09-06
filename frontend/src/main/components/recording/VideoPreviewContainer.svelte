@@ -21,19 +21,9 @@
 
   type PreviewState = 'checking' | 'connected' | 'disconnected' | 'error';
 
-  type AudioHealthWarningResponse = {
-    input_name?: string;
-    status?: string;
-    healthy?: boolean;
-    short_message?: string;
-    details?: string;
-    peak_db?: number | null;
-  };
-
   type PrepareRecordingResponse = {
     success: boolean;
     error?: string;
-    audio_health_warning?: AudioHealthWarningResponse | null;
   };
 
   type AudioHealthWarning = {
@@ -263,10 +253,8 @@
     return trimmed.length > 0 ? trimmed : undefined;
   }
 
-  function applyAudioHealthResult(
-    payload: AudioHealthWarningResponse | RecordingAudioHealthCheckedPayload | null | undefined
-  ): void {
-    if (!payload || payload.healthy !== false) {
+  function applyAudioHealthResult(payload: RecordingAudioHealthCheckedPayload): void {
+    if (payload.healthy !== false) {
       audioHealthWarning = null;
       return;
     }
@@ -622,7 +610,6 @@
       console.log('prepare_recording result:', result);
       if (result.success === true) {
         isPrepared = true;
-        applyAudioHealthResult(result.audio_health_warning);
         _status = '録画準備完了';
         console.log('録画準備完了 - isPrepared =', isPrepared);
       } else {
