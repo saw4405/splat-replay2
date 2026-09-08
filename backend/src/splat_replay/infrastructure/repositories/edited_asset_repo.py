@@ -125,10 +125,20 @@ class EditedAssetRepository:
             すべてのファイルが削除された場合True
         """
         video = video.resolve()
+        base_stem, separator, source_id = video.stem.rpartition("_")
+        pending_thumbnail = (
+            video.with_name(f"{base_stem}.png")
+            if separator
+            and len(source_id) == 12
+            and all(char in "0123456789abcdef" for char in source_id)
+            else None
+        )
         if video.exists():
             video.unlink(missing_ok=True)
 
         self._file_ops.delete_related_files(video)
+        if pending_thumbnail is not None:
+            pending_thumbnail.unlink(missing_ok=True)
 
         self._event_publisher.publish_edited_deleted(video)
 
@@ -137,6 +147,7 @@ class EditedAssetRepository:
             and not video.with_suffix(".srt").exists()
             and not video.with_suffix(".png").exists()
             and not video.with_suffix(".json").exists()
+            and (pending_thumbnail is None or not pending_thumbnail.exists())
         )
 
     def get_subtitle(self, video: Path) -> str | None:

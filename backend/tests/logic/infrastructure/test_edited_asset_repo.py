@@ -100,3 +100,20 @@ def test_save_edited_rolls_back_sidecars_when_video_move_fails(
     assert not (settings.edited_dir / video.name).exists()
     assert not (settings.edited_dir / sidecar.name).exists()
     assert publisher.events == []
+
+
+def test_delete_edited_removes_pending_thumbnail_for_hashed_video(
+    tmp_path: Path,
+) -> None:
+    repository, _, settings = _build_repository(tmp_path)
+    settings.edited_dir.mkdir(parents=True)
+    video = settings.edited_dir / "group_0123456789ab.mkv"
+    pending_thumbnail = settings.edited_dir / "group.png"
+    video.write_bytes(b"video")
+    video.with_suffix(".png").write_bytes(b"thumbnail")
+    pending_thumbnail.write_bytes(b"pending-thumbnail")
+
+    assert repository.delete_edited(video) is True
+    assert not video.exists()
+    assert not video.with_suffix(".png").exists()
+    assert not pending_thumbnail.exists()
