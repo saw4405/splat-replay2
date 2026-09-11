@@ -393,7 +393,9 @@ function Invoke-DesktopDeployCopy {
 
     $sourceExe = Join-Path $SourceDir "SplatReplay.exe"
     $sourceInternalDir = Join-Path $SourceDir "_internal"
+    $sourceAssetsDir = Join-Path $SourceDir "assets"
     $targetInternalDir = Join-Path $DestinationDir "_internal"
+    $targetAssetsDir = Join-Path $DestinationDir "assets"
 
     if (-not (Test-Path -LiteralPath $sourceExe -PathType Leaf)) {
         throw "Deploy executable not found: $sourceExe"
@@ -401,6 +403,10 @@ function Invoke-DesktopDeployCopy {
 
     if (-not (Test-Path -LiteralPath $sourceInternalDir -PathType Container)) {
         throw "Deploy internal directory not found: $sourceInternalDir"
+    }
+
+    if (-not (Test-Path -LiteralPath $sourceAssetsDir -PathType Container)) {
+        throw "Deploy assets directory not found: $sourceAssetsDir"
     }
 
     Copy-Item -LiteralPath $sourceExe -Destination $DestinationDir -Force -ErrorAction Stop
@@ -411,9 +417,16 @@ function Invoke-DesktopDeployCopy {
 
     Copy-Item -LiteralPath $sourceInternalDir -Destination $DestinationDir -Recurse -Force -ErrorAction Stop
 
+    if (Test-Path -LiteralPath $targetAssetsDir) {
+        Remove-Item -LiteralPath $targetAssetsDir -Recurse -Force -ErrorAction Stop
+    }
+
+    Copy-Item -LiteralPath $sourceAssetsDir -Destination $DestinationDir -Recurse -Force -ErrorAction Stop
+
     return [ordered]@{
         copiedExe = "SplatReplay.exe"
         replacedInternal = "_internal"
+        replacedAssets = "assets"
     }
 }
 
