@@ -3,11 +3,22 @@
 from __future__ import annotations
 
 import multiprocessing
+import os
 import sys
 import traceback
 
+# PyInstaller の windowed モードでは標準出力が存在しない。
+if sys.stdout is None:
+    sys.stdout = open(os.devnull, "w", encoding="utf-8")  # noqa: SIM115
+if sys.stderr is None:
+    sys.stderr = open(os.devnull, "w", encoding="utf-8")  # noqa: SIM115
+
+# frozen worker が GUI などの重い import を実行する前に分岐させる。
+if __name__ == "__main__" and sys.platform == "win32":
+    multiprocessing.freeze_support()
+
 from splat_replay.infrastructure.config import load_settings_from_toml
-from splat_replay.infrastructure.filesystem import PROJECT_ROOT
+from splat_replay.infrastructure.filesystem import PROJECT_ROOT, RUNTIME_ROOT
 from splat_replay.infrastructure.logging import get_logger
 from splat_replay.interface.gui.webview_app import (
     SplatReplayWebViewApp,
@@ -25,16 +36,13 @@ def main() -> None:
         logger.info(f"Frozen: {getattr(sys, 'frozen', False)}")
         logger.info(f"PROJECT_ROOT: {PROJECT_ROOT}")
 
-        # Windows multiprocessing support
-        if sys.platform == "win32":
-            multiprocessing.freeze_support()
-
         settings = load_settings_from_toml()
         backend_bind_host, backend_url_host = resolve_backend_hosts(
             settings.remote_access.enabled
         )
         app_instance = SplatReplayWebViewApp(
             project_root=PROJECT_ROOT,
+            startup_video=RUNTIME_ROOT / "assets" / "startup-loading.mp4",
             logger=logger,
             backend_app_module="splat_replay.bootstrap.web_app:app",
             render_mode=settings.webview.render_mode,

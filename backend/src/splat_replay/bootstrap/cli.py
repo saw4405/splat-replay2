@@ -13,7 +13,7 @@ from splat_replay.infrastructure.di import configure_container, resolve
 from splat_replay.infrastructure.di.runtime_profile import (
     resolve_runtime_profile,
 )
-from splat_replay.infrastructure.filesystem import PROJECT_ROOT
+from splat_replay.infrastructure.filesystem import PROJECT_ROOT, RUNTIME_ROOT
 from splat_replay.interface.cli.main import CliDependencies, build_app
 
 if TYPE_CHECKING:
@@ -71,6 +71,7 @@ class _LazyResources:
         )
         return SplatReplayWebViewApp(
             project_root=PROJECT_ROOT,
+            startup_video=RUNTIME_ROOT / "assets" / "startup-loading.mp4",
             logger=self.logger(),
             backend_app_module="splat_replay.bootstrap.web_app:app",
             render_mode=settings.webview.render_mode,

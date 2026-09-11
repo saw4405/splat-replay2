@@ -1,7 +1,13 @@
 from __future__ import annotations
 
+import threading
 from pathlib import Path
+from unittest.mock import MagicMock, Mock
 
+import httpx
+import pytest
+
+from splat_replay.interface.gui import webview_app
 from splat_replay.interface.gui.webview_app import (
     build_frontend_entry_url,
     resolve_backend_hosts,
@@ -43,3 +49,109 @@ def test_resolve_backend_hosts_uses_loopback_when_remote_disabled() -> None:
 
     assert bind_host == "127.0.0.1"
     assert browser_host == "127.0.0.1"
+
+
+def test_startup_loads_frontend_after_backend_is_ready(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    window = Mock()
+    backend_process = Mock()
+    logger = Mock()
+    stop_event = threading.Event()
+    monkeypatch.setattr(
+        webview_app, "wait_for_backend", lambda *args, **kwargs: True
+    )
+
+    webview_app._load_frontend_when_ready(
+        window,
+        backend_process,
+        "http://127.0.0.1:8000",
+        "http://127.0.0.1:8000/?frontend=1-1",
+        stop_event,
+        logger,
+    )
+
+    window.load_url.assert_called_once_with(
+        "http://127.0.0.1:8000/?frontend=1-1"
+    )
+    window.load_html.assert_not_called()
+
+
+def test_startup_shows_error_when_backend_fails(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    window = Mock()
+    backend_process = Mock()
+    backend_process.is_alive.return_value = True
+    logger = Mock()
+    stop_event = threading.Event()
+    monkeypatch.setattr(
+        webview_app, "wait_for_backend", lambda *args, **kwargs: False
+    )
+
+    webview_app._load_frontend_when_ready(
+        window,
+        backend_process,
+        "http://127.0.0.1:8000",
+        "http://127.0.0.1:8000/?frontend=1-1",
+        stop_event,
+        logger,
+    )
+
+    backend_process.terminate.assert_called_once_with()
+    window.load_html.assert_called_once_with(webview_app._STARTUP_ERROR_HTML)
+
+
+def test_startup_does_not_update_closed_window(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    window = Mock()
+    backend_process = Mock()
+    logger = Mock()
+    stop_event = threading.Event()
+    stop_event.set()
+    monkeypatch.setattr(
+        webview_app, "wait_for_backend", lambda *args, **kwargs: False
+    )
+
+    webview_app._load_frontend_when_ready(
+        window,
+        backend_process,
+        "http://127.0.0.1:8000",
+        "http://127.0.0.1:8000/?frontend=1-1",
+        stop_event,
+        logger,
+    )
+
+    window.load_url.assert_not_called()
+    window.load_html.assert_not_called()
+    backend_process.terminate.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    ("cancelled", "process_alive"),
+    [(True, True), (False, False)],
+)
+def test_backend_wait_stops_without_health_request(
+    monkeypatch: pytest.MonkeyPatch,
+    cancelled: bool,
+    process_alive: bool,
+) -> None:
+    client = MagicMock()
+    monkeypatch.setattr(httpx, "Client", Mock(return_value=client))
+    stop_event = threading.Event()
+    if cancelled:
+        stop_event.set()
+    backend_process = Mock()
+    backend_process.is_alive.return_value = process_alive
+
+    ready = webview_app.wait_for_backend(
+        "http://127.0.0.1:8000",
+        timeout=1,
+        stop_event=stop_event,
+        backend_process=backend_process,
+        logger=Mock(),
+    )
+
+    assert ready is False
+    client.__enter__.return_value.get.assert_not_called()

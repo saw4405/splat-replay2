@@ -5,22 +5,106 @@ FastAPIバックエンドとpywebviewフロントエンドを統合したデス�
 
 from __future__ import annotations
 
+import base64
 import multiprocessing
 import os
 import sys
+import threading
 import time
 import traceback
+from multiprocessing.process import BaseProcess
 from pathlib import Path
+from typing import TYPE_CHECKING, cast
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 import structlog
-import uvicorn
-import webview
 from structlog.stdlib import BoundLogger
 
 from splat_replay.interface.gui.webview_runtime import (
     configure_webview2_browser_arguments,
 )
+
+if TYPE_CHECKING:
+    import webview
+
+
+_STARTUP_HTML = """<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Splat Replay</title>
+  <style>
+    html, body { height: 100%; margin: 0; }
+    body {
+      display: grid;
+      place-items: center;
+      overflow: hidden;
+      color: rgba(245, 245, 255, 0.95);
+      background: linear-gradient(140deg, #090916 0%, #161633 44%, #10263b 100%);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, "Fira Sans", "Droid Sans", "Helvetica Neue", sans-serif;
+    }
+    main { display: grid; justify-items: center; gap: 24px; }
+    h1 {
+      margin: 0;
+      color: #2ff6e3;
+      font-size: 48px;
+      font-weight: 700;
+      line-height: 1.1;
+      letter-spacing: 0.05em;
+      text-shadow:
+        0 0 10px rgba(47, 246, 227, 0.8),
+        0 0 20px rgba(47, 246, 227, 0.6),
+        0 0 30px rgba(47, 246, 227, 0.4),
+        0 0 40px rgba(47, 246, 227, 0.3),
+        0 0 60px rgba(47, 246, 227, 0.2),
+        0 2px 4px rgba(6, 8, 15, 0.5);
+    }
+    .loader {
+      width: min(512px, calc(100vw - 64px));
+      aspect-ratio: 16 / 15;
+      object-fit: cover;
+    }
+    p { margin: 0; color: rgba(220, 224, 247, 0.72); font-size: 18px; }
+  </style>
+</head>
+<body>
+  <main role="status" aria-live="polite">
+    <h1>Splat Replay</h1>
+    <video class="loader" src="data:video/mp4;base64,STARTUP_VIDEO_DATA" autoplay muted loop playsinline preload="auto" aria-hidden="true"></video>
+    <p>起動しています...</p>
+  </main>
+</body>
+</html>"""
+
+_STARTUP_ERROR_HTML = """<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Splat Replay - 起動エラー</title>
+  <style>
+    html, body { height: 100%; margin: 0; }
+    body {
+      display: grid;
+      place-items: center;
+      color: rgba(245, 245, 255, 0.95);
+      background: linear-gradient(140deg, #090916 0%, #161633 44%, #10263b 100%);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      text-align: center;
+    }
+    main { max-width: 560px; padding: 32px; }
+    h1 { color: #ff5f88; font-size: 32px; }
+    p { color: rgba(220, 224, 247, 0.8); font-size: 18px; line-height: 1.7; }
+  </style>
+</head>
+<body>
+  <main role="alert">
+    <h1>起動に失敗しました</h1>
+    <p>アプリを閉じて再度起動してください。解決しない場合は logs フォルダを確認してください。</p>
+  </main>
+</body>
+</html>"""
 
 
 def find_frontend_dist(project_root: Path) -> Path:
@@ -90,6 +174,8 @@ def start_backend_server(
     logger = structlog.get_logger()
 
     try:
+        import uvicorn
+
         os.environ["SPLAT_REPLAY_BACKEND_BIND_HOST"] = host
         os.environ["SPLAT_REPLAY_BACKEND_PORT"] = str(port)
         logger.info(
@@ -124,8 +210,10 @@ def start_backend_server(
 def wait_for_backend(
     url: str,
     timeout: int = 120,
-    interval: float = 0.5,
+    interval: float = 0.1,
     logger: BoundLogger | None = None,
+    stop_event: threading.Event | None = None,
+    backend_process: BaseProcess | None = None,
 ) -> bool:
     """バックエンドサーバーの起動を待機。
 
@@ -144,30 +232,73 @@ def wait_for_backend(
         logger = structlog.get_logger()
     logger.info("Waiting for backend to start", url=url, timeout=timeout)
 
-    elapsed = 0.0
-    while elapsed < timeout:
-        try:
-            # frozen モードでは SSL 証明書検証を無効化（ローカルホスト通信のため）
-            with httpx.Client(verify=False) as client:
+    deadline = time.monotonic() + timeout
+    with httpx.Client(verify=False) as client:
+        while time.monotonic() < deadline:
+            if stop_event is not None and stop_event.is_set():
+                logger.info("Backend startup wait cancelled")
+                return False
+            if backend_process is not None and not backend_process.is_alive():
+                logger.error("Backend process exited before startup")
+                return False
+
+            try:
                 response = client.get(f"{url}/api/health", timeout=2.0)
                 if response.status_code == 200:
                     logger.info("Backend is ready", url=url)
                     return True
-                else:
-                    logger.warning(
-                        "Backend health check failed",
-                        status_code=response.status_code,
-                    )
-        except Exception as e:
-            logger.debug(
-                "Backend not ready yet", error=str(e), elapsed=elapsed
-            )
+                logger.warning(
+                    "Backend health check failed",
+                    status_code=response.status_code,
+                )
+            except Exception as e:
+                logger.debug("Backend not ready yet", error=str(e))
 
-        time.sleep(interval)
-        elapsed += interval
+            if stop_event is not None:
+                if stop_event.wait(interval):
+                    return False
+            else:
+                time.sleep(interval)
 
     logger.error("Backend startup timeout", url=url, timeout=timeout)
     return False
+
+
+def _load_frontend_when_ready(
+    window: webview.Window,
+    backend_process: BaseProcess,
+    backend_url: str,
+    frontend_url: str,
+    stop_event: threading.Event,
+    logger: BoundLogger,
+) -> None:
+    """バックエンド準備完了後、起動画面を本画面へ切り替える。"""
+    try:
+        ready = wait_for_backend(
+            backend_url,
+            logger=logger,
+            stop_event=stop_event,
+            backend_process=backend_process,
+        )
+        if stop_event.is_set():
+            return
+        if ready:
+            window.load_url(frontend_url)
+            return
+        logger.error("Failed to start backend server")
+    except Exception as e:
+        if stop_event.is_set():
+            return
+        logger.error("Startup callback failed", error=str(e), exc_info=True)
+
+    if backend_process.is_alive():
+        backend_process.terminate()
+    try:
+        window.load_html(_STARTUP_ERROR_HTML)
+    except Exception as e:
+        logger.error(
+            "Failed to show startup error", error=str(e), exc_info=True
+        )
 
 
 class SplatReplayWebViewApp:
@@ -177,6 +308,7 @@ class SplatReplayWebViewApp:
         self,
         *,
         project_root: Path,
+        startup_video: Path,
         logger: BoundLogger,
         backend_app_module: str,
         render_mode: str = "gpu",
@@ -192,6 +324,7 @@ class SplatReplayWebViewApp:
 
         Args:
             project_root: プロジェクトルート
+            startup_video: 起動画面の無音 MP4
             logger: ロガー
             backend_app_module: 起動するバックエンド ASGI アプリの import パス
             render_mode: WebView の描画モード
@@ -202,6 +335,7 @@ class SplatReplayWebViewApp:
             backend_port: バックエンドポート
         """
         self.project_root = project_root
+        self.startup_video = startup_video
         self.logger = logger
         self.backend_app_module = backend_app_module
         self.render_mode = render_mode
@@ -244,16 +378,6 @@ class SplatReplayWebViewApp:
         )
         backend_process.start()
 
-        # バックエンドの起動を待機
-        if not wait_for_backend(self.backend_url, logger=self.logger):
-            self.logger.error(
-                "Failed to start backend server",
-                error="Backend startup failed",
-            )
-            backend_process.terminate()
-            sys.exit(1)
-
-        # pywebviewウィンドウを作成
         try:
             configured_args = configure_webview2_browser_arguments(
                 os.environ,
@@ -267,24 +391,50 @@ class SplatReplayWebViewApp:
                     arguments=configured_args,
                 )
 
-            # WebViewウィンドウ作成
+            import webview
+
             frontend_url = build_frontend_entry_url(
                 self.backend_url, self.frontend_dist
             )
-            webview.create_window(
-                title=self.title,
-                url=frontend_url,
-                width=self.width,
-                height=self.height,
-                resizable=True,
-                min_size=(400, 300),
-                frameless=False,
-                easy_drag=False,
+            startup_html = _STARTUP_HTML.replace(
+                "STARTUP_VIDEO_DATA",
+                base64.b64encode(self.startup_video.read_bytes()).decode(
+                    "ascii"
+                ),
             )
+            window = cast(
+                "webview.Window",
+                webview.create_window(
+                    title=self.title,
+                    html=startup_html,
+                    width=self.width,
+                    height=self.height,
+                    resizable=True,
+                    min_size=(400, 300),
+                    frameless=False,
+                    easy_drag=False,
+                    background_color="#090916",
+                ),
+            )
+            stop_event = threading.Event()
+            window.events.closing += stop_event.set
 
-            # ウィンドウを起動
+            def finish_startup() -> None:
+                _load_frontend_when_ready(
+                    window,
+                    backend_process,
+                    self.backend_url,
+                    frontend_url,
+                    stop_event,
+                    self.logger,
+                )
+
             # private_mode=Falseでカメラ許可などの設定を永続化
-            webview.start(debug=False, private_mode=False)
+            webview.start(
+                finish_startup,
+                debug=False,
+                private_mode=False,
+            )
 
         except Exception as e:
             self.logger.error("WebView error", error=str(e), exc_info=True)
