@@ -273,6 +273,7 @@ class AutoEditor:
             ]
         )
         completed_groups = 0
+        failures: list[str] = []
 
         for idx, (key, group) in enumerate(groups.items()):
             if self._cancelled:
@@ -356,10 +357,16 @@ class AutoEditor:
                     )
                     self._state = self._state.with_failed(str(e))
                     raise
+                failures.append(f"{label}: {e}")
                 continue
 
         if self._cancelled:
             self._mark_cancelled(task_id)
+        elif failures:
+            message = "自動編集に失敗しました: " + "; ".join(failures)
+            self.progress.finish(task_id, False, message)
+            self._state = self._state.with_failed(message)
+            raise RuntimeError(message)
         else:
             self.progress.finish(task_id, True, "自動編集を完了しました")
             self._state = self._state.with_succeeded("編集完了")

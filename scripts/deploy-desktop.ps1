@@ -1,4 +1,4 @@
-[CmdletBinding()]
+﻿[CmdletBinding()]
 param(
     [Parameter()]
     [ValidateSet("Inspect", "Execute")]
@@ -417,11 +417,23 @@ function Invoke-DesktopDeployCopy {
 
     Copy-Item -LiteralPath $sourceInternalDir -Destination $DestinationDir -Recurse -Force -ErrorAction Stop
 
-    if (Test-Path -LiteralPath $targetAssetsDir) {
-        Remove-Item -LiteralPath $targetAssetsDir -Recurse -Force -ErrorAction Stop
+    # 再配布対象外の個別導入フォントは、assets の更新でも保持する。
+    $userFontPath = Join-Path $targetAssetsDir "thumbnail\ikamodoki1.ttf"
+    $userFontBytes = if (Test-Path -LiteralPath $userFontPath -PathType Leaf) {
+        [System.IO.File]::ReadAllBytes($userFontPath)
+    } else { $null }
+    try {
+        if (Test-Path -LiteralPath $targetAssetsDir) {
+            Remove-Item -LiteralPath $targetAssetsDir -Recurse -Force -ErrorAction Stop
+        }
+        Copy-Item -LiteralPath $sourceAssetsDir -Destination $DestinationDir -Recurse -Force -ErrorAction Stop
     }
-
-    Copy-Item -LiteralPath $sourceAssetsDir -Destination $DestinationDir -Recurse -Force -ErrorAction Stop
+    finally {
+        if ($null -ne $userFontBytes) {
+            [System.IO.Directory]::CreateDirectory((Split-Path -Parent $userFontPath)) | Out-Null
+            [System.IO.File]::WriteAllBytes($userFontPath, [byte[]]$userFontBytes)
+        }
+    }
 
     return [ordered]@{
         copiedExe = "SplatReplay.exe"

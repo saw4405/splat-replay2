@@ -526,6 +526,70 @@ def _build_cancellable_editor(
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("partial_success", [False, True])
+async def test_edit_failure_blocks_upload_and_reports_failure(
+    tmp_path: Path,
+    partial_success: bool,
+) -> None:
+    """グループ失敗を成功通知にせず、成功した成果物は保持する。"""
+    from splat_replay.application.use_cases.assets.start_edit_upload import (
+        StartEditUploadUseCase,
+    )
+
+    editor, asset, source, edited_dir, key = _build_cancellable_editor(
+        tmp_path
+    )
+    repo = MagicMock()
+    repo.list_recordings.return_value = [asset]
+    repo.list_edited.return_value = []
+    repo.get_edited_dir.return_value = edited_dir
+    editor.repo = repo
+    edit = AsyncMock(side_effect=OSError("cannot open resource"))
+    committed = edited_dir / "completed.mkv"
+    if partial_success:
+        second_source = source.with_name("second.mkv")
+        second_source.write_bytes(b"second")
+        second_asset = SimpleNamespace(video=second_source, metadata=None)
+        second_key = (key[0], datetime.time(9), key[2], key[3])
+        editor.grouping = SimpleNamespace(
+            group_by_timeslot=lambda assets: {
+                key: assets,
+                second_key: [second_asset],
+            }
+        )
+        committed.write_bytes(b"completed")
+        edit.side_effect = [OSError("cannot open resource"), (committed, {})]
+        repo.save_edited.return_value = committed
+    editor._edit = edit  # type: ignore[invalid-assignment]
+    uploader = MagicMock(execute=AsyncMock())
+    event_bus = MagicMock()
+    config = MagicMock()
+    config.get_behavior_settings.return_value.sleep_after_upload = False
+    use_case = StartEditUploadUseCase(
+        editor, uploader, event_bus, config, MagicMock()
+    )
+
+    await use_case.execute()
+    with pytest.raises(RuntimeError, match="cannot open resource"):
+        await use_case.wait_until_complete()
+
+    assert edit.await_count == (2 if partial_success else 1)
+    assert source.read_bytes() == b"source"
+    assert editor.get_status()["phase"] == "failed"
+    assert isinstance(editor.progress, _FakeProgress)
+    assert editor.progress.finish_calls[-1]["success"] is False
+    assert use_case.get_state() == "failed"
+    uploader.execute.assert_not_awaited()
+    completion = event_bus.publish_domain_event.call_args.args[0]
+    assert completion.success is False
+    if partial_success:
+        assert committed.read_bytes() == b"completed"
+    else:
+        repo.save_edited.assert_not_called()
+        repo.delete_recording.assert_not_called()
+
+
+@pytest.mark.asyncio
 async def test_cancel_before_commit_keeps_recording_and_removes_outputs(
     tmp_path: Path,
 ) -> None:

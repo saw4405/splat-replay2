@@ -234,8 +234,12 @@ def test_deploy_inspect_accepts_untracked_unicode_path(tmp_path: Path) -> None:
     assert len({result["fingerprint"] for result in results}) == 1
 
 
+@pytest.mark.parametrize("has_user_font", [False, True])
+@pytest.mark.parametrize("has_packaged_videos", [False, True])
 def test_deploy_replaces_assets_without_touching_user_data(
     tmp_path: Path,
+    has_user_font: bool,
+    has_packaged_videos: bool,
 ) -> None:
     """root assets は同期し、実行時に生成されるデータは保持する。"""
     if os.name != "nt":
@@ -273,9 +277,36 @@ def test_deploy_replaces_assets_without_touching_user_data(
         deploy_dir / "outputs" / "result.mp4": b"output",
         deploy_dir / "logs" / "app.log": b"log",
     }
+    font_path = deploy_dir / "assets" / "thumbnail" / "ikamodoki1.ttf"
+    if has_user_font:
+        user_data[font_path] = b"user-installed font"
     for path, contents in user_data.items():
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_bytes(contents)
+
+    # 録画済み・編集済みの動画と付随データを、パスと内容の両方で保護する。
+    videos_dir = deploy_dir / "videos"
+    for category in ("recorded", "edited"):
+        for filename in (
+            "対戦.mkv",
+            "subfolder/動画.mp4",
+            "対戦.json",
+            "対戦.png",
+            "対戦.srt",
+        ):
+            relative = Path(category) / filename
+            video_file = videos_dir / relative
+            video_file.parent.mkdir(parents=True, exist_ok=True)
+            video_file.write_bytes(f"利用者データ:{relative}".encode("utf-8"))
+            packaged_file = source_dir / "videos" / relative
+            packaged_file.parent.mkdir(parents=True, exist_ok=True)
+            if has_packaged_videos:
+                packaged_file.write_bytes(b"must not overwrite user data")
+    videos_before = {
+        path.relative_to(videos_dir): path.read_bytes()
+        for path in videos_dir.rglob("*")
+        if path.is_file()
+    }
 
     env_file = repo_root / "deploy.env"
     env_file.write_text(
@@ -319,6 +350,16 @@ def test_deploy_replaces_assets_without_touching_user_data(
         ),
         encoding="utf-8",
     )
+    # 配布コピーの検証を、テスト端末で起動中のアプリから隔離する。
+    wrapper = tmp_path / "deploy-test.ps1"
+    script_path = str(DEPLOY_SCRIPT).replace("'", "''")
+    wrapper.write_text(
+        "param([string]$Mode, [string]$RepoRoot, [string]$EnvFile)\n"
+        "function Get-Process { param($Name, $ErrorAction) @() }\n"
+        f"& '{script_path}' @PSBoundParameters\n"
+        "exit $LASTEXITCODE\n",
+        encoding="utf-8-sig",
+    )
     completed = subprocess.run(
         [
             "powershell",
@@ -326,7 +367,7 @@ def test_deploy_replaces_assets_without_touching_user_data(
             "-ExecutionPolicy",
             "Bypass",
             "-File",
-            str(DEPLOY_SCRIPT),
+            str(wrapper),
             "-Mode",
             "Execute",
             "-RepoRoot",
@@ -345,7 +386,7 @@ def test_deploy_replaces_assets_without_touching_user_data(
 
     result = _parse_result_json(completed.stdout)
     assert completed.returncode == 0, completed.stderr
-    assert result["success"] is True
+    assert result["success"] is True, result
     assert result["buildSkipped"] is True
     assert result["deployCopyActions"] == {
         "copiedExe": "SplatReplay.exe",
@@ -356,5 +397,14 @@ def test_deploy_replaces_assets_without_touching_user_data(
         b"new startup video"
     )
     assert not (deploy_dir / "assets" / "obsolete.asset").exists()
+    videos_after = {
+        path.relative_to(videos_dir): path.read_bytes()
+        for path in videos_dir.rglob("*")
+        if path.is_file()
+    }
+    assert videos_after == videos_before, (
+        "デプロイで動画または付随データが変更されました"
+    )
     for path, contents in user_data.items():
         assert path.read_bytes() == contents
+    assert font_path.exists() is has_user_font
