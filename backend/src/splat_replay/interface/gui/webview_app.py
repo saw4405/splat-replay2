@@ -25,6 +25,9 @@ from splat_replay.interface.gui.webview_runtime import (
 )
 
 if TYPE_CHECKING:
+    from multiprocessing.synchronize import Event as ProcessEvent
+
+    from uvicorn import Server
     import webview
 
 
@@ -161,8 +164,19 @@ def resolve_backend_hosts(remote_access_enabled: bool) -> tuple[str, str]:
     return "127.0.0.1", "127.0.0.1"
 
 
+def _request_backend_shutdown(
+    shutdown_event: ProcessEvent, server: Server
+) -> None:
+    """親プロセスからの終了通知を Uvicorn の正常終了へ変換する。"""
+    shutdown_event.wait()
+    server.should_exit = True
+
+
 def start_backend_server(
-    app_import_path: str, host: str = "127.0.0.1", port: int = 8000
+    app_import_path: str,
+    host: str = "127.0.0.1",
+    port: int = 8000,
+    shutdown_event: ProcessEvent | None = None,
 ) -> None:
     """FastAPIバックエンドサーバーを起動。
 
@@ -170,6 +184,7 @@ def start_backend_server(
         app_import_path: uvicorn で起動する ASGI アプリの import パス
         host: バインドするホスト
         port: バインドするポート
+        shutdown_event: 親プロセスからの正常終了通知
     """
     logger = structlog.get_logger()
 
@@ -185,14 +200,24 @@ def start_backend_server(
             app=app_import_path,
         )
 
-        uvicorn.run(
-            app_import_path,
-            host=host,
-            port=port,
-            log_level="info",
-            access_log=False,
-            factory=True,
+        server = uvicorn.Server(
+            uvicorn.Config(
+                app_import_path,
+                host=host,
+                port=port,
+                log_level="info",
+                access_log=False,
+                factory=True,
+            )
         )
+        if shutdown_event is not None:
+            threading.Thread(
+                target=_request_backend_shutdown,
+                args=(shutdown_event, server),
+                daemon=True,
+                name="backend-shutdown-watcher",
+            ).start()
+        server.run()
     except Exception as e:
         logger.error("Backend server error", error=str(e), exc_info=True)
         print(f"\n{'=' * 60}")
@@ -367,12 +392,14 @@ class SplatReplayWebViewApp:
         )
 
         # バックエンドサーバーを別プロセスで起動
+        backend_shutdown_event = multiprocessing.Event()
         backend_process = multiprocessing.Process(
             target=start_backend_server,
             args=(
                 self.backend_app_module,
                 self.backend_host,
                 self.backend_port,
+                backend_shutdown_event,
             ),
             daemon=True,
         )
@@ -441,9 +468,15 @@ class SplatReplayWebViewApp:
             raise
         finally:
             # クリーンアップ
-            self.logger.info("Shutting down backend process")
-            backend_process.terminate()
-            backend_process.join(timeout=5)
+            self.logger.info("Requesting graceful backend shutdown")
+            backend_shutdown_event.set()
+            backend_process.join(timeout=30)
+            if backend_process.is_alive():
+                self.logger.warning(
+                    "Backend did not stop gracefully; force terminating"
+                )
+                backend_process.terminate()
+                backend_process.join(timeout=5)
             if backend_process.is_alive():
                 backend_process.kill()
 

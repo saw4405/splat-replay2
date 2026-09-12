@@ -658,7 +658,7 @@ async def test_process_manager_teardown_confirms_obs_exit_dialog(
     win32gui = _Win32GuiStub(
         titles={
             201: "OBS 32.1.1 - プロファイル: 無題 - シーン: 無題",
-            202: "OBS",
+            202: "アクティブな出力があります",
             303: "はい(&Y)",
         },
         classes={201: "Qt5152QWindowIcon", 202: "#32770", 303: "Button"},
@@ -753,6 +753,7 @@ async def test_process_manager_teardown_uses_uia_for_qt_exit_dialog(
     manager._process = cast(Any, process)
     window_sequences = iter([[201], [202]])
     uia_calls: list[tuple[int, tuple[str, ...]]] = []
+    uia_excludes_obs_main_window: list[bool] = []
 
     async def fake_is_running() -> bool:
         return True
@@ -775,9 +776,11 @@ async def test_process_manager_teardown_uses_uia_for_qt_exit_dialog(
         *,
         window_title_tokens: tuple[str, ...] = (),
         window_class_names: tuple[str, ...] = (),
+        exclude_obs_main_window: bool = False,
     ) -> tuple[str, str] | None:
         _ = window_title_tokens, window_class_names
         uia_calls.append((pid, labels))
+        uia_excludes_obs_main_window.append(exclude_obs_main_window)
         if process.returncode is None and len(uia_calls) >= 2:
             process.close()
             return ("OBS", "はい")
@@ -810,6 +813,7 @@ async def test_process_manager_teardown_uses_uia_for_qt_exit_dialog(
 
     assert win32api.closed_windows == [201]
     assert uia_calls
+    assert all(uia_excludes_obs_main_window)
     assert process.returncode == 0
     assert manager._process is None
 
@@ -917,6 +921,58 @@ def _controller_with_spies(
     controller._process_manager = cast(Any, process_manager)
     controller._ws_client = cast(Any, ws_client)
     return controller
+
+
+@pytest.mark.asyncio
+async def test_teardown_waits_for_virtual_camera_to_stop(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    events: list[str] = []
+    process_manager = _ProcessManagerSpy(events)
+    process_manager.running = True
+    ws_client = _WebSocketSpy(events)
+    ws_client.is_connected = True
+    ws_client.virtual_camera_active = True
+    controller = _controller_with_spies(process_manager, ws_client)
+    original_request = ws_client.request
+    stop_requested = asyncio.Event()
+    stop_observed = asyncio.Event()
+    release_stop = asyncio.Event()
+
+    async def request(
+        request_type: str,
+        idempotent: bool = False,
+        request_data: dict[str, object] | None = None,
+    ) -> _OBSResponseStub:
+        if request_type == "StopVirtualCam":
+            stop_requested.set()
+            return _OBSResponseStub({})
+        return await original_request(request_type, idempotent, request_data)
+
+    async def get_data(request_type: str, key: str) -> object | None:
+        assert (request_type, key) == ("GetVirtualCamStatus", "outputActive")
+        if stop_requested.is_set():
+            stop_observed.set()
+            await release_stop.wait()
+        return ws_client.virtual_camera_active
+
+    monkeypatch.setattr(ws_client, "request", request)
+    monkeypatch.setattr(ws_client, "get_data", get_data)
+    teardown_task = asyncio.create_task(controller.teardown())
+    try:
+        await asyncio.wait_for(stop_observed.wait(), timeout=1)
+        assert process_manager.running
+        assert ws_client.is_connected
+        ws_client.virtual_camera_active = False
+        release_stop.set()
+        await asyncio.wait_for(teardown_task, timeout=1)
+        assert not process_manager.running
+        assert not ws_client.is_connected
+    finally:
+        release_stop.set()
+        if not teardown_task.done():
+            teardown_task.cancel()
+        await asyncio.gather(teardown_task, return_exceptions=True)
 
 
 @pytest.mark.asyncio

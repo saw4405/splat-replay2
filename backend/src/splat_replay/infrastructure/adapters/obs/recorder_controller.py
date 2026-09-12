@@ -616,6 +616,22 @@ class OBSRecorderController(VideoRecorderPort):
             self._logger.info("仮想カメラは既に停止済み")
             return
         await self._ws_client.request("StopVirtualCam")
+        # 要求の受理と出力停止は別。停止完了前に閉じると終了確認が出る。
+        try:
+            async with asyncio.timeout(5):
+                while (
+                    await self._ws_client.get_data(
+                        "GetVirtualCamStatus", "outputActive"
+                    )
+                    is not False
+                ):
+                    await asyncio.sleep(0.1)
+        except TimeoutError as exc:
+            raise DeviceError(
+                "仮想カメラの停止を確認できませんでした",
+                "OBS_VIRTUAL_CAMERA_STOP_TIMEOUT",
+                cause=exc,
+            ) from exc
         self._logger.info("仮想カメラ停止完了")
 
     # ------------------------------------------------------------------

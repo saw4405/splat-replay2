@@ -51,6 +51,9 @@ UIA_INVOKE_PATTERN_ID = 10000
 UIA_PROCESS_ID_PROPERTY_ID = 30002
 UIA_CONTROL_TYPE_PROPERTY_ID = 30003
 UIA_BUTTON_CONTROL_TYPE_ID = 50000
+OBS_MAIN_WINDOW_TITLE = re.compile(
+    r"^OBS(?:\s+Studio)?\s+\d+(?:\.\d+){1,2}", re.IGNORECASE
+)
 
 ManagedOBSProcess = subprocess.Popen[bytes] | psutil.Process
 
@@ -440,10 +443,7 @@ class OBSProcessManager:
 
     def _is_obs_main_window(self, hwnd: int) -> bool:
         title = self._get_window_text(hwnd)
-        return (
-            re.match(r"^OBS\s+\d+(?:\.\d+){1,2}", title, re.IGNORECASE)
-            is not None
-        )
+        return OBS_MAIN_WINDOW_TITLE.match(title) is not None
 
     def _find_button_by_labels(
         self, hwnd: int, labels: tuple[str, ...]
@@ -509,6 +509,7 @@ class OBSProcessManager:
         *,
         window_title_tokens: tuple[str, ...] = (),
         window_class_names: tuple[str, ...] = (),
+        exclude_obs_main_window: bool = False,
     ) -> tuple[str, str] | None:
         if win32com_client is None:
             return None
@@ -534,6 +535,10 @@ class OBSProcessManager:
                 window_name = str(window.CurrentName or "")
                 window_class_name = str(window.CurrentClassName or "")
                 normalized_window_name = window_name.lower()
+                if exclude_obs_main_window and OBS_MAIN_WINDOW_TITLE.match(
+                    window_name
+                ):
+                    continue
                 if normalized_title_tokens or expected_classes:
                     title_matched = any(
                         token in normalized_window_name
@@ -620,8 +625,7 @@ class OBSProcessManager:
         clicked = self._invoke_uia_button_by_labels(
             pid,
             ("はい", "yes", "ok", "終了", "exit", "quit"),
-            window_title_tokens=("obs", "確認", "confirm", "終了"),
-            window_class_names=("QMessageBox",),
+            exclude_obs_main_window=True,
         )
         if clicked is not None:
             window_name, button_name = clicked
@@ -638,13 +642,8 @@ class OBSProcessManager:
         for hwnd in hwnds:
             if self._is_obs_main_window(hwnd):
                 continue
-            title = self._get_window_text(hwnd)
-            if not any(
-                token in title.lower()
-                for token in ("obs", "確認", "confirm", "終了")
-            ):
-                continue
 
+            title = self._get_window_text(hwnd)
             button_hwnd = self._find_affirmative_button(hwnd)
             if button_hwnd is None:
                 if self._press_enter_on_window(hwnd):
