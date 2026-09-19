@@ -133,6 +133,7 @@ def non_public_network_interface_aliases() -> set[str] | None:
             errors="replace",
             timeout=WINDOWS_NETWORK_PROFILE_TIMEOUT_SECONDS,
             check=False,
+            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
         )
     except (OSError, subprocess.TimeoutExpired):
         return None

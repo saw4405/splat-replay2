@@ -117,6 +117,7 @@ class FFmpegProcessor(VideoEditorPort, FramePreviewPort):
             stdin=asyncio_subprocess.PIPE if input_text is not None else None,
             stdout=asyncio_subprocess.PIPE,
             stderr=asyncio_subprocess.PIPE,
+            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
         )
         input_bytes = (
             input_text.encode("utf-8") if input_text is not None else None
@@ -189,6 +190,7 @@ class FFmpegProcessor(VideoEditorPort, FramePreviewPort):
                 stdin=subprocess.PIPE if input_bytes is not None else None,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
+                creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
             )
             watcher = self._start_cancel_watcher(process, cancel_check)
             try:
@@ -247,6 +249,7 @@ class FFmpegProcessor(VideoEditorPort, FramePreviewPort):
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 bufsize=0,
+                creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
             )
             watcher = self._start_cancel_watcher(process, cancel_check)
 
@@ -394,6 +397,7 @@ class FFmpegProcessor(VideoEditorPort, FramePreviewPort):
                 else None,
                 stdout=asyncio_subprocess.PIPE,
                 stderr=asyncio_subprocess.PIPE,
+                creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
             )
         except NotImplementedError:
             if not self._subprocess_fallback_logged:
@@ -468,6 +472,7 @@ class FFmpegProcessor(VideoEditorPort, FramePreviewPort):
                 stdin=subprocess.PIPE if input_bytes is not None else None,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
+                creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
             )
             watcher = self._start_cancel_watcher(process, cancel_check)
             try:

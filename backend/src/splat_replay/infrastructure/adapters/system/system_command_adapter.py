@@ -65,6 +65,7 @@ class SystemCommandAdapter(SystemCommandPort):
                 timeout=timeout,
                 shell=False,  # コマンドインジェクション対策
                 check=False,  # エラーでも例外を投げない
+                creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
             )
 
             self._logger.debug(

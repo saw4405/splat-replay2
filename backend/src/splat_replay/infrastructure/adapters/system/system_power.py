@@ -21,7 +21,10 @@ class SystemPower(PowerPort):
         self.logger.info("PC スリープ指示")
         try:
             process = await asyncio.create_subprocess_exec(
-                "rundll32.exe", "powrprof.dll,SetSuspendState", "0,1,0"
+                "rundll32.exe",
+                "powrprof.dll,SetSuspendState",
+                "0,1,0",
+                creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
             )
             await process.wait()
         except NotImplementedError:
@@ -34,4 +37,5 @@ class SystemPower(PowerPort):
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
             check=False,
+            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
         )
