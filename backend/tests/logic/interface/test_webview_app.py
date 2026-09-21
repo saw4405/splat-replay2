@@ -103,7 +103,8 @@ def test_startup_shows_error_when_backend_fails(
         logger,
     )
 
-    backend_process.terminate.assert_called_once_with()
+    # 応答が遅いだけで録画処理を強制停止しない。
+    backend_process.terminate.assert_not_called()
     window.load_html.assert_called_once_with(webview_app._STARTUP_ERROR_HTML)
 
 
@@ -166,6 +167,14 @@ def test_backend_server_stops_gracefully_on_parent_signal(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """親プロセスの終了通知で FastAPI の lifespan を実行できる。"""
+    from fastapi import FastAPI
+
+    app = FastAPI()
+    monkeypatch.setitem(
+        sys.modules,
+        "uvicorn.importer",
+        SimpleNamespace(import_from_string=lambda path: lambda: app),
+    )
     shutdown_event = multiprocessing.Event()
     shutdown_event.set()
     config = Mock()
@@ -191,8 +200,11 @@ def test_backend_server_stops_gracefully_on_parent_signal(
     while not server.should_exit and time.monotonic() < deadline:
         time.sleep(0.01)
     assert server.should_exit is True
+    app_factory = config_factory.call_args.args[0]
+    assert app_factory() is app
+    assert app.state.desktop_shutdown_event is shutdown_event
     config_factory.assert_called_once_with(
-        "example.app:factory",
+        app_factory,
         host="127.0.0.2",
         port=9000,
         log_level="info",

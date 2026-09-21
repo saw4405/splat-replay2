@@ -11,7 +11,7 @@ import asyncio
 import json
 from typing import TYPE_CHECKING, Any, AsyncGenerator, Dict, Protocol, cast
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Request
 from sse_starlette.sse import EventSourceResponse
 
 if TYPE_CHECKING:
@@ -23,6 +23,11 @@ class EventLike(Protocol):
 
     type: str
     payload: dict[str, Any]
+
+
+def _shutting_down(request: Request) -> bool:
+    event = getattr(request.app.state, "desktop_shutdown_event", None)
+    return event is not None and bool(event.is_set())
 
 
 def create_events_router(server: WebAPIServer) -> APIRouter:
@@ -37,12 +42,12 @@ def create_events_router(server: WebAPIServer) -> APIRouter:
     router = APIRouter(prefix="/api/events", tags=["events"])
 
     @router.get("/progress")
-    async def progress_events() -> EventSourceResponse:
+    async def progress_events(request: Request) -> EventSourceResponse:
         """進捗イベントをSSE (Server-Sent Events) でストリーム配信。"""
 
         async def event_generator() -> AsyncGenerator[Dict[str, str], None]:
             cursor = 0
-            while True:
+            while not _shutting_down(request):
                 events, cursor = server.progress_store.read_since(cursor)
                 if events:
                     for payload in events:
@@ -56,13 +61,13 @@ def create_events_router(server: WebAPIServer) -> APIRouter:
         return EventSourceResponse(event_generator())
 
     @router.get("/domain-events")
-    async def domain_events() -> EventSourceResponse:
+    async def domain_events(request: Request) -> EventSourceResponse:
         """ドメインイベントをSSE (Server-Sent Events) でストリーム配信。"""
 
         async def event_generator() -> AsyncGenerator[Dict[str, str], None]:
             sub = server.event_bus.subscribe(event_types=None)
             try:
-                while True:
+                while not _shutting_down(request):
                     events = sub.poll(max_items=10)
                     for ev in events:
                         event = cast(EventLike, ev)

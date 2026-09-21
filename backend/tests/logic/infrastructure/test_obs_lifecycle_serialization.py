@@ -328,7 +328,7 @@ async def test_process_manager_does_not_launch_again_for_owned_live_process(
     await manager.launch()
 
     assert len(popen_calls) == 1
-    assert popen_calls[0] == [str(obs_exe)]
+    assert popen_calls[0] == [str(obs_exe), "--minimize-to-tray"]
 
 
 @pytest.mark.asyncio
@@ -1022,3 +1022,50 @@ async def test_audio_health_check_and_teardown_do_not_overlap_obs_operations() -
     await asyncio.gather(health_task, teardown_task)
 
     assert events.index("ws.meter:end") < events.index("process.teardown")
+
+
+@pytest.mark.asyncio
+async def test_hidden_obs_main_window_is_running_and_closes_normally(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    from types import SimpleNamespace
+    from unittest.mock import Mock
+
+    manager = OBSProcessManager(
+        tmp_path / "obs64.exe", cast(Any, _LoggerStub())
+    )
+    process = _PopenStub(pid=1234)
+    manager._process = cast(Any, process)
+    gui = Mock()
+    gui.IsWindowVisible.return_value = False
+    gui.GetWindowText.side_effect = (
+        lambda hwnd: "OBS 32.2.2 - Profile" if hwnd == 101 else "hidden helper"
+    )
+    gui.EnumWindows.side_effect = lambda callback, param: [
+        callback(hwnd, param) for hwnd in (101, 102)
+    ]
+    monkeypatch.setattr(process_module, "win32gui", gui)
+    monkeypatch.setattr(
+        process_module,
+        "win32process",
+        SimpleNamespace(GetWindowThreadProcessId=lambda hwnd: (1, 1234)),
+    )
+    monkeypatch.setattr(
+        process_module.psutil,
+        "process_iter",
+        lambda attrs: [SimpleNamespace(info={"name": "obs64.exe"})],
+    )
+    monkeypatch.setattr(
+        process_module, "win32api", _Win32ApiStub(on_close=process.close)
+    )
+    monkeypatch.setattr(process_module, "win32con", _Win32ConStub())
+    monkeypatch.setattr(
+        manager, "_confirm_exit_dialog_if_present", lambda pid, hwnds: False
+    )
+
+    assert await manager.is_running()
+    assert manager.find_window_by_pid(1234) == [101]
+    await manager.teardown()
+    assert (
+        process.returncode == 0
+    )  # terminateなら1。隠れた本体へWM_CLOSEで正常終了。

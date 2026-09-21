@@ -190,7 +190,9 @@ class OBSProcessManager:
                     if win32gui is None:  # pragma: no cover - defensive
                         return False
                     try:
-                        if win32gui.IsWindowVisible(hwnd):
+                        if win32gui.IsWindowVisible(
+                            hwnd
+                        ) or self._is_obs_main_window(hwnd):
                             title = win32gui.GetWindowText(hwnd)
                             # デバッグ用：OBSを含むすべてのタイトルを記録
                             if "obs" in title.lower():
@@ -322,7 +324,7 @@ class OBSProcessManager:
                     f"ワーキングディレクトリが見つかりません: {working_dir}"
                 )
 
-            args = [str(self._executable_path)]
+            args = [str(self._executable_path), "--minimize-to-tray"]
 
             def _launch_process() -> subprocess.Popen[bytes]:
                 """別スレッドでプロセスを起動"""
@@ -423,7 +425,9 @@ class OBSProcessManager:
         def callback(hwnd: int, _param: object) -> bool:
             if win32gui is None or win32process is None:
                 return False
-            if win32gui.IsWindowVisible(hwnd):
+            if win32gui.IsWindowVisible(hwnd) or self._is_obs_main_window(
+                hwnd
+            ):
                 _, found_pid = win32process.GetWindowThreadProcessId(hwnd)
                 if found_pid == pid:
                     result.append(hwnd)

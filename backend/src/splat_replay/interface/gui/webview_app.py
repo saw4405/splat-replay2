@@ -15,6 +15,7 @@ import traceback
 from multiprocessing.process import BaseProcess
 from pathlib import Path
 from typing import TYPE_CHECKING, cast
+from collections.abc import Callable
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 import structlog
@@ -22,6 +23,10 @@ from structlog.stdlib import BoundLogger
 
 from splat_replay.interface.gui.webview_runtime import (
     configure_webview2_browser_arguments,
+)
+from splat_replay.interface.gui.desktop_control import (
+    DesktopControl,
+    DesktopSignals,
 )
 
 if TYPE_CHECKING:
@@ -177,6 +182,7 @@ def start_backend_server(
     host: str = "127.0.0.1",
     port: int = 8000,
     shutdown_event: ProcessEvent | None = None,
+    desktop_signals: DesktopSignals | None = None,
 ) -> None:
     """FastAPIバックエンドサーバーを起動。
 
@@ -200,9 +206,23 @@ def start_backend_server(
             app=app_import_path,
         )
 
+        from uvicorn.importer import import_from_string
+        from fastapi import FastAPI
+
+        def desktop_app() -> FastAPI:
+            factory = cast(
+                Callable[[], FastAPI], import_from_string(app_import_path)
+            )
+            app = factory()
+            app.state.desktop_signals = desktop_signals
+            app.state.desktop_shutdown_event = shutdown_event
+            return app
+
         server = uvicorn.Server(
             uvicorn.Config(
-                app_import_path,
+                desktop_app
+                if desktop_signals is not None or shutdown_event is not None
+                else app_import_path,
                 host=host,
                 port=port,
                 log_level="info",
@@ -296,7 +316,7 @@ def _load_frontend_when_ready(
     frontend_url: str,
     stop_event: threading.Event,
     logger: BoundLogger,
-) -> None:
+) -> bool:
     """バックエンド準備完了後、起動画面を本画面へ切り替える。"""
     try:
         ready = wait_for_backend(
@@ -306,24 +326,24 @@ def _load_frontend_when_ready(
             backend_process=backend_process,
         )
         if stop_event.is_set():
-            return
+            return False
         if ready:
             window.load_url(frontend_url)
-            return
+            return True
         logger.error("Failed to start backend server")
     except Exception as e:
         if stop_event.is_set():
-            return
+            return False
         logger.error("Startup callback failed", error=str(e), exc_info=True)
 
-    if backend_process.is_alive():
-        backend_process.terminate()
     try:
         window.load_html(_STARTUP_ERROR_HTML)
     except Exception as e:
         logger.error(
             "Failed to show startup error", error=str(e), exc_info=True
         )
+
+    return False
 
 
 class SplatReplayWebViewApp:
@@ -344,6 +364,9 @@ class SplatReplayWebViewApp:
         backend_bind_host: str | None = None,
         backend_url_host: str | None = None,
         backend_port: int = 8000,
+        desktop_control: DesktopControl | None = None,
+        background: bool = False,
+        hold: bool = False,
     ) -> None:
         """初期化。
 
@@ -371,6 +394,9 @@ class SplatReplayWebViewApp:
         self.backend_url_host = backend_url_host or backend_host
         self.backend_port = backend_port
         self.backend_url = f"http://{self.backend_url_host}:{backend_port}"
+        self.desktop_control = desktop_control
+        self.background = background
+        self.hold = hold
 
         # フロントエンドパスを検索
         try:
@@ -393,6 +419,11 @@ class SplatReplayWebViewApp:
 
         # バックエンドサーバーを別プロセスで起動
         backend_shutdown_event = multiprocessing.Event()
+        signals = (
+            DesktopSignals() if self.desktop_control is not None else None
+        )
+        if signals is not None and not self.hold:
+            signals.activated.set()
         backend_process = multiprocessing.Process(
             target=start_backend_server,
             args=(
@@ -400,10 +431,13 @@ class SplatReplayWebViewApp:
                 self.backend_host,
                 self.backend_port,
                 backend_shutdown_event,
+                signals,
             ),
             daemon=True,
         )
         backend_process.start()
+        tray = None
+        stop_event = threading.Event()
 
         try:
             configured_args = configure_webview2_browser_arguments(
@@ -441,20 +475,136 @@ class SplatReplayWebViewApp:
                     frameless=False,
                     easy_drag=False,
                     background_color="#090916",
+                    hidden=self.background or self.hold,
                 ),
             )
-            stop_event = threading.Event()
-            window.events.closing += stop_event.set
+            exiting = threading.Event()
+            backend_verified = threading.Event()
+
+            def on_loaded() -> None:
+                if window.get_current_url() == frontend_url:
+                    backend_verified.set()
+
+            window.events.loaded += on_loaded
+            if self.desktop_control is None:
+                window.events.closing += stop_event.set
+            else:
+
+                def on_closing() -> bool:
+                    if exiting.is_set():
+                        stop_event.set()
+                        return True
+                    window.hide()
+                    return False
+
+                window.events.closing += on_closing
+
+                from queue import SimpleQueue
+                from splat_replay.interface.gui.desktop_tray import DesktopTray
+
+                commands: SimpleQueue[str] = SimpleQueue()
+                tray = DesktopTray(
+                    self.startup_video.parent / "icon.ico", commands.put
+                )
+                tray.start()
+
+                def control_loop() -> None:
+                    control = self.desktop_control
+                    assert control is not None and signals is not None
+                    stopping = False
+                    while not stop_event.wait(0.1):
+                        for command in (
+                            "show",
+                            "update",
+                            "quit",
+                            "cancel",
+                            "resume",
+                        ):
+                            if control.take(command):
+                                commands.put(command)
+                        while not commands.empty():
+                            command = commands.get()
+                            if command == "show":
+                                window.show()
+                            elif command == "resume" and not stopping:
+                                signals.activated.set()
+                            elif (
+                                command in {"update", "quit"} and not stopping
+                            ):
+                                if command == "quit":
+                                    signals.quitting.set()
+                                if not signals.requested.is_set():
+                                    signals.ready.clear()
+                                signals.requested.set()
+                                self.logger.info(
+                                    "デスクトップ終了要求を受理",
+                                    command=command,
+                                )
+                                control.state("cancelled", False)
+                                window.set_title(
+                                    "Splat Replay — 処理完了後に終了します"
+                                    if signals.quitting.is_set()
+                                    else "Splat Replay — Switchのスリープ・後処理完了を待っています"
+                                )
+                            elif command == "cancel" and not stopping:
+                                signals.requested.clear()
+                                signals.quitting.clear()
+                                control.state("cancelled", True)
+                                signals.ready.clear()
+                                window.set_title(self.title)
+                        control.state("waiting", signals.requested.is_set())
+                        control.state(
+                            "held",
+                            self.hold
+                            and backend_verified.is_set()
+                            and not signals.activated.is_set(),
+                        )
+                        control.state(
+                            "ready",
+                            backend_verified.is_set()
+                            and signals.activated.is_set()
+                            and not stopping,
+                        )
+                        if signals.requested.is_set() and (
+                            signals.ready.is_set()
+                            or not signals.activated.is_set()
+                        ):
+                            stopping = True
+                            backend_shutdown_event.set()
+                        status = signals.tray_status.value.decode("utf-8")
+                        icon, _, description = status.partition("|")
+                        if stopping:
+                            icon, description = "starting", "終了処理中"
+                        elif not signals.activated.is_set():
+                            icon, description = "starting", "更新待機中"
+                        elif not status:
+                            icon, description = "starting", "起動中"
+                        if signals.requested.is_set() and not stopping:
+                            description += (
+                                "／処理完了後に終了"
+                                if signals.quitting.is_set()
+                                else "／更新予約中"
+                            )
+                        tray.set_status(icon, description)
+                        if not backend_process.is_alive():
+                            exiting.set()
+                            window.destroy()
+                            return
+
+                threading.Thread(
+                    target=control_loop, daemon=True, name="desktop-control"
+                ).start()
 
             def finish_startup() -> None:
-                _load_frontend_when_ready(
+                if not _load_frontend_when_ready(
                     window,
                     backend_process,
                     self.backend_url,
                     frontend_url,
                     stop_event,
                     self.logger,
-                )
+                ):
+                    window.show()
 
             # private_mode=Falseでカメラ許可などの設定を永続化
             webview.start(
@@ -462,15 +612,30 @@ class SplatReplayWebViewApp:
                 debug=False,
                 private_mode=False,
             )
+            if (
+                self.desktop_control is not None
+                and backend_process.exitcode not in (None, 0)
+            ):
+                raise RuntimeError(
+                    "バックエンドが異常終了しました。更新を中止します。"
+                )
 
         except Exception as e:
             self.logger.error("WebView error", error=str(e), exc_info=True)
             raise
         finally:
+            stop_event.set()
+            if tray is not None:
+                tray.close()
             # クリーンアップ
             self.logger.info("Requesting graceful backend shutdown")
             backend_shutdown_event.set()
             backend_process.join(timeout=30)
+            if self.desktop_control is not None and backend_process.is_alive():
+                self.logger.error(
+                    "正常終了が完了しないため、更新せず終了を待ちます"
+                )
+                backend_process.join()
             if backend_process.is_alive():
                 self.logger.warning(
                     "Backend did not stop gracefully; force terminating"

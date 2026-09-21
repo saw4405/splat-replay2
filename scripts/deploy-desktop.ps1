@@ -286,8 +286,10 @@ function Get-SourceState {
 }
 
 function Get-BlockingProcesses {
-    $running = Get-Process -Name @("SplatReplay", "obs64") -ErrorAction SilentlyContinue |
-        Sort-Object ProcessName, Id
+    param([Parameter(Mandatory = $true)][string]$Executable)
+    $running = Get-Process -Name "SplatReplay" -ErrorAction SilentlyContinue |
+        Where-Object { $_.Path -eq $Executable } |
+        Sort-Object @{ Expression = { $_.MainWindowHandle -ne 0 }; Descending = $true }, Id
 
     $entries = foreach ($process in $running) {
         $path = $null
@@ -337,7 +339,7 @@ function Stop-BlockingProcesses {
 
         if ($graceful) {
             try {
-                Wait-Process -Id $process.Id -Timeout 15 -ErrorAction Stop
+                Wait-Process -Id $process.Id -Timeout 60 -ErrorAction Stop
                 $actions += [ordered]@{
                     processName = $process.ProcessName
                     id = $process.Id
@@ -346,17 +348,12 @@ function Stop-BlockingProcesses {
                 continue
             }
             catch {
-                # Fall through to forced stop.
+                # 正常終了できなければ差し替えを中止する。
             }
         }
 
-        Stop-Process -Id $process.Id -Force -ErrorAction Stop
-        Wait-Process -Id $process.Id -Timeout 15 -ErrorAction Stop
-        $actions += [ordered]@{
-            processName = $process.ProcessName
-            id = $process.Id
-            action = if ($graceful) { "force-stopped-after-timeout" } else { "force-stopped" }
-        }
+        throw "Process $($process.Id) did not exit normally. Deployment aborted."
+
     }
 
     return (ConvertTo-Array -Value $actions)
@@ -462,7 +459,7 @@ try {
     $repoKey = ConvertTo-Sha256Hex -Text $normalizedRepoRoot.ToLowerInvariant()
     $stateFile = Join-Path $stateDir "$repoKey.json"
     $sourceState = Get-SourceState -WorkingTree $normalizedRepoRoot
-    $blockingProcesses = @(Get-BlockingProcesses)
+    $blockingProcesses = @(Get-BlockingProcesses -Executable (Join-Path $deployDir "SplatReplay.exe"))
     $previousState = $null
 
     if (Test-Path -LiteralPath $stateFile -PathType Leaf) {
@@ -516,18 +513,6 @@ try {
         throw "Blocking processes are running. Re-run deploy:stop-running-apps only after confirming they can be closed."
     }
 
-    if (@($blockingProcesses).Count -gt 0 -and $StopRunningApps.IsPresent) {
-        $result.closedProcesses = [object[]](Stop-BlockingProcesses -BlockingProcesses $blockingProcesses)
-        Start-Sleep -Seconds 1
-        $remainingProcesses = @(Get-BlockingProcesses)
-        if (@($remainingProcesses).Count -gt 0) {
-            $result.blockingProcesses = [object[]]$remainingProcesses
-            throw "Some blocking processes are still running after stop attempts."
-        }
-        $result.blockingProcesses = [object[]]@()
-        $result.requiresUserConfirmation = $false
-    }
-
     if ($buildRequired) {
         Invoke-TaskBuild -WorkingTree $normalizedRepoRoot
         $result.buildExecuted = $true
@@ -540,7 +525,26 @@ try {
         throw "Build output not found after build step: $distExe"
     }
 
-    $deployActions = Invoke-DesktopDeployCopy -SourceDir $distDir -DestinationDir $deployDir
+    $residentMarker = Join-Path $deployDir "assets\desktop-control.json"
+    if (Test-Path -LiteralPath $residentMarker) {
+        & (Join-Path $PSScriptRoot 'update-resident-desktop.ps1') -SourceDir $distDir -DestinationDir $deployDir
+        $deployActions = [ordered]@{ residentUpdate = $true }
+    }
+    else {
+        if (@($blockingProcesses).Count -gt 0 -and $StopRunningApps.IsPresent) {
+            $result.closedProcesses = [object[]](Stop-BlockingProcesses -BlockingProcesses $blockingProcesses)
+            Start-Sleep -Seconds 1
+            $remainingProcesses = @(Get-BlockingProcesses -Executable (Join-Path $deployDir "SplatReplay.exe"))
+            if (@($remainingProcesses).Count -gt 0) {
+                $result.blockingProcesses = [object[]]$remainingProcesses
+                throw "Some blocking processes are still running after stop attempts."
+            }
+            $result.blockingProcesses = [object[]]@()
+            $result.requiresUserConfirmation = $false
+        }
+
+        $deployActions = Invoke-DesktopDeployCopy -SourceDir $distDir -DestinationDir $deployDir
+    }
     $result.deployExecuted = $true
     $result.deployCopyActions = [object[]](ConvertTo-Array -Value $deployActions)
 

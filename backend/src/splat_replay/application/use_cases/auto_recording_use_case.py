@@ -14,6 +14,7 @@ Phase 4 Refactoring: Handler が返す Command を実行し、Context を単一�
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Callable
 from datetime import datetime
 from dataclasses import replace
 from typing import Literal, Mapping
@@ -129,6 +130,8 @@ class AutoRecordingUseCase:
         self._background_retry_delay_seconds = background_retry_delay_seconds
         self._capture_device = capture_device
         self._audio_preparation_task: asyncio.Task[None] | None = None
+        self.power_off_count = 0
+        self.maintenance_check: Callable[[], bool] | None = None
 
     # ================================================================
     # UseCase 実行
@@ -161,6 +164,13 @@ class AutoRecordingUseCase:
             saw_power_off = False
             try:
                 while not self._stop_event.is_set():
+                    # セットアップ失敗後も、後片付け済みの境界で終了要求を評価する。
+                    if (
+                        self.maintenance_check is not None
+                        and self.maintenance_check()
+                    ):
+                        await asyncio.sleep(0.1)
+                        continue
                     try:
                         saw_power_off = (
                             await self._run(continuous=True) or saw_power_off
@@ -298,6 +308,10 @@ class AutoRecordingUseCase:
         pending_power_on_frames: list[Frame] = []
 
         while not self._stop_event.is_set():
+            # フレーム処理の境界でのみ保守へ移行し、録画開始と競合させない。
+            if self.maintenance_check is not None and self.maintenance_check():
+                await asyncio.sleep(0.1)
+                continue
             # フレーム取得
             frame = await self._frame_processor.acquire_frame()
             synced = await self._sync_context_if_state_changed()
@@ -428,6 +442,7 @@ class AutoRecordingUseCase:
             base_context, _ = await self._snapshot_context()
             await self._sync_context_from_service(base_context=base_context)
         self._frame_processor.publish_power_off_detected(final=True)
+        self.power_off_count += 1
 
     async def _handle_capture_disconnect_transition(self) -> None:
         """デバイス切断をOFFイベントに変換せず、録画だけ安全に止める。"""

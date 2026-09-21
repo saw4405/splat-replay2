@@ -5,7 +5,16 @@ from __future__ import annotations
 import contextlib
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
+from starlette.middleware.base import RequestResponseEndpoint
+from starlette.responses import Response, JSONResponse
+from splat_replay.application.services.system.desktop_maintenance import (
+    DesktopMaintenance,
+)
+from splat_replay.interface.gui.desktop_control import (
+    DesktopSignals,
+    describe_tray_status,
+)
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -57,33 +66,107 @@ def create_app(server: WebAPIServer, enable_lifespan: bool = True) -> FastAPI:
     device_checker = server.device_checker
     recording_preparation_service = server.recording_preparation_service
     upload_use_case = server.upload_use_case
+    active_mutations = 0
+    maintenance: DesktopMaintenance | None = None
+    signals: DesktopSignals | None = None
 
     from contextlib import asynccontextmanager
 
     @asynccontextmanager
     async def lifespan(_app: FastAPI):
+        nonlocal maintenance, signals
         # Startup
         import asyncio
 
-        auto_process_task = asyncio.create_task(
-            server.auto_process_service.start()
-        )
+        signals = getattr(_app.state, "desktop_signals", None)
         auto_recording_use_case = server.auto_recording_use_case_factory()
-        await auto_recording_use_case.start_background()
+        if signals is not None:
+            maintenance = DesktopMaintenance(
+                auto_recording_use_case,
+                server.auto_process_service,
+                signals.requested.is_set,
+                signals.ready.set,
+                lambda: active_mutations == 0
+                and server.auto_recorder.get_state() == "STOPPED",
+                quitting=signals.quitting.is_set,
+            )
+            auto_recording_use_case.maintenance_check = maintenance.check
+
+        async def run_workers() -> None:
+            if signals is not None:
+                while not signals.activated.is_set():
+                    await asyncio.sleep(0.1)
+            await auto_recording_use_case.start_background()
+            await server.auto_process_service.start()
+
+        auto_process_task = asyncio.create_task(run_workers())
+
+        async def check_stopped_worker() -> None:
+            # 稼働中はフレーム境界が所有する。停止完了後だけここで判定する。
+            while True:
+                if signals is not None:
+                    icon, text = describe_tray_status(
+                        server.auto_recorder.get_state(),
+                        server.start_edit_upload_uc.get_state(),
+                        auto_recording_use_case.status(),
+                        auto_recording_use_case.power_status().value,
+                    )
+                    signals.tray_status.value = f"{icon}|{text}".encode(
+                        "utf-8"
+                    )
+                if (
+                    maintenance is not None
+                    and auto_recording_use_case.status() == "stopped"
+                ):
+                    maintenance.check()
+                await asyncio.sleep(0.1)
+
+        maintenance_task = (
+            asyncio.create_task(check_stopped_worker())
+            if signals is not None
+            else None
+        )
+        if signals is not None:
+            signals.started.set()
         try:
             yield
         finally:
             # Shutdown
+            if maintenance_task is not None:
+                maintenance_task.cancel()
+                with contextlib.suppress(asyncio.CancelledError):
+                    await maintenance_task
             await auto_recording_use_case.stop_background()
             auto_process_task.cancel()
             with contextlib.suppress(asyncio.CancelledError):
                 await auto_process_task
+            auto_recording_use_case.maintenance_check = None
 
     # テスト時は lifespan を無効化
     if enable_lifespan:
         app = FastAPI(title="Splat Replay Web API", lifespan=lifespan)
     else:
         app = FastAPI(title="Splat Replay Web API")
+
+    @app.middleware("http")
+    async def guard_maintenance(
+        request: Request, call_next: RequestResponseEndpoint
+    ) -> Response:
+        nonlocal active_mutations
+        if request.method in {"GET", "HEAD", "OPTIONS"}:
+            return await call_next(request)
+        if (maintenance is not None and maintenance.entered) or (
+            signals is not None and not signals.activated.is_set()
+        ):
+            return JSONResponse(
+                {"detail": "更新準備中です。しばらくお待ちください。"},
+                status_code=503,
+            )
+        active_mutations += 1
+        try:
+            return await call_next(request)
+        finally:
+            active_mutations -= 1
 
     # CORS設定 (開発時 & pywebview)
     # pywebview からのアクセスも許可するため、127.0.0.1:8000 と localhost:8000 を追加

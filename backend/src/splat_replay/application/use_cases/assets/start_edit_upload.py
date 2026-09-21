@@ -48,6 +48,7 @@ class StartEditUploadUseCase:
         self._task: asyncio.Task[None] | None = None
         self._cancel_requested = False
         self._state: EditUploadState = "idle"
+        self.maintenance = False
         self._message: str = ""
         self._sleep_after_upload_default = False
         self._sleep_after_upload_effective = False
@@ -58,6 +59,10 @@ class StartEditUploadUseCase:
         Raises:
             RuntimeError: 既に実行中の場合
         """
+        if self.maintenance:
+            raise RuntimeError(
+                "更新のため、新しい編集・アップロードは開始できません"
+            )
         # 実行中チェック
         if self._task is not None and not self._task.done():
             raise RuntimeError("編集・アップロード処理が既に実行中です")

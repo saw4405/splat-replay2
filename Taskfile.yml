@@ -715,7 +715,7 @@ tasks:
       - powershell -NoProfile -ExecutionPolicy Bypass -File "{{.DESKTOP_DEPLOY_SCRIPT}}" -Mode Inspect -RepoRoot "{{.ROOT_DIR}}" -EnvFile "{{.DEPLOY_ENV_FILE_VALUE}}"
 
   deploy:stop-running-apps:
-    desc: Stop SplatReplay / obs64 after confirmation and deploy
+    desc: 確認後に配布先の SplatReplay を正常終了して配布する
     vars:
       DEPLOY_ENV_FILE_VALUE: "{{default .DESKTOP_DEPLOY_ENV_FILE .DEPLOY_ENV_FILE}}"
     cmds:

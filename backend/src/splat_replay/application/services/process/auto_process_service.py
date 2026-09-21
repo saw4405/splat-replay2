@@ -70,6 +70,8 @@ class AutoProcessService:
         self._worker_task: asyncio.Task[None] | None = None
         self._sleep_generation = 0
         self._sleep_task: asyncio.Task[None] | None = None
+        self.update_pending = False
+        self.power_off_count = 0
 
         # イベント購読
         # Note: EventBusPortの実装によってはsubscribeメソッドのシグネチャが異なる可能性があるが、
@@ -150,6 +152,7 @@ class AutoProcessService:
             is_final = bool(ev.payload.get("final", False))
         if not is_final:
             return
+        self.power_off_count += 1
 
         settings = self.config.get_behavior_settings()
         if not settings.edit_after_power_off:
@@ -180,6 +183,14 @@ class AutoProcessService:
 
     def _has_pending_assets(self) -> bool:
         return bool(self.repo.list_recordings() or self.repo.list_edited())
+
+    def is_idle(self) -> bool:
+        """猶予中の後処理も含め、実行すべき要求が完了しているか。"""
+        return (
+            self._handled_generation >= self._scan_generation
+            and not self._is_auto_processing
+            and not self.start_edit_upload_uc.is_running()
+        )
 
     def _pending_asset_ids(self) -> frozenset[str]:
         recorded = (str(asset.video) for asset in self.repo.list_recordings())
@@ -455,6 +466,8 @@ class AutoProcessService:
 
     async def start_auto_sleep(self) -> None:
         """自動スリープを開始する。"""
+        if self.update_pending:
+            return
         if not self._auto_sleep_allowed:
             raise RuntimeError("自動スリープが許可されていません")
 
@@ -466,4 +479,6 @@ class AutoProcessService:
         self.event_bus.publish_domain_event(AutoSleepStarted())
         # スリープ直前にログが残るよう少し待機
         await self._sleep(3)
+        if self.update_pending:
+            return
         await self.power_manager.sleep(sleep_after_upload=sleep_after_upload)

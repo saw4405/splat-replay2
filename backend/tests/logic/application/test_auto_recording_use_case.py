@@ -553,8 +553,12 @@ async def test_capture_disconnect_does_not_publish_power_off() -> None:
 
 
 @pytest.mark.asyncio
-async def test_background_recorder_retries_after_setup_failure() -> None:
+@pytest.mark.parametrize("quit_after_failure", [False, True])
+async def test_background_recorder_retries_after_setup_failure(
+    quit_after_failure: bool,
+) -> None:
     events: list[str] = []
+    cleanup_completed = False
 
     class _RetrySession(_SessionSpy):
         def __init__(self) -> None:
@@ -568,7 +572,8 @@ async def test_background_recorder_retries_after_setup_failure() -> None:
                 raise RuntimeError("OBS unavailable")
 
         async def teardown(self) -> None:
-            return None
+            nonlocal cleanup_completed
+            cleanup_completed = True
 
     class _Capture:
         def setup(self) -> None:
@@ -619,12 +624,21 @@ async def test_background_recorder_retries_after_setup_failure() -> None:
         run_main_loop_after_setup
     )
 
+    def maintenance_check() -> bool:
+        if quit_after_failure and session.setup_calls == 1:
+            assert cleanup_completed
+            use_case.force_stop()
+            return True
+        return False
+
+    use_case.maintenance_check = maintenance_check
+
     assert await use_case.start_background() is True
     task = use_case._task
     assert task is not None
     await asyncio.wait_for(task, timeout=1)
 
-    assert session.setup_calls == 2
+    assert session.setup_calls == (1 if quit_after_failure else 2)
     assert use_case.status() == "stopped"
 
 

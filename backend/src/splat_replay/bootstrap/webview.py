@@ -6,6 +6,8 @@ import multiprocessing
 import os
 import sys
 import traceback
+import argparse
+from pathlib import Path
 
 # PyInstaller の windowed モードでは標準出力が存在しない。
 if sys.stdout is None:
@@ -29,6 +31,49 @@ from splat_replay.interface.gui.webview_app import (
 def main() -> None:
     """Entry point for the WebView desktop app."""
     logger = get_logger()
+    parser = argparse.ArgumentParser(description="SplatReplay デスクトップ")
+    parser.add_argument("--background", action="store_true")
+    parser.add_argument("--hold", action="store_true")
+    parser.add_argument(
+        "--desktop-command",
+        choices=("show", "update", "cancel", "quit", "resume", "status"),
+    )
+    args = parser.parse_args()
+    instance = None
+    if sys.platform == "win32":
+        from splat_replay.infrastructure.adapters.system.desktop_instance import (
+            DesktopInstance,
+        )
+
+        identity = (
+            Path(sys.executable)
+            if getattr(sys, "frozen", False)
+            else PROJECT_ROOT / "SplatReplay.exe"
+        )
+        instance = DesktopInstance(
+            identity, client_only=args.desktop_command is not None
+        )
+        if args.desktop_command is not None or not instance.owner:
+            try:
+                if args.desktop_command == "status":
+                    code = instance.status()
+                elif instance.owner:
+                    code = 4
+                else:
+                    code = (
+                        0
+                        if instance.send(args.desktop_command or "show")
+                        else 3
+                    )
+            finally:
+                instance.close()
+            raise SystemExit(code)
+        if instance.updating() and not args.hold:
+            instance.close()
+            logger.info(
+                "アプリを更新しています。完了後にもう一度開いてください"
+            )
+            raise SystemExit(8)
 
     try:
         logger.info("=== Splat Replay WebView App Starting ===")
@@ -48,6 +93,9 @@ def main() -> None:
             render_mode=settings.webview.render_mode,
             backend_bind_host=backend_bind_host,
             backend_url_host=backend_url_host,
+            desktop_control=instance,
+            background=args.background,
+            hold=args.hold,
         )
         app_instance.run()
 
@@ -63,6 +111,9 @@ def main() -> None:
         traceback.print_exc()
         print(f"{'=' * 60}\n")
         raise
+    finally:
+        if instance is not None:
+            instance.close()
 
 
 __all__ = ["main"]
