@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+    <background android:drawable="@android:color/black" />
+    <foreground>
+        <!-- 108dp のレイヤ中央 72dp に画像を配置し、ランチャーの枠まで表示する。 -->
+        <inset android:inset="16.6667%">
+            <bitmap android:src="@drawable/icon" android:gravity="fill" />
+        </inset>
+    </foreground>
+</adaptive-icon>

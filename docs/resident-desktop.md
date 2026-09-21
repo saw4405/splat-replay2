@@ -51,6 +51,9 @@ CLI の `--desktop-command` は `show / update / cancel / quit / resume / status
 
 ## Android のビルド
 
+アプリ識別子とJavaパッケージ名は `app.splatreplay.android` です。
+ソースは `android/src/app/splatreplay/android` に配置します。
+
 Android SDK Platform 35・Build Tools 35.0.0 と JDK 17 を用意し、パスを指定します。
 Gradle や追加の Android ライブラリは使用しません。
 
