@@ -1,14 +1,14 @@
 {
-  "description": "design_steward に親セッションの原文トランスクリプト位置を渡す。",
+  "description": "design_recorder に親セッションの原文トランスクリプト位置を渡す。",
   "hooks": {
     "SubagentStart": [
       {
-        "matcher": "^design_steward$",
+        "matcher": "^design_recorder$",
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"$(git rev-parse --show-toplevel)/.codex/hooks/inject_design_steward_context.py\"",
-            "commandWindows": "python -X utf8 \"$(git rev-parse --show-toplevel)/.codex/hooks/inject_design_steward_context.py\"",
+            "command": "python3 \"$(git rev-parse --show-toplevel)/.codex/hooks/inject_design_recorder_context.py\"",
+            "commandWindows": "& \"$(git rev-parse --show-toplevel)/backend/.venv/Scripts/python.exe\" -X utf8 \"$(git rev-parse --show-toplevel)/.codex/hooks/inject_design_recorder_context.py\"",
             "timeout": 10,
             "statusMessage": "設計判断の原文参照を準備しています"
           }
