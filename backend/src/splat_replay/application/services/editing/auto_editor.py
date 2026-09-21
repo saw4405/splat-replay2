@@ -44,6 +44,8 @@ class EditedCommitCleanupError(RuntimeError):
 
 
 SOURCE_RECORDINGS_METADATA_KEY = "splat_replay_source_recordings"
+_CLEANUP_RETRY_INTERVAL_SECONDS = 0.5
+_CLEANUP_RETRY_COUNT = 20
 
 
 class AutoEditor:
@@ -149,7 +151,9 @@ class AutoEditor:
         self.logger.info("自動編集を開始します")
         self._state = self._state.with_running("編集処理を開始しています", 0)
         assets = self.repo.list_recordings()
-        edited, recovered_source_names = self._recover_committed_inputs(assets)
+        edited, recovered_source_names = await self._recover_committed_inputs(
+            assets
+        )
         assets = [
             asset
             for asset in assets
@@ -181,10 +185,7 @@ class AutoEditor:
                     path=str(committed_target),
                 )
                 for asset in group:
-                    if not self.repo.delete_recording(asset.video):
-                        raise EditedCommitCleanupError(
-                            f"録画済み動画を削除できませんでした: {asset.video}"
-                        )
+                    await self._delete_recording_after_commit(asset.video)
                 edited.append(committed_target)
                 committed_group_indexes.add(idx)
                 continue
@@ -317,10 +318,7 @@ class AutoEditor:
                     self.logger.info(
                         "録画済み動画を削除します", path=str(asset.video)
                     )
-                    if not self.repo.delete_recording(asset.video):
-                        raise EditedCommitCleanupError(
-                            f"録画済み動画を削除できませんでした: {asset.video}"
-                        )
+                    await self._delete_recording_after_commit(asset.video)
                 # 保存ステップを通知し、全体の進捗を 1 進める
                 self.progress.item_stage(
                     task_id,
@@ -467,7 +465,7 @@ class AutoEditor:
         target = group[0].video.with_name(filename)
         return target
 
-    def _recover_committed_inputs(
+    async def _recover_committed_inputs(
         self, assets: List[VideoAsset]
     ) -> tuple[list[Path], set[str]]:
         """commit済み成果物のmanifestから未完了cleanupを再開する。"""
@@ -493,14 +491,39 @@ class AutoEditor:
             )
             for source_name in pending_names:
                 source = assets_by_name[source_name].video
-                if not self.repo.delete_recording(source):
-                    raise EditedCommitCleanupError(
-                        f"録画済み動画を削除できませんでした: {source}"
-                    )
+                await self._delete_recording_after_commit(source)
                 recovered_source_names.add(source_name)
             recovered.append(committed)
 
         return recovered, recovered_source_names
+
+    async def _delete_recording_after_commit(self, video: Path) -> None:
+        """一時的なWindows共有違反だけ待って元録画を削除する。"""
+        for retry_index in range(_CLEANUP_RETRY_COUNT + 1):
+            try:
+                if self.repo.delete_recording(video):
+                    return
+                raise EditedCommitCleanupError(
+                    f"録画済み動画を削除できませんでした: {video}"
+                )
+            except PermissionError as exc:
+                if (
+                    getattr(exc, "winerror", None) != 32
+                    or retry_index == _CLEANUP_RETRY_COUNT
+                ):
+                    raise EditedCommitCleanupError(
+                        f"録画済み動画を削除できませんでした: {video}"
+                    ) from exc
+                if retry_index == 0:
+                    self.logger.warning(
+                        "元録画が使用中のため削除を再試行します",
+                        path=str(video),
+                        timeout_seconds=(
+                            _CLEANUP_RETRY_INTERVAL_SECONDS
+                            * _CLEANUP_RETRY_COUNT
+                        ),
+                    )
+                await asyncio.sleep(_CLEANUP_RETRY_INTERVAL_SECONDS)
 
     @staticmethod
     def _source_recording_names(group: List[VideoAsset]) -> list[str]:

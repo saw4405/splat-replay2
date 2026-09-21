@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from collections.abc import Iterator
 import datetime
 import os
@@ -350,7 +351,7 @@ def test_make_filename_is_stable_for_same_inputs(tmp_path: Path) -> None:
 
 @pytest.mark.asyncio
 async def test_committed_manifest_recovers_partial_cleanup_without_reediting(
-    tmp_path: Path,
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     remaining = SimpleNamespace(
         video=tmp_path / "recorded" / "second.mkv",
@@ -358,9 +359,14 @@ async def test_committed_manifest_recovers_partial_cleanup_without_reediting(
     )
     committed = tmp_path / "edited" / "combined.mkv"
     deleted: list[Path] = []
+    sleep = AsyncMock()
+    monkeypatch.setattr(asyncio, "sleep", sleep)
 
     class _Logger:
         def info(self, *args: object, **kwargs: object) -> None:
+            _ = args, kwargs
+
+        def warning(self, *args: object, **kwargs: object) -> None:
             _ = args, kwargs
 
     class _Config:
@@ -389,6 +395,10 @@ async def test_committed_manifest_recovers_partial_cleanup_without_reediting(
 
         def delete_recording(self, video: Path) -> bool:
             deleted.append(video)
+            if len(deleted) == 1:
+                error = PermissionError("file is in use")
+                setattr(error, "winerror", 32)
+                raise error
             return True
 
     editor = AutoEditor.__new__(AutoEditor)
@@ -403,7 +413,8 @@ async def test_committed_manifest_recovers_partial_cleanup_without_reediting(
     result = await editor.execute()
 
     assert result == [committed]
-    assert deleted == [remaining.video]
+    assert deleted == [remaining.video, remaining.video]
+    sleep.assert_awaited_once_with(0.5)
 
 
 @pytest.mark.asyncio

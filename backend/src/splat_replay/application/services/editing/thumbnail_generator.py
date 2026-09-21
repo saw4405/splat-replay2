@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import tempfile
 from typing import List
 
 from splat_replay.application.interfaces import (
@@ -182,7 +183,6 @@ class ThumbnailGenerator:
         high_score_thumbnails.sort(reverse=True, key=lambda x: x[0])
         high_score_thumbnails = high_score_thumbnails[:3]
 
-        out = assets[0].video.with_suffix(".thumb.png")
         drawer = self.image_selector(thumbnails, (0, 0, 750, 1.0))
         if drawer is None:
             self.logger.warning(
@@ -190,94 +190,110 @@ class ThumbnailGenerator:
             )
             return None
 
-        (
-            drawer
-            # 勝敗を記載
-            .draw_text_with_outline(
-                win_lose,
-                (458, 100),
-                font_paintball,
-                120,
-                fill_color="yellow",
-                outline_color="black",
-                outline_width=5,
-                center=True,
-            )
-            # マッチルール・レート・ステージを描画するベース
-            .draw_rounded_rectangle(
-                (777, 20, 1850, 750),
-                radius=40,
-                fill_color=(28, 28, 28),
-                outline_color=(28, 28, 28),
-                outline_width=1,
-            )
-            # マッチを描画
-            .draw_image(match_image_path, (800, 40), size=(300, 300))
-            # ルールを記載し描画
-            .draw_text(
-                rule_name, (1120, 50), font_ikamodoki, 140, fill_color="white"
-            )
-            .draw_image(rule_image_path, (1660, 70), size=(150, 150))
-            # レートを記載し描画
-            .when(
-                rate is not None,
-                lambda d: d.draw_text(
-                    rate,
-                    (1125, 230),
+        with tempfile.NamedTemporaryFile(
+            dir=assets[0].video.parent,
+            prefix=f"{assets[0].video.stem}.",
+            suffix=".thumb.png",
+            delete=False,
+        ) as temporary:
+            out = Path(temporary.name)
+
+        try:
+            (
+                drawer
+                # 勝敗を記載
+                .draw_text_with_outline(
+                    win_lose,
+                    (458, 100),
                     font_paintball,
-                    70,
-                    fill_color=rate_text_color,
-                ),
-            )
-            # ステージ画像を描画
-            .when(
-                stage1_image_exists,
-                lambda d: d.draw_image(
-                    stage1_image_path, (860, 360), size=(960, 168)
-                ),
-            )
-            .when(
-                stage2_image_exists,
-                lambda d: d.draw_image(
-                    stage2_image_path, (860, 540), size=(960, 168)
-                ),
-            )
-            # 高キルレ画像を左下に描画
-            .for_each(
-                list(enumerate(high_score_thumbnails)),
-                lambda item, d: d.draw_image(
-                    item[1][1],
-                    (
-                        0 + (item[0] // 3) * (146 * 2 + 30),
-                        620 + (item[0] % 3) * (60 * 2 + 30),
-                    ),
-                    crop=(1467, 259, 1661, 319),
-                    size=(146 * 2, 60 * 2),
+                    120,
+                    fill_color="yellow",
+                    outline_color="black",
+                    outline_width=5,
+                    center=True,
                 )
-                if self._file_system.is_file(item[1][1])
-                else d,
-            )
-            # キルレを白枠で囲う
-            .for_each(
-                list(enumerate(high_score_thumbnails)),
-                lambda item, d: d.draw_rectangle(
-                    (
-                        int(0 + (item[0] // 3) * (146 * 2 + 30)),
-                        int(620 + (item[0] % 3) * (60 * 2 + 30)),
-                        int(0 + (item[0] // 3) * (146 * 2 + 30) + 146 * 2),
-                        int(620 + (item[0] % 3) * (60 * 2 + 30) + 60 * 2),
-                    ),
-                    fill_color=None,
-                    outline_color="white",
-                    outline_width=3,
+                # マッチルール・レート・ステージを描画するベース
+                .draw_rounded_rectangle(
+                    (777, 20, 1850, 750),
+                    radius=40,
+                    fill_color=(28, 28, 28),
+                    outline_color=(28, 28, 28),
+                    outline_width=1,
                 )
-                if self._file_system.is_file(item[1][1])
-                else d,
+                # マッチを描画
+                .draw_image(match_image_path, (800, 40), size=(300, 300))
+                # ルールを記載し描画
+                .draw_text(
+                    rule_name,
+                    (1120, 50),
+                    font_ikamodoki,
+                    140,
+                    fill_color="white",
+                )
+                .draw_image(rule_image_path, (1660, 70), size=(150, 150))
+                # レートを記載し描画
+                .when(
+                    rate is not None,
+                    lambda d: d.draw_text(
+                        rate,
+                        (1125, 230),
+                        font_paintball,
+                        70,
+                        fill_color=rate_text_color,
+                    ),
+                )
+                # ステージ画像を描画
+                .when(
+                    stage1_image_exists,
+                    lambda d: d.draw_image(
+                        stage1_image_path, (860, 360), size=(960, 168)
+                    ),
+                )
+                .when(
+                    stage2_image_exists,
+                    lambda d: d.draw_image(
+                        stage2_image_path, (860, 540), size=(960, 168)
+                    ),
+                )
+                # 高キルレ画像を左下に描画
+                .for_each(
+                    list(enumerate(high_score_thumbnails)),
+                    lambda item, d: d.draw_image(
+                        item[1][1],
+                        (
+                            0 + (item[0] // 3) * (146 * 2 + 30),
+                            620 + (item[0] % 3) * (60 * 2 + 30),
+                        ),
+                        crop=(1467, 259, 1661, 319),
+                        size=(146 * 2, 60 * 2),
+                    )
+                    if self._file_system.is_file(item[1][1])
+                    else d,
+                )
+                # キルレを白枠で囲う
+                .for_each(
+                    list(enumerate(high_score_thumbnails)),
+                    lambda item, d: d.draw_rectangle(
+                        (
+                            int(0 + (item[0] // 3) * (146 * 2 + 30)),
+                            int(620 + (item[0] % 3) * (60 * 2 + 30)),
+                            int(0 + (item[0] // 3) * (146 * 2 + 30) + 146 * 2),
+                            int(620 + (item[0] % 3) * (60 * 2 + 30) + 60 * 2),
+                        ),
+                        fill_color=None,
+                        outline_color="white",
+                        outline_width=3,
+                    )
+                    if self._file_system.is_file(item[1][1])
+                    else d,
+                )
+                .when(
+                    self._file_system.is_file(overlay_image_path),
+                    lambda d: d.overlay_image(overlay_image_path),
+                )
+                .save(out)
             )
-            .when(
-                self._file_system.is_file(overlay_image_path),
-                lambda d: d.overlay_image(overlay_image_path),
-            )
-            .save(out)
-        )
+        except Exception:
+            out.unlink(missing_ok=True)
+            raise
         return out

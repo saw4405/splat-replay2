@@ -219,6 +219,29 @@ def test_thumbnail_keeps_x_power_range_for_x_match(tmp_path: Path) -> None:
     assert "XP: 2105.7 ~ 2180.0" in selector.drawer.drawn_texts
 
 
+def test_thumbnail_uses_unique_temporary_path_per_call(
+    tmp_path: Path,
+) -> None:
+    generator, _ = _generator(tmp_path)
+    assets = [
+        _asset(
+            tmp_path=tmp_path,
+            name="first",
+            match=Match.X,
+            rate=XP(2105.7),
+        )
+    ]
+
+    first = generator.create(assets)
+    second = generator.create(assets)
+
+    assert first is not None
+    assert second is not None
+    assert first != second
+    assert first.name.endswith(".thumb.png")
+    assert second.name.endswith(".thumb.png")
+
+
 def test_thumbnail_returns_none_when_no_source_thumbnail_is_available(
     tmp_path: Path,
 ) -> None:
