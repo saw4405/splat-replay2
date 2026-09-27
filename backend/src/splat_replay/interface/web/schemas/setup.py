@@ -6,14 +6,7 @@ from typing import Literal
 
 from pydantic import BaseModel
 
-CaptureDeviceBindingStatus = Literal["bound", "name_only"]
-CaptureDeviceRecoveryTrigger = Literal["manual", "startup_auto", "idle_auto"]
-
 __all__ = [
-    "CaptureDeviceDiagnosticsResponse",
-    "CaptureDeviceDescriptorResponse",
-    "CaptureDeviceRecoveryRequest",
-    "CaptureDeviceRecoveryResponse",
     "CaptureDeviceRequest",
     "CaptureDeviceSaveResponse",
     "ErrorResponse",
@@ -87,37 +80,7 @@ class CaptureDeviceRequest(BaseModel):
 
 
 class CaptureDeviceSaveResponse(MessageResponse):
-    binding_status: CaptureDeviceBindingStatus
-
-
-class CaptureDeviceRecoveryRequest(BaseModel):
-    trigger: CaptureDeviceRecoveryTrigger
-
-
-class CaptureDeviceRecoveryResponse(BaseModel):
-    attempted: bool
-    recovered: bool
-    message: str
-    action: str
-
-
-class CaptureDeviceDescriptorResponse(BaseModel):
-    name: str
-    alternative_name: str | None = None
-    pnp_instance_id: str | None = None
-    hardware_id: str | None = None
-    location_path: str | None = None
-    parent_instance_id: str | None = None
-
-
-class CaptureDeviceDiagnosticsResponse(BaseModel):
-    configured_device_name: str
-    configured_hardware_id: str | None = None
-    configured_location_path: str | None = None
-    configured_parent_instance_id: str | None = None
-    resolved_device: CaptureDeviceDescriptorResponse | None = None
-    available_devices: list[CaptureDeviceDescriptorResponse]
-    last_recovery: CaptureDeviceRecoveryResponse | None = None
+    pass
 
 
 YouTubePrivacyStatus = Literal["private", "unlisted", "public"]

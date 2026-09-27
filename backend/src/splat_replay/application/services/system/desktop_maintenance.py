@@ -46,7 +46,10 @@ class DesktopMaintenance:
             (
                 self.quitting()
                 or self.recording.power_status()
-                is SwitchPowerState.WAITING_FOR_POWER_ON
+                in {
+                    SwitchPowerState.WAITING_FOR_POWER_ON,
+                    SwitchPowerState.CAPTURE_DISCONNECTED,
+                }
             )
             and self.processing.power_off_count
             >= self.recording.power_off_count

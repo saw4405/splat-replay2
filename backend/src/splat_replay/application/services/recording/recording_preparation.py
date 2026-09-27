@@ -76,5 +76,5 @@ class RecordingPreparationService:
 
     def save_capture_device(self, device_name: str) -> None:
         """Persist only the selected capture-device name."""
-        self._config.save_capture_device_binding(device_name)
+        self._config.save_capture_device_name(device_name)
         self._logger.info("Capture device saved", device=device_name)

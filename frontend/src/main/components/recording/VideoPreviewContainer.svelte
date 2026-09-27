@@ -11,11 +11,7 @@
     type RecordingAudioHealthCheckedPayload,
   } from '../../domainEvents';
   import { buildMetadataOptionMap, getMetadataOptions } from '../../api/metadata';
-  import {
-    getAutoRecorderState,
-    getRecorderPreviewMode,
-    recoverCaptureDevice,
-  } from '../../api/recording';
+  import { getAutoRecorderState, getRecorderPreviewMode } from '../../api/recording';
   import type { SwitchPowerState } from '../../api/types';
   import { getDeviceStatusPollIntervalMs, renderMode } from '../../renderMode';
 
@@ -31,13 +27,6 @@
     details: string;
     inputName?: string;
     status?: string;
-  };
-
-  type RecoverDeviceResponse = {
-    attempted: boolean;
-    recovered: boolean;
-    message: string;
-    action: string;
   };
 
   const NOTIFICATION_DURATION_MS = 5000;
@@ -57,9 +46,6 @@
   let isPrepared = $state(false);
   let isMetadataOpen = $state(false);
   let isRefreshingDeviceStatus = $state(false); // 多重実行防止フラグ
-  let recoveryPending = $state(false);
-  let hasTriedStartupRecovery = $state(false);
-  let hasTriedIdleRecoveryForCurrentDisconnect = $state(false);
   let isCameraPermissionDialogOpen = $state(false);
   let isVideoFileInput = $state(false);
   let audioHealthWarning = $state<AudioHealthWarning | null>(null);
@@ -633,42 +619,6 @@
       console.error('自動録画状態取得エラー:', error);
     }
   }
-  function canAutoRecover(): boolean {
-    return (
-      !isVideoFileInput && !isRecording && !startPending && !preparePending && !recoveryPending
-    );
-  }
-
-  async function attemptDeviceRecovery(
-    trigger: 'manual' | 'startup_auto' | 'idle_auto'
-  ): Promise<RecoverDeviceResponse | null> {
-    if (recoveryPending) {
-      return null;
-    }
-
-    recoveryPending = true;
-    try {
-      _status =
-        trigger === 'manual'
-          ? 'キャプチャーデバイスの復旧を試しています...'
-          : 'キャプチャーデバイスの自動復旧を試しています...';
-      const result = (await recoverCaptureDevice(trigger)) as RecoverDeviceResponse;
-      if (result.recovered) {
-        _status = 'キャプチャーデバイスを復旧しました。再確認中...';
-        await refreshDeviceStatus();
-      } else {
-        _status = `復旧できませんでした: ${result.message}`;
-      }
-      return result;
-    } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : '原因不明のエラー';
-      _status = `復旧エラー: ${message}`;
-      console.error('キャプチャーデバイス復旧エラー:', error);
-      return null;
-    } finally {
-      recoveryPending = false;
-    }
-  }
 
   async function refreshDeviceStatus(): Promise<void> {
     // 多重実行防止: すでに実行中の場合はスキップ
@@ -733,9 +683,6 @@
 
   function updateDeviceState(nextState: PreviewState, message = ''): void {
     const previous = deviceState;
-    const wasRecording = isRecording;
-    const wasStartPending = startPending;
-    const wasPreparePending = preparePending;
     deviceState = nextState;
 
     if (nextState === 'error') {
@@ -748,7 +695,6 @@
     deviceErrorMessage = '';
 
     if (nextState === 'connected' && previous !== 'connected') {
-      hasTriedIdleRecoveryForCurrentDisconnect = false;
       if (deviceStatusTimer !== null) {
         window.clearInterval(deviceStatusTimer);
         deviceStatusTimer = null;
@@ -765,20 +711,7 @@
       isRecording = false;
       isPrepared = false;
       audioHealthWarning = null;
-      _status = recoveryPending
-        ? 'キャプチャーデバイスを復旧しています...'
-        : 'キャプチャーデバイスを接続してください';
-      if (
-        previous === 'connected' &&
-        !hasTriedIdleRecoveryForCurrentDisconnect &&
-        !wasRecording &&
-        !wasStartPending &&
-        !wasPreparePending &&
-        canAutoRecover()
-      ) {
-        hasTriedIdleRecoveryForCurrentDisconnect = true;
-        void attemptDeviceRecovery('idle_auto');
-      }
+      _status = 'キャプチャーデバイスを接続してください';
       return;
     }
 
@@ -793,10 +726,6 @@
       await refreshAutoRecorderState();
       await refreshPreviewMode();
       await refreshDeviceStatus();
-      if (!hasTriedStartupRecovery && deviceState === 'disconnected' && canAutoRecover()) {
-        hasTriedStartupRecovery = true;
-        await attemptDeviceRecovery('startup_auto');
-      }
     })();
     restartDeviceStatusPolling();
     autoRecorderStateTimer = window.setInterval(() => {
@@ -913,19 +842,6 @@
     />
   {/if}
 
-  {#if deviceState === 'disconnected' || deviceState === 'error'}
-    <div class="recovery-actions">
-      <button
-        class="recovery-button glass-pill"
-        type="button"
-        onclick={() => void attemptDeviceRecovery('manual')}
-        disabled={recoveryPending}
-      >
-        {recoveryPending ? '復旧中...' : '復旧を試す'}
-      </button>
-    </div>
-  {/if}
-
   {#if deviceState === 'connected'}
     <MetadataOverlay bind:visible={isMetadataOpen} />
   {/if}
@@ -1035,42 +951,6 @@
     min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
-  }
-
-  .recovery-actions {
-    position: absolute;
-    right: 1rem;
-    bottom: 1rem;
-    z-index: 220;
-  }
-
-  .recovery-button {
-    border: 1px solid rgba(var(--theme-rgb-accent), 0.45);
-    background: linear-gradient(
-      135deg,
-      rgba(var(--theme-rgb-accent), 0.96) 0%,
-      rgba(var(--theme-rgb-accent-bright), 0.92) 100%
-    );
-    color: var(--theme-accent-ink-surface);
-    font-weight: 700;
-    padding: 0.7rem 1.05rem;
-    cursor: pointer;
-    transition:
-      transform 0.2s ease,
-      box-shadow 0.2s ease,
-      opacity 0.2s ease;
-  }
-
-  .recovery-button:hover:enabled {
-    transform: translateY(-1px);
-    box-shadow:
-      0 10px 22px rgba(var(--theme-rgb-accent), 0.28),
-      0 0 12px rgba(var(--theme-rgb-accent), 0.16);
-  }
-
-  .recovery-button:disabled {
-    cursor: wait;
-    opacity: 0.72;
   }
 
   .metadata-toggle-btn {

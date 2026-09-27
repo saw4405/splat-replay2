@@ -33,23 +33,25 @@ def test_update_waits_for_switch_and_queued_work_then_cancel_reopens() -> None:
     assert not processing.update_pending
 
 
-def test_unknown_disconnected_and_inflight_request_never_allow_update() -> (
-    None
-):
+def test_disconnected_capture_allows_update_only_when_idle() -> None:
     recording, processing = Mock(), Mock()
     recording.power_off_count = processing.power_off_count = 0
     processing.is_idle.return_value = True
-    for state in (
-        SwitchPowerState.UNKNOWN,
-        SwitchPowerState.CAPTURE_DISCONNECTED,
-    ):
-        recording.power_status.return_value = state
-        assert not DesktopMaintenance(
-            recording, processing, lambda: True, Mock()
-        ).check()
-    recording.power_status.return_value = SwitchPowerState.WAITING_FOR_POWER_ON
+    recording.power_status.return_value = SwitchPowerState.UNKNOWN
+    assert not DesktopMaintenance(
+        recording, processing, lambda: True, Mock()
+    ).check()
+    recording.power_status.return_value = SwitchPowerState.CAPTURE_DISCONNECTED
     assert not DesktopMaintenance(
         recording, processing, lambda: True, Mock(), lambda: False
+    ).check()
+    processing.is_idle.return_value = False
+    assert not DesktopMaintenance(
+        recording, processing, lambda: True, Mock()
+    ).check()
+    processing.is_idle.return_value = True
+    assert DesktopMaintenance(
+        recording, processing, lambda: True, Mock()
     ).check()
 
 

@@ -19,9 +19,6 @@ from splat_replay.infrastructure.adapters.obs.recorder_controller import (
 @dataclass(frozen=True)
 class _CaptureDeviceSettingsStub:
     name: str
-    hardware_id: str | None = None
-    location_path: str | None = None
-    parent_instance_id: str | None = None
 
 
 class _ConfigStub:

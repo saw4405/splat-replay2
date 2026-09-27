@@ -92,10 +92,14 @@ def create_setup_config_router(
         async with handle_endpoint_error(
             logger, error_handler, "Failed to save capture device"
         ):
-            binding = device_checker.save_selected_device(request.device_name)
+            recording_preparation_service.save_capture_device(
+                request.device_name
+            )
+            device_checker.update_settings(
+                recording_preparation_service.get_capture_device_settings()
+            )
             return CaptureDeviceSaveResponse(
                 message="Capture device saved successfully",
-                binding_status=binding.binding_status,
             )
 
     @router.post(

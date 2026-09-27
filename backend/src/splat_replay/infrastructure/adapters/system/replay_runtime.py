@@ -7,16 +7,12 @@ from splat_replay.application.interfaces import (
     MicrophoneEnumeratorPort,
     PowerPort,
 )
-from splat_replay.application.interfaces.data import CaptureDeviceDescriptor
 
 
 class ReplayCaptureDeviceEnumerator(CaptureDeviceEnumeratorPort):
     """リプレイ実行では実機キャプチャデバイスを列挙しない。"""
 
     def list_video_devices(self) -> list[str]:
-        return []
-
-    def list_video_device_descriptors(self) -> list[CaptureDeviceDescriptor]:
         return []
 
 

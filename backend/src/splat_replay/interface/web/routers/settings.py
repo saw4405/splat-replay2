@@ -9,10 +9,6 @@ from typing import TYPE_CHECKING, AsyncGenerator, List
 from fastapi import APIRouter, HTTPException, status
 from fastapi.responses import JSONResponse
 from pydantic import ValidationError
-from splat_replay.application.interfaces import (
-    CaptureDeviceDescriptor,
-    CaptureDeviceRecoveryResult,
-)
 from splat_replay.application.services.common.settings_service import (
     SectionUpdate,
     SettingsServiceError,
@@ -21,10 +17,6 @@ from splat_replay.application.services.common.settings_service import (
 )
 from splat_replay.interface.web.schemas import (
     AudioCalibrateRequest,
-    CaptureDeviceDescriptorResponse,
-    CaptureDeviceDiagnosticsResponse,
-    CaptureDeviceRecoveryRequest,
-    CaptureDeviceRecoveryResponse,
     SettingsUpdateRequest,
     SpeechTestRequest,
 )
@@ -32,30 +24,6 @@ from starlette.responses import StreamingResponse
 
 if TYPE_CHECKING:
     from splat_replay.interface.web.server import WebAPIServer
-
-
-def _to_capture_device_descriptor_response(
-    descriptor: CaptureDeviceDescriptor,
-) -> CaptureDeviceDescriptorResponse:
-    return CaptureDeviceDescriptorResponse(
-        name=descriptor.name,
-        alternative_name=descriptor.alternative_name,
-        pnp_instance_id=descriptor.pnp_instance_id,
-        hardware_id=descriptor.hardware_id,
-        location_path=descriptor.location_path,
-        parent_instance_id=descriptor.parent_instance_id,
-    )
-
-
-def _to_capture_device_recovery_response(
-    recovery: CaptureDeviceRecoveryResult,
-) -> CaptureDeviceRecoveryResponse:
-    return CaptureDeviceRecoveryResponse(
-        attempted=recovery.attempted,
-        recovered=recovery.recovered,
-        message=recovery.message,
-        action=recovery.action,
-    )
 
 
 def create_settings_router(server: WebAPIServer) -> APIRouter:
@@ -104,7 +72,9 @@ def create_settings_router(server: WebAPIServer) -> APIRouter:
                 and requested_capture_device_name
                 != current_capture_device_name
             ):
-                server.device_checker.rebind_configured_device()
+                server.device_checker.update_settings(
+                    server.recording_preparation_service.get_capture_device_settings()
+                )
         except UnknownSettingsSectionError as exc:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)
@@ -143,66 +113,6 @@ def create_settings_router(server: WebAPIServer) -> APIRouter:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail="Failed to get device status",
-            ) from exc
-
-    @router.post(
-        "/device/recover", response_model=CaptureDeviceRecoveryResponse
-    )
-    async def recover_device(
-        request: CaptureDeviceRecoveryRequest,
-    ) -> CaptureDeviceRecoveryResponse:
-        try:
-            result = await asyncio.to_thread(
-                server.device_checker.recover_device, request.trigger
-            )
-            return _to_capture_device_recovery_response(result)
-        except Exception as exc:
-            server.logger.error("Failed to recover device", error=str(exc))
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Failed to recover device",
-            ) from exc
-
-    @router.get(
-        "/device/diagnostics",
-        response_model=CaptureDeviceDiagnosticsResponse,
-    )
-    async def get_device_diagnostics() -> CaptureDeviceDiagnosticsResponse:
-        try:
-            diagnostics = await asyncio.to_thread(
-                server.device_checker.get_diagnostics
-            )
-            return CaptureDeviceDiagnosticsResponse(
-                configured_device_name=diagnostics.configured_device_name,
-                configured_hardware_id=diagnostics.configured_hardware_id,
-                configured_location_path=diagnostics.configured_location_path,
-                configured_parent_instance_id=diagnostics.configured_parent_instance_id,
-                resolved_device=(
-                    _to_capture_device_descriptor_response(
-                        diagnostics.resolved_device
-                    )
-                    if diagnostics.resolved_device is not None
-                    else None
-                ),
-                available_devices=[
-                    _to_capture_device_descriptor_response(descriptor)
-                    for descriptor in diagnostics.available_devices
-                ],
-                last_recovery=(
-                    _to_capture_device_recovery_response(
-                        diagnostics.last_recovery
-                    )
-                    if diagnostics.last_recovery is not None
-                    else None
-                ),
-            )
-        except Exception as exc:
-            server.logger.error(
-                "Failed to get device diagnostics", error=str(exc)
-            )
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Failed to get device diagnostics",
             ) from exc
 
     @router.get("/settings/camera-permission-dialog")

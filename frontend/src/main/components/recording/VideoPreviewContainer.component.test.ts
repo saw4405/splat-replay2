@@ -3,14 +3,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const {
   subscribeDomainEventsMock,
-  recoverCaptureDeviceMock,
   getAutoRecorderStateMock,
   getRecorderPreviewModeMock,
   getMetadataOptionsMock,
   buildMetadataOptionMapMock,
 } = vi.hoisted(() => ({
   subscribeDomainEventsMock: vi.fn(),
-  recoverCaptureDeviceMock: vi.fn(),
   getAutoRecorderStateMock: vi.fn(),
   getRecorderPreviewModeMock: vi.fn(),
   getMetadataOptionsMock: vi.fn(),
@@ -27,7 +25,6 @@ vi.mock('../../api/recording', async () => {
     ...actual,
     getAutoRecorderState: getAutoRecorderStateMock,
     getRecorderPreviewMode: getRecorderPreviewModeMock,
-    recoverCaptureDevice: recoverCaptureDeviceMock,
   };
 });
 
@@ -109,14 +106,6 @@ describe('VideoPreviewContainer.svelte', () => {
       power_state: 'armed',
     });
 
-    recoverCaptureDeviceMock.mockReset();
-    recoverCaptureDeviceMock.mockResolvedValue({
-      attempted: true,
-      recovered: false,
-      message: 'recover failed',
-      action: 'restart-device',
-    });
-
     getMetadataOptionsMock.mockReset();
     getMetadataOptionsMock.mockResolvedValue({
       gameModes: [],
@@ -136,7 +125,7 @@ describe('VideoPreviewContainer.svelte', () => {
     vi.restoreAllMocks();
   });
 
-  it('起動時に切断されていれば startup_auto 回復を 1 回試し、手動回復ボタンを表示する', async () => {
+  it('切断時は未接続を表示し、復旧操作を表示しない', async () => {
     fetchMock.mockImplementation(async (input: string | URL | Request) => {
       const url = input.toString();
       if (url.includes('/api/device/status')) {
@@ -147,36 +136,8 @@ describe('VideoPreviewContainer.svelte', () => {
 
     render(VideoPreviewContainer);
 
-    await waitFor(() => {
-      expect(recoverCaptureDeviceMock).toHaveBeenCalledWith('startup_auto');
-    });
-
-    expect(await screen.findByRole('button')).toBeInTheDocument();
-  });
-
-  it('手動回復ボタンから manual 回復を呼び出す', async () => {
-    fetchMock.mockImplementation(async (input: string | URL | Request) => {
-      const url = input.toString();
-      if (url.includes('/api/device/status')) {
-        return jsonResponse(false);
-      }
-      throw new Error(`Unexpected fetch: ${url}`);
-    });
-
-    render(VideoPreviewContainer);
-
-    await waitFor(() => {
-      expect(recoverCaptureDeviceMock).toHaveBeenCalledWith('startup_auto');
-    });
-
-    recoverCaptureDeviceMock.mockClear();
-
-    const button = await screen.findByRole('button');
-    await button.click();
-
-    await waitFor(() => {
-      expect(recoverCaptureDeviceMock).toHaveBeenCalledWith('manual');
-    });
+    expect(await screen.findByText('キャプチャーデバイスが接続されていません')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: '復旧を試す' })).not.toBeInTheDocument();
   });
 
   it('接続時は録画準備だけを行い、自動録画の開始をブラウザから要求しない', async () => {
@@ -213,90 +174,12 @@ describe('VideoPreviewContainer.svelte', () => {
       fetchMock.mock.calls.some(([input]) => input.toString().includes('/api/recorder/enable-auto'))
     ).toBe(false);
 
-    recoverCaptureDeviceMock.mockClear();
     await vi.advanceTimersByTimeAsync(650);
 
     const deviceStatusCalls = fetchMock.mock.calls.filter(([input]) =>
       input.toString().includes('/api/device/status')
     );
     expect(deviceStatusCalls).toHaveLength(1);
-    expect(recoverCaptureDeviceMock).not.toHaveBeenCalledWith('idle_auto');
-  });
-
-  it('prepare 中の切断では idle_auto 回復を走らせない', async () => {
-    vi.useFakeTimers();
-    const deviceStatuses = [true, false];
-    const pendingPrepare = new Promise<Response>(() => {});
-    fetchMock.mockImplementation(async (input: string | URL | Request) => {
-      const url = input.toString();
-      if (url.includes('/api/device/status')) {
-        const next = deviceStatuses.shift() ?? false;
-        return jsonResponse(next);
-      }
-      if (url.includes('/api/settings/camera-permission-dialog')) {
-        return jsonResponse({ shown: true });
-      }
-      if (url.includes('/api/recorder/prepare')) {
-        return pendingPrepare;
-      }
-      throw new Error(`Unexpected fetch: ${url}`);
-    });
-
-    render(VideoPreviewContainer);
-
-    await vi.advanceTimersByTimeAsync(100);
-
-    expect(fetchMock).toHaveBeenCalledWith(
-      '/api/recorder/prepare',
-      expect.objectContaining({ method: 'POST' })
-    );
-
-    await vi.advanceTimersByTimeAsync(650);
-
-    expect(recoverCaptureDeviceMock).not.toHaveBeenCalledWith('idle_auto');
-  });
-
-  it('録画セッションが一時停止中の切断では idle_auto 回復を走らせない', async () => {
-    vi.useFakeTimers();
-    const deviceStatuses = [true, false];
-    fetchMock.mockImplementation(async (input: string | URL | Request) => {
-      const url = input.toString();
-      if (url.includes('/api/device/status')) {
-        const next = deviceStatuses.shift() ?? false;
-        return jsonResponse(next);
-      }
-      if (url.includes('/api/settings/camera-permission-dialog')) {
-        return jsonResponse({ shown: true });
-      }
-      if (url.includes('/api/recorder/prepare')) {
-        return jsonResponse({ success: true });
-      }
-      if (url.includes('/api/recorder/enable-auto')) {
-        return jsonResponse({ success: true });
-      }
-      throw new Error(`Unexpected fetch: ${url}`);
-    });
-
-    render(VideoPreviewContainer);
-
-    await vi.advanceTimersByTimeAsync(100);
-    await vi.runOnlyPendingTimersAsync();
-
-    expect(fetchMock).toHaveBeenCalledWith(
-      '/api/recorder/prepare',
-      expect.objectContaining({ method: 'POST' })
-    );
-
-    emitDomainEvent({ type: 'domain.recording.started', payload: {} });
-    emitDomainEvent({
-      type: 'domain.recording.paused',
-      payload: { reason: 'battle_finished' },
-    });
-
-    recoverCaptureDeviceMock.mockClear();
-    await vi.advanceTimersByTimeAsync(650);
-
-    expect(recoverCaptureDeviceMock).not.toHaveBeenCalledWith('idle_auto');
   });
 
   it('video_file モードでは追加の device status ポーリングをしない', async () => {

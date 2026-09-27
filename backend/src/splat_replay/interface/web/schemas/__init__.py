@@ -36,10 +36,6 @@ from splat_replay.interface.web.schemas.settings import (
     SpeechTestRequest,
 )
 from splat_replay.interface.web.schemas.setup import (
-    CaptureDeviceDiagnosticsResponse,
-    CaptureDeviceDescriptorResponse,
-    CaptureDeviceRecoveryRequest,
-    CaptureDeviceRecoveryResponse,
     CaptureDeviceRequest,
     CaptureDeviceSaveResponse,
     ErrorResponse,
@@ -77,10 +73,6 @@ __all__ = [
     "SettingsUpdateSection",
     "SpeechTestRequest",
     # Setup
-    "CaptureDeviceDiagnosticsResponse",
-    "CaptureDeviceDescriptorResponse",
-    "CaptureDeviceRecoveryRequest",
-    "CaptureDeviceRecoveryResponse",
     "CaptureDeviceRequest",
     "CaptureDeviceSaveResponse",
     "ErrorResponse",

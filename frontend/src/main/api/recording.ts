@@ -7,8 +7,6 @@
 
 import type {
   AutoRecorderStateResponse,
-  CaptureDeviceRecoveryResponse,
-  CaptureDeviceRecoveryTrigger,
   RecorderPreviewMode,
   RecorderPreviewModeResponse,
   RecorderState,
@@ -72,22 +70,4 @@ export async function getRecorderPreviewMode(): Promise<RecorderPreviewMode> {
   }
   const body: RecorderPreviewModeResponse = await response.json();
   return body.mode;
-}
-
-/**
- * キャプチャデバイスのソフト復旧を試行する
- */
-export async function recoverCaptureDevice(
-  trigger: CaptureDeviceRecoveryTrigger
-): Promise<CaptureDeviceRecoveryResponse> {
-  const response = await fetch('/api/device/recover', {
-    method: 'POST',
-    headers: JSON_HEADERS,
-    body: JSON.stringify({ trigger }),
-  });
-  if (!response.ok) {
-    const detail = await safeReadText(response);
-    throw new Error(detail || 'Failed to recover capture device');
-  }
-  return (await response.json()) as CaptureDeviceRecoveryResponse;
 }

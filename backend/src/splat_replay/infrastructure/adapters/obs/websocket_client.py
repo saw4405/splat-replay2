@@ -121,7 +121,8 @@ class OBSWebSocketClient:
 
         for attempt in range(5):
             try:
-                await self._client.connect()
+                if await self._client.connect() is False:
+                    raise ConnectionError("OBS WebSocket connection failed")
                 self._is_connected = True
                 self._logger.info("OBS WebSocket接続成功")
 
@@ -192,7 +193,10 @@ class OBSWebSocketClient:
             # 再接続ループ（指数バックオフ）
             while True:
                 try:
-                    await self._client.connect()
+                    if await self._client.connect() is False:
+                        raise ConnectionError(
+                            "OBS WebSocket connection failed"
+                        )
                     self._is_connected = True
                     self._logger.info("OBS WebSocket 再接続完了")
                     if self._on_reconnect is not None:

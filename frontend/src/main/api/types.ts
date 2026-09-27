@@ -15,7 +15,6 @@ export type SwitchPowerState =
   | 'waiting_for_power_on'
   | 'capture_disconnected'
   | 'stopped';
-export type CaptureDeviceRecoveryTrigger = 'manual' | 'startup_auto' | 'idle_auto';
 
 export interface RecorderStateResponse {
   state: RecorderState;
@@ -28,13 +27,6 @@ export interface RecorderPreviewModeResponse {
 export interface AutoRecorderStateResponse {
   state: AutoRecorderState;
   power_state: SwitchPowerState;
-}
-
-export interface CaptureDeviceRecoveryResponse {
-  attempted: boolean;
-  recovered: boolean;
-  message: string;
-  action: string;
 }
 
 // 編集・アップロード

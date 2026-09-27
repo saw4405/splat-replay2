@@ -19,7 +19,6 @@ if TYPE_CHECKING:
     from splat_replay.application.dto import ReplayBootstrapDTO
     from splat_replay.application.interfaces.data import (
         AudioInputHealthCheckResult,
-        CaptureDeviceDescriptor,
         CaptureDeviceSettingsView,
         OBSSettingsView,
     )
@@ -40,10 +39,6 @@ class CaptureDeviceEnumeratorPort(Protocol):
     """Capture-device enumeration abstraction."""
 
     def list_video_devices(self) -> list[str]: ...
-
-    def list_video_device_descriptors(
-        self,
-    ) -> list[CaptureDeviceDescriptor]: ...
 
 
 class CapturePort(Protocol):
