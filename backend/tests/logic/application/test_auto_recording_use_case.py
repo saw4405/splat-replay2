@@ -1,13 +1,16 @@
 from __future__ import annotations
 
 import asyncio
+from collections.abc import AsyncGenerator
 from dataclasses import replace
+from datetime import datetime
 from typing import Awaitable, Callable, cast
 
 import numpy as np
 import pytest
 
 from splat_replay.application.interfaces import (
+    AudioInputHealthCheckResult,
     CaptureDevicePort,
     CapturePort,
     LoggerPort,
@@ -24,6 +27,7 @@ from splat_replay.application.services.recording.commands import (
 from splat_replay.application.services.recording.recording_context import (
     MatchRateCandidate,
     RecordingContext,
+    SessionPhase,
 )
 from splat_replay.application.services.recording.publisher_worker import (
     PublisherWorker,
@@ -118,6 +122,17 @@ class _SessionSpy:
         self.state = RecordState.RECORDING
         self.audio_health_checks = 0
         self.transcription_preparations = 0
+        self.audio_observation_starts = 0
+        self.audio_observation_started = asyncio.Event()
+        self.audio_observation_closed = asyncio.Event()
+        self.audio_health_results: list[AudioInputHealthCheckResult] = []
+        self.audio_health_events: asyncio.Queue[
+            AudioInputHealthCheckResult
+        ] = asyncio.Queue()
+        self.audio_observation_results: asyncio.Queue[
+            AudioInputHealthCheckResult
+        ] = asyncio.Queue()
+        self.recording_starts = 0
 
     @property
     def context(self) -> RecordingContext:
@@ -134,8 +149,41 @@ class _SessionSpy:
     async def check_audio_health(self) -> None:
         self.audio_health_checks += 1
 
+    async def observe_audio_health(
+        self,
+    ) -> AsyncGenerator[AudioInputHealthCheckResult, None]:
+        self.audio_observation_starts += 1
+        self.audio_observation_started.set()
+        try:
+            while True:
+                yield await self.audio_observation_results.get()
+        finally:
+            self.audio_observation_closed.set()
+
+    def publish_audio_health_result(
+        self, result: AudioInputHealthCheckResult
+    ) -> None:
+        self.audio_health_results.append(result)
+        self.audio_health_events.put_nowait(result)
+
     async def prepare_transcription(self) -> None:
         self.transcription_preparations += 1
+
+    async def start(self) -> None:
+        self.recording_starts += 1
+        self.state = RecordState.RECORDING
+
+    async def pause(self) -> None:
+        self.state = RecordState.PAUSED
+
+    async def resume(self) -> None:
+        self.state = RecordState.RECORDING
+
+    async def cancel(self) -> None:
+        self.state = RecordState.STOPPED
+
+    async def reset_metadata(self) -> None:
+        return None
 
     async def stop(
         self, get_result_frame: Callable[[], Awaitable[Frame | None]]
@@ -155,6 +203,254 @@ def test_is_reset_context_returns_false_when_rate_candidates_exist() -> None:
     )
 
     assert AutoRecordingUseCase._is_reset_context(context) is False
+
+
+@pytest.mark.asyncio
+async def test_audio_observation_stops_on_ok_and_restarts_after_power_cycle() -> (
+    None
+):
+    session = _SessionSpy(events=[])
+    session.state = RecordState.STOPPED
+    session.audio_observation_results.put_nowait(
+        AudioInputHealthCheckResult(
+            input_name="Mic",
+            status="silent",
+            healthy=False,
+            short_message="silent",
+            details="silent",
+            peak_db=None,
+        )
+    )
+    session.audio_observation_results.put_nowait(
+        AudioInputHealthCheckResult(
+            input_name="Mic",
+            status="ok",
+            healthy=True,
+            short_message="",
+            details="ok",
+            peak_db=-12.0,
+        )
+    )
+    use_case = AutoRecordingUseCase(
+        session_service=cast(RecordingSessionService, session),
+        frame_processor=cast(FrameProcessingService, object()),
+        phase_handlers=cast(PhaseHandlerRegistry, object()),
+        context=RecordingContext(),
+        capture=cast(CapturePort, object()),
+        capture_producer=cast(FrameCaptureProducer, object()),
+        publisher_worker=cast(PublisherWorker, object()),
+        logger=cast(LoggerPort, _LoggerStub()),
+    )
+    use_case._power_monitor = SwitchPowerMonitor(state=SwitchPowerState.ARMED)
+
+    await use_case._refresh_audio_health_for_power_state()
+    task = use_case._audio_observation_task
+    assert task is not None
+    silent = await asyncio.wait_for(session.audio_health_events.get(), 0.5)
+    healthy = await asyncio.wait_for(session.audio_health_events.get(), 0.5)
+    await task
+    assert (silent.status, healthy.status) == ("silent", "ok")
+
+    use_case._sync_audio_observation(SessionPhase.MATCHING)
+    use_case._sync_audio_observation(SessionPhase.STANDBY)
+    assert session.audio_observation_starts == 1
+
+    use_case._power_monitor = SwitchPowerMonitor(
+        state=SwitchPowerState.WAITING_FOR_POWER_ON
+    )
+    await use_case._refresh_audio_health_for_power_state()
+    assert use_case._audio_health_last_status is None
+    session.audio_observation_results.put_nowait(
+        AudioInputHealthCheckResult(
+            input_name="Mic",
+            status="silent",
+            healthy=False,
+            short_message="silent",
+            details="silent",
+            peak_db=None,
+        )
+    )
+    use_case._power_monitor = SwitchPowerMonitor(state=SwitchPowerState.ARMED)
+    await use_case._refresh_audio_health_for_power_state()
+    restarted = await asyncio.wait_for(session.audio_health_events.get(), 0.5)
+    assert restarted.status == "silent"
+    assert session.audio_observation_starts == 2
+    use_case._request_stop_audio_observation()
+    await use_case._reap_audio_observations()
+
+
+@pytest.mark.asyncio
+async def test_initial_audio_observation_survives_repeated_standby_sync_before_result() -> (
+    None
+):
+    session = _SessionSpy(events=[])
+    session.state = RecordState.STOPPED
+    use_case = AutoRecordingUseCase(
+        session_service=cast(RecordingSessionService, session),
+        frame_processor=cast(FrameProcessingService, object()),
+        phase_handlers=cast(PhaseHandlerRegistry, object()),
+        context=RecordingContext(),
+        capture=cast(CapturePort, object()),
+        capture_producer=cast(FrameCaptureProducer, object()),
+        publisher_worker=cast(PublisherWorker, object()),
+        logger=cast(LoggerPort, _LoggerStub()),
+    )
+    use_case._power_monitor = SwitchPowerMonitor(state=SwitchPowerState.ARMED)
+
+    await use_case._refresh_audio_health_for_power_state()
+    observation_task = use_case._audio_observation_task
+    assert observation_task is not None
+    await asyncio.wait_for(session.audio_observation_started.wait(), 0.5)
+
+    use_case._sync_audio_observation(SessionPhase.STANDBY)
+    use_case._sync_audio_observation(SessionPhase.STANDBY)
+
+    assert use_case._audio_observation_task is observation_task
+    assert not session.audio_observation_closed.is_set()
+    assert session.audio_observation_starts == 1
+    assert use_case._audio_health_initial_window_pending is True
+
+    session.audio_observation_results.put_nowait(
+        AudioInputHealthCheckResult(
+            input_name="Mic",
+            status="silent",
+            healthy=False,
+            short_message="silent",
+            details="silent",
+            peak_db=None,
+        )
+    )
+    observed = await asyncio.wait_for(session.audio_health_events.get(), 0.5)
+    assert observed.status == "silent"
+    assert use_case._audio_health_initial_window_pending is False
+
+    use_case._request_stop_audio_observation()
+    await use_case._reap_audio_observations()
+
+
+@pytest.mark.asyncio
+async def test_unconfirmed_initial_audio_does_not_restart_after_matching() -> (
+    None
+):
+    session = _SessionSpy(events=[])
+    session.state = RecordState.STOPPED
+    use_case = AutoRecordingUseCase(
+        session_service=cast(RecordingSessionService, session),
+        frame_processor=cast(FrameProcessingService, object()),
+        phase_handlers=cast(PhaseHandlerRegistry, object()),
+        context=RecordingContext(),
+        capture=cast(CapturePort, object()),
+        capture_producer=cast(FrameCaptureProducer, object()),
+        publisher_worker=cast(PublisherWorker, object()),
+        logger=cast(LoggerPort, _LoggerStub()),
+    )
+    use_case._power_monitor = SwitchPowerMonitor(state=SwitchPowerState.ARMED)
+
+    await use_case._refresh_audio_health_for_power_state()
+    await asyncio.wait_for(session.audio_observation_started.wait(), 0.5)
+    use_case._sync_audio_observation(SessionPhase.MATCHING)
+    await asyncio.wait_for(session.audio_observation_closed.wait(), 0.5)
+    use_case._sync_audio_observation(SessionPhase.STANDBY)
+
+    assert session.audio_observation_starts == 1
+    assert session.audio_health_events.empty()
+    await use_case._reap_audio_observations()
+
+
+@pytest.mark.asyncio
+async def test_matching_start_does_not_wait_for_audio_disconnect_cleanup() -> (
+    None
+):
+    class _BlockingCloseSession(_SessionSpy):
+        def __init__(self) -> None:
+            super().__init__(events=[])
+            self.close_started = asyncio.Event()
+            self.allow_close = asyncio.Event()
+            self.waiting_for_next = asyncio.Event()
+
+        async def observe_audio_health(
+            self,
+        ) -> AsyncGenerator[AudioInputHealthCheckResult, None]:
+            self.audio_observation_starts += 1
+            try:
+                yield await self.audio_observation_results.get()
+                self.waiting_for_next.set()
+                while True:
+                    yield await self.audio_observation_results.get()
+            finally:
+                self.close_started.set()
+                await self.allow_close.wait()
+
+    matching_context = RecordingContext(
+        metadata=RecordingMetadata(started_at=datetime(2026, 10, 1))
+    )
+
+    class _MatchingHandler(_PhaseHandlersSpy):
+        async def handle_frame(
+            self, frame: Frame, context: RecordingContext, state: RecordState
+        ) -> RecordingCommand:
+            return RecordingCommand.start_recording(matching_context)
+
+    session = _BlockingCloseSession()
+    session.state = RecordState.STOPPED
+    session.audio_observation_results.put_nowait(
+        AudioInputHealthCheckResult(
+            input_name="Mic",
+            status="silent",
+            healthy=False,
+            short_message="silent",
+            details="silent",
+            peak_db=None,
+        )
+    )
+    phase_handlers = _MatchingHandler(
+        drained_context=RecordingContext(), events=[]
+    )
+    use_case = AutoRecordingUseCase(
+        session_service=cast(RecordingSessionService, session),
+        frame_processor=cast(FrameProcessingService, object()),
+        phase_handlers=cast(PhaseHandlerRegistry, phase_handlers),
+        context=RecordingContext(),
+        capture=cast(CapturePort, object()),
+        capture_producer=cast(FrameCaptureProducer, object()),
+        publisher_worker=cast(PublisherWorker, object()),
+        logger=cast(LoggerPort, _LoggerStub()),
+    )
+    use_case._power_monitor = SwitchPowerMonitor(state=SwitchPowerState.ARMED)
+    use_case._audio_health_last_status = "silent"
+    use_case._sync_audio_observation(SessionPhase.STANDBY)
+    published = await asyncio.wait_for(session.audio_health_events.get(), 0.5)
+    await asyncio.wait_for(session.waiting_for_next.wait(), 0.5)
+
+    await asyncio.wait_for(
+        use_case._process_armed_frame(np.zeros((2, 2, 3), dtype=np.uint8)),
+        0.5,
+    )
+    await asyncio.wait_for(session.close_started.wait(), 0.5)
+    assert published.status == "silent"
+    assert session.recording_starts == 1
+    assert len(session.audio_health_results) == 1
+
+    use_case._context = RecordingContext()
+    session.state = RecordState.STOPPED
+    session.audio_observation_results.put_nowait(
+        AudioInputHealthCheckResult(
+            input_name="Mic",
+            status="silent",
+            healthy=False,
+            short_message="silent",
+            details="silent",
+            peak_db=None,
+        )
+    )
+    use_case._sync_audio_observation(SessionPhase.STANDBY)
+    resumed = await asyncio.wait_for(session.audio_health_events.get(), 0.5)
+    assert resumed.status == "silent"
+    assert session.audio_observation_starts == 2
+
+    session.allow_close.set()
+    use_case._request_stop_audio_observation()
+    await use_case._reap_audio_observations()
 
 
 @pytest.mark.asyncio
@@ -321,6 +617,8 @@ async def test_main_loop_recovers_from_analysis_exception() -> None:
 
     processor.on_second_call = lambda: use_case._stop_event.set()
     await use_case._run_main_loop()
+    use_case._request_stop_audio_observation()
+    await use_case._reap_audio_observations()
 
     assert processor.observe_power_off_calls == 2
 
@@ -358,15 +656,31 @@ class _PowerCycleFrameProcessor:
 
 
 @pytest.mark.asyncio
-async def test_audio_health_refresh_failure_does_not_stop_power_monitoring() -> (
+async def test_transcription_preparation_failure_does_not_stop_power_monitoring() -> (
     None
 ):
     class _FailingSession(_SessionSpy):
-        async def check_audio_health(self) -> None:
-            raise RuntimeError("OBS unavailable")
+        def __init__(self, *, events: list[str]) -> None:
+            super().__init__(events=events)
+            self.preparation_attempts = 0
+
+        async def prepare_transcription(self) -> None:
+            self.preparation_attempts += 1
+            raise RuntimeError("transcription unavailable")
 
     events: list[str] = []
     session = _FailingSession(events=events)
+    session.state = RecordState.STOPPED
+    session.audio_observation_results.put_nowait(
+        AudioInputHealthCheckResult(
+            input_name="Mic",
+            status="silent",
+            healthy=False,
+            short_message="silent",
+            details="silent",
+            peak_db=None,
+        )
+    )
     use_case = AutoRecordingUseCase(
         session_service=cast(RecordingSessionService, session),
         frame_processor=cast(FrameProcessingService, object()),
@@ -380,11 +694,15 @@ async def test_audio_health_refresh_failure_does_not_stop_power_monitoring() -> 
     use_case._power_monitor = SwitchPowerMonitor(state=SwitchPowerState.ARMED)
 
     await use_case._refresh_audio_health_for_power_state()
-    assert use_case._audio_preparation_task is not None
-    await use_case._audio_preparation_task
+    assert use_case._transcription_preparation_task is not None
+    await use_case._transcription_preparation_task
+    observed = await asyncio.wait_for(session.audio_health_events.get(), 0.5)
+    use_case._request_stop_audio_observation()
+    await use_case._reap_audio_observations()
 
     assert use_case.power_status() is SwitchPowerState.ARMED
-    assert session.transcription_preparations == 1
+    assert session.preparation_attempts == 1
+    assert observed.status == "silent"
 
 
 @pytest.mark.asyncio
@@ -419,13 +737,15 @@ async def test_main_loop_rearms_for_three_power_cycles() -> None:
     processor.use_case = use_case
 
     saw_power_off = await use_case._run_main_loop()
-    assert use_case._audio_preparation_task is not None
-    await use_case._audio_preparation_task
+    assert use_case._transcription_preparation_task is not None
+    await use_case._transcription_preparation_task
+    use_case._request_stop_audio_observation()
+    await use_case._reap_audio_observations()
 
     assert saw_power_off is True
     assert use_case.power_status() is SwitchPowerState.ARMED
     assert processor.power_off_events == 3
-    assert session.audio_health_checks == 7
+    assert session.audio_health_checks == 3
     assert session.transcription_preparations == 4
     assert phase_handlers.handle_frame_calls > 0
     assert processor.check_intervals == [
@@ -504,7 +824,10 @@ async def test_main_loop_replays_all_frames_used_to_confirm_power_on() -> None:
 
 
 @pytest.mark.asyncio
-async def test_capture_disconnect_does_not_publish_power_off() -> None:
+@pytest.mark.parametrize("emit_frame", [False, True])
+async def test_capture_disconnect_does_not_publish_power_off(
+    emit_frame: bool,
+) -> None:
     events: list[str] = []
 
     class _NoFrameProcessor:
@@ -512,7 +835,7 @@ async def test_capture_disconnect_does_not_publish_power_off() -> None:
             self.power_off_events = 0
 
         async def acquire_frame(self) -> Frame | None:
-            return None
+            return np.zeros((2, 2, 3), dtype=np.uint8) if emit_frame else None
 
         def publish_power_off_detected(self, final: bool = False) -> None:
             _ = final
@@ -547,6 +870,7 @@ async def test_capture_disconnect_does_not_publish_power_off() -> None:
     assert saw_power_off is False
     assert use_case.power_status() is SwitchPowerState.CAPTURE_DISCONNECTED
     assert processor.power_off_events == 0
+    assert phase_handlers.handled_frames == []
     assert session.audio_health_checks == 1
     assert session.transcription_preparations == 0
     assert capture_producer.intervals == [1.0]

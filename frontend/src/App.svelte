@@ -7,21 +7,36 @@
 
   let isCheckingInstallation = $state(true);
 
+  async function refreshInstallationStatus(): Promise<void> {
+    isCheckingInstallation = true;
+    setupState.set(null);
+    try {
+      await fetchInstallationStatus();
+    } finally {
+      isCheckingInstallation = false;
+    }
+  }
+
   onMount(async () => {
     setRenderMode('cpu');
     const renderModePromise = initializeRenderMode();
 
     // インストール状態をチェック
-    await fetchInstallationStatus();
-    isCheckingInstallation = false;
+    await refreshInstallationStatus();
 
     await renderModePromise;
   });
 
-  const showSetup = $derived(
-    !isCheckingInstallation && (!$setupState || !$setupState.is_completed)
+  const hasKnownServerPlatform = $derived(
+    $setupState?.server_platform === 'windows' || $setupState?.server_platform === 'macos'
   );
-  const showMainApp = $derived(!isCheckingInstallation && $setupState && $setupState.is_completed);
+  const showSetup = $derived(
+    !isCheckingInstallation && $setupState?.is_completed === false && hasKnownServerPlatform
+  );
+  const showMainApp = $derived(!isCheckingInstallation && $setupState?.is_completed === true);
+  const showSetupStatusUnavailable = $derived(
+    !isCheckingInstallation && !showSetup && !showMainApp
+  );
 </script>
 
 {#if isCheckingInstallation}
@@ -33,6 +48,13 @@
   <SetupApp />
 {:else if showMainApp}
   <MainApp />
+{:else if showSetupStatusUnavailable}
+  <div class="setup-status-unavailable" role="alert">
+    <p>サーバーのOS情報を確認できません。通信状況を確認して、もう一度お試しください。</p>
+    <button class="button button-primary" type="button" onclick={refreshInstallationStatus}>
+      再試行
+    </button>
+  </div>
 {/if}
 
 <style>
@@ -68,5 +90,21 @@
     margin: 0;
     font-size: 1.125rem;
     color: var(--text-secondary);
+  }
+
+  .setup-status-unavailable {
+    width: 100%;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 1rem;
+  }
+
+  .setup-status-unavailable p {
+    margin: 0;
+    color: var(--text-secondary);
+    text-align: center;
   }
 </style>

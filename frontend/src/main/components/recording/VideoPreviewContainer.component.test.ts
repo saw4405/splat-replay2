@@ -122,6 +122,7 @@ describe('VideoPreviewContainer.svelte', () => {
   afterEach(() => {
     cleanup();
     vi.useRealTimers();
+    vi.unstubAllGlobals();
     vi.restoreAllMocks();
   });
 
@@ -180,6 +181,94 @@ describe('VideoPreviewContainer.svelte', () => {
       input.toString().includes('/api/device/status')
     );
     expect(deviceStatusCalls).toHaveLength(1);
+  });
+
+  it('LAN の画像 API 表示ではカメラ許可案内を取得・表示しない', async () => {
+    vi.stubGlobal('location', { hostname: '192.168.1.20' });
+    fetchMock.mockImplementation(async (input: string | URL | Request) => {
+      const url = input.toString();
+      if (url.includes('/api/device/status')) {
+        return jsonResponse(true);
+      }
+      if (url.includes('/api/recorder/prepare')) {
+        return jsonResponse({ success: true });
+      }
+      throw new Error(`Unexpected fetch: ${url}`);
+    });
+
+    render(VideoPreviewContainer);
+
+    await waitFor(() => {
+      expect(
+        fetchMock.mock.calls.some(([input]) => input.toString().includes('/api/recorder/prepare'))
+      ).toBe(true);
+    });
+
+    expect(
+      fetchMock.mock.calls.some(([input]) =>
+        input.toString().includes('/api/settings/camera-permission-dialog')
+      )
+    ).toBe(false);
+    expect(screen.getByTestId('open-stub')).toHaveAttribute('data-open', 'false');
+  });
+
+  it('localhost の仮想カメラ表示では未確認の既存案内を表示する', async () => {
+    vi.stubGlobal('location', { hostname: 'localhost' });
+    fetchMock.mockImplementation(async (input: string | URL | Request) => {
+      const url = input.toString();
+      if (url.includes('/api/device/status')) {
+        return jsonResponse(true);
+      }
+      if (url.includes('/api/settings/camera-permission-dialog')) {
+        return jsonResponse({ shown: false });
+      }
+      if (url.includes('/api/recorder/prepare')) {
+        return jsonResponse({ success: true });
+      }
+      throw new Error(`Unexpected fetch: ${url}`);
+    });
+
+    render(VideoPreviewContainer);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('open-stub')).toHaveAttribute('data-open', 'true');
+    });
+    expect(
+      fetchMock.mock.calls.some(([input]) =>
+        input.toString().includes('/api/settings/camera-permission-dialog')
+      )
+    ).toBe(true);
+  });
+
+  it('接続後の切断を表示し、再接続確認を再開する', async () => {
+    vi.useFakeTimers();
+    getAutoRecorderStateMock
+      .mockResolvedValueOnce({ state: 'running', power_state: 'armed' })
+      .mockResolvedValue({ state: 'running', power_state: 'capture_disconnected' });
+    fetchMock.mockImplementation(async (input: string | URL | Request) => {
+      const url = input.toString();
+      if (url.includes('/api/device/status')) {
+        return jsonResponse(true);
+      }
+      if (url.includes('/api/settings/camera-permission-dialog')) {
+        return jsonResponse({ shown: true });
+      }
+      if (url.includes('/api/recorder/prepare')) {
+        return jsonResponse({ success: true });
+      }
+      throw new Error(`Unexpected fetch: ${url}`);
+    });
+
+    render(VideoPreviewContainer);
+    await vi.advanceTimersByTimeAsync(100);
+    await vi.advanceTimersByTimeAsync(1500);
+
+    expect(screen.getByText('キャプチャーデバイスが接続されていません')).toBeInTheDocument();
+    await vi.advanceTimersByTimeAsync(500);
+    const deviceStatusCalls = fetchMock.mock.calls.filter(([input]) =>
+      input.toString().includes('/api/device/status')
+    );
+    expect(deviceStatusCalls).toHaveLength(2);
   });
 
   it('video_file モードでは追加の device status ポーリングをしない', async () => {
@@ -251,13 +340,13 @@ describe('VideoPreviewContainer.svelte', () => {
         healthy: false,
         input_name: 'MiraBox Capture',
         status: 'silent',
-        short_message: '音声入力なし',
+        short_message: '音量メーター未反応',
         details: 'OBS の入力「MiraBox Capture」の音量メーターが振れていません。録画は継続します。',
       },
     });
 
     const warning = await screen.findByTestId('audio-health-warning');
-    expect(warning).toHaveTextContent('音声入力なし');
+    expect(warning).toHaveTextContent('音量メーター未反応');
     expect(warning).not.toHaveTextContent('音量メーターが振れていません');
     expect(warning).toHaveAttribute(
       'title',
@@ -290,7 +379,7 @@ describe('VideoPreviewContainer.svelte', () => {
       payload: {
         healthy: false,
         status: 'silent',
-        short_message: '音声入力なし',
+        short_message: '音量メーター未反応',
         details: '音声を確認できません。',
       },
     });

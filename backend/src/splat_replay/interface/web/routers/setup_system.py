@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException, status
+from starlette.concurrency import run_in_threadpool
 from structlog.stdlib import BoundLogger
 
 from splat_replay.application.services import (
@@ -33,7 +34,7 @@ def create_setup_system_router(
         async with handle_endpoint_error(
             logger, error_handler, "Failed to setup FFmpeg"
         ):
-            result = system_setup_service.setup_ffmpeg()
+            result = await run_in_threadpool(system_setup_service.setup_ffmpeg)
             return SystemCheckResponse(
                 is_installed=result.is_installed,
                 version=result.version,
@@ -49,7 +50,7 @@ def create_setup_system_router(
         async with handle_endpoint_error(
             logger, error_handler, "Failed to setup OBS"
         ):
-            result = system_setup_service.setup_obs()
+            result = await run_in_threadpool(system_setup_service.setup_obs)
             return SystemCheckResponse(
                 is_installed=result.is_installed,
                 version=result.version,
@@ -65,7 +66,25 @@ def create_setup_system_router(
         async with handle_endpoint_error(
             logger, error_handler, "Failed to setup Tesseract"
         ):
-            result = system_setup_service.setup_tesseract()
+            result = await run_in_threadpool(
+                system_setup_service.setup_tesseract
+            )
+            return SystemCheckResponse(
+                is_installed=result.is_installed,
+                version=result.version,
+                installation_path=str(result.installation_path)
+                if result.installation_path
+                else None,
+                error_message=result.error_message,
+            )
+
+    @router.post("/system/setup/flac", response_model=SystemCheckResponse)
+    async def setup_flac() -> SystemCheckResponse:
+        """FLAC のセットアップを実行する。"""
+        async with handle_endpoint_error(
+            logger, error_handler, "Failed to setup FLAC"
+        ):
+            result = await run_in_threadpool(system_setup_service.setup_flac)
             return SystemCheckResponse(
                 is_installed=result.is_installed,
                 version=result.version,
@@ -82,17 +101,33 @@ def create_setup_system_router(
             logger, error_handler, "Failed to check system software"
         ):
             if software == "obs":
-                result = system_check_service.check_obs_installation()
+                result = await run_in_threadpool(
+                    system_check_service.check_obs_installation
+                )
             elif software == "ffmpeg":
-                result = system_check_service.check_ffmpeg_installation()
+                result = await run_in_threadpool(
+                    system_check_service.check_ffmpeg_installation
+                )
             elif software == "tesseract":
-                result = system_check_service.check_tesseract_installation()
+                result = await run_in_threadpool(
+                    system_check_service.check_tesseract_installation
+                )
+            elif software == "flac":
+                result = await run_in_threadpool(
+                    system_check_service.check_flac_installation
+                )
             elif software == "ndi":
-                result = system_check_service.check_ndi_runtime_installation()
+                result = await run_in_threadpool(
+                    system_check_service.check_ndi_runtime_installation
+                )
             elif software == "font":
-                result = system_check_service.check_font_installation()
+                result = await run_in_threadpool(
+                    system_check_service.check_font_installation
+                )
             elif software == "youtube":
-                result = system_check_service.check_youtube_credentials()
+                result = await run_in_threadpool(
+                    system_check_service.check_youtube_credentials
+                )
             else:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,

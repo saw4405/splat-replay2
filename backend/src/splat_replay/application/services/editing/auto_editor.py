@@ -24,6 +24,7 @@ from splat_replay.application.interfaces import (
     ImageSelector,
     LoggerPort,
     PathsPort,
+    ThumbnailFontResolverPort,
     SubtitleEditorPort,
     TextToSpeechPort,
     VideoAssetRepositoryPort,
@@ -60,6 +61,7 @@ class AutoEditor:
         subtitle_editor: SubtitleEditorPort,
         image_selector: ImageSelector,
         text_to_speech: TextToSpeechPort,
+        font_resolver: ThumbnailFontResolverPort,
         repo: VideoAssetRepositoryPort,
         file_system: FileSystemPort,
         progress: ProgressReporter,
@@ -79,7 +81,7 @@ class AutoEditor:
             logger, config, video_editor
         )
         self.thumbnail_generator = ThumbnailGenerator(
-            logger, paths, image_selector, file_system
+            logger, paths, image_selector, file_system, font_resolver
         )
         self.subtitle_processor = SubtitleProcessor(
             logger,

@@ -11,7 +11,10 @@ function commandKey(command: string, args: string[]): string {
   return [command, ...args].join('\0');
 }
 
-function createHealthyCommands(overrides: Record<string, CommandResult> = {}) {
+function createHealthyCommands(overrides: Record<string, CommandResult> = {}, platform = 'win32') {
+  const venvDirectory = platform === 'win32' ? 'Scripts' : 'bin';
+  const suffix = platform === 'win32' ? '.exe' : '';
+  const backendTool = (name: string) => `backend/.venv/${venvDirectory}/${name}${suffix}`;
   const commands: Record<string, CommandResult> = {
     [commandKey('git', ['--version'])]: { status: 0, stdout: 'git version 2.53.0.windows.1\n' },
     [commandKey('git', ['lfs', 'version'])]: { status: 0, stdout: 'git-lfs/3.7.1\n' },
@@ -30,29 +33,32 @@ function createHealthyCommands(overrides: Record<string, CommandResult> = {}) {
     },
     [commandKey('git', ['status', '--short'])]: { status: 0, stdout: '' },
     [commandKey('uv', ['--version'])]: { status: 0, stdout: 'uv 0.5.29\n' },
-    [commandKey('backend/.venv/Scripts/python.exe', ['--version'])]: {
+    [commandKey(backendTool('python'), ['--version'])]: {
       status: 0,
       stdout: 'Python 3.13.2\n',
     },
-    [commandKey('backend/.venv/Scripts/python.exe', ['-m', 'pre_commit', '--version'])]: {
+    [commandKey(backendTool('python'), ['-m', 'pre_commit', '--version'])]: {
       status: 0,
       stdout: 'pre-commit 4.0.0\n',
     },
-    [commandKey('backend/.venv/Scripts/ruff.exe', ['--version'])]: {
+    [commandKey(backendTool('ruff'), ['--version'])]: {
       status: 0,
       stdout: 'ruff 0.12.0\n',
     },
-    [commandKey('backend/.venv/Scripts/ty.exe', ['--version'])]: {
+    [commandKey(backendTool('ty'), ['--version'])]: {
       status: 0,
       stdout: 'ty 0.0.4\n',
     },
-    [commandKey('backend/.venv/Scripts/lint-imports.exe', ['--help'])]: {
+    [commandKey(backendTool('lint-imports'), ['--help'])]: {
       status: 0,
       stdout: 'Usage: lint-imports [OPTIONS]\n',
     },
     [commandKey('node', ['--version'])]: { status: 0, stdout: 'v24.12.0\n' },
     [commandKey('npm', ['--version'])]: { status: 0, stdout: '11.6.2\n' },
-    [commandKey('task.exe', ['--version'])]: { status: 0, stdout: '3.45.5\n' },
+    [commandKey(platform === 'win32' ? 'task.exe' : 'task', ['--version'])]: {
+      status: 0,
+      stdout: '3.45.5\n',
+    },
     ...overrides,
   };
   return async (command: string, args: string[]): Promise<CommandResult> => {
@@ -94,13 +100,15 @@ async function runDoctorWith(
     commands?: Record<string, CommandResult>;
     files?: Record<string, string | null>;
     pointerFiles?: string[];
+    platform?: string;
   } = {}
 ) {
   const { runDoctor } = await import('../../../scripts/dev-doctor.mjs');
   const files = createHealthyFiles(overrides.files);
   return runDoctor({
     repoRoot: 'C:/repo/splat-replay2',
-    runCommand: createHealthyCommands(overrides.commands),
+    platform: overrides.platform ?? 'win32',
+    runCommand: createHealthyCommands(overrides.commands, overrides.platform),
     fileExists: files.exists,
     readTextFile: files.readText,
     ensureWritableDirectory: async () => undefined,
@@ -109,6 +117,16 @@ async function runDoctorWith(
 }
 
 describe('dev doctor', () => {
+  it('checks POSIX virtualenv tools and task on macOS', async () => {
+    const report = await runDoctorWith({ platform: 'darwin' });
+
+    expect(report.status).toBe('pass');
+    expect(report.checks).toContainEqual(
+      expect.objectContaining({ id: 'backend-python', status: 'pass' })
+    );
+    expect(report.checks).toContainEqual(expect.objectContaining({ id: 'task', status: 'pass' }));
+  });
+
   it('fails when core.hooksPath is missing', async () => {
     const report = await runDoctorWith({
       commands: {

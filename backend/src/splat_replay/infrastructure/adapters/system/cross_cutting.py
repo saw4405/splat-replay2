@@ -136,7 +136,12 @@ class FileSystemPathsAdapter(PathsPort):
         return paths.THUMBNAIL_ASSETS_DIR
 
     def get_thumbnail_asset(self, filename: str) -> Path:
-        return paths.thumbnail_asset(filename)
+        user_asset = paths.thumbnail_asset(filename)
+        if paths.IS_MACOS_FROZEN and not user_asset.is_file():
+            bundled_asset = paths.ASSETS_DIR / "thumbnail" / filename
+            if bundled_asset.is_file():
+                return bundled_asset
+        return user_asset
 
 
 class LocalFileSystemAdapter(FileSystemPort):

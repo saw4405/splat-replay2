@@ -300,8 +300,9 @@ def test_start_dev_server_uses_lan_hosts_when_remote_access_enabled(
     start_dev_server()
 
     frontend_call, backend_call = popen_calls
+    expected_npm = "npm.cmd" if os.name == "nt" else "npm"
     assert frontend_call["args"] == [
-        "npm.cmd",
+        expected_npm,
         "run",
         "dev",
         "--",

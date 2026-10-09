@@ -18,6 +18,8 @@ Windows 11 PC 上でスプラトゥーン 3 のプレイ映像を録画・確認
 | 対応 OS      | Windows 11 64bit                                 |
 | 主な外部連携 | HDMI / USB / OBS Studio / YouTube API / Groq API |
 
+Apple Silicon macOS 版は開発・検証用です。2026-10-02〜03 に実ゲームの録画・編集・アップロードや matching 表示など一部の導線を利用者が確認しましたが、受け入れ全体は未完了のため対応 OS の範囲には含めません。確認範囲と未確認事項は[macOS 対応調査](macos_support_plan.md)を参照してください。
+
 ---
 
 ## 3. システム境界と責務分担

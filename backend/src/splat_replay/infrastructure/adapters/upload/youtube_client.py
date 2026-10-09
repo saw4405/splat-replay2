@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import asyncio
 import gc
+import json
 import pickle
+import sys
 from pathlib import Path
 from typing import Any, Callable, List, Optional, Union, cast
 
@@ -31,6 +33,7 @@ from splat_replay.domain.exceptions import (
     ResourceNotFoundError,
 )
 from splat_replay.infrastructure import filesystem as paths
+from splat_replay.infrastructure.adapters.upload import macos_keychain
 
 Credentials = Union[
     Credentials1,
@@ -57,11 +60,18 @@ class YouTubeClient(UploadPort, AuthenticatedClientPort):
         self._youtube: Any = None
 
     def _load_credentials(self) -> Optional[Credentials]:
-        """認証情報をファイルからロードする
+        """OS ごとの保存先から認証情報をロードする。
 
         Returns:
             Optional[Credentials]: 認証情報が存在する場合はCredentials、それ以外はNone
         """
+        if sys.platform == "darwin":
+            token_json = macos_keychain.get_youtube_oauth_token()
+            if token_json is None:
+                return None
+            info = cast(dict[str, Any], json.loads(token_json))
+            return Credentials2.from_authorized_user_info(info, self.SCOPES)
+
         if not self.TOKEN_FILE.exists():
             return None
 
@@ -70,11 +80,19 @@ class YouTubeClient(UploadPort, AuthenticatedClientPort):
         return cast(Optional[Credentials], data)
 
     def _save_credentials(self, credentials: Credentials) -> None:
-        """認証情報をファイルに保存する
+        """OS ごとの保存先に認証情報を保存する。
 
         Args:
             credentials (Credentials): 保存する認証情報
         """
+        if sys.platform == "darwin":
+            if not isinstance(credentials, Credentials2):
+                raise TypeError(
+                    "macOS Keychain は Google OAuth user credentials のみ保存できます"
+                )
+            macos_keychain.set_youtube_oauth_token(credentials.to_json())
+            return
+
         with open(self.TOKEN_FILE, "wb") as token_file:
             pickle.dump(credentials, token_file)
 
@@ -101,18 +119,21 @@ class YouTubeClient(UploadPort, AuthenticatedClientPort):
         """
         credentials = self._load_credentials()
         if credentials:
-            try:
-                has_refresh_token = (
-                    isinstance(credentials, Credentials2)
-                    and credentials.refresh_token is not None
-                )
-                if credentials.expired and has_refresh_token:
+            has_refresh_token = (
+                isinstance(credentials, Credentials2)
+                and credentials.refresh_token is not None
+            )
+            if credentials.expired and has_refresh_token:
+                try:
                     credentials.refresh(Request())
+                except Exception:
+                    # 認証更新できなかった場合は新規認証を行う
+                    pass
+                else:
                     self._save_credentials(credentials)
+                    return credentials
+            else:
                 return credentials
-            except Exception:
-                # 認証更新できなかった場合は新規認証を行う
-                pass
 
         self._ensure_credentials_file()
 

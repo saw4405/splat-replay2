@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 from fastapi import APIRouter
+from starlette.concurrency import run_in_threadpool
 from structlog.stdlib import BoundLogger
 
 from splat_replay.application.services import (
@@ -70,7 +71,9 @@ def create_setup_config_router(
         async with handle_endpoint_error(
             logger, error_handler, "Failed to list video devices"
         ):
-            devices = device_checker.list_video_capture_devices()
+            devices = await run_in_threadpool(
+                device_checker.list_video_capture_devices
+            )
             return VideoDeviceListResponse(devices=devices)
 
     @router.get("/devices/audio", response_model=MicrophoneDeviceListResponse)
@@ -79,7 +82,9 @@ def create_setup_config_router(
         async with handle_endpoint_error(
             logger, error_handler, "Failed to list microphone devices"
         ):
-            devices = device_checker.list_microphone_devices()
+            devices = await run_in_threadpool(
+                device_checker.list_microphone_devices
+            )
             return MicrophoneDeviceListResponse(devices=devices)
 
     @router.post(

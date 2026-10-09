@@ -6,6 +6,7 @@ import contextlib
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Request
+from splat_replay.application.interfaces import DesktopNotificationPort
 from starlette.middleware.base import RequestResponseEndpoint
 from starlette.responses import Response, JSONResponse
 from splat_replay.application.services.system.desktop_maintenance import (
@@ -48,7 +49,11 @@ def _frontend_file_response(file_path: str | Path) -> FileResponse:
     return FileResponse(path)
 
 
-def create_app(server: WebAPIServer, enable_lifespan: bool = True) -> FastAPI:
+def create_app(
+    server: WebAPIServer,
+    enable_lifespan: bool = True,
+    macos_notification_sender: DesktopNotificationPort | None = None,
+) -> FastAPI:
     """FastAPIアプリケーションを作成する。
 
     Args:
@@ -132,15 +137,18 @@ def create_app(server: WebAPIServer, enable_lifespan: bool = True) -> FastAPI:
             yield
         finally:
             # Shutdown
-            if maintenance_task is not None:
-                maintenance_task.cancel()
+            try:
+                if maintenance_task is not None:
+                    maintenance_task.cancel()
+                    with contextlib.suppress(asyncio.CancelledError):
+                        await maintenance_task
+                await auto_recording_use_case.stop_background()
+                auto_process_task.cancel()
                 with contextlib.suppress(asyncio.CancelledError):
-                    await maintenance_task
-            await auto_recording_use_case.stop_background()
-            auto_process_task.cancel()
-            with contextlib.suppress(asyncio.CancelledError):
-                await auto_process_task
-            auto_recording_use_case.maintenance_check = None
+                    await auto_process_task
+                auto_recording_use_case.maintenance_check = None
+            finally:
+                await server.video_preview_service.close()
 
     # テスト時は lifespan を無効化
     if enable_lifespan:
@@ -232,7 +240,9 @@ def create_app(server: WebAPIServer, enable_lifespan: bool = True) -> FastAPI:
     app.include_router(file_serving_router)
 
     # 通知ルーターを登録
-    notifications_router = create_notifications_router(server.assets_dir)
+    notifications_router = create_notifications_router(
+        server.assets_dir, macos_notification_sender
+    )
     app.include_router(notifications_router)
 
     metadata_router = create_metadata_router(server)

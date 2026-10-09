@@ -1,4 +1,5 @@
 import asyncio
+from collections.abc import AsyncGenerator
 from contextlib import suppress
 from pathlib import Path
 from typing import Awaitable, Callable, List, Optional, Tuple
@@ -157,6 +158,16 @@ class RecorderWithTranscription(RecorderWithTranscriptionPort):
             input_name,
             sample_duration_seconds=sample_duration_seconds,
         )
+
+    async def observe_audio_input_health(
+        self, input_name: str
+    ) -> AsyncGenerator[AudioInputHealthCheckResult, None]:
+        observations = self.recorder.observe_audio_input_health(input_name)
+        try:
+            async for result in observations:
+                yield result
+        finally:
+            await observations.aclose()
 
     async def _notify_status_change(self, status: RecorderStatus) -> None:
         """録画状態変化をリスナーに通知する。"""

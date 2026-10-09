@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import asyncio
+from collections.abc import AsyncGenerator
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, cast
@@ -13,6 +15,9 @@ from splat_replay.application.interfaces.data import (
 from splat_replay.domain.config import OBSSettings
 from splat_replay.infrastructure.adapters.obs.recorder_controller import (
     OBSRecorderController,
+)
+from splat_replay.infrastructure.adapters.obs.websocket_client import (
+    InputVolumeMeterSample,
 )
 
 
@@ -116,39 +121,31 @@ class _RunningProcessStub:
         return True
 
 
-class _RecoveryProcessStub(_RunningProcessStub):
-    def __init__(self, restarted: bool) -> None:
-        self.restarted = restarted
-        self.restart_calls = 0
-
-    async def restart_for_recovery(self) -> bool:
-        self.restart_calls += 1
-        return self.restarted
-
-
-class _RecoveryWebSocketStub:
-    def __init__(self) -> None:
-        self.is_connected = True
-        self.disconnect_calls = 0
-        self.connect_calls = 0
-
-    async def disconnect(self) -> None:
-        self.disconnect_calls += 1
-        self.is_connected = False
-
-    async def connect(self) -> None:
-        self.connect_calls += 1
-        self.is_connected = True
-
-
 class _OBSWebSocketStub:
     def __init__(
-        self, meter_events: list[dict[str, object]] | None = None
+        self,
+        meter_events: list[dict[str, object]] | None = None,
+        *,
+        inputs: list[dict[str, object]] | None = None,
+        input_settings: dict[str, dict[str, object]] | None = None,
+        property_items: dict[str, list[dict[str, object]]] | None = None,
+        failed_requests: set[str] | None = None,
     ) -> None:
         self.is_connected = False
         self.requests: list[tuple[str, dict[str, object]]] = []
         self.meter_events = meter_events or []
         self.meter_checks: list[tuple[str, float]] = []
+        self.inputs = inputs or [
+            {"inputName": "MiraBox", "inputKind": "dshow_input"}
+        ]
+        self.input_settings = input_settings or {
+            "MiraBox": {
+                "video_device_id": "MiraBox Capture:\\\\?\\usb#vid",
+                "last_video_device_id": "MiraBox Capture:\\\\?\\usb#vid",
+            }
+        }
+        self.property_items = property_items or {}
+        self.failed_requests = failed_requests or set()
 
     async def connect(self) -> None:
         self.is_connected = True
@@ -161,28 +158,19 @@ class _OBSWebSocketStub:
     ) -> _OBSResponseStub:
         data = request_data or {}
         self.requests.append((request_type, data))
+        if request_type in self.failed_requests:
+            raise RuntimeError(f"OBS request failed: {request_type}")
         if request_type == "GetInputList":
-            return _OBSResponseStub(
-                {
-                    "inputs": [
-                        {
-                            "inputName": "MiraBox",
-                            "inputKind": "dshow_input",
-                        }
-                    ]
-                }
-            )
+            return _OBSResponseStub({"inputs": self.inputs})
         if request_type == "GetInputSettings":
+            input_name = str(data.get("inputName"))
             return _OBSResponseStub(
-                {
-                    "inputKind": "dshow_input",
-                    "inputSettings": {
-                        "video_device_id": "MiraBox Capture:\\\\?\\usb#vid",
-                        "last_video_device_id": (
-                            "MiraBox Capture:\\\\?\\usb#vid"
-                        ),
-                    },
-                }
+                {"inputSettings": self.input_settings.get(input_name, {})}
+            )
+        if request_type == "GetInputPropertiesListPropertyItems":
+            input_name = str(data.get("inputName"))
+            return _OBSResponseStub(
+                {"propertyItems": self.property_items.get(input_name, [])}
             )
         if request_type == "GetInputMute":
             return _OBSResponseStub({"inputMuted": False})
@@ -239,28 +227,50 @@ class _OBSRecorderControllerMeterProbe(OBSRecorderController):
         self._ws_client = cast(Any, ws_client)
 
 
-class _OBSRecorderControllerRecoveryProbe(OBSRecorderController):
+class _ChangingSettingsWebSocketStub(_OBSWebSocketStub):
     def __init__(
-        self,
-        *,
-        record_active: bool,
-        process_manager: _RecoveryProcessStub,
-        ws_client: _RecoveryWebSocketStub,
+        self, windows: list[dict[str, InputVolumeMeterSample]]
     ) -> None:
         super().__init__(
-            OBSSettings(websocket_password=SecretStr("")),
-            cast(Any, _LoggerStub()),
+            inputs=[
+                {
+                    "inputName": "Mic",
+                    "inputKind": "wasapi_input_capture",
+                }
+            ],
+            input_settings={"Mic": {"device_id": "old"}},
         )
-        self._record_active = record_active
-        self._process_manager = cast(Any, process_manager)
-        self._ws_client = cast(Any, ws_client)
-        self.setup_calls = 0
+        self._windows = windows
+        self.settings_reads = 0
+        self.meter_windows_closed = False
 
-    async def _get_record_status(self) -> tuple[bool, bool]:
-        return self._record_active, False
+    async def request(
+        self,
+        request_type: str,
+        idempotent: bool = False,
+        request_data: dict[str, object] | None = None,
+    ) -> _OBSResponseStub:
+        if request_type == "GetInputSettings":
+            self.settings_reads += 1
+            device_id = "old" if self.settings_reads == 1 else "new"
+            return _OBSResponseStub(
+                {"inputSettings": {"device_id": device_id}}
+            )
+        return await super().request(
+            request_type,
+            idempotent=idempotent,
+            request_data=request_data,
+        )
 
-    async def setup(self) -> None:
-        self.setup_calls += 1
+    async def iter_input_volume_meter_windows(
+        self, *, window_seconds: float
+    ) -> AsyncGenerator[dict[str, InputVolumeMeterSample], None]:
+        _ = window_seconds
+        try:
+            for window in self._windows:
+                yield window
+        finally:
+            self.meter_windows_closed = True
 
 
 def _silent_result() -> AudioInputHealthCheckResult:
@@ -268,7 +278,7 @@ def _silent_result() -> AudioInputHealthCheckResult:
         input_name="MiraBox Capture",
         status="silent",
         healthy=False,
-        short_message="音声入力なし",
+        short_message="音量メーター未反応",
         details=(
             "OBS の入力「MiraBox Capture」の音量メーターが振れていません。"
             "録画は継続しますが、動画に音声が入らない可能性があります。"
@@ -291,6 +301,224 @@ async def test_obs_audio_health_resolves_dshow_input_by_device_name() -> None:
     assert result.input_name == "MiraBox"
     assert ("GetInputSettings", {"inputName": "MiraBox"}) in ws_client.requests
     assert ("GetInputMute", {"inputName": "MiraBox"}) in ws_client.requests
+
+
+@pytest.mark.asyncio
+async def test_obs_audio_health_keeps_exact_name_for_other_input_kinds() -> (
+    None
+):
+    ws_client = _OBSWebSocketStub(
+        meter_events=[
+            {
+                "inputName": "MiraBox Capture",
+                "inputLevelsMul": [[0.04]],
+                "inputLevelsDb": [[-28.0]],
+            }
+        ],
+        inputs=[
+            {
+                "inputName": "MiraBox Capture",
+                "inputKind": "wasapi_input_capture",
+            }
+        ],
+    )
+    controller = _OBSRecorderControllerMeterProbe(ws_client)
+
+    result = await controller.check_audio_input_health(
+        "MiraBox Capture", sample_duration_seconds=0.1
+    )
+
+    assert result.status == "ok"
+    assert result.input_name == "MiraBox Capture"
+    assert ws_client.meter_checks == [("MiraBox Capture", 0.1)]
+
+
+@pytest.mark.asyncio
+async def test_obs_audio_health_treats_input_list_failure_as_unknown() -> None:
+    ws_client = _OBSWebSocketStub(failed_requests={"GetInputList"})
+    controller = _OBSRecorderControllerMeterProbe(ws_client)
+
+    result = await controller.check_audio_input_health(
+        "MiraBox Capture", sample_duration_seconds=0.1
+    )
+
+    assert result.healthy is False
+    assert result.status == "unknown"
+    assert ws_client.meter_checks == []
+
+
+@pytest.mark.asyncio
+async def test_obs_audio_health_resolves_matching_coreaudio_device() -> None:
+    device_id = "AppleUSBAudioEngine:MACROSILICON:MiraBox Capture:3100000:3"
+    ws_client = _OBSWebSocketStub(
+        meter_events=[
+            {
+                "inputName": "音声入力キャプチャ",
+                "inputLevelsMul": [[0.04, 0.06]],
+                "inputLevelsDb": [[-28.0, -24.0]],
+            }
+        ],
+        inputs=[
+            {"inputName": "MiraBox", "inputKind": "macos-avcapture"},
+            {
+                "inputName": "音声入力キャプチャ",
+                "inputKind": "coreaudio_input_capture",
+            },
+            {"inputName": "別マイク", "inputKind": "coreaudio_input_capture"},
+        ],
+        input_settings={
+            "MiraBox": {"device": "0x3100000534d2109"},
+            "音声入力キャプチャ": {"device_id": device_id},
+            "別マイク": {"device_id": "default"},
+        },
+        property_items={
+            "音声入力キャプチャ": [
+                {
+                    "itemName": "MiraBox Capture",
+                    "itemValue": device_id,
+                    "itemEnabled": True,
+                }
+            ]
+        },
+    )
+    controller = _OBSRecorderControllerMeterProbe(ws_client)
+
+    result = await controller.check_audio_input_health(
+        "MiraBox Capture", sample_duration_seconds=0.1
+    )
+
+    assert result.healthy is True
+    assert result.status == "ok"
+    assert result.input_name == "音声入力キャプチャ"
+    assert ws_client.meter_checks == [("音声入力キャプチャ", 0.1)]
+    assert (
+        "GetInputPropertiesListPropertyItems",
+        {
+            "inputName": "音声入力キャプチャ",
+            "propertyName": "device_id",
+        },
+    ) in ws_client.requests
+
+
+@pytest.mark.asyncio
+async def test_obs_audio_health_does_not_measure_macos_video_source() -> None:
+    ws_client = _OBSWebSocketStub(
+        inputs=[{"inputName": "MiraBox", "inputKind": "macos-avcapture"}],
+        input_settings={"MiraBox": {"device_name": "MiraBox Capture"}},
+    )
+    controller = _OBSRecorderControllerMeterProbe(ws_client)
+
+    result = await controller.check_audio_input_health(
+        "MiraBox Capture", sample_duration_seconds=0.1
+    )
+
+    assert result.healthy is False
+    assert result.status == "unknown"
+    assert ws_client.meter_checks == []
+
+
+@pytest.mark.asyncio
+async def test_obs_audio_health_treats_ambiguous_coreaudio_devices_as_unknown() -> (
+    None
+):
+    ws_client = _OBSWebSocketStub(
+        inputs=[
+            {"inputName": "音声1", "inputKind": "coreaudio_input_capture"},
+            {"inputName": "音声2", "inputKind": "coreaudio_input_capture"},
+        ],
+        input_settings={
+            "音声1": {"device_id": "device-id-1"},
+            "音声2": {"device_id": "device-id-2"},
+        },
+        property_items={
+            "音声1": [
+                {
+                    "itemName": "MiraBox Capture",
+                    "itemValue": "device-id-1",
+                    "itemEnabled": True,
+                }
+            ],
+            "音声2": [
+                {
+                    "itemName": "MiraBox Capture",
+                    "itemValue": "device-id-2",
+                    "itemEnabled": True,
+                }
+            ],
+        },
+    )
+    controller = _OBSRecorderControllerMeterProbe(ws_client)
+
+    result = await controller.check_audio_input_health(
+        "MiraBox Capture", sample_duration_seconds=0.1
+    )
+
+    assert result.healthy is False
+    assert result.status == "unknown"
+    assert ws_client.meter_checks == []
+
+
+@pytest.mark.asyncio
+async def test_obs_audio_health_treats_duplicate_coreaudio_device_names_as_unknown() -> (
+    None
+):
+    ws_client = _OBSWebSocketStub(
+        inputs=[
+            {
+                "inputName": "音声入力キャプチャ",
+                "inputKind": "coreaudio_input_capture",
+            }
+        ],
+        input_settings={"音声入力キャプチャ": {"device_id": "device-id-1"}},
+        property_items={
+            "音声入力キャプチャ": [
+                {
+                    "itemName": "MiraBox Capture",
+                    "itemValue": "device-id-1",
+                    "itemEnabled": True,
+                },
+                {
+                    "itemName": "MiraBox Capture",
+                    "itemValue": "device-id-2",
+                    "itemEnabled": True,
+                },
+            ]
+        },
+    )
+    controller = _OBSRecorderControllerMeterProbe(ws_client)
+
+    result = await controller.check_audio_input_health(
+        "MiraBox Capture", sample_duration_seconds=0.1
+    )
+
+    assert result.healthy is False
+    assert result.status == "unknown"
+    assert ws_client.meter_checks == []
+
+
+@pytest.mark.asyncio
+async def test_obs_audio_health_treats_coreaudio_device_lookup_failure_as_unknown() -> (
+    None
+):
+    ws_client = _OBSWebSocketStub(
+        inputs=[
+            {
+                "inputName": "音声入力キャプチャ",
+                "inputKind": "coreaudio_input_capture",
+            }
+        ],
+        input_settings={"音声入力キャプチャ": {"device_id": "device-id"}},
+        failed_requests={"GetInputPropertiesListPropertyItems"},
+    )
+    controller = _OBSRecorderControllerMeterProbe(ws_client)
+
+    result = await controller.check_audio_input_health(
+        "MiraBox Capture", sample_duration_seconds=0.1
+    )
+
+    assert result.healthy is False
+    assert result.status == "unknown"
+    assert ws_client.meter_checks == []
 
 
 @pytest.mark.asyncio
@@ -336,7 +564,7 @@ async def test_obs_audio_health_warns_when_meter_stays_silent() -> None:
 
     assert result.healthy is False
     assert result.status == "silent"
-    assert result.short_message == "音声入力なし"
+    assert result.short_message == "音量メーター未反応"
     assert result.input_name == "MiraBox"
     assert result.peak_db == pytest.approx(-72.0)
 
@@ -345,7 +573,7 @@ async def test_obs_audio_health_warns_when_meter_stays_silent() -> None:
 async def test_obs_audio_health_warns_when_meter_events_are_unavailable() -> (
     None
 ):
-    controller = _OBSRecorderControllerProbe(_OBSWebSocketStub(), sample=None)
+    controller = _OBSRecorderControllerMeterProbe(_OBSWebSocketStub())
 
     result = await controller.check_audio_input_health(
         "MiraBox", sample_duration_seconds=0.1
@@ -358,7 +586,7 @@ async def test_obs_audio_health_warns_when_meter_events_are_unavailable() -> (
 
 
 @pytest.mark.asyncio
-async def test_obs_audio_health_treats_empty_meter_levels_as_silence() -> None:
+async def test_obs_audio_health_treats_empty_meter_levels_as_silent() -> None:
     controller = _OBSRecorderControllerMeterProbe(
         _OBSWebSocketStub(
             meter_events=[
@@ -376,57 +604,43 @@ async def test_obs_audio_health_treats_empty_meter_levels_as_silence() -> None:
 
     assert result.healthy is False
     assert result.status == "silent"
+    assert result.short_message == "音量メーター未反応"
 
 
 @pytest.mark.asyncio
-async def test_obs_audio_recovery_restarts_matching_idle_process() -> None:
-    process_manager = _RecoveryProcessStub(restarted=True)
-    ws_client = _RecoveryWebSocketStub()
-    controller = _OBSRecorderControllerRecoveryProbe(
-        record_active=False,
-        process_manager=process_manager,
-        ws_client=ws_client,
+async def test_observer_rechecks_input_assignment_and_closes_meter_stream() -> (
+    None
+):
+    ws_client = _ChangingSettingsWebSocketStub(
+        [
+            {
+                "Mic": InputVolumeMeterSample(
+                    event_count=1,
+                    numeric_mul_samples=1,
+                    numeric_db_samples=1,
+                    peak_mul=0.5,
+                    peak_db=-6.0,
+                )
+            },
+            {
+                "Mic": InputVolumeMeterSample(
+                    event_count=1,
+                    numeric_mul_samples=0,
+                    numeric_db_samples=0,
+                    peak_mul=None,
+                    peak_db=None,
+                )
+            },
+        ]
     )
+    controller = _OBSRecorderControllerMeterProbe(ws_client)
+    observations = controller.observe_audio_input_health("Mic")
 
-    restarted = await controller.try_recover_audio_input()
+    stale_window = await asyncio.wait_for(anext(observations), timeout=0.5)
+    current_window = await asyncio.wait_for(anext(observations), timeout=0.5)
+    await asyncio.wait_for(observations.aclose(), timeout=2.0)
 
-    assert restarted is True
-    assert process_manager.restart_calls == 1
-    assert ws_client.disconnect_calls == 1
-    assert controller.setup_calls == 1
-
-
-@pytest.mark.asyncio
-async def test_obs_audio_recovery_never_restarts_while_recording() -> None:
-    process_manager = _RecoveryProcessStub(restarted=True)
-    ws_client = _RecoveryWebSocketStub()
-    controller = _OBSRecorderControllerRecoveryProbe(
-        record_active=True,
-        process_manager=process_manager,
-        ws_client=ws_client,
-    )
-
-    restarted = await controller.try_recover_audio_input()
-
-    assert restarted is False
-    assert process_manager.restart_calls == 0
-    assert ws_client.disconnect_calls == 0
-
-
-@pytest.mark.asyncio
-async def test_obs_audio_recovery_preserves_external_process() -> None:
-    process_manager = _RecoveryProcessStub(restarted=False)
-    ws_client = _RecoveryWebSocketStub()
-    controller = _OBSRecorderControllerRecoveryProbe(
-        record_active=False,
-        process_manager=process_manager,
-        ws_client=ws_client,
-    )
-
-    restarted = await controller.try_recover_audio_input()
-
-    assert restarted is False
-    assert process_manager.restart_calls == 1
-    assert ws_client.disconnect_calls == 1
-    assert ws_client.connect_calls == 1
-    assert controller.setup_calls == 0
+    assert stale_window.status == "unknown"
+    assert current_window.status == "silent"
+    assert ws_client.settings_reads == 3
+    assert ws_client.meter_windows_closed is True

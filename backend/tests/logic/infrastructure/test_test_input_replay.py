@@ -41,6 +41,13 @@ from splat_replay.infrastructure.test_input import (
 )
 
 
+@pytest.fixture(autouse=True)
+def _use_test_settings_path_environment(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("SPLAT_REPLAY_SETTINGS_FILE", raising=False)
+
+
 class DummyLogger:
     def debug(self, *args, **kwargs) -> None:
         return None

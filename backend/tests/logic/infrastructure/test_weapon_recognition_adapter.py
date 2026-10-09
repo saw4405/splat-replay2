@@ -29,7 +29,7 @@ from splat_replay.infrastructure.adapters.weapon_detection.team_color import (
 )
 
 FIXTURE_DIR = (
-    Path(__file__).resolve().parents[3] / "fixtures" / "weapon_detection"
+    Path(__file__).resolve().parents[2] / "fixtures" / "weapon_detection"
 )
 VISIBLE_FIXTURE_DIR = FIXTURE_DIR / "weapon_icons_visible"
 MATCHING_CONFIG_PATH = (

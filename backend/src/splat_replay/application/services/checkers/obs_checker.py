@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 from typing import Optional
 
@@ -34,10 +35,17 @@ class OBSChecker:
         self._logger.info("Checking OBS installation")
 
         # OBSの実行ファイルパスを確認
-        common_paths = [
-            Path("C:/Program Files/obs-studio/bin/64bit/obs64.exe"),
-            Path("C:/Program Files (x86)/obs-studio/bin/64bit/obs64.exe"),
-        ]
+        common_paths = (
+            [
+                Path("/Applications/OBS.app/Contents/MacOS/OBS"),
+                Path.home() / "Applications/OBS.app/Contents/MacOS/OBS",
+            ]
+            if sys.platform == "darwin"
+            else [
+                Path("C:/Program Files/obs-studio/bin/64bit/obs64.exe"),
+                Path("C:/Program Files (x86)/obs-studio/bin/64bit/obs64.exe"),
+            ]
+        )
 
         for path in common_paths:
             if self._file_system.is_file(path):

@@ -14,20 +14,13 @@
   } from './grouping';
   import type { FieldValue, SettingField, SettingsResponse } from './types';
   import { calibrateAudio } from '../../../setup/stores/config';
+  import { getSetupPlatform } from '../../../setup/platform';
   import { fetchRemoteAccessStatus, type RemoteAccessStatus } from '../../api/remoteAccess';
   import SpeechTestDialog from './SpeechTestDialog.svelte';
 
   const REMOTE_ACCESS_STATUS_REFRESH_INTERVAL_MS = 5000;
-  const REMOTE_ACCESS_FALLBACK_PORT = 5173;
-  const REMOTE_ACCESS_FIREWALL_COMMAND = [
-    'New-NetFirewallRule `',
-    '  -DisplayName "Allow TCP 5173 Inbound from LocalSubnet" `',
-    '  -Direction Inbound `',
-    '  -Action Allow `',
-    '  -Protocol TCP `',
-    '  -LocalPort 5173 `',
-    '  -RemoteAddress LocalSubnet',
-  ].join('\n');
+  const POWERSHELL_LINE_CONTINUATION = '`';
+  const setupPlatform = getSetupPlatform();
 
   interface Props {
     open?: boolean;
@@ -75,13 +68,32 @@
   const remoteAccessEnabledForSummary = $derived(
     remoteAccessEnabledDraft ?? remoteAccessStatus?.enabled ?? false
   );
+  const remoteAccessPendingSave = $derived(
+    remoteAccessStatus !== null &&
+      remoteAccessEnabledDraft !== null &&
+      remoteAccessEnabledDraft !== remoteAccessStatus.enabled
+  );
   const remoteAccessRestartRequired = $derived(
     remoteAccessStatus
       ? remoteAccessEnabledForSummary !== isRemoteAccessLanBound(remoteAccessStatus.bind_host)
       : false
   );
+  const remoteAccessPort = $derived(resolveRemoteAccessPort(remoteAccessStatus));
+  const remoteAccessFirewallCommand = $derived(
+    remoteAccessPort === null
+      ? null
+      : [
+          'New-NetFirewallRule `',
+          `  -DisplayName "Allow TCP ${remoteAccessPort} Inbound from LocalSubnet" ${POWERSHELL_LINE_CONTINUATION}`,
+          '  -Direction Inbound `',
+          '  -Action Allow `',
+          '  -Protocol TCP `',
+          `  -LocalPort ${remoteAccessPort} ${POWERSHELL_LINE_CONTINUATION}`,
+          '  -RemoteAddress LocalSubnet',
+        ].join('\n')
+  );
   const remoteAccessFallbackUrl = $derived(
-    `http://<PCのIP>:${remoteAccessStatus?.port ?? REMOTE_ACCESS_FALLBACK_PORT}/`
+    remoteAccessPort === null ? null : `http://<PCのIP>:${remoteAccessPort}/`
   );
 
   $effect(() => {
@@ -201,6 +213,13 @@
 
   function isRemoteAccessLanBound(bindHost: string): boolean {
     return ['0.0.0.0', '::', '::0'].includes(bindHost.trim().toLowerCase());
+  }
+
+  function resolveRemoteAccessPort(status: RemoteAccessStatus | null): number | null {
+    const port: unknown = status?.port;
+    return typeof port === 'number' && Number.isInteger(port) && port >= 1 && port <= 65535
+      ? port
+      : null;
   }
 
   async function loadSettings(): Promise<void> {
@@ -441,6 +460,9 @@
       ...section,
       fields: section.fields.map((f) => ({ ...f })),
     }));
+    if (field.id === 'enabled' && value === true) {
+      void loadRemoteAccessStatus();
+    }
   }
 
   function handleGroupFieldValueChange(
@@ -584,38 +606,87 @@
     <div class="remote-access-summary" data-testid="remote-access-summary">
       <div class="remote-access-row">
         <span>LAN 公開</span>
-        <strong>{remoteAccessEnabledForSummary ? '有効' : '無効'}</strong>
+        <strong
+          >{remoteAccessPendingSave
+            ? '未保存'
+            : remoteAccessEnabledForSummary
+              ? '有効'
+              : '無効'}</strong
+        >
       </div>
-      {#if remoteAccessRestartRequired}
+      {#if remoteAccessPendingSave}
+        <p>「保存」を押してアプリを再起動するとURL候補を表示します。</p>
+      {:else if remoteAccessRestartRequired}
         <p>変更はアプリ再起動後に反映されます。</p>
-      {:else if remoteAccessStatus?.active && remoteAccessStatus.access_urls.length}
-        <p>現在、家庭内LANから接続できます。</p>
+      {:else if remoteAccessStatus?.active && remoteAccessPort !== null && remoteAccessStatus.access_urls.length}
+        <p>URL候補を別の端末で開いて、LAN接続を確認してください。</p>
       {:else if remoteAccessStatus?.active}
-        <p>スマホから接続できるLAN URLを確認できません。</p>
+        <p>
+          {remoteAccessPort === null
+            ? 'LAN のポート情報を取得できません。アプリを再読み込みしてから、もう一度確認してください。'
+            : 'スマホから接続できるLAN URLを確認できません。'}
+        </p>
       {:else}
         <p>初期状態ではPC内からのみ接続できます。</p>
       {/if}
-      {#if remoteAccessStatus?.active && remoteAccessStatus.access_urls.length}
+      {#if remoteAccessStatus?.active && remoteAccessPort !== null && remoteAccessStatus.access_urls.length}
         <div class="remote-access-urls" aria-label="スマホで開くURL候補">
           {#each remoteAccessStatus.access_urls as url}
             <code>{url}</code>
           {/each}
         </div>
-      {:else if remoteAccessRestartRequired}
+      {:else if remoteAccessRestartRequired && !remoteAccessPendingSave}
         <p>再起動後、LAN公開が反映されるとURL候補を表示します。</p>
       {:else if remoteAccessStatus?.active}
-        <p>Windows Firewallやネットワーク設定を確認してください。</p>
+        {#if setupPlatform === 'macos'}
+          <p>システム設定でファイアウォールとローカルネットワークの許可を確認してください。</p>
+        {:else if setupPlatform === 'windows'}
+          <p>Windows Firewallやネットワーク設定を確認してください。</p>
+        {:else}
+          <p>ネットワーク設定を確認してください。</p>
+        {/if}
+      {:else if remoteAccessFallbackUrl}
+        <p>
+          設定を保存してアプリを再起動した後、PCのIPアドレスで <code
+            class="remote-access-inline-code">{remoteAccessFallbackUrl}</code
+          > を開きます。
+        </p>
       {:else}
         <p>
-          有効化後、PCのIPアドレスで <code class="remote-access-inline-code"
-            >{remoteAccessFallbackUrl}</code
-          > を開きます。
+          LAN のポート情報を取得できません。再読み込み後、表示された LAN 用 URL を確認してください。
         </p>
       {/if}
       <div class="remote-access-help" style="text-align: left">
-        <p>Wi-Fiをプライベートネットワークに設定してください。</p>
-        <p>ファイアウォールは管理者権限のPowerShellで以下を実行してください。</p>
-        <pre class="remote-access-command"><code>{REMOTE_ACCESS_FIREWALL_COMMAND}</code></pre>
+        {#if setupPlatform === 'macos'}
+          <p>macOS の「システム設定」で次の許可を確認してください。</p>
+          <ol>
+            <li>
+              「ネットワーク」&gt;「ファイアウォール」で SplatReplay.app の受信接続を許可します。
+            </li>
+            <li>
+              「プライバシーとセキュリティ」&gt;「ローカルネットワーク」に Splat Replay
+              が表示された場合は許可します。項目がない場合は、LAN接続を試した後にもう一度確認してください。
+            </li>
+          </ol>
+          <p>アプリがファイアウォール設定を自動変更することはありません。</p>
+        {:else if setupPlatform === 'windows'}
+          <p>Wi-Fiをプライベートネットワークに設定してください。</p>
+          {#if remoteAccessFirewallCommand}
+            <p>
+              表示中のLAN
+              URLと同じポートを開けます。管理者権限のPowerShellで以下を実行してください。
+            </p>
+            <pre class="remote-access-command"><code>{remoteAccessFirewallCommand}</code></pre>
+          {:else}
+            <p>
+              LAN
+              のポート情報を取得できないため、ファイアウォールのコマンドは表示できません。再読み込み後、設定画面に表示された
+              LAN 用 URL のポートを確認してください。
+            </p>
+          {/if}
+        {:else}
+          <p>アプリが動作するPCのネットワーク設定と、受信接続の許可を確認してください。</p>
+        {/if}
       </div>
     </div>
   {/if}

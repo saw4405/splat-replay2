@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import Callable
+from contextlib import suppress
 from datetime import datetime
 from dataclasses import replace
 from typing import Literal, Mapping
@@ -48,6 +49,7 @@ from splat_replay.application.services.recording.phase_handler_registry import (
 )
 from splat_replay.application.services.recording.recording_context import (
     RecordingContext,
+    SessionPhase,
 )
 from splat_replay.application.services.recording.recording_session_service import (
     RecordingSessionService,
@@ -129,7 +131,12 @@ class AutoRecordingUseCase:
         self._power_monitor = SwitchPowerMonitor()
         self._background_retry_delay_seconds = background_retry_delay_seconds
         self._capture_device = capture_device
-        self._audio_preparation_task: asyncio.Task[None] | None = None
+        self._transcription_preparation_task: asyncio.Task[None] | None = None
+        self._audio_observation_task: asyncio.Task[None] | None = None
+        self._audio_observation_tasks: set[asyncio.Task[None]] = set()
+        self._audio_observation_generation = 0
+        self._audio_health_last_status: str | None = None
+        self._audio_health_initial_window_pending = False
         self.power_off_count = 0
         self.maintenance_check: Callable[[], bool] | None = None
 
@@ -218,6 +225,8 @@ class AutoRecordingUseCase:
         self.last_phase = None
         self._last_record_state = self._session.state
         self._power_monitor = SwitchPowerMonitor()
+        self._audio_health_last_status = None
+        self._audio_health_initial_window_pending = False
         self.logger.info("自動録画開始")
         detected_power_off = False
 
@@ -278,7 +287,8 @@ class AutoRecordingUseCase:
     async def _teardown(self) -> None:
         """自動録画のクリーンアップ。"""
         self._power_monitor = self._power_monitor.stop()
-        await self._cancel_audio_preparation()
+        self._request_stop_audio_observation()
+        await self._cancel_transcription_preparation()
         self._phase_handlers.cancel_background_tasks()
 
         # 録画中なら停止
@@ -292,6 +302,7 @@ class AutoRecordingUseCase:
         # Cleanup
         self._capture.teardown()
         await self._session.teardown()
+        await self._reap_audio_observations()
 
     # ================================================================
     # Main Loop
@@ -304,6 +315,7 @@ class AutoRecordingUseCase:
         """
         last_check = 0.0
         last_device_check = 0.0
+        device_is_connected = True
         saw_power_off = False
         pending_power_on_frames: list[Frame] = []
 
@@ -315,20 +327,20 @@ class AutoRecordingUseCase:
             # フレーム取得
             frame = await self._frame_processor.acquire_frame()
             synced = await self._sync_context_if_state_changed()
-            if frame is None:
-                now = asyncio.get_running_loop().time()
-                if (
-                    self._capture_device is not None
-                    and now - last_device_check
-                    >= CAPTURE_DEVICE_CHECK_INTERVAL_SECONDS
-                ):
-                    last_device_check = now
-                    connected = await asyncio.to_thread(
-                        self._capture_device.is_connected
-                    )
-                    if not connected:
-                        pending_power_on_frames.clear()
-                        await self._handle_capture_disconnect_transition()
+            now = asyncio.get_running_loop().time()
+            if (
+                self._capture_device is not None
+                and now - last_device_check
+                >= CAPTURE_DEVICE_CHECK_INTERVAL_SECONDS
+            ):
+                last_device_check = now
+                device_is_connected = await asyncio.to_thread(
+                    self._capture_device.is_connected
+                )
+                if not device_is_connected:
+                    pending_power_on_frames.clear()
+                    await self._handle_capture_disconnect_transition()
+            if frame is None or not device_is_connected:
                 # フレーム未到来。CPU スピン緩和のため譲歩。
                 await asyncio.sleep(0.1)
                 continue
@@ -417,6 +429,7 @@ class AutoRecordingUseCase:
         """電源ON確定済みのフレームを現在のフェーズへ一度だけ渡す。"""
         context_snapshot, revision_snapshot = await self._snapshot_context()
         phase = context_snapshot.phase(self._session.state)
+        self._sync_audio_observation(phase)
         if self.last_phase != phase:
             self.logger.info(
                 f"フェーズが変更されました: {self.last_phase} -> {phase}"
@@ -431,6 +444,7 @@ class AutoRecordingUseCase:
             updated_context=command.updated_context,
             base_revision=revision_snapshot,
         )
+        self._sync_audio_observation(self._context.phase(self._session.state))
         await self._execute_command(command, base_context=context_snapshot)
 
     async def _handle_power_off_transition(self) -> None:
@@ -460,9 +474,12 @@ class AutoRecordingUseCase:
             await self._sync_context_from_service(base_context=base_context)
 
     async def _refresh_audio_health_for_power_state(self) -> None:
-        """ARMED時だけ音声復旧と文字起こし準備を開始する。"""
-        await self._cancel_audio_preparation()
+        """Switch ONで初回音声確認を始め、監視と準備を別寿命にする。"""
+        self._request_stop_audio_observation()
         if self._power_monitor.state is not SwitchPowerState.ARMED:
+            self._audio_health_last_status = None
+            self._audio_health_initial_window_pending = False
+            await self._cancel_transcription_preparation()
             try:
                 await self._session.check_audio_health()
             except Exception as exc:  # noqa: BLE001
@@ -472,30 +489,32 @@ class AutoRecordingUseCase:
                     error=str(exc),
                 )
             return
-        self._audio_preparation_task = asyncio.create_task(
-            self._prepare_audio_for_power_on()
+        self._audio_health_last_status = None
+        phase = self._context.phase(self._session.state)
+        self._audio_health_initial_window_pending = (
+            phase is SessionPhase.STANDBY
         )
-
-    async def _prepare_audio_for_power_on(self) -> None:
-        audio_result, transcription_result = await asyncio.gather(
-            self._session.check_audio_health(),
-            self._session.prepare_transcription(),
-            return_exceptions=True,
-        )
-        if isinstance(audio_result, Exception):
-            self.logger.warning(
-                "Switch電源ON後のOBS音声確認に失敗しました",
-                error=str(audio_result),
+        if (
+            self._transcription_preparation_task is None
+            or self._transcription_preparation_task.done()
+        ):
+            self._transcription_preparation_task = asyncio.create_task(
+                self._prepare_transcription_for_power_on()
             )
-        if isinstance(transcription_result, Exception):
+        self._sync_audio_observation(phase)
+
+    async def _prepare_transcription_for_power_on(self) -> None:
+        try:
+            await self._session.prepare_transcription()
+        except Exception as exc:  # noqa: BLE001
             self.logger.warning(
                 "Switch電源ON後の文字起こし準備に失敗しました",
-                error=str(transcription_result),
+                error=str(exc),
             )
 
-    async def _cancel_audio_preparation(self) -> None:
-        task = self._audio_preparation_task
-        self._audio_preparation_task = None
+    async def _cancel_transcription_preparation(self) -> None:
+        task = self._transcription_preparation_task
+        self._transcription_preparation_task = None
         if task is None:
             return
         task.cancel()
@@ -503,6 +522,87 @@ class AutoRecordingUseCase:
             await task
         except asyncio.CancelledError:
             pass
+
+    def _sync_audio_observation(self, phase: SessionPhase) -> None:
+        if (
+            self._power_monitor.state is not SwitchPowerState.ARMED
+            or phase is not SessionPhase.STANDBY
+        ):
+            self._audio_health_initial_window_pending = False
+            self._request_stop_audio_observation()
+            return
+
+        eligible = (
+            self._audio_health_initial_window_pending
+            or self._audio_health_last_status == "silent"
+        )
+        if not eligible:
+            self._request_stop_audio_observation()
+            return
+        if self._audio_observation_task is not None:
+            return
+
+        self._audio_observation_generation += 1
+        generation = self._audio_observation_generation
+        task = asyncio.create_task(self._observe_audio_health(generation))
+        self._audio_observation_task = task
+        self._audio_observation_tasks.add(task)
+        task.add_done_callback(self._on_audio_observation_done)
+
+    async def _observe_audio_health(self, generation: int) -> None:
+        observations = self._session.observe_audio_health()
+        try:
+            async for result in observations:
+                if generation != self._audio_observation_generation:
+                    return
+                self._audio_health_initial_window_pending = False
+                self._audio_health_last_status = result.status
+                self._session.publish_audio_health_result(result)
+                if result.status != "silent":
+                    return
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:  # noqa: BLE001
+            if generation == self._audio_observation_generation:
+                self.logger.warning(
+                    "OBS 音声入力の継続観測に失敗しました",
+                    error=str(exc),
+                )
+                self._audio_health_last_status = "unknown"
+        finally:
+            if generation == self._audio_observation_generation:
+                self._audio_health_initial_window_pending = False
+            await observations.aclose()
+
+    def _request_stop_audio_observation(self) -> None:
+        self._audio_observation_generation += 1
+        task = self._audio_observation_task
+        self._audio_observation_task = None
+        if task is not None and not task.done():
+            task.cancel()
+
+    def _on_audio_observation_done(self, task: asyncio.Task[None]) -> None:
+        self._audio_observation_tasks.discard(task)
+        if self._audio_observation_task is task:
+            self._audio_observation_task = None
+        if not task.cancelled():
+            with suppress(Exception):
+                task.exception()
+
+    async def _reap_audio_observations(self) -> None:
+        tasks = tuple(self._audio_observation_tasks)
+        if not tasks:
+            return
+        _, pending = await asyncio.wait(tasks, timeout=1.0)
+        if pending:
+            for task in pending:
+                task.cancel()
+            _, pending = await asyncio.wait(pending, timeout=0.5)
+        if pending:
+            self.logger.warning(
+                "OBS 音声監視の切断完了を待機時間内に確認できませんでした",
+                pending_tasks=len(pending),
+            )
 
     def _apply_capture_interval_for_power_state(self) -> None:
         """ON待機・切断中だけ実キャプチャを抑え、ARMEDでは戻す。"""

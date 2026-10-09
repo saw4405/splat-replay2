@@ -7,6 +7,9 @@
   import { setupState } from '../../stores/state';
   import { type SystemCheckResult, SetupStep } from '../../types';
   import NotificationDialog from '../../../common/components/NotificationDialog.svelte';
+  import { getSetupPlatform, MACOS_APPLICATION_SUPPORT_DIR } from '../../platform';
+
+  const setupPlatform = getSetupPlatform();
 
   const SUBSTEP_STORAGE_KEY = 'youtube_substep_index';
 
@@ -493,11 +496,25 @@
                   <div class="path-box">
                     <FolderOpen class="icon" size={20} />
                     <div class="path-content">
-                      <code class="path-value">SplatReplay\config</code>
+                      <code class="path-value">
+                        {setupPlatform === 'macos'
+                          ? `${MACOS_APPLICATION_SUPPORT_DIR}/config`
+                          : setupPlatform === 'windows'
+                            ? 'SplatReplay\\config'
+                            : 'アプリの config フォルダ'}
+                      </code>
                     </div>
                   </div>
                 </li>
               </ol>
+              {#if setupPlatform === 'macos'}
+                <p class="instruction-text" role="note">
+                  Google でログインし、アクセスを許可した後の YouTube 認証情報（OAuth token）は
+                  macOS Keychain に保存されます。Keychain のアクセス確認は Google
+                  のログイン・アクセス許可とは別です。15分以上の動画向け YouTube
+                  アカウント本人確認も別途必要です。
+                </p>
+              {/if}
             {:else if currentSubStepIndex === 5}
               <!-- Account Verification -->
               <p style="margin-bottom: 1rem;">

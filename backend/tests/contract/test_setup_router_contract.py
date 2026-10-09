@@ -10,11 +10,21 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 from fastapi import status
 from fastapi.testclient import TestClient
 
 from splat_replay.application.services import RecordingPreparationService
+from splat_replay.application.services.setup.system_check_service import (
+    SoftwareCheckResult,
+    SystemCheckService,
+)
+from splat_replay.application.services.setup.system_setup_service import (
+    SystemSetupService,
+)
+import splat_replay.interface.web.schemas.setup as setup_schemas
 
 pytestmark = pytest.mark.contract
 
@@ -45,6 +55,43 @@ class TestSetupStatusEndpoints:
         assert isinstance(data["progress_percentage"], (int, float))
         assert isinstance(data["remaining_steps"], list)
         assert isinstance(data["step_details"], dict)
+
+    @pytest.mark.parametrize(
+        ("system_name", "expected_platform"),
+        [
+            ("Windows", "windows"),
+            ("Darwin", "macos"),
+            ("Linux", "unknown"),
+        ],
+    )
+    def test_server_platform_is_in_status_navigation_and_lifecycle_responses(
+        self,
+        client: TestClient,
+        monkeypatch: pytest.MonkeyPatch,
+        system_name: str,
+        expected_platform: str,
+    ) -> None:
+        """全OS判定値をstatus・navigation・lifecycle応答へ含める。"""
+        monkeypatch.setattr(
+            setup_schemas.platform, "system", lambda: system_name
+        )
+
+        responses = [
+            client.get("/setup/status"),
+            client.post("/setup/start"),
+            client.post("/setup/steps/hardware_check/skip"),
+            client.post("/setup/navigation/next"),
+            client.post("/setup/navigation/previous"),
+            client.post("/setup/complete"),
+        ]
+
+        assert all(
+            response.status_code == status.HTTP_200_OK
+            for response in responses
+        )
+        assert [
+            response.json()["server_platform"] for response in responses
+        ] == [expected_platform] * len(responses)
 
 
 class TestSetupNavigationEndpoints:
@@ -179,12 +226,30 @@ class TestSystemCheckEndpoints:
 
     @pytest.mark.parametrize(
         "software",
-        ["obs", "ffmpeg", "tesseract", "ndi", "font", "youtube"],
+        ["obs", "ffmpeg", "tesseract", "flac", "ndi", "font", "youtube"],
     )
     def test_check_system_software(
-        self, client: TestClient, software: str
+        self,
+        client: TestClient,
+        software: str,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         """GET /setup/system/check/{software} - システムソフトウェアチェック。"""
+        for method_name in (
+            "check_obs_installation",
+            "check_ffmpeg_installation",
+            "check_tesseract_installation",
+            "check_flac_installation",
+            "check_ndi_runtime_installation",
+            "check_font_installation",
+            "check_youtube_credentials",
+        ):
+            monkeypatch.setattr(
+                SystemCheckService,
+                method_name,
+                lambda self: SoftwareCheckResult(is_installed=False),
+            )
+
         response = client.get(f"/setup/system/check/{software}")
         assert response.status_code == status.HTTP_200_OK
 
@@ -212,6 +277,29 @@ class TestSystemCheckEndpoints:
         response = client.get("/setup/system/check/invalid_software")
         assert response.status_code == status.HTTP_400_BAD_REQUEST
 
+    def test_font_check_returns_the_resolved_os_font_path(
+        self, client: TestClient, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """フォント確認は代替 OS フォントの利用可能性を返す。"""
+        fallback_path = Path("/System/Library/Fonts/Hiragino Sans.ttc")
+        monkeypatch.setattr(
+            SystemCheckService,
+            "check_font_installation",
+            lambda self: SoftwareCheckResult(
+                is_installed=True, installation_path=fallback_path
+            ),
+        )
+
+        response = client.get("/setup/system/check/font")
+
+        assert response.status_code == status.HTTP_200_OK
+        assert response.json() == {
+            "is_installed": True,
+            "version": None,
+            "installation_path": str(fallback_path),
+            "error_message": None,
+        }
+
 
 class TestSystemSetupEndpoints:
     """システムセットアップエンドポイントのcontractテスト。"""
@@ -222,12 +310,28 @@ class TestSystemSetupEndpoints:
             "/setup/system/setup/ffmpeg",
             "/setup/system/setup/obs",
             "/setup/system/setup/tesseract",
+            "/setup/system/setup/flac",
         ],
     )
     def test_system_setup_endpoints(
-        self, client: TestClient, endpoint: str
+        self,
+        client: TestClient,
+        endpoint: str,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         """POST /setup/system/setup/{software} - システムセットアップ実行。"""
+        for method_name in (
+            "setup_ffmpeg",
+            "setup_obs",
+            "setup_tesseract",
+            "setup_flac",
+        ):
+            monkeypatch.setattr(
+                SystemSetupService,
+                method_name,
+                lambda self: SoftwareCheckResult(is_installed=False),
+            )
+
         response = client.post(endpoint)
 
         # セットアップ成功または既にインストール済み

@@ -9,8 +9,10 @@
 from __future__ import annotations
 
 import asyncio
-from collections.abc import AsyncIterator, Iterable, Mapping
+import json
+from collections.abc import AsyncGenerator, AsyncIterator, Iterable, Mapping
 from contextlib import asynccontextmanager, suppress
+from dataclasses import dataclass
 from functools import wraps
 from pathlib import Path
 from typing import (
@@ -20,6 +22,7 @@ from typing import (
     Concatenate,
     Coroutine,
     Dict,
+    Literal,
     ParamSpec,
     TypeVar,
     cast,
@@ -40,6 +43,7 @@ from splat_replay.infrastructure.adapters.obs.process_manager import (
     OBSProcessManager,
 )
 from splat_replay.infrastructure.adapters.obs.websocket_client import (
+    InputVolumeMeterSample,
     OBSWebSocketClient,
 )
 
@@ -49,6 +53,14 @@ OperationResult = TypeVar("OperationResult")
 DEFAULT_AUDIO_SAMPLE_SECONDS = 1.0
 SILENCE_PEAK_MUL_THRESHOLD = 0.001
 SILENCE_PEAK_DB_THRESHOLD = -60.0
+_AudioInputResolutionStatus = Literal["input_not_found", "unknown"]
+
+
+@dataclass(frozen=True)
+class _OBSInput:
+    name: str
+    kind: str
+
 
 # OBSイベント状態からRecorderStatusへのマッピング
 STATE_TO_STATUS: Dict[str, RecorderStatus] = {
@@ -64,7 +76,7 @@ SHORT_AUDIO_MESSAGES = {
     "input_inactive": "音声入力非アクティブ",
     "muted": "音声ミュート",
     "no_audio_tracks": "録音トラック未設定",
-    "silent": "音声入力なし",
+    "silent": "音量メーター未反応",
     "unknown": "音声確認失敗",
     "ok": "",
     "skipped": "",
@@ -274,27 +286,30 @@ class OBSRecorderController(VideoRecorderPort):
     async def teardown(self) -> None:
         """OBSを終了。
 
-        録画中の場合は停止し、仮想カメラも停止してからプロセスを終了。
+        アプリが終了させる OBS の録画と仮想カメラを停止してから終了する。
+        アプリ起動前から存在する OBS の出力には触れない。
         """
         self._logger.info("OBS 終了要求")
 
-        # WebSocket接続がある場合は録画と仮想カメラを停止
+        # 外部起動または終了時に保持する OBS の出力を巻き込まない。
         if self._ws_client.is_connected:
-            self._logger.info("OBS リソース解放開始")
+            if self._process_manager.will_close_on_teardown:
+                self._logger.info("OBS リソース解放開始")
 
-            active, _ = await self._get_record_status()
-            if active:
-                self._logger.info("録画停止中")
-                await self.stop()
+                active, _ = await self._get_record_status()
+                if active:
+                    self._logger.info("録画停止中")
+                    await self.stop()
 
-            if await self.is_virtual_camera_active():
-                self._logger.info("仮想カメラ停止中")
-                await self.stop_virtual_camera()
+                if await self.is_virtual_camera_active():
+                    self._logger.info("仮想カメラ停止中")
+                    await self.stop_virtual_camera()
 
             await self._ws_client.disconnect()
 
         # プロセス終了
         await self._process_manager.teardown()
+        await self._ws_client.drain_meter_cleanup_tasks()
         self._logger.info("OBS 終了完了")
 
     @_guard_obs_operation
@@ -306,88 +321,19 @@ class OBSRecorderController(VideoRecorderPort):
     ) -> AudioInputHealthCheckResult:
         """Check whether the named OBS audio input appears usable."""
         target_name = input_name.strip()
-        if not target_name:
-            return _audio_health_result(
-                input_name=input_name,
-                status="input_not_configured",
-                healthy=False,
-            )
-
         try:
-            await self.connect()
-            available_names = await self._list_input_names()
-            resolved_name = await self._resolve_audio_input_name(
-                target_name, available_names
+            inspection, resolved_name, _ = await self._inspect_audio_input(
+                target_name
             )
-            if resolved_name is None:
-                details = (
-                    f"OBS の入力「{target_name}」が見つかりません。"
-                    f"利用可能な入力: {', '.join(available_names) or 'なし'}。"
-                    "録画は継続しますが、音声が入らない可能性があります。"
-                )
-                return _audio_health_result(
-                    input_name=target_name,
-                    status="input_not_found",
-                    healthy=False,
-                    details=details,
-                )
-
-            if await self._is_input_muted(resolved_name):
-                return _audio_health_result(
-                    input_name=resolved_name,
-                    status="muted",
-                    healthy=False,
-                )
-
-            tracks = await self._get_input_audio_tracks(resolved_name)
-            if tracks is not None and not any(tracks):
-                return _audio_health_result(
-                    input_name=resolved_name,
-                    status="no_audio_tracks",
-                    healthy=False,
-                )
-
-            active = await self._is_source_active(resolved_name)
-            if active is False:
-                return _audio_health_result(
-                    input_name=resolved_name,
-                    status="input_inactive",
-                    healthy=False,
-                )
+            if inspection is not None:
+                return inspection
+            assert resolved_name is not None
 
             sample = await self._sample_audio_meter(
                 resolved_name,
                 sample_duration_seconds=sample_duration_seconds,
             )
-            if sample is None:
-                return _audio_health_result(
-                    input_name=resolved_name,
-                    status="unknown",
-                    healthy=False,
-                    details=(
-                        "OBS WebSocket から音量メーターイベントを取得できなかったため、"
-                        f"入力「{resolved_name}」の入力レベルを確認できませんでした。"
-                        "録画は継続しますが、動画に音声が入らない可能性があります。"
-                    ),
-                )
-
-            peak_mul, peak_db = sample
-            if peak_mul <= SILENCE_PEAK_MUL_THRESHOLD and (
-                peak_db is None or peak_db <= SILENCE_PEAK_DB_THRESHOLD
-            ):
-                return _audio_health_result(
-                    input_name=resolved_name,
-                    status="silent",
-                    healthy=False,
-                    peak_db=peak_db,
-                )
-
-            return _audio_health_result(
-                input_name=resolved_name,
-                status="ok",
-                healthy=True,
-                peak_db=peak_db,
-            )
+            return self._audio_health_from_meter_sample(resolved_name, sample)
         except Exception as exc:
             self._logger.warning(
                 "OBS 音声入力ヘルスチェックに失敗しました",
@@ -404,85 +350,350 @@ class OBSRecorderController(VideoRecorderPort):
                 ),
             )
 
-    @_guard_obs_operation
-    async def try_recover_audio_input(self) -> bool:
-        """設定と一致する非録画中の OBS を一度だけ再起動する。"""
-        was_connected = False
-        try:
-            active, _ = await self._get_record_status()
-            if active:
-                self._logger.info(
-                    "OBS 音声自動復旧を見送りました",
-                    reason="recording_active",
+    async def observe_audio_input_health(
+        self, input_name: str
+    ) -> AsyncGenerator[AudioInputHealthCheckResult, None]:
+        """OBS の音声状態を有界な1秒窓で連続観測する。"""
+        target_name = input_name.strip()
+        while True:
+            meter_windows: (
+                AsyncGenerator[dict[str, InputVolumeMeterSample], None] | None
+            ) = None
+            try:
+                (
+                    inspection,
+                    resolved_name,
+                    source_key,
+                ) = await self._inspect_audio_input(target_name)
+                if inspection is not None:
+                    yield inspection
+                    await asyncio.sleep(DEFAULT_AUDIO_SAMPLE_SECONDS)
+                    continue
+
+                meter_windows = (
+                    self._ws_client.iter_input_volume_meter_windows(
+                        window_seconds=DEFAULT_AUDIO_SAMPLE_SECONDS
+                    )
                 )
-                return False
+                async for window in meter_windows:
+                    (
+                        current_inspection,
+                        current_name,
+                        current_key,
+                    ) = await self._inspect_audio_input(target_name)
+                    if current_inspection is not None:
+                        result = current_inspection
+                        source_key = None
+                    elif current_key != source_key:
+                        result = _audio_health_result(
+                            input_name=target_name,
+                            status="unknown",
+                            healthy=False,
+                            details=(
+                                f"OBS の入力「{target_name}」の割り当てが変わったため、"
+                                "次の音量メーター窓で再確認します。"
+                            ),
+                        )
+                        source_key = current_key
+                    else:
+                        assert current_name is not None
+                        result = self._audio_health_from_meter_sample(
+                            current_name, window.get(current_name)
+                        )
+                        source_key = current_key
+                    yield result
+            except asyncio.CancelledError:
+                raise
+            except Exception:
+                yield _audio_health_result(
+                    input_name=target_name,
+                    status="unknown",
+                    healthy=False,
+                    details=(
+                        f"OBS の入力「{target_name}」の音声状態を確認できませんでした。"
+                        "録画は継続します。"
+                    ),
+                )
+                await asyncio.sleep(DEFAULT_AUDIO_SAMPLE_SECONDS)
+            finally:
+                if meter_windows is not None:
+                    with suppress(Exception):
+                        await meter_windows.aclose()
 
-            was_connected = self._ws_client.is_connected
-            if was_connected:
-                await self._ws_client.disconnect()
-
-            restarted = await self._process_manager.restart_for_recovery()
-            if not restarted:
-                if was_connected:
-                    await self._ws_client.connect()
-                return False
-
-            await self.setup()
-            return True
-        except Exception as exc:
-            if was_connected and not self._ws_client.is_connected:
-                with suppress(Exception):
-                    await self._ws_client.connect()
-            self._logger.warning(
-                "OBS 音声自動復旧に失敗しました",
-                error=str(exc),
+    async def _inspect_audio_input(
+        self, target_name: str
+    ) -> tuple[AudioInputHealthCheckResult | None, str | None, str | None]:
+        if not target_name:
+            return (
+                _audio_health_result(
+                    input_name=target_name,
+                    status="input_not_configured",
+                    healthy=False,
+                ),
+                None,
+                None,
             )
-            return False
+
+        await self._connect_if_running()
+        available_inputs = await self._list_inputs()
+        (
+            resolved_name,
+            unresolved_status,
+        ) = await self._resolve_audio_input_name(target_name, available_inputs)
+        if resolved_name is None:
+            status = unresolved_status or "input_not_found"
+            if status == "unknown":
+                details = (
+                    f"OBS の入力「{target_name}」に対応する音声入力を"
+                    "一意に確認できませんでした。録画は継続します。"
+                )
+            else:
+                available_names = ", ".join(
+                    obs_input.name for obs_input in available_inputs
+                )
+                details = (
+                    f"OBS の入力「{target_name}」が見つかりません。"
+                    f"利用可能な入力: {available_names or 'なし'}。"
+                    "録画は継続しますが、音声が入らない可能性があります。"
+                )
+            return (
+                _audio_health_result(
+                    input_name=target_name,
+                    status=status,
+                    healthy=False,
+                    details=details,
+                ),
+                None,
+                None,
+            )
+
+        if await self._is_input_muted(resolved_name):
+            return (
+                _audio_health_result(
+                    input_name=resolved_name, status="muted", healthy=False
+                ),
+                resolved_name,
+                None,
+            )
+        tracks = await self._get_input_audio_tracks(resolved_name)
+        if tracks is not None and not any(tracks):
+            return (
+                _audio_health_result(
+                    input_name=resolved_name,
+                    status="no_audio_tracks",
+                    healthy=False,
+                ),
+                resolved_name,
+                None,
+            )
+        if await self._is_source_active(resolved_name) is False:
+            return (
+                _audio_health_result(
+                    input_name=resolved_name,
+                    status="input_inactive",
+                    healthy=False,
+                ),
+                resolved_name,
+                None,
+            )
+
+        settings = await self._get_input_settings(resolved_name)
+        return (
+            None,
+            resolved_name,
+            json.dumps(dict(settings), sort_keys=True, default=str),
+        )
+
+    async def _connect_if_running(self) -> None:
+        """OBS が起動済みならWebSocket接続を行う。"""
+        if not await self._process_manager.is_running():
+            raise DeviceError("OBS が起動していません", "OBS_NOT_RUNNING")
+        if not self._ws_client.is_connected:
+            await self._ws_client.connect()
+
+    @staticmethod
+    def _audio_health_from_meter_sample(
+        input_name: str,
+        sample: (InputVolumeMeterSample | tuple[float, float | None] | None),
+    ) -> AudioInputHealthCheckResult:
+        if sample is None:
+            return _audio_health_result(
+                input_name=input_name,
+                status="unknown",
+                healthy=False,
+                details=(
+                    "OBS WebSocket から音量メーターイベントを取得できなかったため、"
+                    f"入力「{input_name}」の入力レベルを確認できませんでした。"
+                    "録画は継続しますが、動画に音声が入らない可能性があります。"
+                ),
+            )
+        if isinstance(sample, InputVolumeMeterSample):
+            raw_peak_mul = sample.peak_mul
+            peak_db = sample.peak_db
+        else:
+            raw_peak_mul, peak_db = sample
+        peak_mul = float(raw_peak_mul) if raw_peak_mul is not None else 0.0
+        if peak_mul <= SILENCE_PEAK_MUL_THRESHOLD and (
+            peak_db is None or peak_db <= SILENCE_PEAK_DB_THRESHOLD
+        ):
+            return _audio_health_result(
+                input_name=input_name,
+                status="silent",
+                healthy=False,
+                peak_db=peak_db,
+            )
+        return _audio_health_result(
+            input_name=input_name,
+            status="ok",
+            healthy=True,
+            peak_db=peak_db,
+        )
 
     async def _resolve_audio_input_name(
-        self, target_name: str, available_names: list[str]
-    ) -> str | None:
-        if target_name in available_names:
-            return target_name
-        for input_name in available_names:
+        self, target_name: str, available_inputs: list[_OBSInput]
+    ) -> tuple[str | None, _AudioInputResolutionStatus | None]:
+        coreaudio_inputs = [
+            obs_input
+            for obs_input in available_inputs
+            if obs_input.kind == "coreaudio_input_capture"
+        ]
+        if coreaudio_inputs:
+            matches: list[str] = []
+            for obs_input in coreaudio_inputs:
+                settings = await self._get_input_settings(obs_input.name)
+                device_id = settings.get("device_id")
+                if device_id == "default":
+                    continue
+                if not isinstance(device_id, str) or not device_id:
+                    return None, "unknown"
+
+                response = await self._ws_client.request(
+                    "GetInputPropertiesListPropertyItems",
+                    idempotent=True,
+                    request_data={
+                        "inputName": obs_input.name,
+                        "propertyName": "device_id",
+                    },
+                )
+                property_items = (response.res_data or {}).get("propertyItems")
+                if not isinstance(property_items, list):
+                    return None, "unknown"
+
+                named_items: list[dict[str, object]] = []
+                for item in property_items:
+                    if not isinstance(item, dict):
+                        return None, "unknown"
+                    if (
+                        item.get("itemEnabled") is True
+                        and item.get("itemName") == target_name
+                    ):
+                        named_items.append(item)
+                if len(named_items) > 1:
+                    return None, "unknown"
+                if (
+                    len(named_items) == 1
+                    and named_items[0].get("itemValue") == device_id
+                ):
+                    matches.append(obs_input.name)
+
+            if len(matches) == 1:
+                return matches[0], None
+            return None, "unknown"
+
+        non_macos_inputs = [
+            obs_input
+            for obs_input in available_inputs
+            if obs_input.kind != "macos-avcapture"
+        ]
+        exact_matches = [
+            obs_input.name
+            for obs_input in non_macos_inputs
+            if obs_input.name == target_name
+        ]
+        if len(exact_matches) == 1:
+            return exact_matches[0], None
+        if len(exact_matches) > 1:
+            return None, "unknown"
+
+        device_matches: list[str] = []
+        for obs_input in non_macos_inputs:
             if await self._input_settings_contain_device_name(
-                input_name, target_name
+                obs_input.name, target_name
             ):
-                return input_name
-        return None
+                device_matches.append(obs_input.name)
+        if len(device_matches) == 1:
+            return device_matches[0], None
+        if len(device_matches) > 1:
+            return None, "unknown"
+
+        macos_video_inputs = [
+            obs_input
+            for obs_input in available_inputs
+            if obs_input.kind == "macos-avcapture"
+        ]
+        if macos_video_inputs:
+            return None, "unknown"
+
+        if any(
+            obs_input.name == target_name for obs_input in available_inputs
+        ):
+            return None, "unknown"
+        return None, "input_not_found"
 
     async def _input_settings_contain_device_name(
         self, input_name: str, device_name: str
     ) -> bool:
-        try:
-            response = await self._ws_client.request(
-                "GetInputSettings",
-                idempotent=True,
-                request_data={"inputName": input_name},
-            )
-        except DeviceError as exc:
-            self._logger.debug(
-                "OBS 入力設定を取得できませんでした",
-                input_name=input_name,
-                error=str(exc),
-            )
-            return False
-        return _contains_device_name(response.res_data or {}, device_name)
+        settings = await self._get_input_settings(input_name)
+        return _contains_device_name(settings, device_name)
 
-    async def _list_input_names(self) -> list[str]:
+    async def _get_input_settings(
+        self, input_name: str
+    ) -> Mapping[str, object]:
+        response = await self._ws_client.request(
+            "GetInputSettings",
+            idempotent=True,
+            request_data={"inputName": input_name},
+        )
+        input_settings = (response.res_data or {}).get("inputSettings")
+        if not isinstance(input_settings, Mapping):
+            raise DeviceError(
+                f"OBS 入力「{input_name}」の設定を確認できません",
+                "OBS_INPUT_SETTINGS_INVALID",
+            )
+        return cast(Mapping[str, object], input_settings)
+
+    async def _list_inputs(self) -> list[_OBSInput]:
         response = await self._ws_client.request(
             "GetInputList", idempotent=True
         )
-        inputs = (response.res_data or {}).get("inputs", [])
+        response_data = response.res_data
+        if not isinstance(response_data, Mapping):
+            raise DeviceError(
+                "OBS 入力一覧を確認できません",
+                "OBS_INPUT_LIST_INVALID",
+            )
+        inputs = response_data.get("inputs")
         if not isinstance(inputs, list):
-            return []
-        names: list[str] = []
+            raise DeviceError(
+                "OBS 入力一覧を確認できません",
+                "OBS_INPUT_LIST_INVALID",
+            )
+        result: list[_OBSInput] = []
         for item in inputs:
-            if isinstance(item, dict):
-                name = item.get("inputName")
-                if isinstance(name, str):
-                    names.append(name)
-        return names
+            if not isinstance(item, dict):
+                raise DeviceError(
+                    "OBS 入力一覧の項目を確認できません",
+                    "OBS_INPUT_LIST_INVALID",
+                )
+            name = item.get("inputName")
+            kind = item.get("inputKind")
+            if not isinstance(name, str) or not isinstance(kind, str):
+                raise DeviceError(
+                    "OBS 入力一覧の種類を確認できません",
+                    "OBS_INPUT_LIST_INVALID",
+                )
+            result.append(_OBSInput(name=name, kind=kind))
+        return result
 
     async def _is_input_muted(self, input_name: str) -> bool:
         response = await self._ws_client.request(
@@ -540,19 +751,54 @@ class OBSRecorderController(VideoRecorderPort):
                 input_name,
                 sample_duration_seconds=sample_duration_seconds,
             )
+            event_count = 0
+            numeric_mul_samples = 0
+            numeric_db_samples = 0
             for item in events:
                 peak_mul = _extract_peak_number(item.get("inputLevelsMul"))
                 peak_db = _extract_peak_number(item.get("inputLevelsDb"))
+                item_event_count = item.get("_eventCount")
+                event_count += (
+                    item_event_count
+                    if isinstance(item_event_count, int)
+                    else 1
+                )
                 if peak_mul is not None:
                     peaks_mul.append(peak_mul)
+                item_mul_count = item.get("_numericMulSamples")
+                numeric_mul_samples += (
+                    item_mul_count
+                    if isinstance(item_mul_count, int)
+                    else int(peak_mul is not None)
+                )
                 if peak_db is not None:
                     peaks_db.append(peak_db)
+                item_db_count = item.get("_numericDbSamples")
+                numeric_db_samples += (
+                    item_db_count
+                    if isinstance(item_db_count, int)
+                    else int(peak_db is not None)
+                )
+
+            peak_mul_value = max(peaks_mul) if peaks_mul else None
+            peak_db_value = max(peaks_db) if peaks_db else None
+            self._logger.info(
+                "OBS 音声メーター計測結果",
+                input_name=input_name,
+                sample_duration_seconds=sample_duration_seconds,
+                event_count=event_count,
+                numeric_mul_samples=numeric_mul_samples,
+                numeric_db_samples=numeric_db_samples,
+                peak_mul=peak_mul_value,
+                peak_db=peak_db_value,
+            )
 
             if not events:
                 return None
-            peak_mul_value = max(peaks_mul) if peaks_mul else 0.0
-            peak_db_value = max(peaks_db) if peaks_db else None
-            return peak_mul_value, peak_db_value
+            return (
+                peak_mul_value if peak_mul_value is not None else 0.0,
+                peak_db_value,
+            )
 
     @_guard_obs_operation
     async def connect(self) -> None:
@@ -561,10 +807,7 @@ class OBSRecorderController(VideoRecorderPort):
         Raises:
             DeviceError: OBSが起動していない、または接続失敗時
         """
-        if not await self._process_manager.is_running():
-            raise DeviceError("OBS が起動していません", "OBS_NOT_RUNNING")
-
-        await self._ws_client.connect()
+        await self._connect_if_running()
 
     @_guard_obs_operation
     async def setup(self) -> None:

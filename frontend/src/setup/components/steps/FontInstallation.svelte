@@ -1,11 +1,14 @@
 <script lang="ts">
   import { onMount, untrack } from 'svelte';
-  import { Download, ExternalLink, Check, FolderOpen } from 'lucide-svelte';
+  import { Check, FolderOpen, RefreshCw } from 'lucide-svelte';
   import { checkSystem } from '../../stores/system';
   import { markSubstepCompleted } from '../../stores/navigation';
   import { setupState } from '../../stores/state';
   import { type SystemCheckResult, SetupStep } from '../../types';
   import NotificationDialog from '../../../common/components/NotificationDialog.svelte';
+  import { getSetupPlatform, MACOS_APPLICATION_SUPPORT_DIR } from '../../platform';
+
+  const setupPlatform = getSetupPlatform();
 
   const SUBSTEP_STORAGE_KEY = 'font_substep_index';
 
@@ -16,7 +19,8 @@
     completed: boolean;
   }
 
-  let fontInstalled = $state(false);
+  let fontAvailable = $state(false);
+  let customFontInstalled = $state(false);
   let _fontPath = $state<string | null>(null);
   let isChecking = $state(false);
   let hasInitializedSubstep = $state(false);
@@ -27,14 +31,14 @@
   let setupSteps: SetupStepItem[] = $state([
     {
       id: 'font-download',
-      title: 'イカモドキフォントをダウンロード',
-      description: 'サムネイル生成に使用するイカモドキフォントをダウンロードします。',
+      title: 'イカモドキフォント（任意）',
+      description: 'お持ちの場合は配置すると、従来のサムネイルの見た目を維持できます。',
       completed: false,
     },
     {
       id: 'font-place',
-      title: 'イカモドキフォントを配置',
-      description: 'ダウンロードしたフォントファイルをアプリケーションフォルダに配置します。',
+      title: '日本語フォントを確認',
+      description: '未配置の場合は OS 標準の日本語フォントを使います。',
       completed: false,
     },
   ]);
@@ -119,16 +123,16 @@
   export async function next(options: { skip?: boolean } = {}): Promise<boolean> {
     const currentStep = setupSteps[currentSubStepIndex];
 
-    // フォント配置ステップのバリデーション
-    if (currentSubStepIndex === 1 && !fontInstalled) {
+    if (!fontAvailable) {
       await checkFontInstallation();
-      if (!fontInstalled) {
+      if (!fontAvailable && !options.skip) {
         showDialog(
-          'フォントファイルが見つかりませんでした。配置してから次へ進んでください。',
-          'warning'
+          '日本語フォントを利用できないため、サムネイル生成に失敗します。フォントを導入後に再確認するか、このセットアップ手順をスキップしてください。',
+          'error'
         );
         return true;
       }
+      if (!fontAvailable) return false;
     }
 
     if (!options.skip && !currentStep.completed) {
@@ -155,71 +159,21 @@
 
     try {
       const result: SystemCheckResult = await checkSystem('font');
-      fontInstalled = result.is_installed;
+      fontAvailable = result.is_installed;
       _fontPath = result.installation_path || null;
+      customFontInstalled = _fontPath?.split(/[\\/]/).pop()?.toLowerCase() === 'ikamodoki1.ttf';
 
-      if (fontInstalled) {
-        await markSubstepCompleted(SetupStep.FONT_INSTALLATION, setupSteps[0].id, true);
-        await markSubstepCompleted(SetupStep.FONT_INSTALLATION, setupSteps[1].id, true);
-      }
+      await markSubstepCompleted(SetupStep.FONT_INSTALLATION, setupSteps[0].id, fontAvailable);
+      await markSubstepCompleted(SetupStep.FONT_INSTALLATION, setupSteps[1].id, fontAvailable);
     } catch (error) {
+      fontAvailable = false;
+      customFontInstalled = false;
+      await markSubstepCompleted(SetupStep.FONT_INSTALLATION, setupSteps[0].id, false);
+      await markSubstepCompleted(SetupStep.FONT_INSTALLATION, setupSteps[1].id, false);
       console.error('Font check failed', error);
     } finally {
       isChecking = false;
     }
-  }
-
-  async function toggleStep(index: number): Promise<void> {
-    const step = setupSteps[index];
-
-    // Prevent unchecking if installed (both steps)
-    if (fontInstalled) return;
-
-    // For step 2 (font placement), check installation
-    if (index === 1 && !step.completed) {
-      await checkFontInstallation();
-      if (!fontInstalled) {
-        showDialog('フォントファイルが見つかりませんでした。', 'warning');
-      }
-    } else {
-      await markSubstepCompleted(SetupStep.FONT_INSTALLATION, step.id, !step.completed);
-    }
-  }
-
-  function handleCardClick(event: Event) {
-    // テキスト選択中は反応しない
-    if (window.getSelection()?.toString()) {
-      return;
-    }
-
-    // イベントターゲットの取得と要素への正規化（テキストノードの場合は親要素を取得）
-    let target = event.target as Element;
-    if (target.nodeType === Node.TEXT_NODE) {
-      target = target.parentElement as Element;
-    }
-
-    // インタラクティブな要素のクリックは除外
-    if (
-      target &&
-      (target.closest('button') ||
-        target.closest('a') ||
-        target.closest('input') ||
-        target.closest('.path-value'))
-    ) {
-      return;
-    }
-
-    toggleStep(currentSubStepIndex);
-  }
-
-  function handleKeyDown(event: KeyboardEvent) {
-    if (event.key === 'Enter') {
-      handleCardClick(event);
-    }
-  }
-
-  function openUrl(url: string): void {
-    window.open(url, '_blank');
   }
 
   function showDialog(
@@ -234,20 +188,14 @@
 
 <div class="font-installation">
   <div class="step-header">
-    <h2 class="step-title">イカモドキフォントのダウンロード</h2>
-    <p class="step-description">サムネイル生成に使用するイカモドキフォントをダウンロードします</p>
+    <h2 class="step-title">サムネイル用フォント</h2>
+    <p class="step-description">
+      イカモドキフォントがあれば従来の見た目を保ち、無ければ OS 標準の日本語フォントを使います。
+    </p>
   </div>
 
   <div class="setup-steps-section">
-    <div
-      class="step-card glass-card"
-      class:completed={setupSteps[currentSubStepIndex].completed}
-      class:disabled={fontInstalled || (currentSubStepIndex === 1 && isChecking)}
-      onclick={handleCardClick}
-      onkeydown={handleKeyDown}
-      role="button"
-      tabindex="0"
-    >
+    <div class="step-card glass-card" class:completed={setupSteps[currentSubStepIndex].completed}>
       {#key currentSubStepIndex}
         <div class="step-content-wrapper">
           <div class="card-header">
@@ -257,8 +205,10 @@
                 <h3 class="step-name-large">
                   {setupSteps[currentSubStepIndex].title}
                 </h3>
-                {#if fontInstalled}
-                  <span class="installed-badge">配置済み</span>
+                {#if fontAvailable}
+                  <span class="installed-badge">
+                    {customFontInstalled ? 'イカモドキを使用' : 'OS 標準を使用'}
+                  </span>
                 {/if}
               </div>
             </div>
@@ -274,45 +224,42 @@
 
           <div class="card-body">
             {#if currentSubStepIndex === 0}
-              <!-- Font Download -->
-              <ol class="instruction-list">
-                <li>
-                  イカモドキフォント配布ページからフォントファイルをダウンロードする
-                  <div style="margin-top: 1rem;">
-                    <button
-                      class="link-button"
-                      type="button"
-                      onclick={() =>
-                        openUrl(
-                          'https://web.archive.org/web/20150906013956/http://aramugi.com/?page_id=807'
-                        )}
-                    >
-                      <Download class="icon" size={16} />
-                      ダウンロードページを開く
-                      <ExternalLink class="icon" size={14} />
-                    </button>
-                  </div>
-                </li>
-              </ol>
-              <p class="step-note">※ イカモドキフォントはシステムにインストールしません</p>
+              <p>{setupSteps[currentSubStepIndex].description}</p>
+              <p class="step-note">
+                作者による配布は終了しています。お持ちのファイルを使う場合は、下記へ
+                <code>ikamodoki1.ttf</code> を配置してください。
+              </p>
+              <div class="path-box">
+                <FolderOpen class="icon" size={20} />
+                <div class="path-content">
+                  <code class="path-value">
+                    {setupPlatform === 'macos'
+                      ? `${MACOS_APPLICATION_SUPPORT_DIR}/assets/thumbnail`
+                      : setupPlatform === 'windows'
+                        ? 'SplatReplay\\assets\\thumbnail'
+                        : 'アプリの assets/thumbnail フォルダ'}
+                  </code>
+                </div>
+              </div>
             {:else if currentSubStepIndex === 1}
-              <!-- Font Placement -->
-              <ol class="instruction-list">
-                <li>
-                  ダウンロードした ZIP ファイルを展開し、ファイル名を <code>ikamodoki1.ttf</code>
-                  に変更して アプリケーションフォルダに配置します
-                </li>
-                <li>
-                  ダウンロードしたイカモドキフォント（<code>ikamodoki1.ttf</code
-                  >）を下記のフォルダに配置する
-                  <div class="path-box">
-                    <FolderOpen class="icon" size={20} />
-                    <div class="path-content">
-                      <code class="path-value">SplatReplay\assets\thumbnail</code>
-                    </div>
-                  </div>
-                </li>
-              </ol>
+              <p>{setupSteps[currentSubStepIndex].description}</p>
+              {#if isChecking}
+                <p role="status">日本語フォントを確認しています…</p>
+              {:else if fontAvailable && !customFontInstalled}
+                <p role="status">
+                  ikamodoki1.ttf がないため、OS 標準の日本語フォントを使用します。
+                </p>
+              {:else if fontAvailable}
+                <p role="status">ikamodoki1.ttf を使用できます。</p>
+              {:else}
+                <p role="alert">
+                  利用可能な日本語フォントがありません。フォントを導入して再確認するか、このセットアップ手順をスキップしてください。
+                </p>
+                <button class="link-button" type="button" onclick={checkFontInstallation}>
+                  <RefreshCw class="icon" size={16} />
+                  インストール状態を再確認
+                </button>
+              {/if}
             {/if}
           </div>
         </div>
@@ -355,14 +302,8 @@
     border-radius: 16px;
     max-height: 100%;
     box-sizing: border-box;
-    cursor: pointer;
     transition: all 0.2s ease;
     outline: none;
-  }
-
-  .step-card.disabled {
-    cursor: default;
-    opacity: 0.8;
   }
 
   @keyframes fadeIn {
@@ -477,9 +418,5 @@
     color: var(--accent-color);
     font-size: 0.875rem;
     word-break: break-all;
-  }
-
-  .instruction-list li + li {
-    margin-top: 0.5rem;
   }
 </style>

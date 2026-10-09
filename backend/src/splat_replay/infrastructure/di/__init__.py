@@ -17,6 +17,7 @@ from splat_replay.application.interfaces import (
     FileSystemPort,
     LoggerPort,
     PathsPort,
+    ThumbnailFontResolverPort,
 )
 from splat_replay.application.services import AutoRecorder
 from splat_replay.application.services.common.queries import AssetQueryService
@@ -28,6 +29,9 @@ from splat_replay.infrastructure.adapters.system.cross_cutting import (
     ProcessEnvironmentAdapter,
     StructlogLoggerAdapter,
     TomlConfigAdapter,
+)
+from splat_replay.infrastructure.adapters.image.thumbnail_font_resolver import (
+    ThumbnailFontResolver,
 )
 from splat_replay.infrastructure.di.adapters import register_adapters
 from splat_replay.infrastructure.di.app_services import register_app_services
@@ -67,6 +71,11 @@ def configure_container(
 
     paths_adapter = FileSystemPathsAdapter()
     container.register(PathsPort, instance=paths_adapter)
+    container.register(
+        ThumbnailFontResolverPort,
+        ThumbnailFontResolver,
+        scope=punq.Scope.singleton,
+    )
 
     file_system_adapter = LocalFileSystemAdapter()
     container.register(FileSystemPort, instance=file_system_adapter)

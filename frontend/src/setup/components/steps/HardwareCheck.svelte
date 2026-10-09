@@ -4,6 +4,9 @@
   import { markSubstepCompleted } from '../../stores/navigation';
   import { setupState } from '../../stores/state';
   import { SetupStep } from '../../types';
+  import { getSetupPlatform } from '../../platform';
+
+  const setupPlatform = getSetupPlatform();
 
   const SUBSTEP_STORAGE_KEY = 'hardware_substep_index';
 
@@ -34,7 +37,12 @@
     {
       id: 'hardware-pc',
       name: 'PC',
-      spec: 'Windows 11、メモリ 8GB 以上、ストレージ 10GB 以上の空き容量',
+      spec:
+        setupPlatform === 'windows'
+          ? 'Windows 11、メモリ 8GB 以上、ストレージ 10GB 以上の空き容量'
+          : setupPlatform === 'macos'
+            ? 'Apple Silicon 搭載 Mac、メモリ 8GB 以上、ストレージ 10GB 以上の空き容量'
+            : 'Windows 11 または Apple Silicon 搭載 Mac、メモリ 8GB 以上、ストレージ 10GB 以上の空き容量',
       icon: HardDrive,
       checked: false,
     },

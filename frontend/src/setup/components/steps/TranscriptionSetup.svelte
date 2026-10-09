@@ -10,7 +10,11 @@
     type TranscriptionConfig,
   } from '../../stores/config';
   import { SetupStep } from '../../types';
+  import { checkSystem, setupFlac } from '../../stores/system';
   import NotificationDialog from '../../../common/components/NotificationDialog.svelte';
+  import { getSetupPlatform } from '../../platform';
+
+  const setupPlatform = getSetupPlatform();
 
   const SUBSTEP_STORAGE_KEY = 'transcription_substep_index';
 
@@ -64,6 +68,17 @@
   let isLoadingMicrophones = $state(false);
   let useTranscription: boolean | null = $state(null);
   let hasLoadedMicrophones = $state(false);
+  let flacInstalled = $state(false);
+  let flacStatusMessage = $state('');
+  let isCheckingFlac = $state(false);
+  let isInstallingFlac = $state(false);
+
+  let savedMicrophoneUnavailable = $derived(
+    setupPlatform === 'macos' &&
+      hasLoadedMicrophones &&
+      micDeviceName.trim().length > 0 &&
+      !microphoneDevices.includes(micDeviceName.trim())
+  );
 
   // 親コンポーネントに通知するためのフラグ
   interface Props {
@@ -76,7 +91,14 @@
   let currentStepCompleted = $state(false);
   $effect(() => {
     if (currentSubStepIndex === 0) {
-      currentStepCompleted = useTranscription !== null;
+      currentStepCompleted =
+        useTranscription !== null &&
+        (setupPlatform !== 'macos' || useTranscription === false || flacInstalled);
+    } else if (currentSubStepIndex === 1 && useTranscription && setupPlatform === 'macos') {
+      currentStepCompleted =
+        setupSteps[1]?.completed === true &&
+        micDeviceName.trim().length > 0 &&
+        microphoneDevices.includes(micDeviceName.trim());
     } else {
       currentStepCompleted = setupSteps[currentSubStepIndex]?.completed || false;
     }
@@ -90,6 +112,9 @@
   onMount(async () => {
     await loadConfig();
     if (useTranscription) {
+      if (setupPlatform === 'macos' && !(await refreshFlacStatus())) {
+        await markSubstepCompleted(SetupStep.TRANSCRIPTION_SETUP, setupSteps[0].id, false);
+      }
       await loadMicrophones();
     }
   });
@@ -160,6 +185,19 @@
         return true;
       }
       return false;
+    }
+
+    if (
+      currentSubStepIndex === 0 &&
+      useTranscription &&
+      setupPlatform === 'macos' &&
+      !flacInstalled
+    ) {
+      showDialog(
+        flacStatusMessage || '文字起こしを使うには FLAC の導入確認が必要です。',
+        'warning'
+      );
+      return true;
     }
 
     if (!options.skip) {
@@ -281,6 +319,9 @@
     if (stepIndex === 1 && micDeviceName.trim().length === 0) {
       return 'マイク名を入力してください。';
     }
+    if (stepIndex === 1 && useTranscription && savedMicrophoneUnavailable) {
+      return '保存済みのマイクは現在の一覧にありません。接続中のマイクを選び、一覧を更新してください。';
+    }
     if (stepIndex === 2 && groqApiKey.trim().length === 0) {
       return 'Groq API キーを入力してください。';
     }
@@ -309,7 +350,11 @@
         new Set(devices.map((device) => device.trim()).filter((device) => device.length > 0))
       );
       microphoneDevices = normalizedDevices;
-      if (micDeviceName && !microphoneDevices.includes(micDeviceName)) {
+      if (
+        setupPlatform !== 'macos' &&
+        micDeviceName &&
+        !microphoneDevices.includes(micDeviceName)
+      ) {
         microphoneDevices = [...microphoneDevices, micDeviceName];
       }
       hasLoadedMicrophones = true;
@@ -328,10 +373,71 @@
 
   async function setTranscriptionUsage(value: boolean): Promise<void> {
     useTranscription = value;
+    if (value && setupPlatform === 'macos') {
+      flacInstalled = false;
+      await markSubstepCompleted(SetupStep.TRANSCRIPTION_SETUP, setupSteps[0].id, false);
+      await refreshFlacStatus();
+    }
     if (value && !hasLoadedMicrophones) {
       await loadMicrophones();
     }
-    await markSubstepCompleted(SetupStep.TRANSCRIPTION_SETUP, setupSteps[0].id, true);
+    if (!value || setupPlatform !== 'macos' || flacInstalled) {
+      await markSubstepCompleted(SetupStep.TRANSCRIPTION_SETUP, setupSteps[0].id, true);
+    }
+  }
+
+  async function refreshFlacStatus(): Promise<boolean> {
+    isCheckingFlac = true;
+    try {
+      const result = await checkSystem('flac');
+      flacInstalled = result.is_installed;
+      flacStatusMessage = result.is_installed
+        ? `FLAC を確認しました${result.version ? ` (${result.version})` : ''}。`
+        : result.error_message || 'FLAC が PATH から実行できません。';
+    } catch {
+      flacInstalled = false;
+      flacStatusMessage = 'FLAC のインストール状態を確認できませんでした。';
+    } finally {
+      isCheckingFlac = false;
+    }
+    return flacInstalled;
+  }
+
+  async function installFlac(event: Event): Promise<void> {
+    event.stopPropagation();
+    isInstallingFlac = true;
+    flacStatusMessage = 'Homebrew で FLAC を導入しています。';
+    try {
+      const installResult = await setupFlac();
+      const checkResult = await checkSystem('flac');
+      flacInstalled = checkResult.is_installed;
+      flacStatusMessage = checkResult.is_installed
+        ? `FLAC を確認しました${checkResult.version ? ` (${checkResult.version})` : ''}。`
+        : installResult.error_message ||
+          checkResult.error_message ||
+          'FLAC を確認できませんでした。';
+      await markSubstepCompleted(
+        SetupStep.TRANSCRIPTION_SETUP,
+        setupSteps[0].id,
+        checkResult.is_installed
+      );
+    } catch {
+      flacInstalled = false;
+      flacStatusMessage = 'Homebrew による FLAC の導入に失敗しました。';
+      await markSubstepCompleted(SetupStep.TRANSCRIPTION_SETUP, setupSteps[0].id, false);
+    } finally {
+      isInstallingFlac = false;
+    }
+  }
+
+  async function recheckFlac(event: Event): Promise<void> {
+    event.stopPropagation();
+    const installed = await refreshFlacStatus();
+    await markSubstepCompleted(
+      SetupStep.TRANSCRIPTION_SETUP,
+      setupSteps[0].id,
+      installed || useTranscription === false
+    );
   }
 
   async function saveCurrentConfig(): Promise<boolean> {
@@ -422,6 +528,41 @@
                   録画中に話した内容を文字起こしし、字幕として動画に追加します。
                 </p>
                 <p class="instruction-text">後から設定変更も可能です。</p>
+                {#if setupPlatform === 'macos' && useTranscription}
+                  <p class="instruction-text">
+                    文字起こしに使う音声形式変換のため、PATH から FLAC
+                    を確認します。未導入の場合はアプリ内から Homebrew で導入できます。
+                  </p>
+                  <p class="instruction-text">
+                    Homebrew がない場合は Terminal
+                    が開くことがあります。画面を本人が確認し、必要な認証を入力してください。導入後は「インストール状態を再確認」を押します。
+                  </p>
+                  <p class="instruction-text" role="status" aria-live="polite">
+                    {isCheckingFlac
+                      ? 'FLAC のインストール状態を確認しています。'
+                      : flacStatusMessage || 'FLAC のインストール状態は未確認です。'}
+                  </p>
+                  {#if !flacInstalled}
+                    <div class="choice-group">
+                      <button
+                        type="button"
+                        class="choice-button"
+                        onclick={installFlac}
+                        disabled={isInstallingFlac || isCheckingFlac}
+                      >
+                        {isInstallingFlac ? '導入中…' : 'Homebrew で FLAC を導入'}
+                      </button>
+                      <button
+                        type="button"
+                        class="choice-button"
+                        onclick={recheckFlac}
+                        disabled={isInstallingFlac || isCheckingFlac}
+                      >
+                        インストール状態を再確認
+                      </button>
+                    </div>
+                  {/if}
+                {/if}
               </div>
             {:else if currentSubStepIndex === 1}
               <ol class="instruction-list">
@@ -435,6 +576,11 @@
                       disabled={isLoadingMicrophones}
                     >
                       <option value="">-- マイクを選択 --</option>
+                      {#if savedMicrophoneUnavailable}
+                        <option value={micDeviceName} disabled>
+                          {micDeviceName}（現在の一覧にありません）
+                        </option>
+                      {/if}
                       {#each microphoneDevices as device}
                         <option value={device}>{device}</option>
                       {/each}
@@ -450,8 +596,18 @@
                     </button>
                   </div>
                 </li>
+                <li>
+                  マイク名が一覧にあるだけでは実際の収音を確認できません。送信機の電源・ペアリングとミュートを確認してください。
+                </li>
                 {#if !microphoneDevices.length}
                   <li>一覧が取得できない場合は、OS の設定でマイク接続を確認してください。</li>
+                {/if}
+                {#if setupPlatform === 'macos'}
+                  <li>
+                    macOS
+                    がマイクへのアクセスを求めた場合は許可してください。一覧が表示されないときは、
+                    「システム設定」→「プライバシーとセキュリティ」→「マイク」で本アプリのアクセスを確認し、一覧を更新してください。
+                  </li>
                 {/if}
               </ol>
             {:else if currentSubStepIndex === 2}
@@ -517,6 +673,10 @@
                   </div>
                 </li>
               </ol>
+              <p class="step-note">
+                API
+                キーを保存しても音声認識の成功は確認できません。セットアップ後、設定画面の「音声認識テスト」で実際の入力を確認してください。キーをチャットなどへ貼り付けないでください。
+              </p>
             {:else if currentSubStepIndex === 3}
               <ol class="instruction-list">
                 <li>

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import queue
+import sys
 import threading
 import time
 from typing import List, Optional, Tuple
@@ -43,7 +44,7 @@ class SpeechTranscriber(SpeechTranscriberPort):
 
         enumerator = MicrophoneEnumerator(structlog.get_logger())
         result = enumerator.find_microphone_index(device_name)
-        if result is not None:
+        if result is not None or sys.platform == "darwin":
             return result
         # フォールバック: デフォルトホスト API
         for index, name in enumerate(sr.Microphone.list_microphone_names()):

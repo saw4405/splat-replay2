@@ -15,6 +15,8 @@ export enum SetupStep {
   YOUTUBE_SETUP = 'youtube_setup',
 }
 
+export type SetupPlatform = 'windows' | 'macos' | 'unknown';
+
 export interface SetupState {
   is_completed: boolean;
   current_step: SetupStep;
@@ -22,6 +24,7 @@ export interface SetupState {
   skipped_steps: SetupStep[];
   step_details: Record<string, Record<string, boolean>>;
   installation_date: string | null;
+  server_platform?: SetupPlatform;
 }
 
 export interface StepResult {

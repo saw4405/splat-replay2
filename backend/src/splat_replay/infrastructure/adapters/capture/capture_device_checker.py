@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 import subprocess
 import sys
 
@@ -13,9 +14,104 @@ from splat_replay.application.interfaces import (
     CaptureDeviceSettingsView,
 )
 
+_DEVICE_ENUMERATION_TIMEOUT_SECONDS = 10.0
+_AVFOUNDATION_VIDEO_DEVICES_HEADER = "AVFoundation video devices:"
+_AVFOUNDATION_AUDIO_DEVICES_HEADER = "AVFoundation audio devices:"
+_VIDEO_DEVICE_LINE = re.compile(r"\[(\d+)\]\s+(.+?)\s*$")
+_PERMISSION_ERROR_MARKERS = (
+    "permission denied",
+    "not authorized",
+    "not permitted",
+    "access denied",
+)
+
+
+def _get_video_devices_from_avfoundation(
+    logger: BoundLogger,
+    timeout: float = _DEVICE_ENUMERATION_TIMEOUT_SECONDS,
+) -> list[str]:
+    """macOS の FFmpeg AVFoundation 出力から映像デバイス名を得る。"""
+    try:
+        result = subprocess.run(
+            [
+                "ffmpeg",
+                "-f",
+                "avfoundation",
+                "-list_devices",
+                "true",
+                "-i",
+                "",
+            ],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=timeout,
+            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+        )
+    except FileNotFoundError:
+        logger.error("FFmpeg が見つからず映像デバイスを列挙できません")
+        return []
+    except subprocess.TimeoutExpired:
+        logger.error("FFmpeg AVFoundation の列挙がタイムアウトしました")
+        return []
+    except Exception as exc:  # noqa: BLE001
+        logger.error("AVFoundation の列挙に失敗しました", error=str(exc))
+        return []
+
+    output = result.stderr
+    lowered_output = output.lower()
+    if any(marker in lowered_output for marker in _PERMISSION_ERROR_MARKERS):
+        logger.warning("AVFoundation 映像デバイスへのアクセスが拒否されました")
+        return []
+
+    lines = output.splitlines()
+    video_header_index = next(
+        (
+            index
+            for index, line in enumerate(lines)
+            if _AVFOUNDATION_VIDEO_DEVICES_HEADER in line
+        ),
+        None,
+    )
+    if video_header_index is None:
+        logger.warning(
+            "FFmpeg から AVFoundation の映像一覧を取得できませんでした",
+            return_code=result.returncode,
+        )
+        return []
+
+    audio_header_index = next(
+        (
+            index
+            for index in range(video_header_index + 1, len(lines))
+            if _AVFOUNDATION_AUDIO_DEVICES_HEADER in lines[index]
+        ),
+        None,
+    )
+    if audio_header_index is None:
+        logger.warning("FFmpeg の AVFoundation デバイス一覧が不完全です")
+        return []
+
+    devices: list[str] = []
+    for line in lines[video_header_index + 1 : audio_header_index]:
+        match = _VIDEO_DEVICE_LINE.search(line)
+        if match is None:
+            continue
+        name = match.group(2).strip()
+        # AVFoundation は画面も映像ソースとして出すため、実機がなくても
+        # 準備完了になることを避けるため画面項目を除外する。
+        if not name or re.fullmatch(r"Capture screen \d+", name):
+            continue
+        if name not in devices:
+            devices.append(name)
+
+    return devices
+
 
 def _get_video_devices_from_ffmpeg(
-    logger: BoundLogger, timeout: float = 10
+    logger: BoundLogger,
+    timeout: float = _DEVICE_ENUMERATION_TIMEOUT_SECONDS,
 ) -> list[str]:
     """FFmpegを使用してビデオデバイス一覧を取得する内部関数。
 
@@ -26,6 +122,11 @@ def _get_video_devices_from_ffmpeg(
     Returns:
         ビデオデバイス名のリスト
     """
+    if sys.platform == "darwin":
+        return _get_video_devices_from_avfoundation(logger, timeout)
+    if sys.platform != "win32":
+        return []
+
     try:
         result = subprocess.run(
             [
@@ -42,9 +143,7 @@ def _get_video_devices_from_ffmpeg(
             encoding="utf-8",
             errors="replace",  # デコードエラーを無視して?に置換
             timeout=timeout,
-            creationflags=subprocess.CREATE_NO_WINDOW
-            if sys.platform == "win32"
-            else 0,
+            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
         )
 
         # ビデオデバイスのみを抽出
@@ -101,12 +200,14 @@ class CaptureDeviceChecker(CaptureDevicePort):
         )
 
     def is_connected(self) -> bool:
-        """デバイスが接続済みかを返す。
+        """現在の映像デバイス一覧に選択名があるかを返す。"""
+        if sys.platform == "darwin":
+            if not self.device_name.strip():
+                return False
+            devices = _get_video_devices_from_ffmpeg(self.logger)
+            return self.device_name in devices
 
-        FFmpegのDirectShowを使用してビデオデバイスを列挙し、
-        設定されたデバイス名が存在するかを確認します。
-        """
-        # Windows 以外では実機での確認ができないため常に接続済みとみなす
+        # Windows 以外では従来どおり実機での確認を省略する
         if sys.platform != "win32":
             self.logger.warning("Check skipped (not Windows)")
             return True
@@ -123,14 +224,9 @@ class CaptureDeviceEnumerator(CaptureDeviceEnumeratorPort):
         self.logger = logger
 
     def list_video_devices(self) -> list[str]:
-        """ビデオキャプチャデバイス一覧を取得する。
-
-        OBSと同じく、FFmpegのDirectShowを使用してビデオデバイスのみを列挙します。
-        オーディオデバイスは含まれません。
-        """
-        # Windows 以外では空リストを返す
-        if sys.platform != "win32":
-            self.logger.warning("Device enumeration skipped (not Windows)")
+        """FFmpeg から映像キャプチャデバイスのみを取得する。"""
+        if sys.platform not in {"win32", "darwin"}:
+            self.logger.warning("Device enumeration skipped (unsupported OS)")
             return []
 
         devices = _get_video_devices_from_ffmpeg(self.logger)

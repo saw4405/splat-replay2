@@ -21,6 +21,7 @@
   let loading = $state(true);
   let saving = $state(false);
   let error = $state<string | null>(null);
+  let previewLoadState = $state<'loading' | 'ready' | 'error'>('loading');
 
   // 動画プレイヤー
   let videoElement = $state<HTMLVideoElement>(undefined as unknown as HTMLVideoElement);
@@ -63,6 +64,10 @@
   });
 
   $effect(() => {
+    if (visible && videoUrl) previewLoadState = 'loading';
+  });
+
+  $effect(() => {
     if (!visible) {
       cleanup();
     }
@@ -82,6 +87,11 @@
     } finally {
       loading = false;
     }
+  }
+
+  function retryPreview(): void {
+    previewLoadState = 'loading';
+    videoElement?.load();
   }
 
   async function saveSubtitle() {
@@ -544,11 +554,15 @@
             <video
               bind:this={videoElement}
               src={videoUrl}
+              aria-label="字幕プレビューを再生"
               ontimeupdate={handleVideoTimeUpdate}
               onplay={handleVideoPlay}
               onpause={handleVideoPause}
               onloadedmetadata={handleVideoMetadataLoaded}
               ondurationchange={handleVideoMetadataLoaded}
+              onloadstart={() => (previewLoadState = 'loading')}
+              oncanplay={() => (previewLoadState = 'ready')}
+              onerror={() => (previewLoadState = 'error')}
               controls
             >
               <track kind="captions" />
@@ -560,6 +574,17 @@
               </div>
             {/if}
           </div>
+          {#if previewLoadState === 'loading'}
+            <p class="video-preview-status" role="status">動画プレビューを準備しています...</p>
+          {:else if previewLoadState === 'error'}
+            <div class="video-preview-status video-preview-error" role="alert">
+              <span>動画プレビューを読み込めませんでした。</span>
+              <button class="action-button primary" type="button" onclick={retryPreview}>
+                <span aria-hidden="true" class="button-background"></span>
+                <span class="button-content">再試行</span>
+              </button>
+            </div>
+          {/if}
         </div>
 
         <!-- タイムライン -->
@@ -825,6 +850,18 @@
   /* 動画プレビュー */
   .video-preview {
     margin-bottom: 24px;
+  }
+
+  .video-preview-status {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.75rem;
+    margin: 0.75rem 0;
+  }
+
+  .video-preview-error {
+    color: var(--theme-status-danger-soft);
   }
 
   .video-wrapper {

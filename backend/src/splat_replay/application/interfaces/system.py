@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Optional, Protocol
+from typing import Literal, Optional, Protocol
 
 
 @dataclass(frozen=True)
@@ -54,6 +54,24 @@ class SystemCommandPort(Protocol):
 
     def check_command_exists(self, command: str) -> bool:
         """Check if command exists in system."""
+        ...
+
+
+@dataclass(frozen=True)
+class SoftwareInstallAttempt:
+    """外部ソフト導入を開始または完了した結果。"""
+
+    completed: bool
+    error_message: Optional[str] = None
+
+
+class SoftwareInstallerPort(Protocol):
+    """対応済みの外部ソフトを導入するポート。"""
+
+    def install(
+        self, software: Literal["ffmpeg", "tesseract", "flac"]
+    ) -> SoftwareInstallAttempt:
+        """ソフト導入を実行するか、対話インストーラーを起動する。"""
         ...
 
 

@@ -14,6 +14,7 @@ from splat_replay.application.interfaces import (
     ImageSelector,
     LoggerPort,
     PathsPort,
+    ThumbnailFontResolverPort,
 )
 from splat_replay.domain.models import (
     BattleResult,
@@ -33,11 +34,13 @@ class ThumbnailGenerator:
         paths: PathsPort,
         image_selector: ImageSelector,
         file_system: FileSystemPort,
+        font_resolver: ThumbnailFontResolverPort,
     ):
         self.logger = logger
         self.paths = paths
         self.image_selector = image_selector
         self._file_system = file_system
+        self._font_resolver = font_resolver
 
     def create(self, assets: List[VideoAsset]) -> Path | None:
         """明るいサムネイルを選び描画する。
@@ -153,7 +156,6 @@ class ThumbnailGenerator:
         font_paintball = str(
             self.paths.get_thumbnail_asset("Paintball_Beta.otf")
         )
-        font_ikamodoki = str(self.paths.get_thumbnail_asset("ikamodoki1.ttf"))
 
         # 高スコア（キルレが高い）のサムネイルをスコアが高い順に格納する
         high_score_thumbnails: list[tuple[float, Path]] = []
@@ -189,6 +191,13 @@ class ThumbnailGenerator:
                 "元画像がないためサムネイル生成をスキップしました"
             )
             return None
+
+        font_ikamodoki_path = self._font_resolver.resolve(
+            self.paths.get_thumbnail_asset("ikamodoki1.ttf")
+        )
+        if font_ikamodoki_path is None:
+            raise RuntimeError("サムネイル用の日本語フォントを利用できません")
+        font_ikamodoki = str(font_ikamodoki_path)
 
         with tempfile.NamedTemporaryFile(
             dir=assets[0].video.parent,

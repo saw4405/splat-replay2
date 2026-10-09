@@ -6,10 +6,13 @@ Phase 4 Refactoring: Context は UseCase が単一所有し、Service は状態�
 from __future__ import annotations
 
 import time
+from collections.abc import AsyncGenerator
 from dataclasses import replace
+from datetime import datetime
 from typing import TYPE_CHECKING, Literal
 
 from splat_replay.application.interfaces import (
+    AudioInputHealthCheckResult,
     ClockPort,
     DomainEventPublisher,
     LoggerPort,
@@ -99,6 +102,7 @@ class RecordingSessionService:
         self._pending_stop_reason: Literal["stop", "cancel"] | None = None
         self._clock = clock or _WallClock()
         self._audio_health = audio_health
+        self._last_audio_health_log_state: tuple[str, str] | None = None
         self._merger = metadata_merger or MetadataMerger()
 
         # StateMachine のリスナーを登録
@@ -164,12 +168,21 @@ class RecordingSessionService:
             self.logger.info(
                 "外部操作で録画が開始されました。バトル状態に遷移します。"
             )
-            # マッチング開始時間が設定されていなければ現在時刻を設定
-            if self._ctx.battle_started_at <= 0.0:
-                self._ctx = replace(
-                    self._ctx,
-                    battle_started_at=self._clock.now(),
+            # OBSから外部開始された場合も保存用の開始日時を補完する
+            battle_started_at = self._ctx.battle_started_at
+            if battle_started_at <= 0.0:
+                battle_started_at = self._clock.now()
+            metadata = self._ctx.metadata
+            if metadata.started_at is None:
+                metadata = replace(
+                    metadata,
+                    started_at=datetime.fromtimestamp(battle_started_at),
                 )
+            self._ctx = replace(
+                self._ctx,
+                metadata=metadata,
+                battle_started_at=battle_started_at,
+            )
             # StateMachine を RECORDING に遷移
             try:
                 await self.sm.handle(RecordEvent.START)
@@ -226,9 +239,17 @@ class RecordingSessionService:
         if self.sm.state is not RecordState.STOPPED:
             self.logger.warning("Recording already started")
             return
+        started_at = self._clock.now()
+        metadata = self._ctx.metadata
+        if metadata.started_at is None:
+            metadata = replace(
+                metadata,
+                started_at=datetime.fromtimestamp(started_at),
+            )
         self._ctx = replace(
             self._ctx,
-            battle_started_at=self._clock.now(),
+            metadata=metadata,
+            battle_started_at=started_at,
         )
         await self.sm.handle(RecordEvent.START)
         try:
@@ -264,9 +285,30 @@ class RecordingSessionService:
         """現在の実機準備状態に応じて音声を確認し、UIへ通知する。"""
         if self._audio_health is None or self._domain_publisher is None:
             return
-        result = await self._audio_health.check_and_recover(
+        result = await self._audio_health.check(
             sample_duration_seconds=PRE_START_AUDIO_HEALTH_SAMPLE_SECONDS,
         )
+        self.publish_audio_health_result(result)
+
+    async def observe_audio_health(
+        self,
+    ) -> AsyncGenerator[AudioInputHealthCheckResult, None]:
+        """OBS 音声状態の窓ごとの結果を返す。"""
+        if self._audio_health is None:
+            return
+        observations = self._audio_health.observe()
+        try:
+            async for result in observations:
+                yield result
+        finally:
+            await observations.aclose()
+
+    def publish_audio_health_result(
+        self, result: AudioInputHealthCheckResult
+    ) -> None:
+        """音声状態をUIへ通知し、同じ状態の警告ログを抑える。"""
+        if self._domain_publisher is None:
+            return
         self._domain_publisher.publish_domain_event(
             RecordingAudioHealthChecked(
                 input_name=result.input_name,
@@ -277,13 +319,15 @@ class RecordingSessionService:
                 peak_db=result.peak_db,
             )
         )
-        if not result.healthy:
+        state = (result.input_name, result.status)
+        if not result.healthy and state != self._last_audio_health_log_state:
             self.logger.warning(
-                "OBS audio health warning before recording start",
+                "OBS audio health warning",
                 input_name=result.input_name,
                 status=result.status,
                 details=result.details,
             )
+        self._last_audio_health_log_state = state
 
     async def pause(self) -> None:
         """録画を一時停止する。"""

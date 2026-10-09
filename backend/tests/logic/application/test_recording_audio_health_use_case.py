@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
 from typing import Any, cast
 
 import pytest
 
 from splat_replay.application.interfaces import (
+    ClockPort,
     ConfigPort,
     RecorderWithTranscriptionPort,
     VideoAssetRepositoryPort,
@@ -28,6 +30,7 @@ from splat_replay.application.services.recording.recording_session_service impor
     RecordingSessionService,
 )
 from splat_replay.domain.models import SwitchPowerState
+from splat_replay.domain.models import RecordingMetadata
 from splat_replay.domain.services import RecordState, StateMachine
 
 
@@ -56,6 +59,14 @@ class _LoggerStub:
 
     def error(self, event: str, **kw: object) -> None:
         return None
+
+
+class _ClockStub:
+    def __init__(self, timestamp: float) -> None:
+        self.timestamp = timestamp
+
+    def now(self) -> float:
+        return self.timestamp
 
 
 class _DomainPublisherSpy:
@@ -227,6 +238,17 @@ def _muted_result() -> AudioInputHealthCheckResult:
     )
 
 
+def _unknown_result() -> AudioInputHealthCheckResult:
+    return AudioInputHealthCheckResult(
+        input_name="MiraBox Capture",
+        status="unknown",
+        healthy=False,
+        short_message="音声確認失敗",
+        details="OBS の音声状態を確認できませんでした。録画は継続します。",
+        peak_db=None,
+    )
+
+
 @pytest.mark.asyncio
 async def test_prepare_recording_only_sets_up_recorder() -> None:
     recorder = _RecorderSpy(_silent_result())
@@ -243,9 +265,7 @@ async def test_prepare_recording_only_sets_up_recorder() -> None:
 
 
 @pytest.mark.asyncio
-async def test_audio_recovery_restarts_after_confirmed_silence_and_rechecks() -> (
-    None
-):
+async def test_silent_audio_check_does_not_restart_or_recheck_obs() -> None:
     recorder = _RecorderSpy(
         [_silent_result(), _silent_result(), _healthy_result()],
         recovery=True,
@@ -256,11 +276,12 @@ async def test_audio_recovery_restarts_after_confirmed_silence_and_rechecks() ->
         capture_connected=True,
     )
 
-    result = await service.check_and_recover(sample_duration_seconds=0.35)
+    result = await service.check(sample_duration_seconds=0.35)
 
-    assert result.healthy is True
-    assert recorder.recovery_calls == 1
-    assert recorder.sample_durations == [0.35, 1.0, 1.0]
+    assert result.status == "silent"
+    assert result.healthy is False
+    assert recorder.recovery_calls == 0
+    assert recorder.sample_durations == [0.35]
     assert capture_device.checks == 1
 
 
@@ -283,7 +304,7 @@ async def test_audio_readiness_checks_capture_before_switch_power() -> None:
         logger=cast(Any, _LoggerStub()),
     )
 
-    result = await service.check_and_recover(sample_duration_seconds=0.35)
+    result = await service.check(sample_duration_seconds=0.35)
 
     assert result.status == "skipped"
     assert capture_device.checks == 1
@@ -301,7 +322,7 @@ async def test_audio_readiness_checks_capture_before_switch_power() -> None:
         (SwitchPowerState.ARMED, RuntimeError("device check failed")),
     ],
 )
-async def test_audio_recovery_skips_without_live_hardware_readiness(
+async def test_audio_check_skips_without_live_hardware_readiness(
     power_state: SwitchPowerState | Exception,
     capture_connected: bool | Exception,
 ) -> None:
@@ -312,7 +333,7 @@ async def test_audio_recovery_skips_without_live_hardware_readiness(
         capture_connected=capture_connected,
     )
 
-    result = await service.check_and_recover(sample_duration_seconds=0.35)
+    result = await service.check(sample_duration_seconds=0.35)
 
     assert result.status == "skipped"
     assert result.healthy is True
@@ -321,26 +342,47 @@ async def test_audio_recovery_skips_without_live_hardware_readiness(
     assert capture_device.checks == 1
 
 
+@pytest.mark.parametrize(
+    ("health_result", "expected_status"),
+    [
+        pytest.param(_muted_result(), "muted", id="muted"),
+        pytest.param(_unknown_result(), "unknown", id="unknown"),
+    ],
+)
 @pytest.mark.asyncio
-async def test_audio_recovery_does_not_restart_for_configuration_warning() -> (
-    None
-):
-    recorder = _RecorderSpy(_muted_result())
+async def test_audio_check_does_not_restart_for_configuration_warning(
+    health_result: AudioInputHealthCheckResult,
+    expected_status: str,
+) -> None:
+    recorder = _RecorderSpy(health_result)
     service, capture_device = _audio_health_service(
         recorder,
         power_state=SwitchPowerState.ARMED,
         capture_connected=True,
     )
 
-    result = await service.check_and_recover(sample_duration_seconds=0.35)
+    result = await service.check(sample_duration_seconds=0.35)
 
-    assert result.status == "muted"
+    assert result.status == expected_status
     assert recorder.recovery_calls == 0
     assert capture_device.checks == 1
 
 
+@pytest.mark.parametrize(
+    ("started_at", "expected_started_at"),
+    [
+        (None, datetime.fromtimestamp(1_774_387_200.0)),
+        (
+            datetime(2026, 3, 24, 22, 0, 0),
+            datetime(2026, 3, 24, 22, 0, 0),
+        ),
+    ],
+)
 @pytest.mark.asyncio
-async def test_start_does_not_repeat_audio_health_check() -> None:
+async def test_start_sets_missing_timestamp_without_repeating_audio_health_check(
+    started_at: datetime | None,
+    expected_started_at: datetime,
+) -> None:
     state_machine = StateMachine()
 
     class _StateAwareRecorder(_RecorderSpy):
@@ -363,9 +405,12 @@ async def test_start_does_not_repeat_audio_health_check() -> None:
         ),
         analyzer=cast(Any, _AnalyzerStub()),
         logger=cast(Any, _LoggerStub()),
-        context=RecordingContext(),
+        context=RecordingContext(
+            metadata=RecordingMetadata(started_at=started_at),
+        ),
         domain_publisher=cast(Any, publisher),
         audio_health=audio_health,
+        clock=cast(ClockPort, _ClockStub(1_774_387_200.0)),
     )
 
     await service.start()
@@ -374,6 +419,31 @@ async def test_start_does_not_repeat_audio_health_check() -> None:
     assert recorder.started is True
     assert service.state is RecordState.RECORDING
     assert publisher.events == []
+    assert service.context.metadata.started_at == expected_started_at
+
+
+@pytest.mark.asyncio
+async def test_external_start_sets_missing_timestamp() -> None:
+    recorder = _RecorderSpy(_healthy_result())
+    service = RecordingSessionService(
+        state_machine=StateMachine(),
+        recorder=cast(RecorderWithTranscriptionPort, recorder),
+        asset_repository=cast(
+            VideoAssetRepositoryPort, _AssetRepositoryStub()
+        ),
+        analyzer=cast(Any, _AnalyzerStub()),
+        logger=cast(Any, _LoggerStub()),
+        context=RecordingContext(),
+        clock=cast(ClockPort, _ClockStub(1_774_387_200.0)),
+    )
+
+    await service._on_recorder_status_change("started")
+
+    assert service.state is RecordState.RECORDING
+    assert service.context.battle_started_at == 1_774_387_200.0
+    assert service.context.metadata.started_at == datetime.fromtimestamp(
+        1_774_387_200.0
+    )
 
 
 @pytest.mark.asyncio

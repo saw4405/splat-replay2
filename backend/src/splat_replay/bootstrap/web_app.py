@@ -2,11 +2,16 @@
 
 from __future__ import annotations
 
+import sys
 from typing import Any, AsyncGenerator, Dict, Literal
 
 import punq
 from fastapi import FastAPI
-from splat_replay.application.interfaces import EventBusPort, FramePreviewPort
+from splat_replay.application.interfaces import (
+    DesktopNotificationPort,
+    EventBusPort,
+    FramePreviewPort,
+)
 from splat_replay.application.services import (
     AutoRecorder,
     DeviceChecker,
@@ -22,6 +27,9 @@ from splat_replay.application.services.common.settings_service import (
 )
 from splat_replay.application.services.process.auto_process_service import (
     AutoProcessService,
+)
+from splat_replay.application.services.playback.video_preview import (
+    VideoPreviewService,
 )
 from splat_replay.application.use_cases import (
     AutoRecordingUseCase,
@@ -77,6 +85,7 @@ def build_web_api_server(container: punq.Container) -> WebAPIServer:
     event_bus_port = resolve(container, EventBusPort)
     frame_source = resolve(container, GuiRuntimePortAdapter)
     frame_preview = resolve(container, FramePreviewPort)
+    video_preview_service = resolve(container, VideoPreviewService)
     upload_use_case = resolve(container, UploadUseCase)
 
     def auto_recording_use_case_factory() -> AutoRecordingUseCase:
@@ -219,6 +228,7 @@ def build_web_api_server(container: punq.Container) -> WebAPIServer:
         event_bus=event_bus_port,
         frame_source=frame_source,
         frame_preview=frame_preview,
+        video_preview_service=video_preview_service,
         preview_mode_resolver=preview_mode_resolver,
         project_root=PROJECT_ROOT,
         runtime_root=RUNTIME_ROOT,
@@ -257,7 +267,18 @@ def create_app(
     if container is None:
         container = configure_container(profile=resolve_runtime_profile())
     server = build_web_api_server(container)
-    return create_web_app(server, enable_lifespan=enable_lifespan)
+    macos_notification_sender: DesktopNotificationPort | None = None
+    if sys.platform == "darwin":
+        from splat_replay.infrastructure.adapters.system.macos_notification import (
+            MacOSNotificationAdapter,
+        )
+
+        macos_notification_sender = MacOSNotificationAdapter()
+    return create_web_app(
+        server,
+        enable_lifespan=enable_lifespan,
+        macos_notification_sender=macos_notification_sender,
+    )
 
 
 # Expose a factory for uvicorn's --factory mode.

@@ -1,5 +1,14 @@
 import { render, screen, fireEvent } from '@testing-library/svelte';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+
+const { getSetupPlatformMock } = vi.hoisted(() => ({
+  getSetupPlatformMock: vi.fn(),
+}));
+
+vi.mock('../../../setup/platform', () => ({
+  getSetupPlatform: getSetupPlatformMock,
+}));
+
 import YouTubePermissionDialog from './YouTubePermissionDialog.svelte';
 
 describe('YouTubePermissionDialog', () => {
@@ -8,6 +17,7 @@ describe('YouTubePermissionDialog', () => {
   beforeEach(() => {
     fetchMock = vi.fn();
     global.fetch = fetchMock;
+    getSetupPlatformMock.mockReset().mockReturnValue('unknown');
   });
 
   afterEach(() => {
@@ -28,6 +38,24 @@ describe('YouTubePermissionDialog', () => {
       render(YouTubePermissionDialog, { props: { open: false } });
 
       expect(screen.queryByText('YouTubeへのアクセス許可')).not.toBeInTheDocument();
+    });
+
+    it('macOS サーバーでは Keychain アクセス確認を別途案内する', () => {
+      getSetupPlatformMock.mockReturnValue('macos');
+
+      render(YouTubePermissionDialog, { props: { open: true } });
+
+      expect(
+        screen.getByText(/macOSのKeychainアクセス確認が別に表示された場合/)
+      ).toBeInTheDocument();
+    });
+
+    it('Windows サーバーでは macOS Keychain 案内を表示しない', () => {
+      getSetupPlatformMock.mockReturnValue('windows');
+
+      render(YouTubePermissionDialog, { props: { open: true } });
+
+      expect(screen.queryByText(/Keychain/)).not.toBeInTheDocument();
     });
   });
 

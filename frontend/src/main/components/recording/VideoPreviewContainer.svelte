@@ -14,6 +14,7 @@
   import { getAutoRecorderState, getRecorderPreviewMode } from '../../api/recording';
   import type { SwitchPowerState } from '../../api/types';
   import { getDeviceStatusPollIntervalMs, renderMode } from '../../renderMode';
+  import { shouldUseBackendPreviewFrame } from '../../clientEnvironment';
 
   type PreviewState = 'checking' | 'connected' | 'disconnected' | 'error';
 
@@ -614,7 +615,17 @@
   async function refreshAutoRecorderState(): Promise<void> {
     try {
       const state = await getAutoRecorderState();
+      const previousPowerState = switchPowerState;
       switchPowerState = state.power_state;
+      if (
+        !isVideoFileInput &&
+        state.power_state === 'capture_disconnected' &&
+        previousPowerState !== 'capture_disconnected' &&
+        deviceState === 'connected'
+      ) {
+        updateDeviceState('disconnected');
+        restartDeviceStatusPolling();
+      }
     } catch (error) {
       console.error('自動録画状態取得エラー:', error);
     }
@@ -647,10 +658,11 @@
 
   async function refreshPreviewMode(): Promise<void> {
     try {
-      const nextIsVideoFileInput = (await getRecorderPreviewMode()) === 'video_file';
+      const nextMode = await getRecorderPreviewMode();
+      const nextIsVideoFileInput = nextMode === 'video_file';
       const previewModeChanged = isVideoFileInput !== nextIsVideoFileInput;
       isVideoFileInput = nextIsVideoFileInput;
-      if (isVideoFileInput) {
+      if (shouldUseBackendPreviewFrame(nextMode)) {
         isCameraPermissionDialogOpen = false;
       }
       if (previewModeChanged) {
@@ -663,8 +675,10 @@
 
   async function checkAndShowCameraPermissionDialog(): Promise<void> {
     try {
-      isVideoFileInput = (await getRecorderPreviewMode()) === 'video_file';
-      if (isVideoFileInput) {
+      const previewMode = await getRecorderPreviewMode();
+      isVideoFileInput = previewMode === 'video_file';
+      if (shouldUseBackendPreviewFrame(previewMode)) {
+        isCameraPermissionDialogOpen = false;
         return;
       }
 

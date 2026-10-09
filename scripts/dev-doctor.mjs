@@ -7,16 +7,30 @@ import { fileURLToPath } from "node:url";
 import { findGitLfsPointerMkvFiles } from "../frontend/scripts/ensure-e2e-assets.js";
 
 const FRONTEND_TOOLS = ["prettier", "eslint", "svelte-check", "vitest"];
-const BACKEND_TOOLS = [
-  ["backend-ruff", "backend ruff", "backend/.venv/Scripts/ruff.exe", ["--version"]],
-  ["backend-ty", "backend ty", "backend/.venv/Scripts/ty.exe", ["--version"]],
-  [
-    "backend-import-lint",
-    "backend import-lint",
-    "backend/.venv/Scripts/lint-imports.exe",
-    ["--help"],
-  ],
-];
+function backendTools(platform) {
+  const directory = platform === "win32" ? "Scripts" : "bin";
+  const suffix = platform === "win32" ? ".exe" : "";
+  return [
+    [
+      "backend-ruff",
+      "backend ruff",
+      `backend/.venv/${directory}/ruff${suffix}`,
+      ["--version"],
+    ],
+    [
+      "backend-ty",
+      "backend ty",
+      `backend/.venv/${directory}/ty${suffix}`,
+      ["--version"],
+    ],
+    [
+      "backend-import-lint",
+      "backend import-lint",
+      `backend/.venv/${directory}/lint-imports${suffix}`,
+      ["--help"],
+    ],
+  ];
+}
 const HOOKS_PATH = ".githooks";
 const HOOK_FILES = [".githooks/pre-commit", ".githooks/pre-push"];
 const PRE_COMMIT_HOME = ".pre-commit-cache";
@@ -73,8 +87,7 @@ async function defaultRunCommand(command, args, options = {}) {
           process.env.UV_PYTHON_INSTALL_DIR ??
           resolve(options.cwd, ".uv-python"),
         PRE_COMMIT_HOME:
-          process.env.PRE_COMMIT_HOME ??
-          resolve(options.cwd, PRE_COMMIT_HOME),
+          process.env.PRE_COMMIT_HOME ?? resolve(options.cwd, PRE_COMMIT_HOME),
         VIRTUALENV_OVERRIDE_APP_DATA:
           process.env.VIRTUALENV_OVERRIDE_APP_DATA ??
           resolve(options.cwd, VIRTUALENV_APP_DATA),
@@ -379,11 +392,16 @@ async function checkLfsAssets(repoRoot, findPointerFiles) {
  *   readTextFile?: (relativePath: string) => Promise<string>;
  *   ensureWritableDirectory?: (relativePath: string, repoRoot: string) => Promise<void>;
  *   findGitLfsPointerMkvFiles?: (options: { repoRoot: string }) => Promise<string[]>;
+ *   platform?: string;
  * }} options
  * @returns {Promise<DoctorReport>}
  */
 export async function runDoctor(options = {}) {
   const repoRoot = resolve(options.repoRoot ?? defaultRepoRoot());
+  const platform = options.platform ?? process.platform;
+  const venvDirectory = platform === "win32" ? "Scripts" : "bin";
+  const venvSuffix = platform === "win32" ? ".exe" : "";
+  const venvPython = `backend/.venv/${venvDirectory}/python${venvSuffix}`;
   const runCommand = options.runCommand ?? defaultRunCommand;
   const fileExists =
     options.fileExists ??
@@ -425,8 +443,10 @@ export async function runDoctor(options = {}) {
       ensureWritableDirectory,
     ),
   );
-  for (const [id, name, command, args] of BACKEND_TOOLS) {
-    checks.push(await checkCommand(id, name, command, args, runCommand, repoRoot));
+  for (const [id, name, command, args] of backendTools(platform)) {
+    checks.push(
+      await checkCommand(id, name, command, args, runCommand, repoRoot),
+    );
   }
   checks.push(
     await checkCommand(
@@ -450,7 +470,7 @@ export async function runDoctor(options = {}) {
     await checkCommand(
       "backend-python",
       "backend Python",
-      "backend/.venv/Scripts/python.exe",
+      venvPython,
       ["--version"],
       runCommand,
       repoRoot,
@@ -460,7 +480,7 @@ export async function runDoctor(options = {}) {
     await checkCommand(
       "backend-pre-commit",
       "backend pre-commit",
-      "backend/.venv/Scripts/python.exe",
+      venvPython,
       ["-m", "pre_commit", "--version"],
       runCommand,
       repoRoot,
@@ -490,7 +510,7 @@ export async function runDoctor(options = {}) {
     await checkCommand(
       "task",
       "Task",
-      "task.exe",
+      platform === "win32" ? "task.exe" : "task",
       ["--version"],
       runCommand,
       repoRoot,

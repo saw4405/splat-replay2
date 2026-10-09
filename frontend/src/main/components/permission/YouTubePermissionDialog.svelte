@@ -1,5 +1,6 @@
 ﻿<script lang="ts">
   import BaseDialog from '../../../common/components/BaseDialog.svelte';
+  import { getSetupPlatform } from '../../../setup/platform';
 
   interface Props {
     open?: boolean;
@@ -8,6 +9,7 @@
 
   let { open = $bindable(false), onClose }: Props = $props();
 
+  const setupPlatform = getSetupPlatform();
   let dontShowAgain = $state(false);
 
   async function handleClose(): Promise<void> {
@@ -47,6 +49,11 @@
       <p class="message">
         このアプリは、編集した動画をYouTubeに自動アップロードするために、YouTubeへのアクセス権限を使用します。
       </p>
+      {#if setupPlatform === 'macos'}
+        <p class="message">
+          macOSのKeychainアクセス確認が別に表示された場合は、内容を確認して許可してください。これはGoogleの認証画面とは別の確認です。
+        </p>
+      {/if}
     </div>
 
     <div class="checkbox-container">

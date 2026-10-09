@@ -1,9 +1,9 @@
-"""OBS 音声ヘルスチェックと安全な復旧のオーケストレーション。"""
+"""OBS 音声状態の確認と継続観測。"""
 
 from __future__ import annotations
 
 import asyncio
-from collections.abc import Callable
+from collections.abc import AsyncGenerator, Callable
 
 from splat_replay.application.interfaces import (
     AudioInputHealthCheckResult,
@@ -14,11 +14,9 @@ from splat_replay.application.interfaces import (
 )
 from splat_replay.domain.models import SwitchPowerState
 
-RECOVERY_CONFIRMATION_SAMPLE_SECONDS = 1.0
-
 
 class RecordingAudioHealthService:
-    """実機入力の準備完了時だけ OBS の無音を復旧する。"""
+    """入力準備状態を確認し、OBS 音声状態を観測する。"""
 
     def __init__(
         self,
@@ -34,10 +32,10 @@ class RecordingAudioHealthService:
         self._power_state = power_state
         self._logger = logger
 
-    async def check_and_recover(
+    async def check(
         self, *, sample_duration_seconds: float
     ) -> AudioInputHealthCheckResult:
-        """実機入力の準備完了後だけ音声を確認し、一度復旧する。"""
+        """単発で音声状態を確認する。無音でも録画や OBS を操作しない。"""
         input_name = self._config.get_capture_device_settings().name
         try:
             connected = await asyncio.to_thread(
@@ -82,32 +80,19 @@ class RecordingAudioHealthService:
             input_name,
             sample_duration_seconds=sample_duration_seconds,
         )
-        if result.status != "silent":
-            return result
+        return result
 
-        confirmation = await self._recorder.check_audio_input_health(
-            input_name,
-            sample_duration_seconds=max(
-                sample_duration_seconds,
-                RECOVERY_CONFIRMATION_SAMPLE_SECONDS,
-            ),
-        )
-        if confirmation.status != "silent":
-            return confirmation
-
-        if not await self._recorder.try_recover_audio_input():
-            return confirmation
-
-        recovered = await self._recorder.check_audio_input_health(
-            input_name,
-            sample_duration_seconds=RECOVERY_CONFIRMATION_SAMPLE_SECONDS,
-        )
-        self._logger.info(
-            "OBS 音声自動復旧後の再検査が完了しました",
-            healthy=recovered.healthy,
-            status=recovered.status,
-        )
-        return recovered
+    async def observe(
+        self,
+    ) -> AsyncGenerator[AudioInputHealthCheckResult, None]:
+        """OBS 音声状態を連続して観測し、1秒窓ごとの結果を返す。"""
+        input_name = self._config.get_capture_device_settings().name
+        observations = self._recorder.observe_audio_input_health(input_name)
+        try:
+            async for result in observations:
+                yield result
+        finally:
+            await observations.aclose()
 
     @staticmethod
     def _skipped(input_name: str, details: str) -> AudioInputHealthCheckResult:

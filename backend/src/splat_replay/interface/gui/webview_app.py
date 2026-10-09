@@ -6,16 +6,18 @@ FastAPIバックエンドとpywebviewフロントエンドを統合したデス�
 from __future__ import annotations
 
 import base64
+import importlib
 import multiprocessing
 import os
 import sys
 import threading
 import time
 import traceback
+from collections.abc import Callable
 from multiprocessing.process import BaseProcess
 from pathlib import Path
-from typing import TYPE_CHECKING, cast
-from collections.abc import Callable
+from types import new_class
+from typing import TYPE_CHECKING, Protocol, cast
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 import structlog
@@ -34,6 +36,247 @@ if TYPE_CHECKING:
 
     from uvicorn import Server
     import webview
+
+
+class _WebKitOrigin(Protocol):
+    def protocol(self) -> str: ...
+
+    def host(self) -> str: ...
+
+    def port(self) -> int: ...
+
+
+class _WebKitFrameInfo(Protocol):
+    def isMainFrame(self) -> bool: ...
+
+
+class _CocoaBrowserView(Protocol):
+    BrowserDelegate: type[object]
+    AppDelegate: type[object]
+    instances: dict[str, _CocoaWindowInstance]
+    should_close: Callable[[object], int]
+
+
+class _CocoaWindowInstance(Protocol):
+    pywebview_window: object
+
+    def destroy(self) -> None: ...
+
+
+class _CocoaAppKit(Protocol):
+    NSTerminateCancel: int
+    NSTerminateNow: int
+
+
+class _CocoaModule(Protocol):
+    BrowserView: _CocoaBrowserView
+    AppKit: _CocoaAppKit
+
+
+class _WebKitModule(Protocol):
+    WKMediaCaptureTypeCamera: int
+    WKPermissionDecisionGrant: int
+    WKPermissionDecisionPrompt: int
+
+
+def _should_grant_macos_camera_permission(
+    backend_url: str,
+    origin_scheme: str,
+    origin_host: str,
+    origin_port: int,
+    is_main_frame: bool,
+    capture_type: int,
+    camera_capture_type: int,
+) -> bool:
+    """配布WebView自身のloopback originによる映像要求だけを許可する。"""
+    expected = urlsplit(backend_url)
+    expected_scheme = expected.scheme.lower()
+    default_port = 443 if expected_scheme == "https" else 80
+    expected_port = expected.port or default_port
+    normalized_origin_port = origin_port
+    if normalized_origin_port < 0:
+        normalized_origin_port = (
+            443 if origin_scheme.lower() == "https" else 80
+        )
+
+    return (
+        is_main_frame
+        and capture_type == camera_capture_type
+        and origin_scheme.lower() == expected_scheme
+        and origin_host.lower() == (expected.hostname or "").lower()
+        and normalized_origin_port == expected_port
+    )
+
+
+def _install_macos_camera_permission_delegate(
+    backend_url: str, logger: BoundLogger
+) -> None:
+    """pywebview Cocoa の delegate に最小範囲の映像許可を追加する。"""
+    if sys.platform != "darwin":
+        return
+
+    cocoa = cast(
+        _CocoaModule,
+        importlib.import_module("webview.platforms.cocoa"),
+    )
+    webkit = cast(_WebKitModule, importlib.import_module("WebKit"))
+    parent_delegate = cocoa.BrowserView.BrowserDelegate
+
+    def request_camera_permission(
+        self: object,
+        web_view: object,
+        origin: _WebKitOrigin,
+        frame: _WebKitFrameInfo,
+        capture_type: int,
+        decision_handler: Callable[[int], None],
+    ) -> None:
+        del self, web_view
+        grant = _should_grant_macos_camera_permission(
+            backend_url,
+            origin.protocol(),
+            origin.host(),
+            origin.port(),
+            frame.isMainFrame(),
+            capture_type,
+            webkit.WKMediaCaptureTypeCamera,
+        )
+        decision = (
+            webkit.WKPermissionDecisionGrant
+            if grant
+            else webkit.WKPermissionDecisionPrompt
+        )
+        if grant:
+            logger.info(
+                "Granted camera permission to the packaged WebView origin"
+            )
+        decision_handler(decision)
+
+    camera_permission_selector = (
+        "webView_requestMediaCapturePermissionForOrigin_"
+        "initiatedByFrame_type_decisionHandler_"
+    )
+    # WKUIDelegateを再宣言するとPyObjCのblock型情報を失うため、親delegateから継承する。
+    camera_permission_delegate = new_class(
+        "CameraPermissionBrowserDelegate",
+        (parent_delegate,),
+        {},
+        lambda namespace: namespace.update(
+            {camera_permission_selector: request_camera_permission}
+        ),
+    )
+
+    cocoa.BrowserView.BrowserDelegate = camera_permission_delegate
+    logger.info(
+        "Installed macOS WebView camera permission delegate",
+        origin=f"{urlsplit(backend_url).scheme}://{urlsplit(backend_url).netloc}",
+    )
+
+
+def _install_macos_graceful_quit_delegate(
+    logger: BoundLogger,
+    *,
+    resident: bool = False,
+    command: Callable[[str], None] | None = None,
+) -> None:
+    """macOS の終了要求を通常終了または常駐終了へ接続する。"""
+    if sys.platform != "darwin":
+        return
+
+    cocoa = cast(
+        _CocoaModule,
+        importlib.import_module("webview.platforms.cocoa"),
+    )
+    objc = None
+    if resident:
+        try:
+            objc = importlib.import_module("objc")
+        except ImportError:
+            objc = None
+    browser_view = cocoa.BrowserView
+    parent_delegate = browser_view.AppDelegate
+    original_should_close = browser_view.should_close
+    approved_window_ids: set[int] = set()
+
+    def should_close_once(window: object) -> int:
+        window_id = id(window)
+        if window_id in approved_window_ids:
+            approved_window_ids.remove(window_id)
+            return cocoa.AppKit.NSTerminateNow
+        return original_should_close(window)
+
+    setattr(browser_view, "should_close", staticmethod(should_close_once))
+
+    def application_should_terminate(self: object, app: object) -> int:
+        del self, app
+        if resident:
+            if command is not None:
+                command("quit")
+            return cocoa.AppKit.NSTerminateCancel
+        instances = tuple(browser_view.instances.values())
+        if not instances:
+            return cocoa.AppKit.NSTerminateCancel
+
+        windows = tuple(instance.pywebview_window for instance in instances)
+        for window in windows:
+            if not original_should_close(window):
+                return cocoa.AppKit.NSTerminateCancel
+
+        for instance in instances:
+            window = instance.pywebview_window
+            approved_window_ids.add(id(window))
+            instance.destroy()
+        return cocoa.AppKit.NSTerminateCancel
+
+    objc_selector: Callable[..., object] | None = None
+    if resident and objc is not None:
+        objc_selector = cast(Callable[..., object], getattr(objc, "selector"))
+    quit_method: object = application_should_terminate
+    if objc_selector is not None:
+        parent_quit_selector = getattr(
+            parent_delegate, "applicationShouldTerminate_"
+        )
+        parent_quit_signature = getattr(
+            parent_quit_selector, "signature", None
+        )
+        if isinstance(parent_quit_signature, bytes):
+            # pywebviewの親selectorと同じ型を引き継ぎ、登録時の不一致を避ける。
+            quit_method = objc_selector(
+                application_should_terminate,
+                selector=b"applicationShouldTerminate:",
+                signature=parent_quit_signature,
+            )
+
+    namespace: dict[str, object] = {"applicationShouldTerminate_": quit_method}
+    if resident:
+
+        def application_should_handle_reopen(
+            self: object, app: object, has_visible_windows: bool
+        ) -> bool:
+            del self, app, has_visible_windows
+            if command is not None:
+                command("show")
+            return True
+
+        reopen_method: object = application_should_handle_reopen
+        if objc_selector is not None:
+            objc_bool = cast(bytes, getattr(objc, "_C_BOOL"))
+            reopen_method = objc_selector(
+                application_should_handle_reopen,
+                selector=b"applicationShouldHandleReopen:hasVisibleWindows:",
+                signature=objc_bool + b"@:@" + objc_bool,
+            )
+        namespace["applicationShouldHandleReopen_hasVisibleWindows_"] = (
+            reopen_method
+        )
+
+    quit_delegate = new_class(
+        "GracefulQuitAppDelegate",
+        (parent_delegate,),
+        {},
+        lambda class_namespace: class_namespace.update(namespace),
+    )
+    browser_view.AppDelegate = quit_delegate
+    logger.info("macOS の終了デリゲートを設定しました", resident=resident)
 
 
 _STARTUP_HTML = """<!doctype html>
@@ -419,9 +662,8 @@ class SplatReplayWebViewApp:
 
         # バックエンドサーバーを別プロセスで起動
         backend_shutdown_event = multiprocessing.Event()
-        signals = (
-            DesktopSignals() if self.desktop_control is not None else None
-        )
+        resident = self.desktop_control is not None or sys.platform == "darwin"
+        signals = DesktopSignals() if resident else None
         if signals is not None and not self.hold:
             signals.activated.set()
         backend_process = multiprocessing.Process(
@@ -438,6 +680,14 @@ class SplatReplayWebViewApp:
         backend_process.start()
         tray = None
         stop_event = threading.Event()
+        from queue import SimpleQueue
+
+        commands: SimpleQueue[str] | None = SimpleQueue() if resident else None
+
+        def dispatch_immediately(action: Callable[[], None]) -> None:
+            action()
+
+        ui_dispatch = dispatch_immediately
 
         try:
             configured_args = configure_webview2_browser_arguments(
@@ -454,6 +704,22 @@ class SplatReplayWebViewApp:
 
             import webview
 
+            app_helper: object | None = None
+            if sys.platform == "darwin" and resident:
+                app_helper = importlib.import_module("PyObjCTools.AppHelper")
+                ui_dispatch = cast(
+                    Callable[[Callable[[], None]], None],
+                    getattr(app_helper, "callAfter"),
+                )
+
+            _install_macos_camera_permission_delegate(
+                self.backend_url, self.logger
+            )
+            _install_macos_graceful_quit_delegate(
+                self.logger,
+                resident=resident,
+                command=commands.put if commands is not None else None,
+            )
             frontend_url = build_frontend_entry_url(
                 self.backend_url, self.frontend_dist
             )
@@ -486,46 +752,78 @@ class SplatReplayWebViewApp:
                     backend_verified.set()
 
             window.events.loaded += on_loaded
-            if self.desktop_control is None:
+            if not resident:
                 window.events.closing += stop_event.set
             else:
+                assert commands is not None
+                tray_ready = False
 
                 def on_closing() -> bool:
                     if exiting.is_set():
                         stop_event.set()
                         return True
-                    window.hide()
+                    if tray_ready:
+                        window.hide()
+                    else:
+                        commands.put("quit")
                     return False
 
                 window.events.closing += on_closing
 
-                from queue import SimpleQueue
-                from splat_replay.interface.gui.desktop_tray import DesktopTray
+                try:
+                    if sys.platform == "darwin":
+                        from splat_replay.interface.gui.macos_desktop_tray import (
+                            MacOSDesktopTray,
+                        )
 
-                commands: SimpleQueue[str] = SimpleQueue()
-                tray = DesktopTray(
-                    self.startup_video.parent / "icon.ico", commands.put
-                )
-                tray.start()
+                        assert app_helper is not None
+                        tray = MacOSDesktopTray(
+                            commands.put,
+                            cast(
+                                Callable[[Callable[[], None]], None],
+                                getattr(app_helper, "callAfter"),
+                            ),
+                        )
+                    else:
+                        from splat_replay.interface.gui.desktop_tray import (
+                            DesktopTray,
+                        )
+
+                        tray = DesktopTray(
+                            self.startup_video.parent / "icon.ico",
+                            commands.put,
+                        )
+                    tray.start()
+                    tray_ready = True
+                except Exception:
+                    if sys.platform != "darwin":
+                        raise
+                    self.logger.error(
+                        "macOS のメニューバー項目を起動できませんでした。画面を表示して続行します",
+                        exc_info=True,
+                    )
+                    tray = None
+                    window.hidden = False
 
                 def control_loop() -> None:
                     control = self.desktop_control
-                    assert control is not None and signals is not None
+                    assert signals is not None
                     stopping = False
                     while not stop_event.wait(0.1):
-                        for command in (
-                            "show",
-                            "update",
-                            "quit",
-                            "cancel",
-                            "resume",
-                        ):
-                            if control.take(command):
-                                commands.put(command)
+                        if control is not None:
+                            for command in (
+                                "show",
+                                "update",
+                                "quit",
+                                "cancel",
+                                "resume",
+                            ):
+                                if control.take(command):
+                                    commands.put(command)
                         while not commands.empty():
                             command = commands.get()
                             if command == "show":
-                                window.show()
+                                ui_dispatch(window.show)
                             elif command == "resume" and not stopping:
                                 signals.activated.set()
                             elif (
@@ -540,31 +838,39 @@ class SplatReplayWebViewApp:
                                     "デスクトップ終了要求を受理",
                                     command=command,
                                 )
-                                control.state("cancelled", False)
-                                window.set_title(
+                                if control is not None:
+                                    control.state("cancelled", False)
+                                title = (
                                     "Splat Replay — 処理完了後に終了します"
                                     if signals.quitting.is_set()
                                     else "Splat Replay — Switchのスリープ・後処理完了を待っています"
                                 )
+                                ui_dispatch(lambda: window.set_title(title))
                             elif command == "cancel" and not stopping:
                                 signals.requested.clear()
                                 signals.quitting.clear()
-                                control.state("cancelled", True)
+                                if control is not None:
+                                    control.state("cancelled", True)
                                 signals.ready.clear()
-                                window.set_title(self.title)
-                        control.state("waiting", signals.requested.is_set())
-                        control.state(
-                            "held",
-                            self.hold
-                            and backend_verified.is_set()
-                            and not signals.activated.is_set(),
-                        )
-                        control.state(
-                            "ready",
-                            backend_verified.is_set()
-                            and signals.activated.is_set()
-                            and not stopping,
-                        )
+                                ui_dispatch(
+                                    lambda: window.set_title(self.title)
+                                )
+                        if control is not None:
+                            control.state(
+                                "waiting", signals.requested.is_set()
+                            )
+                            control.state(
+                                "held",
+                                self.hold
+                                and backend_verified.is_set()
+                                and not signals.activated.is_set(),
+                            )
+                            control.state(
+                                "ready",
+                                backend_verified.is_set()
+                                and signals.activated.is_set()
+                                and not stopping,
+                            )
                         if signals.requested.is_set() and (
                             signals.ready.is_set()
                             or not signals.activated.is_set()
@@ -585,10 +891,12 @@ class SplatReplayWebViewApp:
                                 if signals.quitting.is_set()
                                 else "／更新予約中"
                             )
-                        tray.set_status(icon, description)
+                        if tray is not None:
+                            tray.set_status(icon, description)
                         if not backend_process.is_alive():
+                            stopping = True
                             exiting.set()
-                            window.destroy()
+                            ui_dispatch(window.destroy)
                             return
 
                 threading.Thread(
@@ -604,7 +912,7 @@ class SplatReplayWebViewApp:
                     stop_event,
                     self.logger,
                 ):
-                    window.show()
+                    ui_dispatch(window.show)
 
             # private_mode=Falseでカメラ許可などの設定を永続化
             webview.start(
@@ -612,10 +920,7 @@ class SplatReplayWebViewApp:
                 debug=False,
                 private_mode=False,
             )
-            if (
-                self.desktop_control is not None
-                and backend_process.exitcode not in (None, 0)
-            ):
+            if resident and backend_process.exitcode not in (None, 0):
                 raise RuntimeError(
                     "バックエンドが異常終了しました。更新を中止します。"
                 )
@@ -631,7 +936,7 @@ class SplatReplayWebViewApp:
             self.logger.info("Requesting graceful backend shutdown")
             backend_shutdown_event.set()
             backend_process.join(timeout=30)
-            if self.desktop_control is not None and backend_process.is_alive():
+            if resident and backend_process.is_alive():
                 self.logger.error(
                     "正常終了が完了しないため、更新せず終了を待ちます"
                 )

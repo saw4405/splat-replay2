@@ -36,9 +36,15 @@ async function sendNotificationViaBackend(
       body: JSON.stringify({ title, body, icon }),
     });
 
-    if (!response.ok) {
-      const error = await response.json();
-      console.error('[Notification] Failed to send notification:', error);
+    const result: unknown = await response.json();
+    if (
+      !response.ok ||
+      typeof result !== 'object' ||
+      result === null ||
+      !('status' in result) ||
+      result.status !== 'success'
+    ) {
+      console.error('[Notification] Failed to send notification:', result);
       return false;
     }
 

@@ -8,6 +8,7 @@ from splat_replay.application.interfaces import (
     ImageSelector,
     LoggerPort,
     PathsPort,
+    ThumbnailFontResolverPort,
 )
 from splat_replay.application.services.editing.thumbnail_generator import (
     ThumbnailGenerator,
@@ -54,6 +55,11 @@ class _FileSystem:
     def is_file(self, path: Path) -> bool:
         _ = path
         return True
+
+
+class _FontResolver:
+    def resolve(self, preferred_path: Path) -> Path:
+        return preferred_path
 
 
 class _Drawer:
@@ -158,6 +164,7 @@ def _generator(
         paths=cast(PathsPort, _Paths(tmp_path)),
         image_selector=cast(ImageSelector, selector),
         file_system=cast(FileSystemPort, _FileSystem()),
+        font_resolver=cast(ThumbnailFontResolverPort, _FontResolver()),
     )
     return generator, selector
 
@@ -265,6 +272,7 @@ def test_thumbnail_returns_none_when_no_source_thumbnail_is_available(
         paths=cast(PathsPort, _Paths(tmp_path)),
         image_selector=cast(ImageSelector, select_missing_image),
         file_system=cast(FileSystemPort, _FileSystem()),
+        font_resolver=cast(ThumbnailFontResolverPort, _FontResolver()),
     )
 
     assert generator.create([asset]) is None

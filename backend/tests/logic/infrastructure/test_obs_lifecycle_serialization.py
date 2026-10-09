@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import asyncio
+import plistlib
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any, Callable, cast
 
 import pytest
@@ -42,7 +44,8 @@ class _PopenStub:
     def poll(self) -> int | None:
         return self.returncode
 
-    def wait(self) -> int:
+    def wait(self, timeout: float | None = None) -> int:
+        _ = timeout
         if self.returncode is None:
             self.returncode = 0
         return self.returncode
@@ -52,6 +55,20 @@ class _PopenStub:
 
     def close(self) -> None:
         self.returncode = 0
+
+
+class _UnresponsivePopenStub(_PopenStub):
+    def __init__(self, pid: int) -> None:
+        super().__init__(pid)
+        self.terminate_calls = 0
+        self.kill_calls = 0
+
+    def terminate(self) -> None:
+        self.terminate_calls += 1
+
+    def kill(self) -> None:
+        self.kill_calls += 1
+        self.returncode = -9
 
 
 class _PsutilProcessStub:
@@ -85,6 +102,468 @@ class _ProcessInfoStub(_PsutilProcessStub):
             "name": name,
             "exe": str(exe) if exe is not None else None,
         }
+
+
+class _LaunchedProcessStub(_PsutilProcessStub):
+    def __init__(self, pid: int, executable: Path) -> None:
+        super().__init__(pid)
+        self._executable = executable
+        self.created_at = 0.0
+
+    def exe(self) -> str:
+        return str(self._executable)
+
+    def create_time(self) -> float:
+        return self.created_at
+
+
+class _RunningApplicationStub:
+    def __init__(self, pid: int) -> None:
+        self._pid = pid
+
+    def processIdentifier(self) -> int:
+        return self._pid
+
+
+class _WorkspaceConfigurationStub:
+    def __init__(self) -> None:
+        self.arguments: list[str] = []
+        self.allows_substitution: bool | None = None
+        self.creates_new_instance: bool | None = None
+
+    @classmethod
+    def configuration(cls) -> _WorkspaceConfigurationStub:
+        return cls()
+
+    def setArguments_(self, arguments: list[str]) -> None:
+        self.arguments = arguments
+
+    def setAllowsRunningApplicationSubstitution_(self, value: bool) -> None:
+        self.allows_substitution = value
+
+    def setCreatesNewApplicationInstance_(self, value: bool) -> None:
+        self.creates_new_instance = value
+
+
+def _make_appkit_stub(
+    on_open: Callable[
+        [str, _WorkspaceConfigurationStub, Callable[..., None]], None
+    ],
+) -> tuple[object, list[tuple[str, _WorkspaceConfigurationStub]]]:
+    opened: list[tuple[str, _WorkspaceConfigurationStub]] = []
+
+    class _WorkspaceStub:
+        @staticmethod
+        def sharedWorkspace() -> _WorkspaceStub:
+            return _WorkspaceStub()
+
+        def openApplicationAtURL_configuration_completionHandler_(
+            self,
+            url: str,
+            configuration: _WorkspaceConfigurationStub,
+            completion_handler: Callable[..., None],
+        ) -> None:
+            opened.append((url, configuration))
+            on_open(url, configuration, completion_handler)
+
+    class _URLStub:
+        @staticmethod
+        def fileURLWithPath_(path: str) -> str:
+            return path
+
+    return (
+        SimpleNamespace(
+            NSWorkspace=_WorkspaceStub,
+            NSWorkspaceOpenConfiguration=_WorkspaceConfigurationStub,
+            NSURL=_URLStub,
+        ),
+        opened,
+    )
+
+
+def _make_obs_bundle(tmp_path: Path) -> tuple[Path, Path]:
+    app_bundle = tmp_path / "OBS.app"
+    executable = app_bundle / "Contents" / "MacOS" / "OBS"
+    executable.parent.mkdir(parents=True)
+    executable.write_bytes(b"obs")
+    (app_bundle / "Contents" / "Info.plist").write_bytes(
+        plistlib.dumps({"CFBundleExecutable": "OBS"})
+    )
+    return app_bundle, executable
+
+
+def test_macos_default_obs_path_uses_app_bundle(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(process_module.sys, "platform", "darwin")
+    monkeypatch.setattr(Path, "is_file", lambda _path: False)
+
+    manager = OBSProcessManager(
+        OBSSettings().executable_path, cast(Any, _LoggerStub())
+    )
+
+    assert manager._executable_path == Path(
+        "/Applications/OBS.app/Contents/MacOS/OBS"
+    )
+
+
+@pytest.mark.asyncio
+async def test_macos_existing_obs_is_detected_by_exact_path_and_left_running(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    _, executable = _make_obs_bundle(tmp_path)
+    manager = OBSProcessManager(executable, cast(Any, _LoggerStub()))
+    matching = _ProcessInfoStub(4321, name="OBS", exe=executable)
+    monkeypatch.setattr(process_module.sys, "platform", "darwin")
+    monkeypatch.setattr(process_module, "win32gui", None)
+    monkeypatch.setattr(
+        process_module.psutil, "process_iter", lambda _attrs: [matching]
+    )
+
+    def fail_if_launch_attempted() -> Path:
+        raise AssertionError("既存 OBS を再起動しない")
+
+    monkeypatch.setattr(
+        manager, "_resolve_working_dir", fail_if_launch_attempted
+    )
+
+    assert await manager.is_running()
+    await manager.launch()
+    assert not manager.will_close_on_teardown
+    await manager.teardown()
+
+    assert matching.alive
+    assert not matching.terminated
+    assert manager._process is None
+
+
+@pytest.mark.asyncio
+async def test_macos_app_bundle_launch_uses_launch_services_and_owns_exact_pid(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    app_bundle, executable = _make_obs_bundle(tmp_path)
+    manager = OBSProcessManager(executable, cast(Any, _LoggerStub()))
+    process = _LaunchedProcessStub(9876, executable)
+
+    def on_open(
+        _url: str,
+        _configuration: _WorkspaceConfigurationStub,
+        completion_handler: Callable[..., None],
+    ) -> None:
+        process.created_at = process_module.time.time()
+        completion_handler(_RunningApplicationStub(process.pid), None)
+
+    appkit, opened = _make_appkit_stub(on_open)
+
+    async def run_inline(
+        func: object, *args: object, **kwargs: object
+    ) -> object:
+        return cast(Any, func)(*args, **kwargs)
+
+    async def no_sleep(_: float) -> None:
+        return None
+
+    monkeypatch.setattr(process_module.sys, "platform", "darwin")
+    monkeypatch.setattr(process_module, "AppKit", appkit)
+    monkeypatch.setattr(
+        process_module.psutil, "process_iter", lambda _attrs: []
+    )
+    monkeypatch.setattr(process_module.psutil, "Process", lambda _pid: process)
+    monkeypatch.setattr(process_module.asyncio, "to_thread", run_inline)
+    monkeypatch.setattr(process_module.asyncio, "sleep", no_sleep)
+
+    await manager.launch()
+
+    assert len(opened) == 1
+    opened_url, configuration = opened[0]
+    assert opened_url == str(app_bundle.resolve())
+    assert configuration.arguments == ["--minimize-to-tray"]
+    assert configuration.allows_substitution is False
+    assert configuration.creates_new_instance is True
+    assert manager._process is process
+    assert manager.will_close_on_teardown
+
+
+@pytest.mark.asyncio
+async def test_macos_app_bundle_launch_does_not_own_preexisting_callback_pid(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    _, executable = _make_obs_bundle(tmp_path)
+    manager = OBSProcessManager(executable, cast(Any, _LoggerStub()))
+    process = _LaunchedProcessStub(9876, executable)
+    process.created_at = process_module.time.time() - 1.0
+
+    def on_open(
+        _url: str,
+        _configuration: _WorkspaceConfigurationStub,
+        completion_handler: Callable[..., None],
+    ) -> None:
+        completion_handler(_RunningApplicationStub(process.pid), None)
+
+    appkit, _ = _make_appkit_stub(on_open)
+
+    async def run_inline(
+        func: object, *args: object, **kwargs: object
+    ) -> object:
+        return cast(Any, func)(*args, **kwargs)
+
+    monkeypatch.setattr(process_module.sys, "platform", "darwin")
+    monkeypatch.setattr(process_module, "AppKit", appkit)
+    monkeypatch.setattr(
+        process_module.psutil, "process_iter", lambda _attrs: []
+    )
+    monkeypatch.setattr(process_module.psutil, "Process", lambda _pid: process)
+    monkeypatch.setattr(process_module.asyncio, "to_thread", run_inline)
+
+    with pytest.raises(DeviceError) as error:
+        await manager.launch()
+
+    assert error.value.error_code == "OBS_LAUNCH_PROCESS_NOT_NEW"
+    assert process.alive
+    assert not process.terminated
+    assert manager._process is None
+    assert not manager.will_close_on_teardown
+
+
+@pytest.mark.asyncio
+async def test_macos_app_bundle_launch_failure_does_not_fall_back_to_popen(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    _, executable = _make_obs_bundle(tmp_path)
+    manager = OBSProcessManager(executable, cast(Any, _LoggerStub()))
+    ns_error = SimpleNamespace(domain="NSCocoaErrorDomain", code=256)
+
+    def on_open(
+        _url: str,
+        _configuration: _WorkspaceConfigurationStub,
+        completion_handler: Callable[..., None],
+    ) -> None:
+        completion_handler(None, ns_error)
+
+    appkit, _ = _make_appkit_stub(on_open)
+
+    def fail_if_popen(*_args: object, **_kwargs: object) -> None:
+        raise AssertionError("bundle 起動失敗後に Popen fallback しない")
+
+    monkeypatch.setattr(process_module.sys, "platform", "darwin")
+    monkeypatch.setattr(process_module, "AppKit", appkit)
+    monkeypatch.setattr(
+        process_module.psutil, "process_iter", lambda _attrs: []
+    )
+    monkeypatch.setattr(process_module.subprocess, "Popen", fail_if_popen)
+
+    with pytest.raises(DeviceError) as error:
+        await manager.launch()
+
+    assert error.value.error_code == "OBS_LAUNCH_FAILED"
+    assert error.value.cause is None
+    assert manager._process is None
+
+
+@pytest.mark.asyncio
+async def test_macos_app_bundle_launch_timeout_ignores_late_callback(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    _, executable = _make_obs_bundle(tmp_path)
+    manager = OBSProcessManager(executable, cast(Any, _LoggerStub()))
+    callbacks: list[Callable[..., None]] = []
+
+    def on_open(
+        _url: str,
+        _configuration: _WorkspaceConfigurationStub,
+        completion_handler: Callable[..., None],
+    ) -> None:
+        callbacks.append(completion_handler)
+
+    appkit, _ = _make_appkit_stub(on_open)
+
+    async def run_inline(
+        func: object, *args: object, **kwargs: object
+    ) -> object:
+        return cast(Any, func)(*args, **kwargs)
+
+    monkeypatch.setattr(process_module.sys, "platform", "darwin")
+    monkeypatch.setattr(process_module, "AppKit", appkit)
+    monkeypatch.setattr(
+        process_module.psutil, "process_iter", lambda _attrs: []
+    )
+    monkeypatch.setattr(process_module.asyncio, "to_thread", run_inline)
+    monkeypatch.setattr(
+        process_module,
+        "_MACOS_APP_LAUNCH_TIMEOUT_SECONDS",
+        0.001,
+    )
+
+    with pytest.raises(DeviceError) as error:
+        await manager.launch()
+
+    assert error.value.error_code == "OBS_LAUNCH_TIMEOUT"
+    assert manager._process is None
+
+    loop = asyncio.get_running_loop()
+    callback_errors: list[dict[str, object]] = []
+    old_exception_handler = loop.get_exception_handler()
+    loop.set_exception_handler(
+        lambda _loop, context: callback_errors.append(context)
+    )
+    try:
+        callbacks[0](_RunningApplicationStub(9876), None)
+        drained = loop.create_future()
+        loop.call_soon(drained.set_result, None)
+        await drained
+    finally:
+        loop.set_exception_handler(old_exception_handler)
+
+    assert callback_errors == []
+    assert manager._process is None
+
+
+@pytest.mark.asyncio
+async def test_macos_app_bundle_launch_rejects_different_process_executable(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    _, executable = _make_obs_bundle(tmp_path)
+    manager = OBSProcessManager(executable, cast(Any, _LoggerStub()))
+    other_executable = tmp_path / "other" / "OBS"
+    process = _LaunchedProcessStub(9876, other_executable)
+
+    def on_open(
+        _url: str,
+        _configuration: _WorkspaceConfigurationStub,
+        completion_handler: Callable[..., None],
+    ) -> None:
+        completion_handler(_RunningApplicationStub(process.pid), None)
+
+    appkit, _ = _make_appkit_stub(on_open)
+
+    async def run_inline(
+        func: object, *args: object, **kwargs: object
+    ) -> object:
+        return cast(Any, func)(*args, **kwargs)
+
+    monkeypatch.setattr(process_module.sys, "platform", "darwin")
+    monkeypatch.setattr(process_module, "AppKit", appkit)
+    monkeypatch.setattr(
+        process_module.psutil, "process_iter", lambda _attrs: []
+    )
+    monkeypatch.setattr(process_module.psutil, "Process", lambda _pid: process)
+    monkeypatch.setattr(process_module.asyncio, "to_thread", run_inline)
+
+    with pytest.raises(DeviceError) as error:
+        await manager.launch()
+
+    assert error.value.error_code == "OBS_LAUNCH_PROCESS_MISMATCH"
+    assert process.alive
+    assert not process.terminated
+    assert manager._process is None
+
+
+@pytest.mark.asyncio
+async def test_macos_bundle_validation_failure_does_not_launch_or_fallback(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    _, bundled_executable = _make_obs_bundle(tmp_path)
+    executable = bundled_executable.parent / "OtherOBS"
+    executable.write_bytes(b"other")
+    manager = OBSProcessManager(executable, cast(Any, _LoggerStub()))
+
+    def fail_if_popen(*_args: object, **_kwargs: object) -> None:
+        raise AssertionError("不正な app bundle を Popen fallback しない")
+
+    monkeypatch.setattr(process_module.sys, "platform", "darwin")
+    monkeypatch.setattr(
+        process_module.psutil, "process_iter", lambda _attrs: []
+    )
+    monkeypatch.setattr(process_module.subprocess, "Popen", fail_if_popen)
+
+    with pytest.raises(DeviceError) as error:
+        await manager.launch()
+
+    assert error.value.error_code == "OBS_LAUNCH_FAILED"
+    assert manager._process is None
+
+
+@pytest.mark.asyncio
+async def test_macos_launch_succeeds_without_a_win32_window(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    executable = tmp_path / "OBS"
+    executable.write_bytes(b"")
+    manager = OBSProcessManager(executable, cast(Any, _LoggerStub()))
+    launched: list[_PopenStub] = []
+
+    async def run_inline(
+        func: object, *args: object, **kwargs: object
+    ) -> object:
+        return cast(Any, func)(*args, **kwargs)
+
+    async def no_sleep(_: float) -> None:
+        return None
+
+    def fake_popen(
+        args: list[str],
+        *,
+        cwd: str,
+        creationflags: int,
+    ) -> _PopenStub:
+        _ = args, cwd, creationflags
+        process = _PopenStub(pid=9876)
+        launched.append(process)
+        return process
+
+    monkeypatch.setattr(process_module.sys, "platform", "darwin")
+    monkeypatch.setattr(process_module, "win32gui", None)
+    monkeypatch.setattr(
+        process_module.psutil, "process_iter", lambda _attrs: []
+    )
+    monkeypatch.setattr(process_module.asyncio, "to_thread", run_inline)
+    monkeypatch.setattr(process_module.asyncio, "sleep", no_sleep)
+    monkeypatch.setattr(process_module.subprocess, "Popen", fake_popen)
+
+    await manager.launch()
+
+    assert len(launched) == 1
+    assert manager._process is launched[0]
+    assert manager.will_close_on_teardown
+
+
+@pytest.mark.asyncio
+async def test_macos_teardown_kills_only_owned_process_after_grace_period(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    class _Clock:
+        def __init__(self) -> None:
+            self._times = iter((0.0, 0.0, 11.0))
+
+        def time(self) -> float:
+            return next(self._times, 11.0)
+
+    manager = OBSProcessManager(tmp_path / "OBS", cast(Any, _LoggerStub()))
+    process = _UnresponsivePopenStub(pid=6543)
+    manager._process = cast(Any, process)
+    clock = _Clock()
+
+    async def run_inline(
+        func: object, *args: object, **kwargs: object
+    ) -> object:
+        return cast(Any, func)(*args, **kwargs)
+
+    async def no_sleep(_: float) -> None:
+        return None
+
+    monkeypatch.setattr(process_module.sys, "platform", "darwin")
+    monkeypatch.setattr(
+        process_module.asyncio, "get_running_loop", lambda: clock
+    )
+    monkeypatch.setattr(process_module.asyncio, "sleep", no_sleep)
+    monkeypatch.setattr(process_module.asyncio, "to_thread", run_inline)
+
+    await manager.teardown()
+
+    assert process.terminate_calls == 1
+    assert process.kill_calls == 1
+    assert process.returncode == -9
+    assert manager._process is None
 
 
 class _Win32ApiStub:
@@ -201,6 +680,55 @@ async def test_process_lookup_rejects_multiple_matching_instances(
 
 
 @pytest.mark.asyncio
+async def test_macos_launch_rejects_ambiguous_existing_obs_processes(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    _, executable = _make_obs_bundle(tmp_path)
+    manager = OBSProcessManager(executable, cast(Any, _LoggerStub()))
+    matches = [
+        _ProcessInfoStub(100, name="OBS", exe=executable),
+        _ProcessInfoStub(200, name="OBS", exe=executable),
+    ]
+
+    monkeypatch.setattr(process_module.sys, "platform", "darwin")
+    monkeypatch.setattr(
+        process_module.psutil, "process_iter", lambda _attrs: matches
+    )
+
+    with pytest.raises(DeviceError) as error:
+        await manager.launch()
+
+    assert error.value.error_code == "OBS_PROCESS_LOOKUP_AMBIGUOUS"
+    assert manager._process is None
+    assert not manager.will_close_on_teardown
+
+
+@pytest.mark.asyncio
+async def test_process_lookup_permission_error_blocks_launch_and_teardown(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    manager = OBSProcessManager(tmp_path / "OBS", cast(Any, _LoggerStub()))
+
+    def denied_process_iter(_attrs: list[str]) -> list[_ProcessInfoStub]:
+        raise PermissionError("sysctl(KERN_PROC_ALL)")
+
+    monkeypatch.setattr(process_module.sys, "platform", "darwin")
+    monkeypatch.setattr(
+        process_module.psutil, "process_iter", denied_process_iter
+    )
+
+    with pytest.raises(DeviceError) as launch_error:
+        await manager.launch()
+    assert launch_error.value.error_code == "OBS_PROCESS_LOOKUP_FAILED"
+    assert manager._process is None
+
+    with pytest.raises(DeviceError) as teardown_error:
+        await manager.teardown()
+    assert teardown_error.value.error_code == "OBS_PROCESS_LOOKUP_FAILED"
+    assert manager._process is None
+
+
+@pytest.mark.asyncio
 async def test_process_manager_recovery_preserves_nonmatching_process(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
@@ -281,6 +809,7 @@ async def test_recovery_of_preexisting_obs_preserves_replacement_on_teardown(
     monkeypatch.setattr(manager, "_launch_locked", launch_locked)
 
     restarted = await manager.restart_for_recovery()
+    assert not manager.will_close_on_teardown
     await manager.teardown()
 
     assert restarted is True
@@ -492,6 +1021,7 @@ async def test_process_manager_teardown_closes_owned_process_even_if_running_che
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
+    monkeypatch.setattr(process_module.sys, "platform", "win32")
     obs_exe = tmp_path / "obs64.exe"
     obs_exe.write_bytes(b"")
     manager = OBSProcessManager(obs_exe, cast(Any, _LoggerStub()))
@@ -530,6 +1060,7 @@ async def test_process_manager_teardown_closes_owned_process_even_if_running_che
 async def test_process_manager_teardown_retries_close_while_process_is_alive(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
+    monkeypatch.setattr(process_module.sys, "platform", "win32")
     obs_exe = tmp_path / "obs64.exe"
     obs_exe.write_bytes(b"")
     manager = OBSProcessManager(obs_exe, cast(Any, _LoggerStub()))
@@ -628,6 +1159,7 @@ async def test_process_manager_teardown_does_not_close_external_process(
 async def test_process_manager_teardown_confirms_obs_exit_dialog(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
+    monkeypatch.setattr(process_module.sys, "platform", "win32")
     obs_exe = tmp_path / "obs64.exe"
     obs_exe.write_bytes(b"")
     manager = OBSProcessManager(obs_exe, cast(Any, _LoggerStub()))
@@ -685,6 +1217,7 @@ async def test_process_manager_teardown_confirms_obs_exit_dialog(
 async def test_process_manager_teardown_presses_enter_on_qt_exit_dialog(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
+    monkeypatch.setattr(process_module.sys, "platform", "win32")
     obs_exe = tmp_path / "obs64.exe"
     obs_exe.write_bytes(b"")
     manager = OBSProcessManager(obs_exe, cast(Any, _LoggerStub()))
@@ -746,6 +1279,7 @@ async def test_process_manager_teardown_presses_enter_on_qt_exit_dialog(
 async def test_process_manager_teardown_uses_uia_for_qt_exit_dialog(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
+    monkeypatch.setattr(process_module.sys, "platform", "win32")
     obs_exe = tmp_path / "obs64.exe"
     obs_exe.write_bytes(b"")
     manager = OBSProcessManager(obs_exe, cast(Any, _LoggerStub()))
@@ -822,9 +1356,14 @@ class _ProcessManagerSpy:
     def __init__(self, events: list[str]) -> None:
         self.events = events
         self.running = False
+        self.close_on_teardown = False
         self.launch_started = asyncio.Event()
         self.release_launch = asyncio.Event()
         self.teardown_started = asyncio.Event()
+
+    @property
+    def will_close_on_teardown(self) -> bool:
+        return self.close_on_teardown
 
     async def is_running(self) -> bool:
         return self.running
@@ -834,11 +1373,13 @@ class _ProcessManagerSpy:
         self.launch_started.set()
         await self.release_launch.wait()
         self.running = True
+        self.close_on_teardown = True
         self.events.append("process.launch:end")
 
     async def teardown(self) -> None:
         self.events.append("process.teardown")
-        self.running = False
+        if self.close_on_teardown:
+            self.running = False
         self.teardown_started.set()
 
 
@@ -852,6 +1393,7 @@ class _WebSocketSpy:
         self.events = events
         self.is_connected = False
         self.virtual_camera_active = False
+        self.recording_active = False
         self.meter_started = asyncio.Event()
         self.release_meter = asyncio.Event()
         self.disconnect_started = asyncio.Event()
@@ -865,6 +1407,10 @@ class _WebSocketSpy:
         self.is_connected = False
         self.disconnect_started.set()
 
+    async def drain_meter_cleanup_tasks(self) -> None:
+        """このspyは終了待ちのメーターtaskを保持しない。"""
+        pass
+
     async def request(
         self,
         request_type: str,
@@ -875,7 +1421,10 @@ class _WebSocketSpy:
         self.events.append(f"ws.request:{request_type}")
         if request_type == "GetRecordStatus":
             return _OBSResponseStub(
-                {"outputActive": False, "outputPaused": False}
+                {
+                    "outputActive": self.recording_active,
+                    "outputPaused": False,
+                }
             )
         if request_type == "StartVirtualCam":
             self.virtual_camera_active = True
@@ -884,11 +1433,22 @@ class _WebSocketSpy:
             self.virtual_camera_active = False
             return _OBSResponseStub({})
         if request_type == "GetInputList":
-            return _OBSResponseStub({"inputs": [{"inputName": "MiraBox"}]})
+            return _OBSResponseStub(
+                {
+                    "inputs": [
+                        {
+                            "inputName": "MiraBox",
+                            "inputKind": "wasapi_input_capture",
+                        }
+                    ]
+                }
+            )
         if request_type == "GetInputMute":
             return _OBSResponseStub({"inputMuted": False})
         if request_type == "GetInputAudioTracks":
             return _OBSResponseStub({"inputAudioTracks": {"1": True}})
+        if request_type == "GetInputSettings":
+            return _OBSResponseStub({"inputSettings": {}})
         if request_type == "GetSourceActive":
             return _OBSResponseStub({"videoActive": True})
         raise AssertionError(f"Unexpected OBS request: {request_type}")
@@ -930,6 +1490,7 @@ async def test_teardown_waits_for_virtual_camera_to_stop(
     events: list[str] = []
     process_manager = _ProcessManagerSpy(events)
     process_manager.running = True
+    process_manager.close_on_teardown = True
     ws_client = _WebSocketSpy(events)
     ws_client.is_connected = True
     ws_client.virtual_camera_active = True
@@ -976,6 +1537,28 @@ async def test_teardown_waits_for_virtual_camera_to_stop(
 
 
 @pytest.mark.asyncio
+async def test_teardown_leaves_preexisting_obs_recording_untouched() -> None:
+    events: list[str] = []
+    process_manager = _ProcessManagerSpy(events)
+    process_manager.running = True
+    ws_client = _WebSocketSpy(events)
+    ws_client.is_connected = True
+    ws_client.recording_active = True
+    ws_client.virtual_camera_active = True
+    controller = _controller_with_spies(process_manager, ws_client)
+
+    await controller.teardown()
+
+    assert "ws.request:StopRecord" not in events
+    assert "ws.request:StopVirtualCam" not in events
+    assert ws_client.recording_active
+    assert ws_client.virtual_camera_active
+    assert process_manager.running
+    assert "ws.disconnect" in events
+    assert "process.teardown" in events
+
+
+@pytest.mark.asyncio
 async def test_setup_and_teardown_do_not_overlap_lifecycle_operations() -> (
     None
 ):
@@ -987,7 +1570,9 @@ async def test_setup_and_teardown_do_not_overlap_lifecycle_operations() -> (
     setup_task = asyncio.create_task(controller.setup())
     await process_manager.launch_started.wait()
     teardown_task = asyncio.create_task(controller.teardown())
-    await asyncio.sleep(0.01)
+    teardown_scheduled = asyncio.Event()
+    asyncio.get_running_loop().call_soon(teardown_scheduled.set)
+    await asyncio.wait_for(teardown_scheduled.wait(), timeout=5)
     process_manager.release_launch.set()
     await process_manager.teardown_started.wait()
 
@@ -1013,11 +1598,13 @@ async def test_audio_health_check_and_teardown_do_not_overlap_obs_operations() -
             "MiraBox", sample_duration_seconds=0.1
         )
     )
-    await ws_client.meter_started.wait()
+    await asyncio.wait_for(ws_client.meter_started.wait(), timeout=5)
     teardown_task = asyncio.create_task(controller.teardown())
-    await asyncio.sleep(0.01)
+    teardown_scheduled = asyncio.Event()
+    asyncio.get_running_loop().call_soon(teardown_scheduled.set)
+    await asyncio.wait_for(teardown_scheduled.wait(), timeout=5)
     ws_client.release_meter.set()
-    await ws_client.disconnect_started.wait()
+    await asyncio.wait_for(ws_client.disconnect_started.wait(), timeout=5)
 
     await asyncio.gather(health_task, teardown_task)
 
@@ -1031,6 +1618,7 @@ async def test_hidden_obs_main_window_is_running_and_closes_normally(
     from types import SimpleNamespace
     from unittest.mock import Mock
 
+    monkeypatch.setattr(process_module.sys, "platform", "win32")
     manager = OBSProcessManager(
         tmp_path / "obs64.exe", cast(Any, _LoggerStub())
     )

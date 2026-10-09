@@ -4,10 +4,20 @@ from __future__ import annotations
 
 import asyncio
 import subprocess
+import sys
 
 from structlog.stdlib import BoundLogger
 
 from splat_replay.application.interfaces import PowerPort
+
+_SLEEP_COMMANDS: dict[str, tuple[str, ...]] = {
+    "darwin": ("pmset", "sleepnow"),
+    "win32": (
+        "rundll32.exe",
+        "powrprof.dll,SetSuspendState",
+        "0,1,0",
+    ),
+}
 
 
 class SystemPower(PowerPort):
@@ -18,24 +28,33 @@ class SystemPower(PowerPort):
 
     async def sleep(self) -> None:
         """PC をスリープさせる。"""
+        try:
+            command = _SLEEP_COMMANDS[sys.platform]
+        except KeyError as error:
+            raise RuntimeError(
+                f"この OS では PC スリープをサポートしていません: {sys.platform}"
+            ) from error
+
         self.logger.info("PC スリープ指示")
         try:
             process = await asyncio.create_subprocess_exec(
-                "rundll32.exe",
-                "powrprof.dll,SetSuspendState",
-                "0,1,0",
+                *command,
                 creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
             )
-            await process.wait()
         except NotImplementedError:
-            await asyncio.to_thread(self._sleep_via_subprocess)
+            await asyncio.to_thread(self._sleep_via_subprocess, command)
+            return
+
+        returncode = await process.wait()
+        if returncode != 0:
+            raise subprocess.CalledProcessError(returncode, command)
 
     @staticmethod
-    def _sleep_via_subprocess() -> None:
+    def _sleep_via_subprocess(command: tuple[str, ...]) -> None:
         subprocess.run(
-            ["rundll32.exe", "powrprof.dll,SetSuspendState", "0,1,0"],
+            list(command),
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
-            check=False,
+            check=True,
             creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
         )

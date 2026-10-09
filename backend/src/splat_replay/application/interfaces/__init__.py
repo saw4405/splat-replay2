@@ -71,6 +71,9 @@ from splat_replay.application.interfaces.messaging import (
     FramePublisher,
     FrameSource,
 )
+from splat_replay.application.interfaces.notification import (
+    DesktopNotificationPort,
+)
 from splat_replay.application.interfaces.recording import (
     CaptureDeviceEnumeratorPort,
     CaptureDevicePort,
@@ -85,16 +88,24 @@ from splat_replay.application.interfaces.system import (
     CommandResult,
     EnvironmentPort,
     PowerPort,
+    SoftwareInstallAttempt,
+    SoftwareInstallerPort,
     SystemCommandPort,
 )
 from splat_replay.application.interfaces.upload import (
     AuthenticatedClientPort,
     UploadPort,
 )
+from splat_replay.application.interfaces.thumbnail_font import (
+    ThumbnailFontResolverPort,
+)
 from splat_replay.application.interfaces.video import (
     FramePreviewPort,
     VideoAssetRepositoryPort,
     VideoEditorPort,
+    VideoPreviewError,
+    VideoPreviewPort,
+    VideoPreviewUnavailableError,
 )
 from splat_replay.application.interfaces.weapon_detection import (
     WeaponCandidateScore,
@@ -120,6 +131,7 @@ __all__ = [
     "FileSystemPort",
     "LoggerPort",
     "PathsPort",
+    "ThumbnailFontResolverPort",
     # Data
     "AudioInputHealthCheckResult",
     "AudioInputHealthStatus",
@@ -157,6 +169,9 @@ __all__ = [
     "FramePreviewPort",
     "VideoAssetRepositoryPort",
     "VideoEditorPort",
+    "VideoPreviewError",
+    "VideoPreviewPort",
+    "VideoPreviewUnavailableError",
     "WeaponCandidateScore",
     "WeaponDisplayDetectionResult",
     "WeaponRecognitionPort",
@@ -180,7 +195,10 @@ __all__ = [
     "CommandResult",
     "EnvironmentPort",
     "PowerPort",
+    "SoftwareInstallAttempt",
+    "SoftwareInstallerPort",
     "SystemCommandPort",
+    "DesktopNotificationPort",
     # Messaging
     "CommandDispatcher",
     "DomainEventPublisher",

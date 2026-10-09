@@ -21,6 +21,7 @@ from splat_replay.application.interfaces import (
     ReplayBootstrapResolverPort,
     RecorderWithTranscriptionPort,
     VideoAssetRepositoryPort,
+    VideoPreviewPort,
     VideoRecorderPort,
     WeaponRecognitionPort,
     XPDetectionDiagnosticsPort,
@@ -43,6 +44,7 @@ from splat_replay.application.services import (
 )
 from splat_replay.application.services.checkers import (
     FFMPEGChecker,
+    FLACChecker,
     OBSChecker,
     TesseractChecker,
 )
@@ -50,6 +52,9 @@ from splat_replay.application.services.common.queries import AssetQueryService
 from splat_replay.application.services.errors.error_logger import ErrorLogger
 from splat_replay.application.services.process.auto_process_service import (
     AutoProcessService,
+)
+from splat_replay.application.services.playback.video_preview import (
+    VideoPreviewService,
 )
 from splat_replay.application.services.recording.recording_audio_health import (
     RecordingAudioHealthService,
@@ -60,6 +65,9 @@ from splat_replay.application.use_cases.auto_recording_use_case import (
 from splat_replay.domain.config import AppSettings
 from splat_replay.domain.services import FrameAnalyzer
 from splat_replay.domain.services.state_machine import StateMachine
+from splat_replay.infrastructure.adapters.system.ndi_runtime_checker import (
+    NDIRuntimeChecker,
+)
 
 
 def register_app_services(container: Container) -> None:
@@ -68,6 +76,14 @@ def register_app_services(container: Container) -> None:
     base_dir = app_settings.storage.base_dir
 
     container.register(DeviceChecker, DeviceChecker)
+
+    container.register(
+        VideoPreviewService,
+        factory=lambda: VideoPreviewService(
+            container.resolve(VideoPreviewPort)
+        ),
+        scope=punq.Scope.singleton,
+    )
 
     def recording_audio_health_service_factory() -> (
         RecordingAudioHealthService
@@ -212,7 +228,9 @@ def register_app_services(container: Container) -> None:
     # Software checkers
     container.register(OBSChecker, OBSChecker)
     container.register(FFMPEGChecker, FFMPEGChecker)
+    container.register(FLACChecker, FLACChecker)
     container.register(TesseractChecker, TesseractChecker)
+    container.register(NDIRuntimeChecker, NDIRuntimeChecker)
 
     # SystemCheckService - Protocol型の依存を明示的に注入
     def system_check_service_factory() -> SystemCheckService:
@@ -220,11 +238,15 @@ def register_app_services(container: Container) -> None:
             EnvironmentPort,
             FileSystemPort,
             PathsPort,
+            ThumbnailFontResolverPort,
         )
 
         obs_checker = container.resolve(OBSChecker)
         ffmpeg_checker = container.resolve(FFMPEGChecker)
         tesseract_checker = container.resolve(TesseractChecker)
+        flac_checker = container.resolve(FLACChecker)
+        ndi_checker = container.resolve(NDIRuntimeChecker)
+        font_resolver = container.resolve(ThumbnailFontResolverPort)
         paths = container.resolve(PathsPort)
         file_system = container.resolve(FileSystemPort)
         environment = container.resolve(EnvironmentPort)
@@ -234,6 +256,9 @@ def register_app_services(container: Container) -> None:
             obs_checker=obs_checker,
             ffmpeg_checker=ffmpeg_checker,
             tesseract_checker=tesseract_checker,
+            flac_checker=flac_checker,
+            ndi_checker=ndi_checker,
+            font_resolver=font_resolver,
             paths=paths,
             file_system=file_system,
             environment=environment,

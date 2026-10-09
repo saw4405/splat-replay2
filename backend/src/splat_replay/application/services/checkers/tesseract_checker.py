@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+import sys
 from pathlib import Path
 from typing import Optional
 
@@ -59,6 +60,35 @@ class TesseractChecker:
 
                 if result.success:
                     version = self._extract_tesseract_version(result.stdout)
+                    if sys.platform == "darwin":
+                        if version is None:
+                            return SoftwareCheckResult(
+                                is_installed=False,
+                                error_message=(
+                                    "Tesseract のバージョンを確認できませんでした"
+                                ),
+                            )
+                        languages = self._command_port.execute_command(
+                            ["tesseract", "--list-langs"], timeout=5.0
+                        )
+                        if not languages.success:
+                            return SoftwareCheckResult(
+                                is_installed=False,
+                                error_message=(
+                                    "Tesseract の日本語 OCR データを確認できませんでした"
+                                ),
+                            )
+                        if "jpn" not in {
+                            line.strip()
+                            for line in languages.stdout.splitlines()
+                        }:
+                            return SoftwareCheckResult(
+                                is_installed=False,
+                                version=version,
+                                error_message=(
+                                    "日本語 OCR データ (jpn) が見つかりませんでした"
+                                ),
+                            )
                     self._logger.info(
                         "Tesseract found via command", version=version
                     )
@@ -75,7 +105,9 @@ class TesseractChecker:
         # 2. C:\Program Files\Tesseract-OCR\tesseract.exeが存在するかを確認
         tesseract_exe = Path("C:/Program Files/Tesseract-OCR/tesseract.exe")
 
-        if self._file_system.is_file(tesseract_exe):
+        if sys.platform == "win32" and self._file_system.is_file(
+            tesseract_exe
+        ):
             self._logger.info(
                 "Tesseract executable found", path=str(tesseract_exe)
             )

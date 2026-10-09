@@ -24,9 +24,6 @@ from splat_replay.application.services.recording.phase_handler_registry import (
 from splat_replay.application.services.recording.publisher_worker import (
     PublisherWorker,
 )
-from splat_replay.application.services.recording.recording_audio_health import (
-    RecordingAudioHealthService,
-)
 from splat_replay.application.services.recording.recording_context import (
     RecordingContext,
 )
@@ -51,13 +48,6 @@ class _RecorderStub:
         await asyncio.sleep(1.1)
 
 
-class _SlowAudioHealthStub:
-    async def check_and_recover(
-        self, *, sample_duration_seconds: float
-    ) -> None:
-        await asyncio.sleep(1.1)
-
-
 class _LoggerStub:
     def debug(self, event: str, **kw: object) -> None:
         return None
@@ -74,7 +64,7 @@ class _LoggerStub:
 
 @pytest.mark.perf
 @pytest.mark.asyncio
-async def test_recording_start_hot_path_does_not_wait_for_audio_health() -> (
+async def test_recording_start_hot_path_does_not_wait_for_transcription_prep() -> (
     None
 ):
     service = RecordingSessionService(
@@ -84,7 +74,6 @@ async def test_recording_start_hot_path_does_not_wait_for_audio_health() -> (
         analyzer=cast(Any, object()),
         logger=cast(Any, _LoggerStub()),
         context=RecordingContext(),
-        audio_health=cast(RecordingAudioHealthService, _SlowAudioHealthStub()),
     )
     use_case = AutoRecordingUseCase(
         session_service=service,
@@ -102,7 +91,7 @@ async def test_recording_start_hot_path_does_not_wait_for_audio_health() -> (
     await use_case._refresh_audio_health_for_power_state()
     await service.start()
     elapsed = time.perf_counter() - started_at
-    await use_case._cancel_audio_preparation()
+    await use_case._cancel_transcription_preparation()
 
     # バトル開始後のアプリ内処理予算。OBS自体の応答時間は実機で別計測する。
     assert elapsed < 1.0

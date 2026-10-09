@@ -33,12 +33,14 @@ from splat_replay.application.interfaces import (
     ReplayBootstrapResolverPort,
     SettingsRepositoryPort,
     SpeechTranscriberPort,
+    SoftwareInstallerPort,
     SubtitleEditorPort,
     SystemCommandPort,
     TextToSpeechPort,
     UploadPort,
     VideoAssetRepositoryPort,
     VideoEditorPort,
+    VideoPreviewPort,
     VideoRecorderPort,
     WeaponRecognitionPort,
     XPDetectionDiagnosticsPort,
@@ -79,6 +81,12 @@ from splat_replay.infrastructure import (
 )
 from splat_replay.infrastructure.adapters.system.capture_clock import (
     CaptureClock,
+)
+from splat_replay.infrastructure.adapters.video.ffmpeg_video_preview import (
+    FFmpegVideoPreviewAdapter,
+)
+from splat_replay.infrastructure.adapters.system.homebrew_software_installer import (
+    HomebrewSoftwareInstaller,
 )
 from splat_replay.infrastructure.adapters.system.replay_runtime import (
     ReplayCaptureDeviceEnumerator,
@@ -237,6 +245,11 @@ def register_adapters(
         FFmpegProcessor,
         scope=punq.Scope.singleton,
     )
+    container.register(
+        VideoPreviewPort,
+        FFmpegVideoPreviewAdapter,
+        scope=punq.Scope.singleton,
+    )
 
     # ImageEditorFactory: Frameごとに新しいImageEditorを生成するFactory関数
     from splat_replay.infrastructure.adapters.image.image_editor import (
@@ -278,6 +291,7 @@ def register_adapters(
         container.register(UploadPort, YouTubeClient)
     container.register(AuthenticatedClientPort, YouTubeClient)
     container.register(SystemCommandPort, SystemCommandAdapter)
+    container.register(SoftwareInstallerPort, HomebrewSoftwareInstaller)
 
     # SetupStateRepository の登録
     def _setup_state_repo_factory() -> SetupStateRepository:

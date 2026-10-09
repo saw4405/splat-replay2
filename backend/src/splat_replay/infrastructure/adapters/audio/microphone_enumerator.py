@@ -25,9 +25,10 @@ class MicrophoneEnumerator(MicrophoneEnumeratorPort):
 
     def list_microphones(self) -> List[str]:
         """マイクデバイス一覧を取得する。"""
-        with self._cache_lock:
-            if self._cached_devices is not None:
-                return list(self._cached_devices)
+        if sys.platform != "darwin":
+            with self._cache_lock:
+                if self._cached_devices is not None:
+                    return list(self._cached_devices)
 
         try:
             if sys.platform == "win32":
@@ -39,12 +40,22 @@ class MicrophoneEnumerator(MicrophoneEnumeratorPort):
                     )
                     self._update_cache(devices)
                     return devices
+            if sys.platform == "darwin":
+                indexed_devices = self._list_macos_input_devices()
+                result = self._unique_preserve_order(
+                    [name for _, name in indexed_devices]
+                )
+                self._logger.info(
+                    "マイク一覧を取得しました", count=len(result)
+                )
+                return result
             import speech_recognition as sr
 
             devices = sr.Microphone.list_microphone_names()
             self._logger.info("マイク一覧を取得しました", count=len(devices))
             result = list(devices)
-            self._update_cache(result)
+            if result and sys.platform != "darwin":
+                self._update_cache(result)
             return result
         except Exception as exc:  # noqa: BLE001
             self._logger.error(
@@ -94,11 +105,28 @@ class MicrophoneEnumerator(MicrophoneEnumeratorPort):
         finally:
             audio.terminate()
 
+    def _list_macos_input_devices(self) -> List[tuple[int, str]]:
+        """macOS で入力チャンネルを持つ PortAudio デバイスを列挙する。"""
+        import pyaudio
+
+        audio = cast(_PyAudioLike, pyaudio.PyAudio())
+        try:
+            devices: List[tuple[int, str]] = []
+            for index in range(audio.get_device_count()):
+                info = audio.get_device_info_by_index(index)
+                if info.get("maxInputChannels", 0) <= 0:
+                    continue
+                name = str(info.get("name", "")).strip()
+                if name:
+                    devices.append((index, name))
+            return devices
+        finally:
+            audio.terminate()
+
     def find_microphone_index(self, device_name: str) -> Optional[int]:
         """表示名からデバイスインデックスを検索する。
 
-        list_microphones が返した名前と同じ方式（WASAPI 優先）で
-        PyAudio のデバイスインデックスを返す。
+        list_microphones と同じ入力デバイスを対象にする。
         """
         if not device_name.strip():
             return None
@@ -107,6 +135,21 @@ class MicrophoneEnumerator(MicrophoneEnumeratorPort):
             result = self._find_windows_microphone_index(device_name)
             if result is not None:
                 return result
+        elif sys.platform == "darwin":
+            try:
+                return next(
+                    (
+                        index
+                        for index, name in self._list_macos_input_devices()
+                        if device_name.lower() in name.lower()
+                    ),
+                    None,
+                )
+            except Exception as exc:  # noqa: BLE001
+                self._logger.warning(
+                    "macOS のマイク検索に失敗しました", error=str(exc)
+                )
+                return None
 
         # フォールバック: sr.Microphone.list_microphone_names()
         try:

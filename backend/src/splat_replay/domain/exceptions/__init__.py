@@ -32,6 +32,8 @@ __all__ = [
     "DeviceError",
     "AuthenticationError",
     "ConfigurationError",
+    "NotificationPermissionDeniedError",
+    "NotificationDeliveryError",
 ]
 
 
@@ -207,3 +209,11 @@ class ConfigurationError(DomainError):
         ...     error_code="CLIENT_SECRETS_NOT_FOUND",
         ... )
     """
+
+
+class NotificationPermissionDeniedError(DomainError):
+    """OS の通知許可が得られなかった。"""
+
+
+class NotificationDeliveryError(DomainError):
+    """OS の通知センターが通知登録を受け付けなかった。"""

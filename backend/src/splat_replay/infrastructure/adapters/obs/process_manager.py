@@ -9,6 +9,7 @@
 from __future__ import annotations
 
 import asyncio
+import plistlib
 import re
 import subprocess
 import sys
@@ -21,6 +22,13 @@ import psutil
 from structlog.stdlib import BoundLogger
 
 from splat_replay.domain.exceptions import DeviceError
+
+# macOS のアプリ起動は Launch Services を通して bundle の identity を保つ。
+AppKit: ModuleType | None = None
+if sys.platform == "darwin":
+    import AppKit as _AppKit
+
+    AppKit = _AppKit
 
 # Windows APIのオプショナルインポート
 win32api: ModuleType | None = None
@@ -54,6 +62,32 @@ UIA_BUTTON_CONTROL_TYPE_ID = 50000
 OBS_MAIN_WINDOW_TITLE = re.compile(
     r"^OBS(?:\s+Studio)?\s+\d+(?:\.\d+){1,2}", re.IGNORECASE
 )
+WINDOWS_DEFAULT_OBS_EXECUTABLE_PATH = Path(
+    r"C:\Program Files\obs-studio\bin\64bit\obs64.exe"
+)
+MACOS_OBS_EXECUTABLE_PATHS = (
+    Path("/Applications/OBS.app/Contents/MacOS/OBS"),
+    Path.home() / "Applications/OBS.app/Contents/MacOS/OBS",
+)
+_MACOS_APP_LAUNCH_TIMEOUT_SECONDS = 30.0
+
+
+def _resolve_executable_path(executable_path: Path) -> Path:
+    """Windows 既定値だけを macOS の OBS app bundle に解決する。"""
+    if (
+        sys.platform != "darwin"
+        or executable_path != WINDOWS_DEFAULT_OBS_EXECUTABLE_PATH
+    ):
+        return executable_path
+    return next(
+        (
+            candidate
+            for candidate in MACOS_OBS_EXECUTABLE_PATHS
+            if candidate.is_file()
+        ),
+        MACOS_OBS_EXECUTABLE_PATHS[0],
+    )
+
 
 ManagedOBSProcess = subprocess.Popen[bytes] | psutil.Process
 
@@ -74,7 +108,7 @@ class OBSProcessManager:
             executable_path: OBS実行ファイルのパス
             logger: ロガー
         """
-        self._executable_path = executable_path
+        self._executable_path = _resolve_executable_path(executable_path)
         self._logger = logger
         self._process: ManagedOBSProcess | None = None
         self._preserve_running_on_teardown = False
@@ -85,38 +119,64 @@ class OBSProcessManager:
             self._process
         )
 
-    async def _find_existing_obs_process(self) -> psutil.Process | None:
+    @property
+    def will_close_on_teardown(self) -> bool:
+        """teardown が終了させるアプリ管理中 OBS があるかを返す。"""
+        return (
+            not self._preserve_running_on_teardown
+            and self._has_managed_live_process()
+        )
+
+    async def _find_existing_obs_process(
+        self, *, require_unique: bool = False
+    ) -> psutil.Process | None:
         file_name = self._executable_path.name.lower()
 
         def _impl() -> psutil.Process | None:
             matches: list[psutil.Process] = []
-            for proc in psutil.process_iter(["name", "exe"]):
-                try:
-                    name_obj = proc.info.get("name")
-                    if not (
-                        isinstance(name_obj, str)
-                        and name_obj.lower() == file_name
-                    ):
-                        continue
-                    exe_obj = proc.info.get("exe")
-                    if not isinstance(exe_obj, str) or not exe_obj:
-                        continue
+            try:
+                for proc in psutil.process_iter(["name", "exe"]):
                     try:
-                        if (
-                            Path(exe_obj).resolve()
-                            != self._executable_path.resolve()
+                        name_obj = proc.info.get("name")
+                        if not (
+                            isinstance(name_obj, str)
+                            and name_obj.lower() == file_name
                         ):
                             continue
-                    except OSError:
+                        exe_obj = proc.info.get("exe")
+                        if not isinstance(exe_obj, str) or not exe_obj:
+                            continue
+                        try:
+                            if (
+                                Path(exe_obj).resolve()
+                                != self._executable_path.resolve()
+                            ):
+                                continue
+                        except OSError:
+                            continue
+                        matches.append(proc)
+                    except (psutil.NoSuchProcess, psutil.AccessDenied):
                         continue
-                    matches.append(proc)
-                except (psutil.NoSuchProcess, psutil.AccessDenied):
-                    continue
+            except PermissionError as exc:
+                self._logger.error(
+                    "OBS プロセス一覧を確認できません",
+                    error=str(exc),
+                )
+                raise DeviceError(
+                    "OBS の実行状態を確認できないため処理を中止しました",
+                    "OBS_PROCESS_LOOKUP_FAILED",
+                    cause=exc,
+                ) from exc
             if len(matches) > 1:
                 self._logger.warning(
                     "OBS 自動復旧対象を一意に特定できません",
                     matching_process_count=len(matches),
                 )
+                if require_unique:
+                    raise DeviceError(
+                        "OBS の実行状態を一意に確認できないため起動を中止しました",
+                        "OBS_PROCESS_LOOKUP_AMBIGUOUS",
+                    )
                 return None
             return matches[0] if matches else None
 
@@ -135,20 +195,35 @@ class OBSProcessManager:
 
     async def _wait_managed_process(self, process: ManagedOBSProcess) -> None:
         try:
-            await asyncio.to_thread(process.wait)
+            if sys.platform == "darwin":
+                await asyncio.to_thread(process.wait, timeout=10.0)
+            else:
+                await asyncio.to_thread(process.wait)
         except psutil.NoSuchProcess:
             return
+        except (subprocess.TimeoutExpired, psutil.TimeoutExpired):
+            self._logger.error(
+                "OBS プロセス終了の待機がタイムアウトしました",
+                pid=process.pid,
+            )
 
     def _terminate_managed_process(self, process: ManagedOBSProcess) -> None:
         try:
             process.terminate()
-        except psutil.NoSuchProcess:
+        except (psutil.NoSuchProcess, ProcessLookupError):
+            return
+
+    def _kill_managed_process(self, process: ManagedOBSProcess) -> None:
+        try:
+            process.kill()
+        except (psutil.NoSuchProcess, ProcessLookupError):
             return
 
     async def is_running(self) -> bool:
         """OBSが実行中かどうかを確認。
 
-        プロセスとウィンドウの両方が存在する場合のみTrueを返す。
+        macOS では設定パスと一致する一意なプロセス、Windows では
+        プロセスとメインウィンドウの両方が存在する場合にTrueを返す。
 
         Returns:
             実行中ならTrue
@@ -222,6 +297,11 @@ class OBSProcessManager:
                 self._logger.debug("OBS関連ウィンドウ検出", titles=titles)
             return found
 
+        if sys.platform == "darwin":
+            if self._has_managed_live_process():
+                return True
+            return await self._find_existing_obs_process() is not None
+
         proc_ok, win_ok = await asyncio.gather(
             exists_process_async(), exists_window_async()
         )
@@ -278,15 +358,34 @@ class OBSProcessManager:
     async def _launch_locked(self) -> None:
         """OBSプロセスを起動。呼び出し元で lifecycle lock を保持する。"""
         self._logger.info("OBS 起動要求")
-        if await self.is_running():
-            self._logger.info("OBS は既に実行中")
-            return
-        if self._has_managed_live_process():
-            self._logger.info(
-                "OBS は起動処理中またはメインウィンドウ待機中です",
-                pid=self._process.pid if self._process is not None else None,
-            )
-            return
+        has_macos_app_bundle = sys.platform == "darwin" and any(
+            parent.suffix.lower() == ".app"
+            for parent in self._executable_path.parents
+        )
+        if has_macos_app_bundle:
+            if self._has_managed_live_process():
+                self._logger.info(
+                    "OBS は起動処理中またはメインウィンドウ待機中です",
+                    pid=self._process.pid
+                    if self._process is not None
+                    else None,
+                )
+                return
+            if await self._find_existing_obs_process(require_unique=True):
+                self._logger.info("OBS は既に実行中")
+                return
+        else:
+            if await self.is_running():
+                self._logger.info("OBS は既に実行中")
+                return
+            if self._has_managed_live_process():
+                self._logger.info(
+                    "OBS は起動処理中またはメインウィンドウ待機中です",
+                    pid=self._process.pid
+                    if self._process is not None
+                    else None,
+                )
+                return
 
         try:
             # Windows環境では優先度「高」でプロセスを起動
@@ -325,33 +424,49 @@ class OBSProcessManager:
                 )
 
             args = [str(self._executable_path), "--minimize-to-tray"]
-
-            def _launch_process() -> subprocess.Popen[bytes]:
-                """別スレッドでプロセスを起動"""
-                return subprocess.Popen(
-                    args,
-                    cwd=str(working_dir),
-                    creationflags=creation_flags,
+            app_bundle = (
+                self._resolve_macos_app_bundle(self._executable_path)
+                if sys.platform == "darwin"
+                else None
+            )
+            if app_bundle is not None:
+                launched_process = await self._launch_macos_application(
+                    app_bundle, args[1:]
                 )
+            else:
 
-            # 別スレッドで起動（イベントループの制限を回避）
-            launched_process = await asyncio.to_thread(_launch_process)
+                def _launch_process() -> subprocess.Popen[bytes]:
+                    """別スレッドでプロセスを起動"""
+                    return subprocess.Popen(
+                        args,
+                        cwd=str(working_dir),
+                        creationflags=creation_flags,
+                    )
+
+                # 別スレッドで起動（イベントループの制限を回避）
+                launched_process = await asyncio.to_thread(_launch_process)
             self._process = launched_process
             self._logger.info("OBS プロセス起動完了", pid=launched_process.pid)
 
             # プロセスがすぐに終了していないか確認
             await asyncio.sleep(0.5)
-            returncode = launched_process.poll()
-            if returncode is not None:
+            if not self._is_managed_process_alive(launched_process):
+                returncode = (
+                    launched_process.poll()
+                    if isinstance(launched_process, subprocess.Popen)
+                    else None
+                )
                 # プロセスが既に終了している
                 self._logger.error(
                     "OBS プロセスがすぐに終了しました",
                     returncode=returncode,
                 )
                 raise RuntimeError(
-                    f"OBSプロセスが終了コード {returncode} で終了しました"
+                    f"OBSプロセスが起動直後に終了しました: {returncode=}"
                 )
 
+        except DeviceError:
+            raise
         except Exception as exc:  # pragma: no cover - process launch failure
             self._logger.error(
                 "OBS 起動失敗", error=str(exc), error_type=type(exc).__name__
@@ -373,7 +488,7 @@ class OBSProcessManager:
             if is_running:
                 self._logger.info("OBS 起動確認完了（プロセス＋ウィンドウ）")
                 return
-            if launched_process.poll() is None:
+            if self._is_managed_process_alive(launched_process):
                 self._handle_launch_dialogs(launched_process.pid)
             await asyncio.sleep(1)
             if i % 5 == 0:
@@ -395,6 +510,124 @@ class OBSProcessManager:
         raise DeviceError(
             "OBS 起動がタイムアウトしました", "OBS_LAUNCH_TIMEOUT"
         )
+
+    @staticmethod
+    def _resolve_macos_app_bundle(executable_path: Path) -> Path | None:
+        """設定実行ファイルを正確に含む macOS app bundle を返す。"""
+        app_bundle = next(
+            (
+                parent
+                for parent in executable_path.parents
+                if parent.suffix.lower() == ".app"
+            ),
+            None,
+        )
+        if app_bundle is None:
+            return None
+
+        resolved_bundle = app_bundle.resolve(strict=True)
+        resolved_executable = executable_path.resolve(strict=True)
+        info = plistlib.loads(
+            (resolved_bundle / "Contents" / "Info.plist").read_bytes()
+        )
+        executable_name = (
+            info.get("CFBundleExecutable") if isinstance(info, dict) else None
+        )
+        if not isinstance(executable_name, str) or not executable_name:
+            raise ValueError(
+                "OBS app bundle に CFBundleExecutable がありません"
+            )
+        if Path(executable_name).name != executable_name:
+            raise ValueError("OBS app bundle の executable 名が不正です")
+
+        bundled_executable = (
+            resolved_bundle / "Contents" / "MacOS" / executable_name
+        )
+        if bundled_executable.resolve(strict=True) != resolved_executable:
+            raise ValueError(
+                "設定された OBS 実行ファイルと app bundle の executable が一致しません"
+            )
+        return resolved_bundle
+
+    async def _launch_macos_application(
+        self, app_bundle: Path, arguments: list[str]
+    ) -> psutil.Process:
+        """Launch Services でアプリを開き、検証済み PID を返す。"""
+        if AppKit is None:
+            raise DeviceError(
+                "macOS の Launch Services を利用できません",
+                "OBS_LAUNCH_FAILED",
+            )
+        loop = asyncio.get_running_loop()
+        result: asyncio.Future[tuple[Any | None, Any | None]] = (
+            loop.create_future()
+        )
+
+        def finish(application: Any | None, error: Any | None) -> None:
+            if not result.done():
+                result.set_result((application, error))
+
+        def completed(application: Any | None, error: Any | None) -> None:
+            try:
+                loop.call_soon_threadsafe(finish, application, error)
+            except RuntimeError:
+                # callback が event loop 終了後に届いた場合は何もしない。
+                return
+
+        configuration = AppKit.NSWorkspaceOpenConfiguration.configuration()
+        configuration.setArguments_(arguments)
+        configuration.setAllowsRunningApplicationSubstitution_(False)
+        configuration.setCreatesNewApplicationInstance_(True)
+        launch_requested_at = time.time()
+        AppKit.NSWorkspace.sharedWorkspace().openApplicationAtURL_configuration_completionHandler_(
+            AppKit.NSURL.fileURLWithPath_(str(app_bundle)),
+            configuration,
+            completed,
+        )
+        try:
+            application, error = await asyncio.wait_for(
+                result, timeout=_MACOS_APP_LAUNCH_TIMEOUT_SECONDS
+            )
+        except TimeoutError as exc:
+            raise DeviceError(
+                "Launch Services による OBS 起動確認がタイムアウトしました",
+                "OBS_LAUNCH_TIMEOUT",
+                cause=exc,
+            ) from exc
+
+        if error is not None or application is None:
+            raise DeviceError(
+                f"Launch Services で OBS を起動できませんでした: {error}",
+                "OBS_LAUNCH_FAILED",
+            )
+
+        try:
+            pid = int(application.processIdentifier())
+            process = psutil.Process(pid)
+            process_executable = await asyncio.to_thread(process.exe)
+            if (
+                Path(process_executable).resolve()
+                != self._executable_path.resolve()
+            ):
+                raise DeviceError(
+                    "Launch Services が返した OBS PID の実行ファイルが設定と一致しません",
+                    "OBS_LAUNCH_PROCESS_MISMATCH",
+                )
+            process_created_at = await asyncio.to_thread(process.create_time)
+            if process_created_at < launch_requested_at:
+                raise DeviceError(
+                    "Launch Services が返した OBS PID は起動要求前から存在します",
+                    "OBS_LAUNCH_PROCESS_NOT_NEW",
+                )
+        except DeviceError:
+            raise
+        except (OSError, psutil.Error, TypeError, ValueError) as exc:
+            raise DeviceError(
+                "Launch Services が返した OBS PID を検証できませんでした",
+                "OBS_LAUNCH_PROCESS_INVALID",
+                cause=exc,
+            ) from exc
+        return process
 
     def _resolve_working_dir(self) -> Path:
         """OBS実行ファイルのあるディレクトリを返す。
@@ -729,6 +962,9 @@ class OBSProcessManager:
             close_logged_windows: set[int] = set()
 
             self._logger.info("OBS 終了処理待機")
+            if sys.platform == "darwin":
+                self._logger.info("OBS に終了シグナルを送信")
+                self._terminate_managed_process(process)
             while self._is_managed_process_alive(process):
                 if win32api is not None and win32con is not None:
                     hwnds = self.find_window_by_pid(process.pid)
@@ -766,7 +1002,10 @@ class OBSProcessManager:
 
             if self._is_managed_process_alive(process):
                 self._logger.warning("OBS 強制終了")
-                self._terminate_managed_process(process)
+                if sys.platform == "darwin":
+                    self._kill_managed_process(process)
+                else:
+                    self._terminate_managed_process(process)
             await self._wait_managed_process(process)
             self._logger.info("OBS 終了処理完了")
 

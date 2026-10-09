@@ -18,6 +18,9 @@ from splat_replay.application.interfaces.common import (
     LoggerPort,
     PathsPort,
 )
+from splat_replay.application.interfaces.thumbnail_font import (
+    ThumbnailFontResolverPort,
+)
 from splat_replay.application.interfaces.system import EnvironmentPort
 from splat_replay.application.services.system.software_checker import (
     SoftwareChecker,
@@ -55,6 +58,9 @@ class SystemCheckService:
         obs_checker: SoftwareChecker,
         ffmpeg_checker: SoftwareChecker,
         tesseract_checker: SoftwareChecker,
+        flac_checker: SoftwareChecker,
+        ndi_checker: SoftwareChecker,
+        font_resolver: ThumbnailFontResolverPort,
         paths: PathsPort,
         file_system: FileSystemPort,
         environment: EnvironmentPort,
@@ -72,6 +78,9 @@ class SystemCheckService:
         self._obs_checker = obs_checker
         self._ffmpeg_checker = ffmpeg_checker
         self._tesseract_checker = tesseract_checker
+        self._flac_checker = flac_checker
+        self._ndi_checker = ndi_checker
+        self._font_resolver = font_resolver
         self._paths = paths
         self._file_system = file_system
         self._environment = environment
@@ -100,6 +109,10 @@ class SystemCheckService:
             Tesseractのチェック結果
         """
         return self._tesseract_checker.check()
+
+    def check_flac_installation(self) -> SoftwareCheckResult:
+        """PATH から FLAC を実行できるか確認する。"""
+        return self._flac_checker.check()
 
     def check_environment_variable(self, var_name: str) -> bool:
         """環境変数が設定されているかどうかを確認する。
@@ -154,27 +167,23 @@ class SystemCheckService:
         self._logger.info("Checking font installation", font_name=font_name)
 
         try:
-            # サムネイル用アセットディレクトリ (assets/thumbnail) を使用
-            font_dir = self._paths.get_thumbnail_assets_dir()
-            self._logger.info(
-                "Checking font directory", font_dir=str(font_dir)
-            )
-
-            # ikamodoki1.ttf ファイルをチェック
-            font_path = font_dir / f"{font_name}.ttf"
-            if self._file_system.is_file(font_path):
-                self._logger.info("Font found", path=str(font_path))
+            font_path = self._paths.get_thumbnail_asset(f"{font_name}.ttf")
+            resolved_path = self._font_resolver.resolve(font_path)
+            if resolved_path is not None:
+                self._logger.info("Font found", path=str(resolved_path))
                 return SoftwareCheckResult(
                     is_installed=True,
-                    installation_path=font_path,
+                    installation_path=resolved_path,
                 )
 
             self._logger.info(
-                "Font not found", font_name=font_name, font_dir=str(font_dir)
+                "Font not found", font_name=font_name, font_path=str(font_path)
             )
             return SoftwareCheckResult(
                 is_installed=False,
-                error_message=f"{font_name}.ttf フォントが見つかりませんでした",
+                error_message=(
+                    f"{font_name}.ttf と OS 標準の日本語フォントが見つかりませんでした"
+                ),
             )
         except Exception as e:
             self._logger.error("Font check error", error=str(e))
@@ -227,36 +236,4 @@ class SystemCheckService:
             NDI Runtimeのチェック結果
         """
         self._logger.info("Checking NDI Runtime installation")
-
-        # NDI Runtimeの一般的なインストールパスをチェック
-        common_paths = [
-            Path("C:/Program Files/NDI/NDI 6 Runtime/v6"),
-            Path("C:/Program Files/NDI/NDI 5 Runtime/v5"),
-            Path("C:/Program Files (x86)/NDI/NDI 6 Runtime/v6"),
-            Path("C:/Program Files (x86)/NDI/NDI 5 Runtime/v5"),
-        ]
-
-        for path in common_paths:
-            if self._file_system.is_dir(path):
-                # Processing.NDI.Lib.x64.dll の存在を確認
-                dll_path = path / "Processing.NDI.Lib.x64.dll"
-                if self._file_system.exists(dll_path):
-                    self._logger.info("NDI Runtime found", path=str(path))
-                    # バージョン情報をパスから抽出
-                    version = None
-                    if "NDI 6" in str(path):
-                        version = "6.x"
-                    elif "NDI 5" in str(path):
-                        version = "5.x"
-
-                    return SoftwareCheckResult(
-                        is_installed=True,
-                        version=version,
-                        installation_path=path,
-                    )
-
-        self._logger.info("NDI Runtime not found")
-        return SoftwareCheckResult(
-            is_installed=False,
-            error_message="NDI Runtime が見つかりませんでした",
-        )
+        return self._ndi_checker.check()
