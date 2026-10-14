@@ -33,6 +33,13 @@ vi.mock('../../renderMode', async () => {
 
 import VideoPreview from './VideoPreview.svelte';
 
+const expectedVideoConstraints = {
+  width: { ideal: 1920 },
+  height: { ideal: 1080 },
+  frameRate: { ideal: 60 },
+  aspectRatio: { ideal: 16 / 9 },
+};
+
 function installMediaDevices(mediaDevices: Partial<MediaDevices>): void {
   Object.defineProperty(navigator, 'mediaDevices', {
     configurable: true,
@@ -151,12 +158,49 @@ describe('VideoPreview.svelte', () => {
 
     await vi.waitFor(() => {
       expect(getUserMediaMock).toHaveBeenCalledWith({
-        video: { deviceId: { exact: 'camera-1' } },
+        video: { ...expectedVideoConstraints, deviceId: { exact: 'camera-1' } },
         audio: false,
       });
     });
     expect(fetchMock).not.toHaveBeenCalledWith('/api/recorder/preview-frame', {
       cache: 'no-store',
+    });
+  });
+
+  it('AbortErrorの再試行で汎用制約へ切り替えても1080p60を希望する', async () => {
+    getRecorderPreviewModeMock.mockResolvedValue('live_capture');
+    const mediaStream = new MediaStream();
+    Object.defineProperty(mediaStream, 'getTracks', {
+      configurable: true,
+      value: vi.fn(() => []),
+    });
+    getUserMediaMock
+      .mockRejectedValueOnce(new DOMException('Camera busy', 'AbortError'))
+      .mockRejectedValueOnce(new DOMException('Camera busy', 'AbortError'))
+      .mockResolvedValue(mediaStream);
+    installMediaDevices({
+      enumerateDevices: vi
+        .fn()
+        .mockResolvedValue([
+          { kind: 'videoinput', label: 'OBS Virtual Camera', deviceId: 'camera-1' },
+        ]),
+      getUserMedia: getUserMediaMock,
+    });
+    fetchMock.mockResolvedValue(jsonResponse({ sections: [] }));
+
+    render(VideoPreview);
+
+    await vi.waitFor(() => {
+      expect(getUserMediaMock).toHaveBeenCalledTimes(1);
+    });
+    await vi.advanceTimersByTimeAsync(500);
+    await vi.advanceTimersByTimeAsync(1000);
+
+    await vi.waitFor(() => {
+      expect(getUserMediaMock).toHaveBeenNthCalledWith(3, {
+        video: expectedVideoConstraints,
+        audio: false,
+      });
     });
   });
 
@@ -190,7 +234,7 @@ describe('VideoPreview.svelte', () => {
     getRecorderStateMock.mockResolvedValue('STOPPED');
     render(VideoPreview, { props: { switchPowerState: 'armed' } });
     let trigger = await screen.findByRole('button', {
-      name: '次のバトルを自動録画する準備ができています。手動録画操作を開く',
+      name: '自動録画の待機中です。マッチングを検出すると画面にマッチング開始時刻が表示されます。手動録画操作を開く',
     });
     await fireEvent.focusIn(trigger);
     await fireEvent.click(screen.getByRole('button', { name: '手動録画を開始' }));

@@ -2,6 +2,8 @@
 
 import base64
 import json
+import os
+import shutil
 import subprocess
 from pathlib import Path
 
@@ -12,6 +14,15 @@ import pytest
 def test_update_preserves_data_and_rolls_back(
     tmp_path: Path, fail_startup: bool
 ) -> None:
+    if os.name != "nt":
+        pytest.skip(
+            "update-resident-desktop.ps1 は Windows PowerShell で検証します"
+        )
+    if shutil.which("powershell") is None:
+        pytest.skip(
+            "update-resident-desktop.ps1 の検証にはPowerShellが必要です"
+        )
+
     source, target = tmp_path / "source", tmp_path / "target"
     for directory, value in ((source, "new"), (target, "old")):
         for name in ("_internal/runtime", "assets/icon", "SplatReplay.exe"):
@@ -88,6 +99,11 @@ Write-Output ('RESULT:' + (@{{ failed = $failed }} | ConvertTo-Json -Compress))
 
 
 def test_legacy_deploy_only_targets_its_executable() -> None:
+    if os.name != "nt":
+        pytest.skip("deploy-desktop.ps1 は Windows PowerShell で検証します")
+    if shutil.which("powershell") is None:
+        pytest.skip("deploy-desktop.ps1 の検証にはPowerShellが必要です")
+
     path = Path(__file__).resolve().parents[4] / "scripts/deploy-desktop.ps1"
     quoted = "'" + str(path).replace("'", "''") + "'"
     script = f"""

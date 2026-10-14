@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import sys
 from pathlib import Path
+from typing import Callable, Literal
 
 from splat_replay.application.interfaces.common import (
     FileSystemPort,
@@ -10,10 +12,12 @@ from splat_replay.application.interfaces.common import (
 )
 from splat_replay.application.interfaces.system import (
     EnvironmentPort,
+    SoftwareInstallerPort,
     SystemCommandPort,
 )
 from splat_replay.application.services.setup.system_check_service import (
     SoftwareCheckResult,
+    SystemCheckService,
 )
 
 
@@ -26,6 +30,8 @@ class SystemSetupService:
         file_system: FileSystemPort,
         environment: EnvironmentPort,
         logger: LoggerPort,
+        software_installer: SoftwareInstallerPort,
+        system_check_service: SystemCheckService,
     ) -> None:
         """サービスを初期化する。
 
@@ -37,6 +43,26 @@ class SystemSetupService:
         self._file_system = file_system
         self._environment = environment
         self._logger = logger
+        self._software_installer = software_installer
+        self._system_check_service = system_check_service
+
+    def _setup_macos_software(
+        self,
+        software: Literal["ffmpeg", "tesseract", "flac"],
+        check: Callable[[], SoftwareCheckResult],
+    ) -> SoftwareCheckResult:
+        current = check()
+        if current.is_installed:
+            return current
+
+        attempt = self._software_installer.install(software)
+        if not attempt.completed:
+            return SoftwareCheckResult(
+                is_installed=False,
+                error_message=attempt.error_message
+                or "導入を完了できませんでした",
+            )
+        return check()
 
     def setup_ffmpeg(self) -> SoftwareCheckResult:
         """FFMPEGのセットアップを行う。
@@ -50,6 +76,10 @@ class SystemSetupService:
             セットアップ結果
         """
         self._logger.info("Setting up FFMPEG")
+        if sys.platform == "darwin":
+            return self._setup_macos_software(
+                "ffmpeg", self._system_check_service.check_ffmpeg_installation
+            )
 
         # 想定されるパス
         ffmpeg_dir = Path("C:/ffmpeg/bin")
@@ -169,6 +199,11 @@ class SystemSetupService:
             セットアップ結果
         """
         self._logger.info("Setting up Tesseract")
+        if sys.platform == "darwin":
+            return self._setup_macos_software(
+                "tesseract",
+                self._system_check_service.check_tesseract_installation,
+            )
 
         # 想定されるパス
         tesseract_dir = Path("C:/Program Files/Tesseract-OCR")
@@ -257,6 +292,15 @@ class SystemSetupService:
                 is_installed=False,
                 error_message=f"確認中にエラーが発生しました: {e}",
             )
+
+    def setup_flac(self) -> SoftwareCheckResult:
+        """macOS の文字起こし向け FLAC を導入して実行確認する。"""
+        self._logger.info("Setting up FLAC")
+        if sys.platform != "darwin":
+            return self._system_check_service.check_flac_installation()
+        return self._setup_macos_software(
+            "flac", self._system_check_service.check_flac_installation
+        )
 
     def setup_obs(self) -> SoftwareCheckResult:
         """OBS Studioのセットアップを行う。

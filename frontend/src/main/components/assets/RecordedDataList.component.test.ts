@@ -5,6 +5,11 @@ import type { RecordedVideo } from '../../api/types';
 import { clearMetadataOptionsCache } from '../../api/metadata';
 import type { RawRecordedVideo } from '../../api/mappers';
 
+vi.mock('../../../setup/platform', () => ({
+  getSetupPlatform: () => 'macos',
+  getClientPlatform: () => 'macos',
+}));
+
 describe('RecordedDataList', () => {
   const mockVideos: RecordedVideo[] = [
     {
@@ -209,6 +214,54 @@ describe('RecordedDataList', () => {
         expect(dialog).toBeInTheDocument();
         expect(screen.getByText('メタデータ編集')).toBeInTheDocument();
       });
+    });
+  });
+
+  describe('動画プレビューURL', () => {
+    it('録画済みMKVの再生にmacOS用MP4 URLを使う', async () => {
+      const video: RecordedVideo = {
+        ...mockVideos[0],
+        id: 'recorded/match.mkv',
+        path: '/path/to/match.mkv',
+        filename: 'match.mkv',
+      };
+      render(RecordedDataList, { props: { videos: [video] } });
+
+      await fireEvent.click(screen.getByTestId('recorded-video-play-button'));
+
+      expect(screen.getByLabelText('動画再生を再生')).toHaveAttribute(
+        'src',
+        '/video-preview/recorded.mp4?video_id=recorded%2Fmatch.mkv'
+      );
+    });
+
+    it('字幕プレビューに既存の動画IDを使う', async () => {
+      const video: RecordedVideo = {
+        ...mockVideos[0],
+        id: 'recorded/match.mkv',
+        path: '/path/to/match.mkv',
+        filename: 'match.mkv',
+      };
+      fetchMock.mockImplementation(async (input: RequestInfo | URL) => {
+        const url = String(input);
+        return new Response(
+          JSON.stringify(
+            url.includes('/api/subtitles/recorded/')
+              ? { blocks: [], video_duration: 30 }
+              : metadataOptionsResponse
+          ),
+          { status: 200 }
+        );
+      });
+      render(RecordedDataList, { props: { videos: [video] } });
+
+      await fireEvent.click(screen.getByRole('button', { name: /字幕/ }));
+      const preview = await screen.findByLabelText('字幕プレビューを再生');
+
+      expect(preview).toHaveAttribute(
+        'src',
+        '/video-preview/recorded.mp4?video_id=recorded%2Fmatch.mkv'
+      );
     });
   });
 

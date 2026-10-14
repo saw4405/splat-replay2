@@ -324,8 +324,16 @@
     const existingStream = mediaStream;
     try {
       const targetDeviceId = forceGenericConstraints ? undefined : deviceId;
+      const videoConstraints = {
+        width: { ideal: 1920 },
+        height: { ideal: 1080 },
+        frameRate: { ideal: 60 },
+        aspectRatio: { ideal: 16 / 9 },
+      };
       const constraints: MediaStreamConstraints = {
-        video: targetDeviceId ? { deviceId: { exact: targetDeviceId } } : true,
+        video: targetDeviceId
+          ? { ...videoConstraints, deviceId: { exact: targetDeviceId } }
+          : videoConstraints,
         audio: false,
       };
       const stream = await navigator.mediaDevices.getUserMedia(constraints);

@@ -106,6 +106,9 @@ class _BlockingEditor:
         self.started = asyncio.Event()
         self.release = asyncio.Event()
 
+    def reset_cancel(self) -> None:
+        pass
+
     async def execute(self) -> None:
         self.started.set()
         await self.release.wait()
@@ -115,6 +118,9 @@ class _BlockingEditor:
 
 
 class _NoopUploader:
+    def reset_cancel(self) -> None:
+        pass
+
     async def execute(self) -> None:
         return None
 

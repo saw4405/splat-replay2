@@ -14,7 +14,11 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, waitFor, cleanup, within } from '@testing-library/svelte';
 import userEvent from '@testing-library/user-event';
 import SettingsDialog from './SettingsDialog.svelte';
+import type { SetupPlatform } from '../../../setup/platform';
 import type { SettingsSection } from './types';
+
+const setupPlatformMock = vi.hoisted(() => vi.fn((): SetupPlatform => 'windows'));
+vi.mock('../../../setup/platform', () => ({ getSetupPlatform: setupPlatformMock }));
 
 describe('SettingsDialog.svelte', () => {
   let fetchMock: ReturnType<typeof vi.fn>;
@@ -23,6 +27,7 @@ describe('SettingsDialog.svelte', () => {
     // fetch のモックを設定
     fetchMock = vi.fn();
     global.fetch = fetchMock;
+    setupPlatformMock.mockReturnValue('windows');
     delete document.documentElement.dataset.renderMode;
   });
 
@@ -302,6 +307,58 @@ describe('SettingsDialog.svelte', () => {
     expect(summaryQueries.getByText('変更はアプリ再起動後に反映されます。')).toBeInTheDocument();
   });
 
+  it('LAN 公開の変更が未保存なら保存と再起動を案内する', async () => {
+    const user = userEvent.setup();
+    const mockSections: SettingsSection[] = [
+      {
+        id: 'remote_access',
+        label: 'LAN アクセス',
+        fields: [
+          {
+            id: 'enabled',
+            label: 'LAN 公開',
+            description: '家庭内LANからスマホで同じ画面を開けます。',
+            type: 'boolean',
+            requirement: 'optional',
+            display_level: 'basic',
+            value: false,
+            user_editable: true,
+          },
+        ],
+      },
+    ];
+    fetchMock.mockImplementation((input: RequestInfo | URL) => {
+      if (String(input) === '/api/remote-access/status') {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({
+            enabled: false,
+            active: false,
+            bind_host: '127.0.0.1',
+            port: 8000,
+            restart_required: false,
+            access_urls: [],
+          }),
+        });
+      }
+      return Promise.resolve({ ok: true, json: async () => ({ sections: mockSections }) });
+    });
+
+    render(SettingsDialog, { props: { open: true } });
+    await user.click(await screen.findByRole('checkbox', { name: 'LAN 公開' }));
+
+    const summary = await screen.findByTestId('remote-access-summary');
+    await waitFor(() => {
+      expect(within(summary).getByText('未保存')).toBeInTheDocument();
+    });
+    expect(
+      within(summary).getByText('「保存」を押してアプリを再起動するとURL候補を表示します。')
+    ).toBeInTheDocument();
+    expect(
+      within(summary).queryByText('初期状態ではPC内からのみ接続できます。')
+    ).not.toBeInTheDocument();
+  });
+
   it('LAN 公開がOFFの場合はLAN公開サマリーと手順を表示しない', async () => {
     const mockSections: SettingsSection[] = [
       {
@@ -397,7 +454,7 @@ describe('SettingsDialog.svelte', () => {
     expect(within(panel).queryByRole('group', { name: 'LAN 公開' })).not.toBeInTheDocument();
   });
 
-  it('LAN 公開が反映済みの場合は通常フィールドの後にスマホ用URL候補と接続準備を表示する', async () => {
+  it.each([8000, 5173, 8123])('Windows 案内は稼働中の LAN ポート %i を使う', async (port) => {
     const mockSections: SettingsSection[] = [
       {
         id: 'remote_access',
@@ -426,9 +483,9 @@ describe('SettingsDialog.svelte', () => {
             enabled: true,
             active: true,
             bind_host: '0.0.0.0',
-            port: 8000,
+            port,
             restart_required: false,
-            access_urls: ['http://192.168.1.20:8000/'],
+            access_urls: [`http://192.168.1.20:${port}/`],
           }),
         });
       }
@@ -447,23 +504,240 @@ describe('SettingsDialog.svelte', () => {
     });
     expect(screen.queryByRole('group', { name: 'LAN 公開' })).not.toBeInTheDocument();
     const summaryQueries = within(summary as HTMLElement);
-    expect(summaryQueries.getByText('http://192.168.1.20:8000/')).toBeInTheDocument();
-    expect(summaryQueries.getByText('現在、家庭内LANから接続できます。')).toBeInTheDocument();
+    expect(summaryQueries.getByText(`http://192.168.1.20:${port}/`)).toBeInTheDocument();
+    expect(
+      summaryQueries.getByText('URL候補を別の端末で開いて、LAN接続を確認してください。')
+    ).toBeInTheDocument();
     expect(
       summaryQueries.getByText('Wi-Fiをプライベートネットワークに設定してください。')
     ).toBeInTheDocument();
     expect(
       summaryQueries.getByText('Wi-Fiをプライベートネットワークに設定してください。').parentElement
     ).toHaveStyle({ textAlign: 'left' });
+    const firewallCommand = summaryQueries.getByText((text) =>
+      text.startsWith('New-NetFirewallRule')
+    );
+    expect(firewallCommand.textContent).toBe(
+      [
+        'New-NetFirewallRule `',
+        `  -DisplayName "Allow TCP ${port} Inbound from LocalSubnet" ` + '`',
+        '  -Direction Inbound `',
+        '  -Action Allow `',
+        '  -Protocol TCP `',
+        `  -LocalPort ${port} ` + '`',
+        '  -RemoteAddress LocalSubnet',
+      ].join('\n')
+    );
+  });
+
+  it.each([
+    { label: '欠落', fields: {} },
+    { label: '文字列', fields: { port: '8000' } },
+    { label: '0', fields: { port: 0 } },
+    { label: '65536', fields: { port: 65536 } },
+    { label: '小数', fields: { port: 1.5 } },
+  ])('無効な LAN ポートはURLやPowerShellコマンドに表示しない（$label）', async ({ fields }) => {
+    const mockSections: SettingsSection[] = [
+      {
+        id: 'remote_access',
+        label: 'LAN アクセス',
+        fields: [
+          {
+            id: 'enabled',
+            label: 'LAN 公開',
+            description: '家庭内LANからスマホで同じ画面を開けます。',
+            type: 'boolean',
+            requirement: 'optional',
+            display_level: 'basic',
+            value: true,
+            user_editable: true,
+          },
+        ],
+      },
+    ];
+    fetchMock.mockImplementation((input: RequestInfo | URL) => {
+      if (String(input) === '/api/remote-access/status') {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({
+            enabled: true,
+            active: true,
+            bind_host: '0.0.0.0',
+            ...fields,
+            restart_required: false,
+            access_urls: ['http://192.168.1.20:8000/'],
+          }),
+        });
+      }
+      return Promise.resolve({
+        ok: true,
+        json: async () => ({ sections: mockSections }),
+      });
+    });
+
+    render(SettingsDialog, { props: { open: true } });
+
+    const summary = await screen.findByTestId('remote-access-summary');
+    const summaryQueries = within(summary);
+    expect(summaryQueries.getByText(/LAN のポート情報を取得できません/)).toBeInTheDocument();
+    expect(summaryQueries.queryByText(/New-NetFirewallRule|8000|5173/)).not.toBeInTheDocument();
+  });
+
+  it('LAN 状態取得に失敗した場合は具体的なポートやコマンドを表示しない', async () => {
+    const mockSections: SettingsSection[] = [
+      {
+        id: 'remote_access',
+        label: 'LAN アクセス',
+        fields: [
+          {
+            id: 'enabled',
+            label: 'LAN 公開',
+            description: '家庭内LANからスマホで同じ画面を開けます。',
+            type: 'boolean',
+            requirement: 'optional',
+            display_level: 'basic',
+            value: true,
+            user_editable: true,
+          },
+        ],
+      },
+    ];
+    fetchMock.mockImplementation((input: RequestInfo | URL) => {
+      if (String(input) === '/api/remote-access/status') {
+        return Promise.reject(new Error('LAN status unavailable'));
+      }
+      return Promise.resolve({
+        ok: true,
+        json: async () => ({ sections: mockSections }),
+      });
+    });
+
+    render(SettingsDialog, { props: { open: true } });
+
+    const summary = await screen.findByTestId('remote-access-summary');
+    const summaryQueries = within(summary);
+    expect(summaryQueries.getByText(/LAN のポート情報を取得できません/)).toBeInTheDocument();
+    expect(summaryQueries.queryByText(/New-NetFirewallRule|8000|5173/)).not.toBeInTheDocument();
+  });
+
+  it('macOS はシステム設定を案内し、Windows 専用のファイアウォール手順を表示しない', async () => {
+    setupPlatformMock.mockReturnValue('macos');
+    const mockSections: SettingsSection[] = [
+      {
+        id: 'remote_access',
+        label: 'LAN アクセス',
+        fields: [
+          {
+            id: 'enabled',
+            label: 'LAN 公開',
+            description: '家庭内LANからスマホで同じ画面を開けます。',
+            type: 'boolean',
+            requirement: 'optional',
+            display_level: 'basic',
+            value: true,
+            user_editable: true,
+          },
+        ],
+      },
+    ];
+
+    fetchMock.mockImplementation((input: RequestInfo | URL) => {
+      if (String(input) === '/api/remote-access/status') {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({
+            enabled: true,
+            active: true,
+            bind_host: '0.0.0.0',
+            port: 8000,
+            restart_required: false,
+            access_urls: ['http://192.168.1.20:8000/'],
+          }),
+        });
+      }
+      return Promise.resolve({
+        ok: true,
+        json: async () => ({ sections: mockSections }),
+      });
+    });
+
+    render(SettingsDialog, { props: { open: true } });
+
+    const summary = await screen.findByTestId('remote-access-summary');
+    const summaryQueries = within(summary);
+    expect(summaryQueries.getByText('http://192.168.1.20:8000/')).toBeInTheDocument();
     expect(
-      summaryQueries.getByText((text) => {
-        return (
-          text.includes('New-NetFirewallRule') &&
-          text.includes('-LocalPort 5173') &&
-          text.includes('-RemoteAddress LocalSubnet')
-        );
-      })
+      summaryQueries.getByText('URL候補を別の端末で開いて、LAN接続を確認してください。')
     ).toBeInTheDocument();
+    expect(
+      summaryQueries.getByText(/「ネットワーク」>「ファイアウォール」で SplatReplay\.app/)
+    ).toBeInTheDocument();
+    expect(
+      summaryQueries.getByText(
+        /「プライバシーとセキュリティ」>「ローカルネットワーク」に Splat Replay が表示された場合は許可します。項目がない場合は、LAN接続を試した後にもう一度確認してください。/
+      )
+    ).toBeInTheDocument();
+    expect(
+      summaryQueries.getByText('アプリがファイアウォール設定を自動変更することはありません。')
+    ).toBeInTheDocument();
+    expect(
+      summaryQueries.queryByText(/PowerShell|New-NetFirewallRule|Windows Firewall/)
+    ).not.toBeInTheDocument();
+  });
+
+  it('server OS がunknownの場合はOS固有手順を出さず共通のLAN案内を表示する', async () => {
+    setupPlatformMock.mockReturnValue('unknown');
+    const mockSections: SettingsSection[] = [
+      {
+        id: 'remote_access',
+        label: 'LAN アクセス',
+        fields: [
+          {
+            id: 'enabled',
+            label: 'LAN 公開',
+            description: '家庭内LANからスマホで同じ画面を開けます。',
+            type: 'boolean',
+            requirement: 'optional',
+            display_level: 'basic',
+            value: true,
+            user_editable: true,
+          },
+        ],
+      },
+    ];
+
+    fetchMock.mockImplementation((input: RequestInfo | URL) => {
+      if (String(input) === '/api/remote-access/status') {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({
+            enabled: true,
+            active: true,
+            bind_host: '0.0.0.0',
+            port: 8000,
+            restart_required: false,
+            access_urls: [],
+          }),
+        });
+      }
+      return Promise.resolve({
+        ok: true,
+        json: async () => ({ sections: mockSections }),
+      });
+    });
+
+    render(SettingsDialog, { props: { open: true } });
+
+    const summary = await screen.findByTestId('remote-access-summary');
+    const summaryQueries = within(summary);
+    expect(
+      summaryQueries.getByText(
+        'アプリが動作するPCのネットワーク設定と、受信接続の許可を確認してください。'
+      )
+    ).toBeInTheDocument();
+    expect(
+      summaryQueries.queryByText(/PowerShell|New-NetFirewallRule|macOS|Windows Firewall/)
+    ).not.toBeInTheDocument();
   });
 
   it('LAN 公開が反映済みでも到達可能URLがない場合は接続可能とは表示しない', async () => {
@@ -515,7 +789,9 @@ describe('SettingsDialog.svelte', () => {
       expect(summary).toBeInTheDocument();
     });
     const summaryQueries = within(summary as HTMLElement);
-    expect(summaryQueries.queryByText('現在、家庭内LANから接続できます。')).not.toBeInTheDocument();
+    expect(
+      summaryQueries.queryByText('URL候補を別の端末で開いて、LAN接続を確認してください。')
+    ).not.toBeInTheDocument();
     expect(
       summaryQueries.getByText('スマホから接続できるLAN URLを確認できません。')
     ).toBeInTheDocument();
@@ -1030,23 +1306,18 @@ describe('SettingsDialog.svelte', () => {
       },
     ];
 
-    // 設定取得のモック
-    fetchMock.mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({ sections: mockSections }),
-    });
-
-    // デバイス選択肢リフレッシュのモック
-    fetchMock.mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({ sections: mockSections }),
-    });
-
-    // 設定保存のモック（失敗）
-    fetchMock.mockResolvedValueOnce({
-      ok: false,
-      status: 500,
-      json: async () => ({ detail: '保存に失敗しました' }),
+    fetchMock.mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
+      if (String(input) === '/api/settings' && init?.method === 'PUT') {
+        return Promise.resolve({
+          ok: false,
+          status: 500,
+          json: async () => ({ detail: '保存に失敗しました' }),
+        });
+      }
+      return Promise.resolve({
+        ok: true,
+        json: async () => ({ sections: mockSections }),
+      });
     });
 
     render(SettingsDialog, { props: { open: true } });
@@ -1085,27 +1356,21 @@ describe('SettingsDialog.svelte', () => {
       },
     ];
 
-    // 設定取得のモック
-    fetchMock.mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({ sections: mockSections }),
-    });
-
-    // デバイス選択肢リフレッシュのモック
-    fetchMock.mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({ sections: mockSections }),
-    });
-
     // 設定保存のモック（明示的に解放するまで保留）
     let resolveSave:
       | ((value: { ok: boolean; json: () => Promise<{ status: string }> }) => void)
       | null = null;
-    fetchMock.mockReturnValueOnce(
-      new Promise((resolve) => {
-        resolveSave = resolve;
-      })
-    );
+    fetchMock.mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
+      if (String(input) === '/api/settings' && init?.method === 'PUT') {
+        return new Promise((resolve) => {
+          resolveSave = resolve;
+        });
+      }
+      return Promise.resolve({
+        ok: true,
+        json: async () => ({ sections: mockSections }),
+      });
+    });
 
     render(SettingsDialog, { props: { open: true } });
 

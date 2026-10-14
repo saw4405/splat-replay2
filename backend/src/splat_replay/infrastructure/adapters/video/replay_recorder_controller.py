@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import shutil
+from collections.abc import AsyncGenerator
 from pathlib import Path
 from typing import Awaitable, Callable
 from uuid import uuid4
@@ -95,8 +96,12 @@ class ReplayRecorderController(VideoRecorderPort):
             peak_db=None,
         )
 
-    async def try_recover_audio_input(self) -> bool:
-        return False
+    async def observe_audio_input_health(
+        self, input_name: str
+    ) -> AsyncGenerator[AudioInputHealthCheckResult, None]:
+        yield await self.check_audio_input_health(
+            input_name, sample_duration_seconds=1.0
+        )
 
     async def _notify(self, status: RecorderStatus) -> None:
         for listener in list(self._status_listeners):

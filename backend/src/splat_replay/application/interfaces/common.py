@@ -9,6 +9,7 @@ from splat_replay.application.interfaces.data import (
     BehaviorSettingsView,
     CaptureDeviceSettingsView,
     OBSSettingsView,
+    SpeechTranscriberSettingsView,
     UploadSettingsView,
     VideoEditSettingsView,
 )
@@ -52,6 +53,20 @@ class ConfigPort(Protocol):
     def save_capture_device_name(self, device_name: str) -> None: ...
 
     def save_upload_privacy_status(self, privacy_status: str) -> None: ...
+
+
+class RequiredSetupConfigPort(Protocol):
+    """必須セットアップ判定が読む設定だけを公開する。"""
+
+    def get_upload_settings(self) -> UploadSettingsView: ...
+
+    def get_obs_settings(self) -> OBSSettingsView: ...
+
+    def get_capture_device_settings(self) -> CaptureDeviceSettingsView: ...
+
+    def get_speech_transcriber_settings(
+        self,
+    ) -> SpeechTranscriberSettingsView: ...
 
 
 class PathsPort(Protocol):

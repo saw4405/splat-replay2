@@ -12,8 +12,9 @@
 """
 
 import asyncio
+import json
 from pathlib import Path
-from unittest.mock import MagicMock, Mock, mock_open, patch
+from unittest.mock import MagicMock, Mock, PropertyMock, mock_open, patch
 
 import pytest
 from google.oauth2.credentials import Credentials
@@ -21,6 +22,12 @@ from google.oauth2.credentials import Credentials
 from splat_replay.domain.exceptions import (
     ConfigurationError,
     ResourceNotFoundError,
+)
+from splat_replay.infrastructure.adapters.upload import (
+    youtube_client as youtube_module,
+)
+from splat_replay.infrastructure.adapters.upload.macos_keychain import (
+    KeychainError,
 )
 from splat_replay.infrastructure.adapters.upload.youtube_client import (
     YouTubeClient,
@@ -62,18 +69,20 @@ class TestYouTubeClientAuthentication:
                 youtube_client._ensure_credentials_file()
 
     def test_load_credentials_returns_none_when_file_missing(
-        self, youtube_client
+        self, youtube_client, monkeypatch
     ):
         """TOKEN_FILE が存在しない場合、None を返す。"""
+        monkeypatch.setattr(youtube_module.sys, "platform", "win32")
         with patch("pathlib.Path.exists", return_value=False):
             result = youtube_client._load_credentials()
 
             assert result is None
 
     def test_save_credentials_writes_to_file(
-        self, youtube_client, mock_credentials
+        self, youtube_client, mock_credentials, monkeypatch
     ):
         """認証情報をファイルに保存する。"""
+        monkeypatch.setattr(youtube_module.sys, "platform", "win32")
         with patch("builtins.open", mock_open()):
             with patch("pickle.dump") as mock_dump:
                 youtube_client._save_credentials(mock_credentials)
@@ -85,9 +94,10 @@ class TestYouTubeClientAuthentication:
         "splat_replay.infrastructure.adapters.upload.youtube_client.InstalledAppFlow"
     )
     def test_authenticate_with_new_credentials(
-        self, mock_flow, youtube_client, mock_credentials
+        self, mock_flow, youtube_client, mock_credentials, monkeypatch
     ):
         """新規認証フロー（認証情報がない場合）。"""
+        monkeypatch.setattr(youtube_module.sys, "platform", "win32")
         # Path.exists のモック
         with patch("pathlib.Path.exists", side_effect=[False, True]):
             # Flow のモック設定
@@ -115,6 +125,195 @@ class TestYouTubeClientAuthentication:
 
                     # 認証情報が保存される
                     mock_save.assert_called()
+
+    def test_windows_load_credentials_uses_pickle(
+        self, youtube_client, mock_credentials, monkeypatch
+    ):
+        """Windows は従来どおり token.pickle をロードする。"""
+        monkeypatch.setattr(youtube_module.sys, "platform", "win32")
+        with patch("pathlib.Path.exists", return_value=True):
+            with patch("builtins.open", mock_open()):
+                with patch("pickle.load", return_value=mock_credentials):
+                    assert (
+                        youtube_client._load_credentials() is mock_credentials
+                    )
+
+    def test_macos_load_credentials_from_keychain_json(
+        self, youtube_client, monkeypatch
+    ):
+        """macOS は Keychain の OAuth JSON から認証情報を復元する。"""
+        monkeypatch.setattr(youtube_module.sys, "platform", "darwin")
+        saved = Credentials(
+            token="access-token",
+            refresh_token="refresh-token",
+            token_uri="https://oauth2.googleapis.com/token",
+            client_id="client-id",
+            client_secret="client-secret",
+            scopes=youtube_client.SCOPES,
+        )
+        with patch.object(
+            youtube_module.macos_keychain,
+            "get_youtube_oauth_token",
+            return_value=saved.to_json(),
+        ) as load_token:
+            with patch("pathlib.Path.exists", side_effect=AssertionError):
+                loaded = youtube_client._load_credentials()
+
+        load_token.assert_called_once_with()
+        assert isinstance(loaded, Credentials)
+        assert loaded.refresh_token == "refresh-token"
+
+    @patch(
+        "splat_replay.infrastructure.adapters.upload.youtube_client.InstalledAppFlow"
+    )
+    def test_macos_missing_keychain_token_starts_new_authentication(
+        self, mock_flow, youtube_client, monkeypatch
+    ):
+        """Keychain 未登録なら新規認証し、取得 token を Keychain に保存する。"""
+        monkeypatch.setattr(youtube_module.sys, "platform", "darwin")
+        credentials = Credentials(
+            token="access-token",
+            refresh_token="refresh-token",
+            token_uri="https://oauth2.googleapis.com/token",
+            client_id="client-id",
+            client_secret="client-secret",
+            scopes=youtube_client.SCOPES,
+        )
+        flow = MagicMock()
+        flow.run_local_server.return_value = credentials
+        mock_flow.from_client_secrets_file.return_value = flow
+        with patch.object(
+            youtube_module.macos_keychain,
+            "get_youtube_oauth_token",
+            return_value=None,
+        ):
+            with patch.object(youtube_client, "_ensure_credentials_file"):
+                with patch.object(
+                    youtube_module.macos_keychain, "set_youtube_oauth_token"
+                ) as save_token:
+                    assert youtube_client._get_credentials() is credentials
+
+        flow.run_local_server.assert_called_once_with(port=8080)
+        saved_info = json.loads(save_token.call_args.args[0])
+        assert saved_info["refresh_token"] == "refresh-token"
+
+    def test_macos_save_credentials_to_keychain_json(
+        self, youtube_client, monkeypatch
+    ):
+        """macOS は OAuth credentials を JSON として Keychain に保存する。"""
+        monkeypatch.setattr(youtube_module.sys, "platform", "darwin")
+        credentials = Credentials(
+            token="access-token",
+            refresh_token="refresh-token",
+            token_uri="https://oauth2.googleapis.com/token",
+            client_id="client-id",
+            client_secret="client-secret",
+            scopes=youtube_client.SCOPES,
+        )
+        with patch.object(
+            youtube_module.macos_keychain, "set_youtube_oauth_token"
+        ) as save_token:
+            with patch("builtins.open", side_effect=AssertionError):
+                youtube_client._save_credentials(credentials)
+
+        payload = json.loads(save_token.call_args.args[0])
+        assert payload["refresh_token"] == "refresh-token"
+
+    def test_macos_refresh_saves_updated_token_to_keychain(
+        self, youtube_client, monkeypatch
+    ):
+        """更新した OAuth credentials は Keychain に保存する。"""
+        from datetime import datetime, timedelta
+
+        monkeypatch.setattr(youtube_module.sys, "platform", "darwin")
+        credentials = Credentials(
+            token="expired-token",
+            refresh_token="refresh-token",
+            token_uri="https://oauth2.googleapis.com/token",
+            client_id="client-id",
+            client_secret="client-secret",
+            scopes=youtube_client.SCOPES,
+            expiry=datetime.now() - timedelta(seconds=1),
+        )
+        credentials.refresh = Mock()
+        with patch.object(
+            youtube_client, "_load_credentials", return_value=credentials
+        ):
+            with patch.object(
+                Credentials,
+                "expired",
+                new_callable=PropertyMock,
+                return_value=True,
+            ):
+                with patch.object(
+                    youtube_module.macos_keychain, "set_youtube_oauth_token"
+                ) as save:
+                    assert youtube_client._get_credentials() is credentials
+
+        credentials.refresh.assert_called_once()
+        saved_info = json.loads(save.call_args.args[0])
+        assert saved_info["refresh_token"] == "refresh-token"
+
+    def test_macos_keychain_read_error_does_not_start_new_authentication(
+        self, youtube_client, monkeypatch
+    ):
+        """Keychain 読み込み失敗を未登録扱いにせず伝播する。"""
+        monkeypatch.setattr(youtube_module.sys, "platform", "darwin")
+        read_error = KeychainError(
+            "macOS Keychain の許可操作を完了できませんでした (OSStatus -128)"
+        )
+        with patch.object(
+            youtube_module.macos_keychain,
+            "get_youtube_oauth_token",
+            side_effect=read_error,
+        ):
+            with patch.object(
+                youtube_client,
+                "_ensure_credentials_file",
+                side_effect=AssertionError,
+            ):
+                with patch.object(
+                    youtube_module.macos_keychain, "set_youtube_oauth_token"
+                ) as save_token:
+                    with pytest.raises(KeychainError, match="OSStatus -128"):
+                        youtube_client._get_credentials()
+
+        save_token.assert_not_called()
+
+    def test_macos_keychain_write_error_does_not_fall_back_to_file(
+        self, youtube_client, monkeypatch
+    ):
+        """Keychain 保存失敗は pickle ファイルへフォールバックしない。"""
+        monkeypatch.setattr(youtube_module.sys, "platform", "darwin")
+        credentials = Credentials(
+            token="access-token",
+            refresh_token="refresh-token",
+            token_uri="https://oauth2.googleapis.com/token",
+            client_id="client-id",
+            client_secret="client-secret",
+            scopes=youtube_client.SCOPES,
+        )
+        with patch.object(
+            youtube_module.macos_keychain,
+            "set_youtube_oauth_token",
+            side_effect=KeychainError("write failed"),
+        ):
+            with patch("builtins.open", side_effect=AssertionError):
+                with pytest.raises(KeychainError):
+                    youtube_client._save_credentials(credentials)
+
+    def test_macos_rejects_external_account_credentials(
+        self, youtube_client, monkeypatch
+    ):
+        """macOS Keychain は OAuth user credentials のみ扱う。"""
+        from google.auth.external_account_authorized_user import (
+            Credentials as ExternalAccountCredentials,
+        )
+
+        monkeypatch.setattr(youtube_module.sys, "platform", "darwin")
+        credentials = object.__new__(ExternalAccountCredentials)
+        with pytest.raises(TypeError):
+            youtube_client._save_credentials(credentials)
 
 
 class TestYouTubeClientUpload:

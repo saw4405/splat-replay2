@@ -12,6 +12,9 @@
   } from '../../stores/config';
   import { type SystemCheckResult, SetupStep } from '../../types';
   import NotificationDialog from '../../../common/components/NotificationDialog.svelte';
+  import { getSetupPlatform } from '../../platform';
+
+  const setupPlatform = getSetupPlatform();
 
   const SUBSTEP_STORAGE_KEY = 'obs_substep_index';
 
@@ -32,6 +35,7 @@
   let ndiInstalled = $state(false);
   let ndiVersion = $state<string | null>(null);
   let ndiPath = $state<string | null>(null);
+  let ndiCheckMessage = $state<string | null>(null);
 
   let websocketPassword = $state('');
   let showWebsocketPassword = $state(false);
@@ -47,23 +51,46 @@
     {
       id: 'obs-install',
       title: 'OBS Studio のインストール',
-      description: 'OBS Studio 公式サイトから最新版をダウンロードしてインストールします',
+      description:
+        setupPlatform === 'macos'
+          ? 'OBS Studio の macOS 版をインストールし、アプリケーションフォルダに配置します。'
+          : 'OBS Studio 公式サイトから最新版をダウンロードしてインストールします',
       completed: false,
-      url: 'https://obsproject.com/ja/download',
+      url:
+        setupPlatform === 'macos'
+          ? 'https://obsproject.com/kb/mac-installation'
+          : 'https://obsproject.com/ja/download',
     },
     {
       id: 'obs-ndi',
-      title: 'obs-ndi プラグインのインストール',
-      description: 'GitHubからobs-ndiプラグインをダウンロードしてインストールします',
+      title:
+        setupPlatform === 'macos'
+          ? 'DistroAV プラグインのインストール'
+          : 'obs-ndi プラグインのインストール',
+      description:
+        setupPlatform === 'macos'
+          ? 'DistroAV の macOS 版を OBS に追加します。'
+          : 'GitHubからobs-ndiプラグインをダウンロードしてインストールします',
       completed: false,
-      url: 'https://github.com/obs-ndi/obs-ndi/releases',
+      url:
+        setupPlatform === 'macos'
+          ? 'https://github.com/DistroAV/DistroAV/releases/latest'
+          : 'https://github.com/obs-ndi/obs-ndi/releases',
     },
     {
       id: 'ndi-runtime',
       title: 'NDI 6 Runtime のインストール',
-      description: 'NDI公式サイトからRuntimeをダウンロードしてインストールします',
+      description:
+        setupPlatform === 'macos'
+          ? 'NDI Runtime 6.3 以降の macOS 公式 pkg をインストールし、再検査します。'
+          : 'NDI公式サイトからRuntimeをダウンロードしてインストールします',
       completed: false,
-      url: 'http://ndi.link/NDIRedistV6',
+      url:
+        setupPlatform === 'macos'
+          ? 'https://ndi.link/NDIRedistV6Apple'
+          : setupPlatform === 'windows'
+            ? 'http://ndi.link/NDIRedistV6'
+            : 'https://github.com/DistroAV/DistroAV/wiki/1.-Installation',
     },
     {
       id: 'video-capture-device',
@@ -113,7 +140,7 @@
     if (_currentIndex === 0) {
       isStepCompleted = _obsInstalled || (_steps[0]?.completed ?? false);
     } else if (_currentIndex === 2) {
-      isStepCompleted = _ndiInstalled || (_steps[2]?.completed ?? false);
+      isStepCompleted = _ndiInstalled;
     } else {
       isStepCompleted = _steps[_currentIndex]?.completed || false;
     }
@@ -130,7 +157,7 @@
     if (_currentIndex === 0) {
       currentStepChecked = _obsInstalled || (_steps[0]?.completed ?? false);
     } else if (_currentIndex === 2) {
-      currentStepChecked = _ndiInstalled || (_steps[2]?.completed ?? false);
+      currentStepChecked = _ndiInstalled;
     } else {
       currentStepChecked = _steps[_currentIndex]?.completed || false;
     }
@@ -374,11 +401,15 @@
   async function checkNDIInstallation(showError: boolean = false): Promise<void> {
     _isChecking = true;
     _checkingIndex = 2;
+    ndiInstalled = false;
+    ndiVersion = null;
+    ndiCheckMessage = null;
     try {
       const result: SystemCheckResult = await checkSystem('ndi');
       ndiInstalled = result.is_installed;
       ndiVersion = result.version || null;
       ndiPath = result.installation_path || null;
+      ndiCheckMessage = result.error_message || null;
 
       console.log('[OBSSetup] NDI check result:', {
         ndiInstalled,
@@ -391,22 +422,51 @@
         // インストール済みの場合は必ず状態を更新
         await markSubstepCompleted(SetupStep.OBS_SETUP, setupSteps[2].id, true);
         console.log('[OBSSetup] Marked NDI as completed');
-      } else if (showError) {
-        // ユーザーがチェックを入れようとした場合のみエラー表示
-        showDialog(
-          'NDI Runtime が検出されませんでした。インストールしてからチェックを入れてください。',
-          'error'
-        );
+      } else {
+        clearNDISubstepCompletion();
+        await markSubstepCompleted(SetupStep.OBS_SETUP, setupSteps[2].id, false);
+        if (showError) {
+          showDialog(
+            ndiCheckMessage ||
+              'NDI Runtime が検出されませんでした。インストール後に再検査してください。',
+            'error'
+          );
+        }
       }
     } catch (error) {
+      ndiInstalled = false;
+      ndiCheckMessage =
+        'NDI Runtime の再検査に失敗しました。アプリを再起動して再試行してください。';
+      clearNDISubstepCompletion();
+      try {
+        await markSubstepCompleted(SetupStep.OBS_SETUP, setupSteps[2].id, false);
+      } catch (persistenceError) {
+        console.warn('NDI completion state could not be cleared on the server:', persistenceError);
+      }
       console.warn('NDI Runtime check failed:', error);
       if (showError) {
-        showDialog('NDI Runtimeの確認中にエラーが発生しました。', 'error');
+        showDialog(ndiCheckMessage, 'error');
       }
     } finally {
       _isChecking = false;
       _checkingIndex = null;
     }
+  }
+
+  function clearNDISubstepCompletion(): void {
+    setupState.update((state) => {
+      if (!state) return state;
+      return {
+        ...state,
+        step_details: {
+          ...state.step_details,
+          [SetupStep.OBS_SETUP]: {
+            ...(state.step_details[SetupStep.OBS_SETUP] ?? {}),
+            [setupSteps[2].id]: false,
+          },
+        },
+      };
+    });
   }
 
   async function loadVideoDevices(): Promise<void> {
@@ -451,10 +511,6 @@
     await markSubstepCompleted(SetupStep.OBS_SETUP, step.id, !step.completed);
   }
 
-  function openUrl(url: string): void {
-    window.open(url, '_blank');
-  }
-
   function handleCardClick(event: Event) {
     // テキスト選択中は反応しない
     if (window.getSelection()?.toString()) {
@@ -485,7 +541,7 @@
     // obsInstalled/ndiInstalled はサーバー同期前でも false のため、サーバー状態(setupSteps)も考慮する
     return (
       (index === 0 && (obsInstalled || (setupSteps[0]?.completed ?? false))) ||
-      (index === 2 && (ndiInstalled || (setupSteps[2]?.completed ?? false)))
+      (index === 2 && ndiInstalled)
     );
   }
 
@@ -559,63 +615,122 @@
               <!-- OBS Install -->
               <ol class="instruction-list">
                 <li>
-                  OBS Studio 公式サイトから最新版をダウンロードします
+                  {setupPlatform === 'macos'
+                    ? 'Apple Silicon 搭載 Mac では OBS Studio の Apple Silicon 版をダウンロードし、画面の案内に従ってアプリケーションフォルダに配置します'
+                    : 'OBS Studio 公式サイトから最新版をダウンロードします'}
                   <div style="margin-top: 1rem;">
-                    <button
+                    <a
                       class="link-button"
-                      type="button"
-                      onclick={() => openUrl('https://obsproject.com/ja/download')}
+                      href={setupSteps[0].url ?? 'https://obsproject.com/ja/download'}
+                      target="_blank"
+                      rel="noopener noreferrer"
                     >
                       <Download class="icon" size={16} />
                       ダウンロードページを開く
                       <ExternalLink class="icon" size={14} />
-                    </button>
+                    </a>
                   </div>
                 </li>
-                <li>ダウンロードしたインストーラーを実行します</li>
+                {#if setupPlatform !== 'macos'}
+                  <li>ダウンロードしたインストーラーを実行します</li>
+                {/if}
               </ol>
               <p class="step-note">※ OBSはまだ起動しません</p>
             {:else if currentSubStepIndex === 1}
               <!-- OBS NDI Plugin -->
               <ol class="instruction-list">
                 <li>
-                  GitHubの「Releases」ページから最新版(Latest)を探す
+                  {setupPlatform === 'macos'
+                    ? 'DistroAV の Releases ページから最新の macOS パッケージを探します'
+                    : 'GitHubの「Releases」ページから最新版(Latest)を探す'}
                   <div style="margin-top: 1rem;">
-                    <button
+                    <a
                       class="link-button"
-                      type="button"
-                      onclick={() => openUrl('https://github.com/obs-ndi/obs-ndi/releases')}
+                      href={setupSteps[1].url ??
+                        'https://github.com/DistroAV/DistroAV/releases/latest'}
+                      target="_blank"
+                      rel="noopener noreferrer"
                     >
                       <Download class="icon" size={16} />
                       ダウンロードページを開く
                       <ExternalLink class="icon" size={14} />
-                    </button>
+                    </a>
                   </div>
                 </li>
-                <li>
-                  「Assets」エリアから「distroav-*-windows-x64-installer.exe」をダウンロードします
-                </li>
-                <li>ダウンロードしたインストーラーを実行します</li>
+                {#if setupPlatform === 'macos'}
+                  <li>
+                    「Assets」から「distroav-*-macos-universal.pkg」をダウンロードして開きます
+                  </li>
+                  <li>インストール後、OBS を再起動します</li>
+                {:else if setupPlatform === 'windows'}
+                  <li>
+                    「Assets」エリアから「distroav-*-windows-x64-installer.exe」をダウンロードします
+                  </li>
+                  <li>ダウンロードしたインストーラーを実行します</li>
+                {:else}
+                  <li>
+                    この OS 向けのインストール手順を判定できません。Releases
+                    の案内を確認してください。
+                  </li>
+                {/if}
               </ol>
             {:else if currentSubStepIndex === 2}
               <!-- NDI Runtime -->
               <ol class="instruction-list">
                 <li>
-                  NDI Runtime をダウンロードします
+                  {setupPlatform === 'macos'
+                    ? 'NDI Runtime 6.3 以降の macOS 公式 pkg をダウンロードします。DistroAV 6.2.1 は 6.3 以降が必要です'
+                    : setupPlatform === 'windows'
+                      ? 'NDI Runtime をダウンロードします'
+                      : 'DistroAV の公式インストール案内を開き、この環境向け NDI Runtime の手順を確認します'}
                   <div style="margin-top: 1rem;">
-                    <button
+                    <a
                       class="link-button"
-                      type="button"
-                      onclick={() => openUrl('http://ndi.link/NDIRedistV6')}
+                      href={setupSteps[2].url ?? 'http://ndi.link/NDIRedistV6'}
+                      target="_blank"
+                      rel="noopener noreferrer"
                     >
                       <Download class="icon" size={16} />
-                      ダウンロードする
+                      {setupPlatform === 'windows'
+                        ? 'ダウンロードする'
+                        : setupPlatform === 'macos'
+                          ? '公式 NDI Runtime pkg を開く'
+                          : '公式手順を開く'}
                       <ExternalLink class="icon" size={14} />
-                    </button>
+                    </a>
                   </div>
                 </li>
-                <li>ダウンロードしたインストーラーを実行します</li>
+                {#if setupPlatform === 'macos'}
+                  <li>
+                    ダウンロードした pkg
+                    を開いてインストールします。管理者の確認が表示されたら画面の案内に従います
+                  </li>
+                  <li>インストール後、OBS を終了して再起動します</li>
+                  <li>
+                    この画面に戻り、「NDI Runtime を再検査」を押します。バージョン 6.3
+                    以降を検出するまで完了になりません
+                  </li>
+                {:else if setupPlatform === 'windows'}
+                  <li>ダウンロードしたインストーラーを実行します</li>
+                {/if}
               </ol>
+              {#if setupPlatform === 'macos'}
+                {#if ndiCheckMessage}
+                  <p class="step-note">{ndiCheckMessage}</p>
+                {:else if ndiInstalled && ndiVersion}
+                  <p class="step-note">NDI Runtime {ndiVersion} を検出しました</p>
+                {/if}
+                <button
+                  class="link-button"
+                  type="button"
+                  onclick={() => checkNDIInstallation(true)}
+                  onkeydown={(event) => event.stopPropagation()}
+                  disabled={_isChecking}
+                >
+                  <RefreshCw class="icon" size={16} />
+                  NDI Runtime を再検査
+                </button>
+              {/if}
             {:else if currentSubStepIndex === 3}
               <!-- Capture Device -->
               <ol class="instruction-list">
@@ -624,6 +739,10 @@
                 <li>「映像キャプチャデバイス」を選択します</li>
                 <li>OKボタンをクリックして設定画面を閉じます</li>
                 <li>ゲーム映像が表示されていることを確認します</li>
+                <li>
+                  OBS と Splat Replay の両方で、ゲーム全体が 16:9
+                  で表示されることを確認します。左右の黒帯や横方向の縮みがなく、ゲーム画面全体が見えることを確認してください。解像度の数字だけでは画角を判断できません
+                </li>
                 <li style="margin-top: 1rem;">
                   OBSで設定したキャプチャーデバイスを選択します
                   <div style="margin-top: 1rem; display: flex; gap: 0.5rem; align-items: center;">
@@ -660,17 +779,25 @@
                 <li>フレームレート: 30 FPS 以上</li>
               </ul>
               <p class="step-note">
-                ※ 一度録画をしてみて、映像のカクツキや音声の乱れがないか確認することを推奨します。
+                Switch の電源 ON 後は OBS
+                音量メーターを観測します。初回確認待ちや無音が続く場合はマッチング開始まで観測し、正常な音声を確認すると停止します。待機に戻ったときは直前が無音の場合だけ再開し、次の電源
+                ON で新しい観測周期になります。無音を理由に OBS は再起動しません。
+              </p>
+              <p class="step-note">
+                OBS
+                の音声入力がミュートされていないか、入力と録音トラックが正しいか、ゲーム音が入力されるかを確認してください。※
+                一度録画をして、映像のカクツキや音声の乱れも確認することを推奨します。
               </p>
               <p class="search-note">録画設定の詳細については、Webで調べてください:</p>
-              <button
+              <a
                 class="search-box"
-                type="button"
-                onclick={() => openUrl('https://www.google.com/search?q=OBS録画設定')}
+                href="https://www.google.com/search?q=OBS録画設定"
+                target="_blank"
+                rel="noopener noreferrer"
               >
                 <Search class="search-icon" size={18} />
                 <span class="search-keyword">OBS録画設定</span>
-              </button>
+              </a>
             {:else if currentSubStepIndex === 5}
               <!-- NDI Settings -->
               <ol class="instruction-list">
@@ -684,6 +811,13 @@
                 style="margin: 0 0 1rem 0; font-size: 1rem; line-height: 1.6; color: var(--text-secondary);"
               >
                 このパスワードは、アプリがOBSの録画制御をするために使用します
+              </p>
+              <p class="step-note">
+                OBS WebSocket の接続情報と認証については、<a
+                  href="https://obsproject.com/kb/remote-control-guide"
+                  target="_blank"
+                  rel="noreferrer">OBS 公式リモート操作ガイド</a
+                >も参照してください。
               </p>
               <ol class="instruction-list">
                 <li>OBS の「ツール」メニューから「WebSocket サーバー設定」をクリックします</li>
@@ -839,6 +973,26 @@
     border-color: rgba(var(--theme-rgb-white), 0.3);
   }
 
+  a.link-button,
+  a.search-box {
+    text-decoration: none;
+  }
+
+  a.link-button:focus-visible,
+  a.search-box:focus-visible {
+    outline: none;
+    box-shadow:
+      0 0 0 2px rgba(var(--theme-rgb-ring), 0.8),
+      0 0 0 4px rgba(var(--theme-rgb-accent), 0.28),
+      0 8px 18px rgba(var(--theme-rgb-accent), 0.18);
+  }
+
+  a.link-button:active,
+  a.search-box:active {
+    transform: scale(0.97);
+    box-shadow: 0 0 8px rgba(var(--theme-rgb-accent), 0.4);
+  }
+
   .step-note {
     margin: 1rem 0 0 0;
     font-size: 0.85rem;
@@ -979,6 +1133,7 @@
     border: 1px solid rgba(var(--theme-rgb-white), 0.3);
     background: rgba(var(--theme-rgb-white), 0.05);
     font-size: 1rem;
+    color: var(--text-primary);
     cursor: pointer;
     transition: all 0.2s ease;
   }

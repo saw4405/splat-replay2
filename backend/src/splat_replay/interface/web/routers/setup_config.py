@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 from fastapi import APIRouter
+from starlette.concurrency import run_in_threadpool
 from structlog.stdlib import BoundLogger
 
 from splat_replay.application.services import (
@@ -13,6 +14,7 @@ from splat_replay.application.services import (
     DeviceChecker,
     ErrorHandler,
     RecordingPreparationService,
+    SetupService,
 )
 from splat_replay.interface.web.schemas import (
     CaptureDeviceRequest,
@@ -32,6 +34,7 @@ def create_setup_config_router(
     recording_preparation_service: RecordingPreparationService,
     device_checker: DeviceChecker,
     auto_uploader: AutoUploader,
+    setup_service: SetupService,
     error_handler: ErrorHandler,
     logger: BoundLogger,
 ) -> APIRouter:
@@ -60,6 +63,9 @@ def create_setup_config_router(
             recording_preparation_service.save_obs_websocket_password(
                 request.password
             )
+            await run_in_threadpool(
+                setup_service.invalidate_required_setup_issues
+            )
             return MessageResponse(
                 message="OBS WebSocket password saved successfully"
             )
@@ -70,7 +76,9 @@ def create_setup_config_router(
         async with handle_endpoint_error(
             logger, error_handler, "Failed to list video devices"
         ):
-            devices = device_checker.list_video_capture_devices()
+            devices = await run_in_threadpool(
+                device_checker.list_video_capture_devices
+            )
             return VideoDeviceListResponse(devices=devices)
 
     @router.get("/devices/audio", response_model=MicrophoneDeviceListResponse)
@@ -79,7 +87,9 @@ def create_setup_config_router(
         async with handle_endpoint_error(
             logger, error_handler, "Failed to list microphone devices"
         ):
-            devices = device_checker.list_microphone_devices()
+            devices = await run_in_threadpool(
+                device_checker.list_microphone_devices
+            )
             return MicrophoneDeviceListResponse(devices=devices)
 
     @router.post(
@@ -98,6 +108,9 @@ def create_setup_config_router(
             device_checker.update_settings(
                 recording_preparation_service.get_capture_device_settings()
             )
+            await run_in_threadpool(
+                setup_service.invalidate_required_setup_issues
+            )
             return CaptureDeviceSaveResponse(
                 message="Capture device saved successfully",
             )
@@ -113,6 +126,9 @@ def create_setup_config_router(
             logger, error_handler, "Failed to save YouTube privacy status"
         ):
             auto_uploader.set_privacy_status(request.privacy_status)
+            await run_in_threadpool(
+                setup_service.invalidate_required_setup_issues
+            )
             return MessageResponse(
                 message="YouTube privacy status saved successfully"
             )

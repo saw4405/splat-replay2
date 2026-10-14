@@ -55,8 +55,8 @@ class FFMPEGChecker:
                 timeout=5.0,
             )
 
-            if result.success:
-                version = self._extract_ffmpeg_version(result.stdout)
+            version = self._extract_ffmpeg_version(result.stdout)
+            if result.success and version is not None:
                 self._logger.info("FFMPEG found", version=version)
                 return SoftwareCheckResult(
                     is_installed=True,

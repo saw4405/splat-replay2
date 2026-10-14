@@ -2,6 +2,7 @@
 """PyInstaller spec file for Splat Replay WebView Desktop App."""
 
 from pathlib import Path
+import platform
 import sys
 
 block_cipher = None
@@ -11,6 +12,10 @@ spec_root = Path(SPECPATH).resolve()
 backend_root = spec_root.parent
 repo_root = backend_root.parent
 backend_src = backend_root / 'src'
+is_macos = sys.platform == 'darwin'
+
+if is_macos and platform.machine() != 'arm64':
+    raise SystemExit('macOS packaging requires an arm64 Python environment')
 
 if str(backend_src) not in sys.path:
     sys.path.insert(0, str(backend_src))
@@ -35,6 +40,20 @@ datas = [
     # certifi SSL certificates（_internal内に配置）
     (certifi.where(), 'certifi'),
 ]
+
+if is_macos:
+    assets_root = backend_root / 'assets'
+    datas.extend(
+        (
+            str(path),
+            str(Path('assets') / path.relative_to(assets_root).parent),
+        )
+        for path in assets_root.rglob('*')
+        if path.is_file() and path.name != 'ikamodoki1.ttf'
+    )
+    datas.append(
+        (str(backend_root / 'config' / 'image_matching.yaml'), 'config')
+    )
 
 # setuptools._vendor.jaraco.text が参照するデータファイル（pkg_resources runtime hook 用）
 _jaraco_text_dir = (
@@ -106,13 +125,6 @@ hiddenimports = [
     'pydantic.main',
     'pydantic.types',
     'pydantic.validators',
-    # pywin32 dependencies (pre-import to reduce startup time)
-    'win32api',
-    'win32con',
-    'win32gui',
-    'win32process',
-    'pythoncom',
-    'pywintypes',
     # cyndilib (NDI capture support) - Cython compiled modules
     'cyndilib',
     'cyndilib.finder',
@@ -121,12 +133,29 @@ hiddenimports = [
     'cyndilib.audio_frame',
     'cyndilib.framesync',
     'cyndilib.sender',
+    # audio_frame の Cython extension が実行時に import する
+    'cyndilib.buffertypes',
+    'cyndilib.send_frame_status',
     'cyndilib.wrapper',
     'cyndilib.wrapper.common',
     'cyndilib.wrapper.ndi_recv',
     'cyndilib.wrapper.ndi_send',
     'cyndilib.wrapper.ndi_structs',
 ]
+if sys.platform == 'win32':
+    # pywin32 dependencies (pre-import to reduce startup time)
+    hiddenimports.extend(
+        [
+            'win32api',
+            'win32con',
+            'win32gui',
+            'win32process',
+            'pythoncom',
+            'pywintypes',
+        ]
+    )
+if is_macos:
+    hiddenimports.extend(['Foundation', 'Security', 'UserNotifications'])
 hiddenimports.extend(collect_pyinstaller_hiddenimports())
 hiddenimports = list(dict.fromkeys(hiddenimports))
 
@@ -157,6 +186,11 @@ a = Analysis(
     noarchive=False,
 )
 
+if is_macos:
+    a.binaries = [
+        entry for entry in a.binaries if entry[0] != 'speech_recognition/flac-mac'
+    ]
+
 pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)
 
 exe = EXE(
@@ -172,10 +206,12 @@ exe = EXE(
     console=False,  # デスクトップ GUI のためコンソールを表示しない
     disable_windowed_traceback=False,
     argv_emulation=False,
-    target_arch=None,
+    target_arch='arm64' if is_macos else None,
     codesign_identity=None,
     entitlements_file=None,
-    icon=str(backend_root / 'assets' / 'icon.ico'),  # アイコン設定（ICO形式）
+    icon=str(
+        backend_root / 'assets' / ('icon.png' if is_macos else 'icon.ico')
+    ),
 )
 
 coll = COLLECT(
@@ -189,6 +225,26 @@ coll = COLLECT(
     name='SplatReplay',
 )
 
-# Note: assetsは_internalの外（実行ファイルと同じ階層）に配置したいため、
-# COLLECTには含めず、ビルドスクリプトで手動コピーする
-# Note: ビルド後、build:move-to-root タスクでプロジェクトルートの dist/ に移動される
+if is_macos:
+    app = BUNDLE(
+        coll,
+        name='SplatReplay.app',
+        icon=str(backend_root / 'assets' / 'icon.png'),
+        bundle_identifier='io.github.saw4405.splatreplay',
+        info_plist={
+            'CFBundleName': 'Splat Replay',
+            'CFBundleDisplayName': 'Splat Replay',
+            'NSCameraUsageDescription': (
+                '選択した映像入力機器の映像を録画画面でプレビューするために使用します。'
+            ),
+            'NSMicrophoneUsageDescription': (
+                '録画中の音声をマイクから取得し、音声認識による字幕作成に使用します。'
+            ),
+            'NSLocalNetworkUsageDescription': (
+                '家庭内 LAN の接続候補を確認するために利用します。'
+            ),
+        },
+    )
+
+# Windows の assets は _internal 外へ置くため、ビルド後に手動コピーする。
+# macOS は assets を app bundle の Resources に収録し、実行時には変更しない。

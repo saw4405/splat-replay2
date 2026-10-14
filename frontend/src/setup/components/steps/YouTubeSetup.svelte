@@ -7,6 +7,9 @@
   import { setupState } from '../../stores/state';
   import { type SystemCheckResult, SetupStep } from '../../types';
   import NotificationDialog from '../../../common/components/NotificationDialog.svelte';
+  import { getSetupPlatform, MACOS_APPLICATION_SUPPORT_DIR } from '../../platform';
+
+  const setupPlatform = getSetupPlatform();
 
   const SUBSTEP_STORAGE_KEY = 'youtube_substep_index';
 
@@ -306,10 +309,6 @@
     }
   }
 
-  function openUrl(url: string): void {
-    window.open(url, '_blank');
-  }
-
   function showDialog(
     message: string,
     variant: 'info' | 'success' | 'warning' | 'error' = 'info'
@@ -383,14 +382,15 @@
                 <li>
                   新しいプロジェクト作成ページにアクセスします
                   <div style="margin-top: 1rem;">
-                    <button
+                    <a
                       class="link-button"
-                      type="button"
-                      onclick={() => openUrl('https://console.cloud.google.com/projectcreate')}
+                      href="https://console.cloud.google.com/projectcreate"
+                      target="_blank"
+                      rel="noopener noreferrer"
                     >
                       <ExternalLink class="icon" size={16} />
                       新しいプロジェクトを作成します
-                    </button>
+                    </a>
                   </div>
                 </li>
                 <li>プロジェクト名を入力します（例: Splat Replay）</li>
@@ -402,17 +402,15 @@
                 <li>
                   YouTube Data API v3 の有効化ページを開きます
                   <div style="margin-top: 1rem;">
-                    <button
+                    <a
                       class="link-button"
-                      type="button"
-                      onclick={() =>
-                        openUrl(
-                          'https://console.cloud.google.com/apis/library/youtube.googleapis.com'
-                        )}
+                      href="https://console.cloud.google.com/apis/library/youtube.googleapis.com"
+                      target="_blank"
+                      rel="noopener noreferrer"
                     >
                       <ExternalLink class="icon" size={16} />
                       YouTube Data API を開く
-                    </button>
+                    </a>
                   </div>
                 </li>
                 <li>
@@ -427,15 +425,15 @@
                 <li>
                   OAuth 同意画面の設定ページを開く
                   <div style="margin-top: 1rem;">
-                    <button
+                    <a
                       class="link-button"
-                      type="button"
-                      onclick={() =>
-                        openUrl('https://console.cloud.google.com/apis/credentials/consent')}
+                      href="https://console.cloud.google.com/apis/credentials/consent"
+                      target="_blank"
+                      rel="noopener noreferrer"
                     >
                       <ExternalLink class="icon" size={16} />
                       OAuth 同意画面を開く
-                    </button>
+                    </a>
                   </div>
                 </li>
                 <li>
@@ -462,14 +460,15 @@
                 <li>
                   認証情報ページを開く
                   <div style="margin-top: 1rem;">
-                    <button
+                    <a
                       class="link-button"
-                      type="button"
-                      onclick={() => openUrl('https://console.cloud.google.com/apis/credentials')}
+                      href="https://console.cloud.google.com/apis/credentials"
+                      target="_blank"
+                      rel="noopener noreferrer"
                     >
                       <Key class="icon" size={16} />
                       認証情報ページを開く
-                    </button>
+                    </a>
                   </div>
                 </li>
                 <li>
@@ -493,11 +492,25 @@
                   <div class="path-box">
                     <FolderOpen class="icon" size={20} />
                     <div class="path-content">
-                      <code class="path-value">SplatReplay\config</code>
+                      <code class="path-value">
+                        {setupPlatform === 'macos'
+                          ? `${MACOS_APPLICATION_SUPPORT_DIR}/config`
+                          : setupPlatform === 'windows'
+                            ? 'SplatReplay\\config'
+                            : 'アプリの config フォルダ'}
+                      </code>
                     </div>
                   </div>
                 </li>
               </ol>
+              {#if setupPlatform === 'macos'}
+                <p class="instruction-text" role="note">
+                  Google でログインし、アクセスを許可した後の YouTube 認証情報（OAuth token）は
+                  macOS Keychain に保存されます。Keychain のアクセス確認は Google
+                  のログイン・アクセス許可とは別です。15分以上の動画向け YouTube
+                  アカウント本人確認も別途必要です。
+                </p>
+              {/if}
             {:else if currentSubStepIndex === 5}
               <!-- Account Verification -->
               <p style="margin-bottom: 1rem;">
@@ -507,14 +520,15 @@
                 <li>
                   YouTube アカウント認証ページにアクセスします
                   <div style="margin-top: 1rem;">
-                    <button
+                    <a
                       class="link-button"
-                      type="button"
-                      onclick={() => openUrl('https://www.youtube.com/verify')}
+                      href="https://www.youtube.com/verify"
+                      target="_blank"
+                      rel="noopener noreferrer"
                     >
                       <ExternalLink class="icon" size={16} />
                       アカウント認証ページを開く
-                    </button>
+                    </a>
                   </div>
                 </li>
                 <li>画面の指示に従って、電話番号による認証を完了してください。</li>
@@ -771,6 +785,23 @@
   .link-button:hover {
     background: rgba(var(--theme-rgb-white), 0.1);
     border-color: rgba(var(--theme-rgb-white), 0.3);
+  }
+
+  a.link-button {
+    text-decoration: none;
+  }
+
+  a.link-button:focus-visible {
+    outline: none;
+    box-shadow:
+      0 0 0 2px rgba(var(--theme-rgb-ring), 0.8),
+      0 0 0 4px rgba(var(--theme-rgb-accent), 0.28),
+      0 8px 18px rgba(var(--theme-rgb-accent), 0.18);
+  }
+
+  a.link-button:active {
+    transform: scale(0.97);
+    box-shadow: 0 0 8px rgba(var(--theme-rgb-accent), 0.4);
   }
 
   .path-box {

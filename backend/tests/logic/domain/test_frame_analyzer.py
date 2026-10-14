@@ -240,20 +240,23 @@ async def test_extract_match_select(
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
-    "filename, expected",
+    "filename, expected, expected_match",
     [
-        ("rate_XP1971.9.png", XP(1971.9)),
-        ("rate_XP2033.9.png", XP(2033.9)),
-        ("rate_S.png", Udemae("S")),
-        ("rate_S+.png", Udemae("S+")),
-        ("rate_None.png", None),
+        ("rate_XP1971.9.png", XP(1971.9), Match.X),
+        ("rate_XP2033.9.png", XP(2033.9), Match.X),
+        ("rate_S.png", Udemae("S"), Match.ANARCHY),
+        ("rate_S+.png", Udemae("S+"), Match.ANARCHY),
+        ("rate_None.png", None, Match.X),
+        # macOS実APIから取得したJPEG。圧縮を含む画面判定回帰fixture。
+        ("rate_XP1985.1_mac.jpg", XP(1985.1), Match.X),
     ],
 )
 async def test_extract_rate(
     analyzer: FrameAnalyzer,
     load_image: Callable[[str], np.ndarray],
     filename: str,
-    expected: RateBase,
+    expected: RateBase | None,
+    expected_match: Match,
 ) -> None:
     """レート取得の結果を確認する。"""
     frame = load_image(filename)
@@ -263,7 +266,10 @@ async def test_extract_rate(
     if mode is None:
         pytest.fail("モードが抽出できない")
         return
-    result = await analyzer.extract_rate(frame, mode)
+    match = await analyzer.extract_match_select(frame, mode)
+    assert match == expected_match
+    assert match is not None
+    result = await analyzer.extract_rate_for_match(frame, mode, match)
     assert result == expected
 
 
@@ -542,6 +548,7 @@ async def test_detect_battle_result(
 @pytest.mark.parametrize(
     "filename, expected",
     [
+        ("battle_result_kill_record_2k_5d_1s.png", (2, 5, 1)),
         ("battle_result_kill_record_7k_5d_3d.png", (7, 5, 3)),
         ("battle_result_kill_record_8k_5d_3s.png", (8, 5, 3)),
         ("battle_result_kill_record_11k_6d_3s.png", (11, 6, 3)),

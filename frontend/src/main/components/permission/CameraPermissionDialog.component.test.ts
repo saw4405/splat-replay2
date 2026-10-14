@@ -1,5 +1,12 @@
 import { render, screen, fireEvent } from '@testing-library/svelte';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+
+const { getClientPlatformMock } = vi.hoisted(() => ({
+  getClientPlatformMock: vi.fn((): 'macos' | 'windows' => 'macos'),
+}));
+
+vi.mock('../../../setup/platform', () => ({ getClientPlatform: getClientPlatformMock }));
+
 import CameraPermissionDialog from './CameraPermissionDialog.svelte';
 
 describe('CameraPermissionDialog', () => {
@@ -8,6 +15,7 @@ describe('CameraPermissionDialog', () => {
   beforeEach(() => {
     fetchMock = vi.fn();
     global.fetch = fetchMock;
+    getClientPlatformMock.mockReturnValue('macos');
   });
 
   afterEach(() => {
@@ -19,9 +27,20 @@ describe('CameraPermissionDialog', () => {
       render(CameraPermissionDialog, { props: { open: true } });
 
       expect(screen.queryByText('カメラ入力の許可')).toBeInTheDocument();
+      expect(screen.queryByText(/利用環境によって仮想カメラへの許可が必要/)).toBeInTheDocument();
+      expect(screen.getByText(/macOS デスクトップ版では/)).toBeInTheDocument();
+      expect(screen.getByText(/localhost\s*をブラウザで開いている場合/)).toBeInTheDocument();
       expect(
-        screen.queryByText(/ブラウザからカメラへのアクセス許可を求められた場合/)
+        screen.getByText(/LAN で別端末から閲覧する場合、カメラ許可は不要/)
       ).toBeInTheDocument();
+    });
+
+    it('Windows には macOS のシステム設定手順を表示しない', () => {
+      getClientPlatformMock.mockReturnValue('windows');
+      render(CameraPermissionDialog, { props: { open: true } });
+
+      expect(screen.queryByText(/macOS デスクトップ版では/)).not.toBeInTheDocument();
+      expect(screen.getByText(/localhost\s*をブラウザで開いている場合/)).toBeInTheDocument();
     });
 
     it('openがfalseの場合、ダイアログが表示されない', () => {

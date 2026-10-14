@@ -20,6 +20,7 @@ from splat_replay.infrastructure.adapters.weapon_detection.constants import (
 )
 from splat_replay.infrastructure.adapters.weapon_detection.recognizer import (
     WeaponRecognitionAdapter,
+    _OutlineInferenceCache,
     _RankedCandidate,
     _SlotSignalMetrics,
 )
@@ -29,7 +30,7 @@ from splat_replay.infrastructure.adapters.weapon_detection.team_color import (
 )
 
 FIXTURE_DIR = (
-    Path(__file__).resolve().parents[3] / "fixtures" / "weapon_detection"
+    Path(__file__).resolve().parents[2] / "fixtures" / "weapon_detection"
 )
 VISIBLE_FIXTURE_DIR = FIXTURE_DIR / "weapon_icons_visible"
 MATCHING_CONFIG_PATH = (
@@ -1291,7 +1292,8 @@ async def test_detect_weapon_display_false_when_outline_matched_slots_is_three(
         cancel_generation=None,
         max_shift=None,
         slot_order=None,
-        stop_at_threshold=True: (  # noqa: E501
+        stop_at_threshold=True,
+        inference_cache=None: (  # noqa: E501
             3,
             iou_by_slot,
             8,
@@ -1329,7 +1331,8 @@ async def test_detect_weapon_display_true_when_outline_matched_slots_is_four(
         cancel_generation=None,
         max_shift=None,
         slot_order=None,
-        stop_at_threshold=True: (  # noqa: E501
+        stop_at_threshold=True,
+        inference_cache=None: (  # noqa: E501
             4,
             iou_by_slot,
             4,
@@ -1369,7 +1372,8 @@ async def test_detect_weapon_display_details_can_recommend_partial_recognition(
         cancel_generation=None,
         max_shift=None,
         slot_order=None,
-        stop_at_threshold=True: (  # noqa: E501
+        stop_at_threshold=True,
+        inference_cache=None: (  # noqa: E501
             6,
             iou_by_slot,
             6,
@@ -1379,7 +1383,12 @@ async def test_detect_weapon_display_details_can_recommend_partial_recognition(
     monkeypatch.setattr(
         recognizer,
         "_calc_outline_matched_slot_weapon_region_gray_std",
-        lambda *, slot_images, iou_by_slot, model_masks, max_shift: (
+        lambda *,
+        slot_images,
+        iou_by_slot,
+        model_masks,
+        max_shift,
+        inference_cache=None: (
             constants.WEAPON_DISPLAY_MIN_MATCHED_SLOT_WEAPON_REGION_GRAY_STD
             - 0.01
         ),
@@ -1396,6 +1405,84 @@ async def test_detect_weapon_display_details_can_recommend_partial_recognition(
     assert details.outline_matched_enemy_slots == 3
     assert details.outline_matched_slots == 6
     assert await recognizer.detect_weapon_display(frame) is False
+
+
+@pytest.mark.asyncio
+async def test_detect_weapon_display_details_does_not_reuse_inference_between_frames(
+    recognizer: WeaponRecognitionAdapter,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    metrics = TeamColorScreenMetrics(
+        allies_max_distance=0.0,
+        enemies_max_distance=0.0,
+        teams_min_distance=999.0,
+        ally_reliable_slot_count=4,
+        enemy_reliable_slot_count=4,
+    )
+
+    def _crop_slots(frame: np.ndarray) -> dict[str, np.ndarray]:
+        frame_marker = int(frame[0, 0, 0])
+        slot_images: dict[str, np.ndarray] = {}
+        for slot in constants.SLOT_ORDER:
+            slot_image = np.zeros((16, 64, 3), dtype=np.uint8)
+            checkerboard = (np.indices((16, 32)).sum(axis=0) % 2 * 255).astype(
+                np.uint8
+            )
+            slot_image[:, 32:, :] = checkerboard[:, :, np.newaxis]
+            slot_image[0, 0, 0] = frame_marker
+            slot_images[slot] = slot_image
+        return slot_images
+
+    def _team_region(slot_image: np.ndarray) -> np.ndarray:
+        mask = np.zeros(slot_image.shape[:2], dtype=np.uint8)
+        if int(slot_image[0, 0, 0]) == 1:
+            mask[:, :32] = 1
+        else:
+            mask[:, 32:] = 1
+        return mask
+
+    def _infer_species_and_mask(
+        *,
+        detected_mask: np.ndarray,
+        model_masks: dict[str, np.ndarray],
+        max_shift: int | None = None,
+    ) -> tuple[str, np.ndarray]:
+        _ = model_masks
+        _ = max_shift
+        return "ika", detected_mask.copy()
+
+    monkeypatch.setattr(
+        "splat_replay.infrastructure.adapters.weapon_detection.recognizer.crop_slot_images",
+        _crop_slots,
+    )
+    monkeypatch.setattr(
+        "splat_replay.infrastructure.adapters.weapon_detection.recognizer.detect_weapon_display_screen",
+        lambda _: (True, metrics),
+    )
+    monkeypatch.setattr(
+        "splat_replay.infrastructure.adapters.weapon_detection.recognizer.detect_slot_team_region",
+        _team_region,
+    )
+    monkeypatch.setattr(
+        "splat_replay.infrastructure.adapters.weapon_detection.recognizer.outline_models.infer_species_and_mask",
+        _infer_species_and_mask,
+    )
+    monkeypatch.setattr(
+        recognizer,
+        "_get_outline_model_masks",
+        lambda: {"ika": np.ones((16, 64), dtype=np.uint8)},
+    )
+
+    first_frame = np.full((1, 1, 3), 1, dtype=np.uint8)
+    second_frame = np.full((1, 1, 3), 2, dtype=np.uint8)
+
+    first_details = await recognizer.detect_weapon_display_details(first_frame)
+    second_details = await recognizer.detect_weapon_display_details(
+        second_frame
+    )
+
+    assert first_details.outline_matched_slots == len(constants.SLOT_ORDER)
+    assert second_details.outline_matched_slots == len(constants.SLOT_ORDER)
 
 
 @pytest.mark.asyncio
@@ -1430,12 +1517,14 @@ async def test_detect_weapon_display_uses_fast_path_without_fallback_when_fast_p
         max_shift: int | None = None,
         slot_order: tuple[str, ...] | None = None,
         stop_at_threshold: bool = True,
+        inference_cache: _OutlineInferenceCache | None = None,
     ) -> tuple[int, dict[str, float], int, float]:
         _ = slot_images
         _ = model_masks
         _ = cancel_generation
         _ = slot_order
         _ = stop_at_threshold
+        _ = inference_cache
         shifts.append(max_shift)
         return (6, iou_by_slot, 6, 0.20)
 
@@ -1489,12 +1578,14 @@ async def test_detect_weapon_display_does_not_run_precise_fallback_when_fast_pas
         max_shift: int | None = None,
         slot_order: tuple[str, ...] | None = None,
         stop_at_threshold: bool = True,
+        inference_cache: _OutlineInferenceCache | None = None,
     ) -> tuple[int, dict[str, float], int]:
         _ = slot_images
         _ = model_masks
         _ = cancel_generation
         _ = slot_order
         _ = stop_at_threshold
+        _ = inference_cache
         shifts.append(max_shift)
         if max_shift != constants.OUTLINE_ALIGN_FAST_MAX_SHIFT:
             raise AssertionError("表示判定で精密fallbackは実行しません")
@@ -1549,11 +1640,13 @@ async def test_detect_weapon_display_rejects_unbalanced_outline_slots_without_pr
         max_shift: int | None = None,
         slot_order: tuple[str, ...] | None = None,
         stop_at_threshold: bool = True,
+        inference_cache: _OutlineInferenceCache | None = None,
     ) -> tuple[int, dict[str, float], int, float]:
         _ = slot_images
         _ = model_masks
         _ = cancel_generation
         _ = stop_at_threshold
+        _ = inference_cache
         slot_orders.append(slot_order)
         shifts.append(max_shift)
         if max_shift != constants.OUTLINE_ALIGN_FAST_MAX_SHIFT:
@@ -1611,6 +1704,7 @@ async def test_detect_weapon_display_rejects_low_weapon_region_ratio_at_fast_pat
         max_shift: int | None = None,
         slot_order: tuple[str, ...] | None = None,
         stop_at_threshold: bool = True,
+        inference_cache: _OutlineInferenceCache | None = None,
     ) -> tuple[int, dict[str, float], int, float]:
         _ = slot_images
         _ = model_masks
@@ -1618,6 +1712,7 @@ async def test_detect_weapon_display_rejects_low_weapon_region_ratio_at_fast_pat
         _ = max_shift
         _ = slot_order
         _ = stop_at_threshold
+        _ = inference_cache
         return (6, iou_by_slot, 6, 0.09)
 
     monkeypatch.setattr(
@@ -1633,7 +1728,12 @@ async def test_detect_weapon_display_rejects_low_weapon_region_ratio_at_fast_pat
     monkeypatch.setattr(
         recognizer,
         "_calc_outline_matched_slot_weapon_region_gray_std",
-        lambda *, slot_images, iou_by_slot, model_masks, max_shift: 60.0,
+        lambda *,
+        slot_images,
+        iou_by_slot,
+        model_masks,
+        max_shift,
+        inference_cache=None: 60.0,
     )
 
     assert await recognizer.detect_weapon_display(frame) is False
@@ -1673,7 +1773,8 @@ async def test_detect_weapon_display_true_when_matched_slot_team_edge_ratio_is_0
         cancel_generation=None,
         max_shift=None,
         slot_order=None,
-        stop_at_threshold=True: (  # noqa: E501
+        stop_at_threshold=True,
+        inference_cache=None: (  # noqa: E501
             6,
             iou_by_slot,
             6,
@@ -1698,7 +1799,12 @@ async def test_detect_weapon_display_true_when_matched_slot_team_edge_ratio_is_0
     monkeypatch.setattr(
         recognizer,
         "_calc_outline_matched_slot_weapon_region_gray_std",
-        lambda *, slot_images, iou_by_slot, model_masks, max_shift: 60.0,
+        lambda *,
+        slot_images,
+        iou_by_slot,
+        model_masks,
+        max_shift,
+        inference_cache=None: 60.0,
     )
 
     assert await recognizer.detect_weapon_display(frame) is True
@@ -1738,7 +1844,8 @@ async def test_detect_weapon_display_false_when_matched_slot_team_edge_ratio_is_
         cancel_generation=None,
         max_shift=None,
         slot_order=None,
-        stop_at_threshold=True: (  # noqa: E501
+        stop_at_threshold=True,
+        inference_cache=None: (  # noqa: E501
             6,
             iou_by_slot,
             6,
@@ -1803,7 +1910,8 @@ async def test_detect_weapon_display_false_when_weapon_region_gray_std_is_low(
         cancel_generation=None,
         max_shift=None,
         slot_order=None,
-        stop_at_threshold=True: (  # noqa: E501
+        stop_at_threshold=True,
+        inference_cache=None: (  # noqa: E501
             6,
             iou_by_slot,
             6,
@@ -1818,7 +1926,12 @@ async def test_detect_weapon_display_false_when_weapon_region_gray_std_is_low(
     monkeypatch.setattr(
         recognizer,
         "_calc_outline_matched_slot_weapon_region_gray_std",
-        lambda *, slot_images, iou_by_slot, model_masks, max_shift: (
+        lambda *,
+        slot_images,
+        iou_by_slot,
+        model_masks,
+        max_shift,
+        inference_cache=None: (
             constants.WEAPON_DISPLAY_MIN_MATCHED_SLOT_WEAPON_REGION_GRAY_STD
             - 0.01
         ),

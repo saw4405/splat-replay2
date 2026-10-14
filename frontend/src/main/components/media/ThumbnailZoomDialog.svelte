@@ -26,16 +26,18 @@
 <style>
   .image-container {
     display: flex;
+    flex: 1 1 auto;
     align-items: center;
     justify-content: center;
-    height: 100%;
-    overflow: auto;
+    min-height: 0;
+    overflow: hidden;
   }
 
   .thumbnail-image {
-    max-width: 100%;
-    max-height: 100%;
+    width: 100%;
+    height: 100%;
     display: block;
+    object-fit: contain;
     border-radius: 8px;
   }
 </style>

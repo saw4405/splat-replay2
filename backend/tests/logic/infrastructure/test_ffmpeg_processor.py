@@ -53,6 +53,11 @@ async def test_ffmpeg_processor_run_with_progress_parsing() -> None:
             cwd=Path("."),
         )
 
+    # worker thread から送られた先行callbackをloop上で実行してから検証する。
+    callbacks_dispatched = asyncio.Event()
+    asyncio.get_running_loop().call_soon(callbacks_dispatched.set)
+    await asyncio.wait_for(callbacks_dispatched.wait(), timeout=1.0)
+
     # コールバックされた内容を検証
     assert len(progress_calls) > 0
 

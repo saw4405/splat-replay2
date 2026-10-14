@@ -43,7 +43,11 @@ def create_setup_router(
     )
     router.include_router(
         create_setup_system_router(
-            system_check_service, system_setup_service, error_handler, logger
+            system_check_service,
+            system_setup_service,
+            error_handler,
+            logger,
+            setup_service,
         )
     )
     router.include_router(
@@ -51,6 +55,7 @@ def create_setup_router(
             recording_preparation_service,
             device_checker,
             auto_uploader,
+            setup_service,
             error_handler,
             logger,
         )

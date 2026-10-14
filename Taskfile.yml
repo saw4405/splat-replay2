@@ -16,8 +16,8 @@ vars:
   BUILD_DIR: backend/build
   BUILD_DIST_DIR: backend/dist/SplatReplay
   BACKEND_SPEC: packaging/splat-replay-webview.spec
-  VENV_PYTHON: .venv/Scripts/python.exe
-  VENV_PYINSTALLER: .venv/Scripts/pyinstaller.exe
+  VENV_PYTHON: '{{if eq OS "windows"}}backend/.venv/Scripts/python.exe{{else}}backend/.venv/bin/python{{end}}'
+  VENV_PYINSTALLER: '{{if eq OS "windows"}}.venv/Scripts/pyinstaller.exe{{else}}.venv/bin/pyinstaller{{end}}'
   WEAPON_TEMPLATE_SYNC_SCRIPT: backend/scripts/sync_weapon_templates.py
   DESKTOP_DEPLOY_SCRIPT: scripts/deploy-desktop.ps1
   DESKTOP_DEPLOY_ENV_FILE: scripts/deploy-desktop.env
@@ -69,7 +69,10 @@ tasks:
     vars:
       SKIP_HOOKS_VALUE: '{{default "" .SKIP_HOOKS}}'
     cmds:
-      - powershell -NoProfile -ExecutionPolicy Bypass -File scripts/install-hooks.ps1 -SkipHooks "{{.SKIP_HOOKS_VALUE}}"
+      - cmd: powershell -NoProfile -ExecutionPolicy Bypass -File scripts/install-hooks.ps1 -SkipHooks "{{.SKIP_HOOKS_VALUE}}"
+        platforms: [windows]
+      - cmd: sh scripts/install-hooks.sh "{{.SKIP_HOOKS_VALUE}}"
+        platforms: [darwin, linux]
 
   install:lfs:
     desc: Initialize Git LFS and materialize replay assets for workflow tests
@@ -77,6 +80,9 @@ tasks:
       SKIP_LFS_VALUE: '{{default "" .SKIP_LFS}}'
     cmds:
       - cmd: 'powershell -NoProfile -Command "if (''{{.SKIP_LFS_VALUE}}'' -eq ''1'') { Write-Host ''WARNING: SKIP_LFS=1 のため Git LFS 初期化をスキップしました。workflow E2E の通常フローには戻してから進めてください。'' -ForegroundColor Yellow; exit 0 }; if (-not (Get-Command git -ErrorAction SilentlyContinue)) { Write-Host ''ERROR: git コマンドが見つかりません。'' -ForegroundColor Red; exit 1 }; git lfs version; if ((Get-Variable LASTEXITCODE -ValueOnly) -ne 0) { Write-Host ''ERROR: Git LFS が未導入です。Git LFS を導入した後で task.exe install:lfs を再実行してください。'' -ForegroundColor Red; exit (Get-Variable LASTEXITCODE -ValueOnly) }; git lfs install --skip-repo; if ((Get-Variable LASTEXITCODE -ValueOnly) -ne 0) { Write-Host ''ERROR: Git LFS の初期化に失敗しました。'' -ForegroundColor Red; exit (Get-Variable LASTEXITCODE -ValueOnly) }; node .\frontend\scripts\ensure-e2e-assets.js; if ((Get-Variable LASTEXITCODE -ValueOnly) -ne 0) { Write-Host ''ERROR: E2E replay asset の実体化に失敗しました。'' -ForegroundColor Red; exit (Get-Variable LASTEXITCODE -ValueOnly) }"'
+        platforms: [windows]
+      - cmd: 'if [ "{{.SKIP_LFS_VALUE}}" = "1" ]; then echo "WARNING: SKIP_LFS=1 のため Git LFS 初期化をスキップしました。"; else git lfs version && git lfs install --skip-repo && node frontend/scripts/ensure-e2e-assets.js; fi'
+        platforms: [darwin, linux]
 
   doctor:
     desc: Diagnose checkout prerequisites without modifying tracked files
@@ -105,6 +111,9 @@ tasks:
     cmds:
       - cmd: powershell -NoProfile -Command "New-Item -ItemType Directory -Force -Path '../{{.FRONTEND_DIR}}/src/generated' | Out-Null"
         ignore_error: true
+        platforms: [windows]
+      - cmd: mkdir -p ../{{.FRONTEND_DIR}}/src/generated
+        platforms: [darwin, linux]
       - uv run python -c "import json; from splat_replay.bootstrap.web_app import create_app; app = create_app(); print(json.dumps(app.openapi(), indent=2))" > ../{{.FRONTEND_DIR}}/src/generated/openapi.json
     sources:
       - src/splat_replay/bootstrap/**/*.py
@@ -135,13 +144,167 @@ tasks:
   # ビルド
   # ========================================
   build:
-    desc: Build complete application (frontend + backend + package)
+    desc: Build complete application for the current supported platform
+    cmds:
+      - task: build:macos
+        platforms: [darwin]
+      - task: build:windows
+        platforms: [windows]
+      - cmd: echo "Application packaging is supported on Windows and Apple Silicon macOS." >&2 && exit 1
+        platforms: [linux]
+
+  build:windows:
+    desc: Build complete Windows application (frontend + backend + package)
+    platforms: [windows]
     cmds:
       - task: clean:dist
       - task: clean:frontend:dist
       - task: build:frontend
       - task: build:backend
       - task: build:postprocess
+
+  build:macos:
+    desc: Build an isolated fixed-identity signed Apple Silicon macOS candidate
+    platforms: [darwin]
+    cmds:
+      - task: build:macos:candidate
+
+  build:macos:candidate:
+    desc: Build a fixed-identity signed macOS candidate in an isolated output directory
+    platforms: [darwin]
+    vars:
+      MACOS_CANDIDATE_ID:
+        sh: /bin/date -u +%Y%m%d-%H%M%S
+      DIST_ROOT: "dist/macos-candidates/{{.MACOS_CANDIDATE_ID}}"
+      BUILD_DIR: "backend/build/macos-candidates/{{.MACOS_CANDIDATE_ID}}"
+    deps:
+      - build:macos:dependencies
+    cmds:
+      - cmd: test "$(/usr/bin/uname -m)" = "arm64"
+        platforms: [darwin]
+      - "{{.VENV_PYTHON}} scripts/macos_code_signing.py preflight"
+      - cmd: |
+          set -eu
+          test ! -e "{{.DIST_ROOT}}"
+          test ! -e "{{.BUILD_DIR}}"
+          /bin/mkdir -p "{{.DIST_ROOT}}" "{{.BUILD_DIR}}"
+        platforms: [darwin]
+      - task: build:frontend
+      - task: build:macos:backend
+        vars:
+          DIST_ROOT: "{{.DIST_ROOT}}"
+          BUILD_DIR: "{{.BUILD_DIR}}"
+      - task: build:macos:sign
+        vars:
+          DIST_ROOT: "{{.DIST_ROOT}}"
+      - task: build:macos:verify
+        vars:
+          DIST_ROOT: "{{.DIST_ROOT}}"
+      - task: build:macos:dmg
+        vars:
+          DIST_ROOT: "{{.DIST_ROOT}}"
+      - cmd: 'echo "Candidate: {{.DIST_ROOT}}/SplatReplay.dmg"'
+        platforms: [darwin]
+
+  build:macos:backend:
+    desc: Build the arm64 macOS application bundle with PyInstaller
+    platforms: [darwin]
+    dir: "{{.BACKEND_DIR}}"
+    deps:
+      - build:macos:dependencies
+    cmds:
+      - /usr/bin/env PYINSTALLER_CONFIG_DIR="{{.ROOT_DIR}}/{{.BUILD_DIR}}" {{.VENV_PYINSTALLER}} {{.BACKEND_SPEC}} --clean --distpath ../{{.DIST_ROOT}} --workpath ../{{.BUILD_DIR}}
+
+  build:macos:dependencies:
+    desc: Synchronize locked macOS build dependencies
+    platforms: [darwin]
+    dir: "{{.BACKEND_DIR}}"
+    cmds:
+      - uv sync --locked --group build
+
+  build:macos:sign:
+    desc: Sign the outer macOS app with the pinned self-signed identity
+    platforms: [darwin]
+    cmds:
+      - '{{.VENV_PYTHON}} scripts/macos_code_signing.py sign "{{.DIST_ROOT}}/SplatReplay.app"'
+
+  build:macos:verify:
+    desc: Verify the macOS app bundle identity, architecture, signature, and bundled assets
+    platforms: [darwin]
+    cmds:
+      - cmd: |
+          set -eu
+          app="{{.DIST_ROOT}}/SplatReplay.app"
+          info="$app/Contents/Info.plist"
+          executable="$app/Contents/MacOS/SplatReplay"
+          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$info")" = "io.github.saw4405.splatreplay"
+          /usr/bin/lipo -verify_arch arm64 "$executable"
+          test -f "$app/Contents/Resources/frontend/dist/index.html"
+          test -f "$app/Contents/Resources/assets/startup-loading.mp4"
+          test -f "$app/Contents/Resources/config/image_matching.yaml"
+          test ! -e "$app/Contents/Resources/config/settings.toml"
+          test ! -e "$app/Contents/Resources/videos"
+          test -z "$(find "$app" -name flac-mac -print -quit)"
+          test -z "$(find "$app" -name ikamodoki1.ttf -print -quit)"
+          "{{.VENV_PYTHON}}" scripts/macos_code_signing.py verify "$app"
+        platforms: [darwin]
+      - cmd: echo "Verified {{.DIST_ROOT}}/SplatReplay.app (arm64, io.github.saw4405.splatreplay)"
+        platforms: [darwin]
+
+  build:macos:dmg:
+    desc: Create and verify a fixed-identity signed macOS DMG from the built app
+    platforms: [darwin]
+    cmds:
+      - cmd: |
+          set -eu
+          app="{{.DIST_ROOT}}/SplatReplay.app"
+          dmg="{{.DIST_ROOT}}/SplatReplay.dmg"
+          stage="$(/usr/bin/mktemp -d "${TMPDIR:-/tmp}/splat-replay-dmg.XXXXXX")"
+          trap 'rm -rf "$stage"' EXIT
+          test -d "$app"
+          /usr/bin/ditto "$app" "$stage/SplatReplay.app"
+          /bin/ln -s /Applications "$stage/Applications"
+          /usr/bin/hdiutil create -volname "Splat Replay" -srcfolder "$stage" -ov -format UDZO "$dmg"
+        platforms: [darwin]
+      - task: verify:macos:dmg
+        vars:
+          DIST_ROOT: "{{.DIST_ROOT}}"
+
+  verify:macos:dmg:
+    desc: Mount the macOS DMG and verify its app, Applications link, architecture, identity, and signature
+    platforms: [darwin]
+    cmds:
+      - cmd: |
+          set -eu
+          dmg="{{.DIST_ROOT}}/SplatReplay.dmg"
+          mount_point="$(/usr/bin/mktemp -d "${TMPDIR:-/tmp}/splat-replay-dmg-mount.XXXXXX")"
+          mounted=0
+          cleanup() {
+            if [ "$mounted" = 1 ]; then
+              /usr/bin/hdiutil detach "$mount_point" -quiet >/dev/null || true
+            fi
+            /bin/rmdir "$mount_point" 2>/dev/null || true
+          }
+          trap cleanup EXIT
+          /usr/bin/hdiutil verify "$dmg"
+          /usr/bin/hdiutil attach -nobrowse -readonly -mountpoint "$mount_point" "$dmg" >/dev/null
+          mounted=1
+          app="$mount_point/SplatReplay.app"
+          test -d "$app"
+          test -L "$mount_point/Applications"
+          test "$(/usr/bin/readlink "$mount_point/Applications")" = "/Applications"
+          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$app/Contents/Info.plist")" = "io.github.saw4405.splatreplay"
+          /usr/bin/lipo -verify_arch arm64 "$app/Contents/MacOS/SplatReplay"
+          test -z "$(/usr/bin/find "$app" -name flac-mac -print -quit)"
+          "{{.VENV_PYTHON}}" scripts/macos_code_signing.py verify "$app"
+          echo "Verified {{.DIST_ROOT}}/SplatReplay.dmg"
+        platforms: [darwin]
+
+  clean:macos:
+    desc: Clean macOS app bundle build artifacts
+    platforms: [darwin]
+    cmds:
+      - rm -rf "{{.DIST_ROOT}}" "{{.BUILD_DIR}}" "{{.FRONTEND_DIR}}/dist"
 
   build:frontend:
     desc: Build frontend only
@@ -727,7 +890,10 @@ tasks:
   run:
     desc: Run the built executable
     cmds:
-      - "{{.DIST_DIR}}\\SplatReplay.exe"
+      - cmd: "{{.DIST_DIR}}\\SplatReplay.exe"
+        platforms: [windows]
+      - cmd: open -a "{{.DIST_ROOT}}/SplatReplay.app"
+        platforms: [darwin]
 
   help:
     desc: Show available tasks

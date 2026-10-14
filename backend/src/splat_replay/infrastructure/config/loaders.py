@@ -49,6 +49,11 @@ def load_settings_from_toml(
 
     settings = AppSettings(**kwargs)
 
+    if paths.IS_MACOS_FROZEN and not settings.storage.base_dir.is_absolute():
+        settings.storage.base_dir = (
+            paths.RUNTIME_ROOT / settings.storage.base_dir
+        ).resolve()
+
     if not file_existed and create_if_missing:
         resolved_path.parent.mkdir(parents=True, exist_ok=True)
         save_settings_to_toml(settings, resolved_path)

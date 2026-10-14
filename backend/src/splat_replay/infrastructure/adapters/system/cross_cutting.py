@@ -23,6 +23,7 @@ from splat_replay.application.interfaces.data import (
     CaptureDeviceSettingsView,
     OBSSettingsView,
     PrivacyStatus,
+    SpeechTranscriberSettingsView,
     UploadSettingsView,
     VideoEditSettingsView,
 )
@@ -87,6 +88,14 @@ class TomlConfigAdapter(ConfigPort):
     def get_obs_settings(self) -> OBSSettingsView:
         return cast(OBSSettingsView, self._load_settings().obs)
 
+    def get_speech_transcriber_settings(
+        self,
+    ) -> SpeechTranscriberSettingsView:
+        return cast(
+            SpeechTranscriberSettingsView,
+            self._load_settings().speech_transcriber,
+        )
+
     def get_capture_device_settings(self) -> CaptureDeviceSettingsView:
         return cast(
             CaptureDeviceSettingsView, self._load_settings().capture_device
@@ -136,7 +145,12 @@ class FileSystemPathsAdapter(PathsPort):
         return paths.THUMBNAIL_ASSETS_DIR
 
     def get_thumbnail_asset(self, filename: str) -> Path:
-        return paths.thumbnail_asset(filename)
+        user_asset = paths.thumbnail_asset(filename)
+        if paths.IS_MACOS_FROZEN and not user_asset.is_file():
+            bundled_asset = paths.ASSETS_DIR / "thumbnail" / filename
+            if bundled_asset.is_file():
+                return bundled_asset
+        return user_asset
 
 
 class LocalFileSystemAdapter(FileSystemPort):

@@ -79,6 +79,18 @@ class TemplateMatcher(BaseMatcher):
         finite_mask = np.isfinite(result)
         if not np.any(finite_mask):
             return -1.0
+        if (
+            self._response_top_k == 1
+            and type(result) is np.ndarray
+            and result.dtype == np.float32
+        ):
+            return float(
+                np.max(
+                    result,
+                    where=finite_mask,
+                    initial=np.float32(-np.inf),
+                )
+            )
         values = result[finite_mask].astype(np.float32, copy=False).ravel()
         if values.size == 0:
             return -1.0

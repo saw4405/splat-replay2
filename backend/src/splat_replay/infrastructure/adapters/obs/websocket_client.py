@@ -10,7 +10,9 @@
 from __future__ import annotations
 
 import asyncio
+from collections.abc import AsyncGenerator, Iterable
 from contextlib import suppress
+from dataclasses import dataclass
 from typing import Any, Awaitable, Callable
 
 from obswsc.client import ObsWsClient
@@ -22,6 +24,63 @@ from splat_replay.domain.exceptions import DeviceError
 
 Response = Response1 | Response2
 EventCallback = Callable[[Event], Awaitable[None]]
+
+
+@dataclass(frozen=True)
+class InputVolumeMeterSample:
+    event_count: int
+    numeric_mul_samples: int
+    numeric_db_samples: int
+    peak_mul: float | None
+    peak_db: float | None
+
+
+@dataclass
+class _InputVolumeMeterAccumulator:
+    event_count: int = 0
+    numeric_mul_samples: int = 0
+    numeric_db_samples: int = 0
+    peak_mul: float | None = None
+    peak_db: float | None = None
+
+    def add(self, item: dict[str, Any]) -> None:
+        self.event_count += 1
+        peak_mul = _extract_peak_number(item.get("inputLevelsMul"))
+        peak_db = _extract_peak_number(item.get("inputLevelsDb"))
+        if peak_mul is not None:
+            self.numeric_mul_samples += 1
+            self.peak_mul = (
+                peak_mul
+                if self.peak_mul is None
+                else max(self.peak_mul, peak_mul)
+            )
+        if peak_db is not None:
+            self.numeric_db_samples += 1
+            self.peak_db = (
+                peak_db if self.peak_db is None else max(self.peak_db, peak_db)
+            )
+
+    def freeze(self) -> InputVolumeMeterSample:
+        return InputVolumeMeterSample(
+            event_count=self.event_count,
+            numeric_mul_samples=self.numeric_mul_samples,
+            numeric_db_samples=self.numeric_db_samples,
+            peak_mul=self.peak_mul,
+            peak_db=self.peak_db,
+        )
+
+
+def _extract_peak_number(value: object) -> float | None:
+    if isinstance(value, (int, float)):
+        return float(value)
+    if not isinstance(value, Iterable) or isinstance(value, (str, bytes)):
+        return None
+    peak: float | None = None
+    for item in value:
+        item_peak = _extract_peak_number(item)
+        if item_peak is not None:
+            peak = item_peak if peak is None else max(peak, item_peak)
+    return peak
 
 
 class OBSWebSocketClient:
@@ -58,6 +117,7 @@ class OBSWebSocketClient:
         self._monitor_task: asyncio.Task[None] | None = None
         self._on_reconnect = on_reconnect
         self._event_callbacks: list[tuple[str, EventCallback]] = []
+        self._meter_cleanup_tasks: set[asyncio.Task[None]] = set()
 
     def update_settings(self, host: str, port: int, password: str) -> None:
         """接続設定を更新。
@@ -158,7 +218,19 @@ class OBSWebSocketClient:
         self._is_connected = False
         with suppress(Exception):
             await self._client.disconnect()
+        await self.drain_meter_cleanup_tasks()
         self._logger.info("OBS WebSocket切断完了")
+
+    async def drain_meter_cleanup_tasks(self) -> None:
+        """音量メーター接続の終了taskを期限付きで回収する。"""
+        tasks = tuple(self._meter_cleanup_tasks)
+        if not tasks:
+            return
+        _, pending = await asyncio.wait(tasks, timeout=0.5)
+        for task in pending:
+            task.cancel()
+        if pending:
+            await asyncio.wait(pending, timeout=0.5)
 
     async def _monitor_connection(self) -> None:
         """接続を監視し、切断時は自動再接続。
@@ -296,19 +368,19 @@ class OBSWebSocketClient:
         """Restore the default non-high-volume OBS event subscription."""
         await self.set_event_subscriptions(EventSubscription.All.value)
 
-    async def collect_input_volume_meter_events(
-        self, input_name: str, *, sample_duration_seconds: float
-    ) -> list[dict[str, Any]]:
-        """Collect volume meter events on a short-lived OBS connection.
-
-        High-volume meter events are intentionally isolated from the main OBS
-        control connection so recording state events keep their normal
-        subscription and request/response traffic is not disturbed.
-        """
-        events: list[dict[str, Any]] = []
+    async def iter_input_volume_meter_windows(
+        self, *, window_seconds: float = 1.0
+    ) -> AsyncGenerator[dict[str, InputVolumeMeterSample], None]:
+        """独立接続から入力別に集計した音量メーター窓を返す。"""
         meter_client = ObsWsClient(url=self._url, password=self._password)
+        current_window: dict[str, _InputVolumeMeterAccumulator] = {}
+        window_queue: asyncio.Queue[
+            dict[str, InputVolumeMeterSample] | Exception
+        ] = asyncio.Queue(maxsize=1)
+        window_task: asyncio.Task[None] | None = None
 
         async def _on_meter(event: Event) -> None:
+            nonlocal current_window
             inputs = (
                 event.event_data.get("inputs") if event.event_data else None
             )
@@ -317,8 +389,11 @@ class OBSWebSocketClient:
             for item in inputs:
                 if not isinstance(item, dict):
                     continue
-                if item.get("inputName") == input_name:
-                    events.append(item)
+                input_name = item.get("inputName")
+                if isinstance(input_name, str):
+                    current_window.setdefault(
+                        input_name, _InputVolumeMeterAccumulator()
+                    ).add(item)
 
         meter_client.reg_event_cb(_on_meter, "InputVolumeMeters")  # type: ignore[arg-type]
         try:
@@ -332,12 +407,95 @@ class OBSWebSocketClient:
                 EventSubscription.All.value
                 | EventSubscription.InputVolumeMeters.value
             )
-            await asyncio.sleep(max(sample_duration_seconds, 0.1))
-            await asyncio.sleep(0)
-            return events
+            duration = max(window_seconds, 0.1)
+
+            async def _collect_windows() -> None:
+                nonlocal current_window
+                try:
+                    while True:
+                        task = getattr(meter_client, "task", None)
+                        if isinstance(task, asyncio.Future):
+                            done, _ = await asyncio.wait(
+                                {task}, timeout=duration
+                            )
+                            if done:
+                                with suppress(
+                                    asyncio.CancelledError, Exception
+                                ):
+                                    task.result()
+                                raise DeviceError(
+                                    "OBS 音量メーター接続が切断されました",
+                                    "OBS_CONNECTION_FAILED",
+                                )
+                        else:
+                            await asyncio.sleep(duration)
+                        completed_window = current_window
+                        current_window = {}
+                        snapshot = {
+                            name: accumulator.freeze()
+                            for name, accumulator in completed_window.items()
+                        }
+                        if window_queue.full():
+                            # ponytail: 遅延時は古い窓を1件捨て、最新状態を保つ。
+                            window_queue.get_nowait()
+                        window_queue.put_nowait(snapshot)
+                except asyncio.CancelledError:
+                    raise
+                except Exception as exc:
+                    if window_queue.full():
+                        window_queue.get_nowait()
+                    window_queue.put_nowait(exc)
+
+            window_task = asyncio.create_task(_collect_windows())
+            while True:
+                window = await window_queue.get()
+                if isinstance(window, Exception):
+                    raise window
+                yield window
         finally:
-            with suppress(Exception):
-                await meter_client.disconnect()
+            if window_task is not None:
+                window_task.cancel()
+                with suppress(asyncio.CancelledError):
+                    await window_task
+            cleanup_task = asyncio.create_task(meter_client.disconnect())
+            self._meter_cleanup_tasks.add(cleanup_task)
+            cleanup_task.add_done_callback(self._on_meter_cleanup_done)
+            _, pending = await asyncio.wait({cleanup_task}, timeout=0.5)
+            if pending:
+                cleanup_task.cancel()
+
+    def _on_meter_cleanup_done(self, task: asyncio.Task[None]) -> None:
+        self._meter_cleanup_tasks.discard(task)
+        with suppress(asyncio.CancelledError, Exception):
+            task.exception()
+
+    async def collect_input_volume_meter_events(
+        self, input_name: str, *, sample_duration_seconds: float
+    ) -> list[dict[str, Any]]:
+        """同じ独立メーターストリームから一窓分を集計する。"""
+        windows = self.iter_input_volume_meter_windows(
+            window_seconds=sample_duration_seconds
+        )
+        try:
+            window = await anext(windows)
+        finally:
+            await windows.aclose()
+        sample = window.get(input_name)
+        if sample is None:
+            return []
+        return [
+            {
+                "inputLevelsMul": (
+                    [sample.peak_mul] if sample.peak_mul is not None else []
+                ),
+                "inputLevelsDb": (
+                    [sample.peak_db] if sample.peak_db is not None else []
+                ),
+                "_eventCount": sample.event_count,
+                "_numericMulSamples": sample.numeric_mul_samples,
+                "_numericDbSamples": sample.numeric_db_samples,
+            }
+        ]
 
     async def get_data(self, request_type: str, key: str) -> Any:
         """リクエストを送信してデータを取得。

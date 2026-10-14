@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import AsyncGenerator
 from pathlib import Path
 from typing import Awaitable, Callable
 
@@ -138,9 +139,16 @@ class AdaptiveVideoRecorder(VideoRecorderPort):
             sample_duration_seconds=sample_duration_seconds,
         )
 
-    async def try_recover_audio_input(self) -> bool:
+    async def observe_audio_input_health(
+        self, input_name: str
+    ) -> AsyncGenerator[AudioInputHealthCheckResult, None]:
         recorder = await self._select_recorder()
-        return await recorder.try_recover_audio_input()
+        observations = recorder.observe_audio_input_health(input_name)
+        try:
+            async for result in observations:
+                yield result
+        finally:
+            await observations.aclose()
 
     async def _forward_status(self, status: RecorderStatus) -> None:
         for listener in list(self._status_listeners):

@@ -10,6 +10,7 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, cast
 
@@ -18,9 +19,259 @@ from fastapi import FastAPI, status
 from fastapi.testclient import TestClient
 
 from splat_replay.application.dto.assets import EditUploadStatusDTO
-from splat_replay.interface.web.routers.assets import create_assets_router
+from splat_replay.application.interfaces import (
+    VideoPreviewError,
+    VideoPreviewUnavailableError,
+)
+from splat_replay.interface.web.routers.assets import (
+    create_assets_router,
+    create_file_serving_router,
+)
 
 pytestmark = pytest.mark.contract
+
+
+@pytest.mark.parametrize("asset_kind", ["recorded", "edited"])
+@pytest.mark.parametrize(
+    ("suffix", "expected_media_type"),
+    [(".mkv", "video/x-matroska"), (".mp4", "video/mp4")],
+)
+def test_video_file_media_type_matches_extension(
+    tmp_path: Path,
+    asset_kind: str,
+    suffix: str,
+    expected_media_type: str,
+) -> None:
+    """録画済み・編集済み動画の MIME type は拡張子に一致する。"""
+    filename = f"clip{suffix}"
+    asset_path = tmp_path / asset_kind / filename
+    asset_path.parent.mkdir()
+    asset_path.write_bytes(b"video-data")
+    app = FastAPI()
+    app.include_router(
+        create_file_serving_router(
+            cast(Any, SimpleNamespace(base_dir=tmp_path))
+        )
+    )
+    url = f"/videos/{asset_kind}/{asset_kind}/{filename}"
+
+    with TestClient(app) as test_client:
+        response = test_client.get(url)
+        range_response = test_client.get(url, headers={"Range": "bytes=1-3"})
+
+    assert response.status_code == status.HTTP_200_OK
+    assert response.headers["content-type"] == expected_media_type
+    assert response.headers["content-disposition"] == (
+        f'attachment; filename="{filename}"'
+    )
+    assert response.content == b"video-data"
+    assert range_response.status_code == status.HTTP_206_PARTIAL_CONTENT
+    assert range_response.headers["content-range"] == "bytes 1-3/10"
+    assert range_response.headers["content-type"] == expected_media_type
+    assert range_response.content == b"ide"
+
+
+def test_video_preview_serves_mp4_inline_with_range_support(
+    tmp_path: Path,
+) -> None:
+    """MP4 元ファイルを inline / Range 対応で直接配信する。"""
+    source = tmp_path / "recorded" / "clip.mp4"
+    source.parent.mkdir()
+    source.write_bytes(b"0123456789")
+
+    class PreviewService:
+        async def prepare(self, video: Path) -> Path:
+            return video
+
+    app = FastAPI()
+    app.include_router(
+        create_file_serving_router(
+            cast(
+                Any,
+                SimpleNamespace(
+                    base_dir=tmp_path,
+                    video_preview_service=PreviewService(),
+                ),
+            )
+        )
+    )
+
+    with TestClient(app) as test_client:
+        response = test_client.get(
+            "/video-preview/recorded.mp4",
+            params={"video_id": "recorded/clip.mp4"},
+        )
+        range_response = test_client.get(
+            "/video-preview/recorded.mp4",
+            params={"video_id": "recorded/clip.mp4"},
+            headers={"Range": "bytes=1-3"},
+        )
+
+    assert response.status_code == status.HTTP_200_OK
+    assert response.headers["content-type"] == "video/mp4"
+    assert response.headers["content-disposition"] == (
+        'inline; filename="clip.mp4"'
+    )
+    assert response.content == b"0123456789"
+    assert range_response.status_code == status.HTTP_206_PARTIAL_CONTENT
+    assert range_response.headers["content-range"] == "bytes 1-3/10"
+    assert range_response.content == b"123"
+
+
+def test_video_preview_serves_generated_mkv_preview_without_changing_source(
+    tmp_path: Path,
+) -> None:
+    """MKV 元ファイルは変換結果だけを MP4 として配信する。"""
+    source = tmp_path / "edited" / "clip.mkv"
+    source.parent.mkdir()
+    source.write_bytes(b"original MKV")
+    original = source.read_bytes()
+    preview = tmp_path / "temporary" / "clip.mp4"
+    preview.parent.mkdir()
+    preview.write_bytes(b"converted MP4")
+
+    class PreviewService:
+        async def prepare(self, video: Path) -> Path:
+            return preview
+
+    app = FastAPI()
+    app.include_router(
+        create_file_serving_router(
+            cast(
+                Any,
+                SimpleNamespace(
+                    base_dir=tmp_path,
+                    video_preview_service=PreviewService(),
+                ),
+            )
+        )
+    )
+
+    with TestClient(app) as test_client:
+        response = test_client.get(
+            "/video-preview/edited.mp4",
+            params={"video_id": "edited/clip.mkv"},
+        )
+
+    assert response.status_code == status.HTTP_200_OK
+    assert response.headers["content-type"] == "video/mp4"
+    assert response.headers["content-disposition"] == (
+        'inline; filename="clip.mp4"'
+    )
+    assert response.content == b"converted MP4"
+    assert source.read_bytes() == original
+
+
+def test_video_preview_reports_missing_ffmpeg_as_unavailable(
+    tmp_path: Path,
+) -> None:
+    """FFmpeg が無い場合は明示的な service unavailable を返す。"""
+    source = tmp_path / "recorded" / "clip.mkv"
+    source.parent.mkdir()
+    source.write_bytes(b"original MKV")
+
+    class PreviewService:
+        async def prepare(self, video: Path) -> Path:
+            raise VideoPreviewUnavailableError(
+                "ffmpeg が見つかりません。FFmpeg をインストールしてください。"
+            )
+
+    app = FastAPI()
+    app.include_router(
+        create_file_serving_router(
+            cast(
+                Any,
+                SimpleNamespace(
+                    base_dir=tmp_path,
+                    video_preview_service=PreviewService(),
+                ),
+            )
+        )
+    )
+
+    with TestClient(app) as test_client:
+        response = test_client.get(
+            "/video-preview/recorded.mp4",
+            params={"video_id": "recorded/clip.mkv"},
+        )
+
+    assert response.status_code == status.HTTP_503_SERVICE_UNAVAILABLE
+    assert response.json()["detail"].startswith("ffmpeg が見つかりません")
+
+
+def test_video_preview_hides_ffmpeg_diagnostics_from_response(
+    tmp_path: Path,
+) -> None:
+    """変換ログの元動画パスなどを HTTP 応答へ返さない。"""
+    source = tmp_path / "recorded" / "clip.mkv"
+    source.parent.mkdir()
+    source.write_bytes(b"original MKV")
+
+    class PreviewService:
+        async def prepare(self, video: Path) -> Path:
+            raise VideoPreviewError(f"ffmpeg failed: {video}")
+
+    app = FastAPI()
+    app.include_router(
+        create_file_serving_router(
+            cast(
+                Any,
+                SimpleNamespace(
+                    base_dir=tmp_path,
+                    video_preview_service=PreviewService(),
+                    logger=SimpleNamespace(error=lambda *args, **kwargs: None),
+                ),
+            )
+        )
+    )
+
+    with TestClient(app) as test_client:
+        response = test_client.get(
+            "/video-preview/recorded.mp4",
+            params={"video_id": "recorded/clip.mkv"},
+        )
+
+    assert response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
+    assert str(tmp_path) not in response.text
+
+
+@pytest.mark.parametrize(
+    "video_id",
+    [
+        "edited/clip.mkv",
+        "recorded/../outside.mkv",
+        "recorded/clip.mov",
+        r"recorded\..\outside.mkv",
+    ],
+)
+def test_video_preview_rejects_wrong_root_traversal_and_extensions(
+    tmp_path: Path, video_id: str
+) -> None:
+    """プレビュー API は kind root 内の MKV / MP4 だけを受け付ける。"""
+
+    class PreviewService:
+        async def prepare(self, video: Path) -> Path:
+            return video
+
+    app = FastAPI()
+    app.include_router(
+        create_file_serving_router(
+            cast(
+                Any,
+                SimpleNamespace(
+                    base_dir=tmp_path,
+                    video_preview_service=PreviewService(),
+                ),
+            )
+        )
+    )
+
+    with TestClient(app) as test_client:
+        response = test_client.get(
+            "/video-preview/recorded.mp4", params={"video_id": video_id}
+        )
+
+    assert response.status_code == status.HTTP_400_BAD_REQUEST
 
 
 class TestRecordedAssetsEndpoints:

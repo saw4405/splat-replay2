@@ -9,6 +9,26 @@ from splat_replay.application.interfaces.data import FileStats
 from splat_replay.domain.models import Frame, RecordingMetadata, VideoAsset
 
 
+class VideoPreviewError(RuntimeError):
+    """動画プレビューを生成できない場合のエラー。"""
+
+
+class VideoPreviewUnavailableError(VideoPreviewError):
+    """FFmpeg / FFprobe を実行できない場合のエラー。"""
+
+
+class VideoPreviewPort(Protocol):
+    """再生用 MP4 の一時生成を提供するポート。"""
+
+    async def create_mp4_preview(self, source: Path) -> Path:
+        """MKV からブラウザー再生用 MP4 を生成して返す。"""
+        ...
+
+    async def close(self) -> None:
+        """一時プレビュー領域と実行中の生成処理を破棄する。"""
+        ...
+
+
 class FramePreviewPort(Protocol):
     """進捗表示用フレーム画像を提供するポート。"""
 

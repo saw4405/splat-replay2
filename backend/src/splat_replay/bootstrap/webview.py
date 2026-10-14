@@ -15,12 +15,27 @@ if sys.stdout is None:
 if sys.stderr is None:
     sys.stderr = open(os.devnull, "w", encoding="utf-8")  # noqa: SIM115
 
+# Finder から起動した frozen app では Homebrew のツールを優先する。
+if sys.platform == "darwin" and getattr(sys, "frozen", False):
+    homebrew_bin = "/opt/homebrew/bin"
+    path_entries = [
+        entry
+        for entry in os.environ.get("PATH", "").split(os.pathsep)
+        if entry and entry != homebrew_bin
+    ]
+    os.environ["PATH"] = os.pathsep.join([homebrew_bin, *path_entries])
+
 # frozen worker が GUI などの重い import を実行する前に分岐させる。
-if __name__ == "__main__" and sys.platform == "win32":
+if __name__ == "__main__" and (
+    sys.platform == "win32" or getattr(sys, "frozen", False)
+):
     multiprocessing.freeze_support()
 
 from splat_replay.infrastructure.config import load_settings_from_toml
-from splat_replay.infrastructure.filesystem import PROJECT_ROOT, RUNTIME_ROOT
+from splat_replay.infrastructure.filesystem import (
+    ASSETS_DIR,
+    PROJECT_ROOT,
+)
 from splat_replay.infrastructure.logging import get_logger
 from splat_replay.interface.gui.webview_app import (
     SplatReplayWebViewApp,
@@ -87,7 +102,7 @@ def main() -> None:
         )
         app_instance = SplatReplayWebViewApp(
             project_root=PROJECT_ROOT,
-            startup_video=RUNTIME_ROOT / "assets" / "startup-loading.mp4",
+            startup_video=ASSETS_DIR / "startup-loading.mp4",
             logger=logger,
             backend_app_module="splat_replay.bootstrap.web_app:app",
             render_mode=settings.webview.render_mode,

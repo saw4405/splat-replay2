@@ -27,6 +27,7 @@ from splat_replay.application.interfaces.common import (
     FileSystemPort,
     LoggerPort,
     PathsPort,
+    RequiredSetupConfigPort,
 )
 from splat_replay.application.interfaces.history import (
     BattleHistoryEntry,
@@ -49,6 +50,7 @@ from splat_replay.application.interfaces.data import (
     SettingsRepositoryPort,
     SpeechAudioEncoding,
     SpeechSettingsView,
+    SpeechTranscriberSettingsView,
     SpeechSynthesisRequest,
     SpeechSynthesisResult,
     UploadSettingsView,
@@ -71,6 +73,13 @@ from splat_replay.application.interfaces.messaging import (
     FramePublisher,
     FrameSource,
 )
+from splat_replay.application.interfaces.notification import (
+    DesktopNotificationPort,
+)
+from splat_replay.application.interfaces.required_setup import (
+    RequiredSetupIssue,
+    RequiredSetupIssueCachePort,
+)
 from splat_replay.application.interfaces.recording import (
     CaptureDeviceEnumeratorPort,
     CaptureDevicePort,
@@ -85,16 +94,24 @@ from splat_replay.application.interfaces.system import (
     CommandResult,
     EnvironmentPort,
     PowerPort,
+    SoftwareInstallAttempt,
+    SoftwareInstallerPort,
     SystemCommandPort,
 )
 from splat_replay.application.interfaces.upload import (
     AuthenticatedClientPort,
     UploadPort,
 )
+from splat_replay.application.interfaces.thumbnail_font import (
+    ThumbnailFontResolverPort,
+)
 from splat_replay.application.interfaces.video import (
     FramePreviewPort,
     VideoAssetRepositoryPort,
     VideoEditorPort,
+    VideoPreviewError,
+    VideoPreviewPort,
+    VideoPreviewUnavailableError,
 )
 from splat_replay.application.interfaces.weapon_detection import (
     WeaponCandidateScore,
@@ -106,6 +123,13 @@ from splat_replay.application.interfaces.weapon_detection import (
 from splat_replay.application.interfaces.xp_detection_diagnostics import (
     XPDetectionDiagnosticsPort,
     XPDetectionDiagnosticsRecord,
+)
+from splat_replay.application.interfaces.system import (
+    OBSMainOutputCheckResult,
+    OBSConfigurationCheckerPort,
+    OBSMainOutputStatus,
+    OBSWebSocketCheckResult,
+    OBSWebSocketStatus,
 )
 
 # Domain Service用ポートはDomain層からインポート（ポート配置ルールに準拠）
@@ -120,6 +144,8 @@ __all__ = [
     "FileSystemPort",
     "LoggerPort",
     "PathsPort",
+    "RequiredSetupConfigPort",
+    "ThumbnailFontResolverPort",
     # Data
     "AudioInputHealthCheckResult",
     "AudioInputHealthStatus",
@@ -128,6 +154,11 @@ __all__ = [
     "CaptureDeviceSettingsView",
     "FileStats",
     "OBSSettingsView",
+    "OBSMainOutputCheckResult",
+    "OBSConfigurationCheckerPort",
+    "OBSMainOutputStatus",
+    "OBSWebSocketCheckResult",
+    "OBSWebSocketStatus",
     "PrivacyStatus",
     "SectionUpdate",
     "SettingDisplayLevel",
@@ -137,6 +168,7 @@ __all__ = [
     "SettingsRepositoryPort",
     "SpeechAudioEncoding",
     "SpeechSettingsView",
+    "SpeechTranscriberSettingsView",
     "SpeechSynthesisRequest",
     "SpeechSynthesisResult",
     "UploadSettingsView",
@@ -146,6 +178,8 @@ __all__ = [
     "CaptureDevicePort",
     "CapturePort",
     "ReplayBootstrapResolverPort",
+    "RequiredSetupIssue",
+    "RequiredSetupIssueCachePort",
     "RecorderStatus",
     "RecorderWithTranscriptionPort",
     "VideoRecorderPort",
@@ -157,6 +191,9 @@ __all__ = [
     "FramePreviewPort",
     "VideoAssetRepositoryPort",
     "VideoEditorPort",
+    "VideoPreviewError",
+    "VideoPreviewPort",
+    "VideoPreviewUnavailableError",
     "WeaponCandidateScore",
     "WeaponDisplayDetectionResult",
     "WeaponRecognitionPort",
@@ -180,7 +217,10 @@ __all__ = [
     "CommandResult",
     "EnvironmentPort",
     "PowerPort",
+    "SoftwareInstallAttempt",
+    "SoftwareInstallerPort",
     "SystemCommandPort",
+    "DesktopNotificationPort",
     # Messaging
     "CommandDispatcher",
     "DomainEventPublisher",

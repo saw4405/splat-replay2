@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
+import platform
 from typing import Literal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 __all__ = [
     "CaptureDeviceRequest",
@@ -15,11 +16,28 @@ __all__ = [
     "MicrophoneDeviceListResponse",
     "OBSConfigResponse",
     "OBSWebSocketPasswordRequest",
+    "RequiredSetupIssueResponse",
     "StepInfoResponse",
     "SystemCheckResponse",
     "VideoDeviceListResponse",
     "YouTubePrivacyStatusRequest",
 ]
+
+
+def _get_server_platform() -> Literal["windows", "macos", "unknown"]:
+    system_name = platform.system()
+    if system_name == "Windows":
+        return "windows"
+    if system_name == "Darwin":
+        return "macos"
+    return "unknown"
+
+
+class RequiredSetupIssueResponse(BaseModel):
+    code: str
+    step: str
+    substep_id: str
+    message: str
 
 
 class InstallationStatusResponse(BaseModel):
@@ -30,6 +48,12 @@ class InstallationStatusResponse(BaseModel):
     progress_percentage: float
     remaining_steps: list[str]
     step_details: dict[str, dict[str, bool]]
+    required_setup_issues: list[RequiredSetupIssueResponse] = Field(
+        default_factory=list
+    )
+    server_platform: Literal["windows", "macos", "unknown"] = Field(
+        default_factory=_get_server_platform
+    )
 
 
 class StepInfoResponse(BaseModel):

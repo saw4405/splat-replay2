@@ -65,6 +65,7 @@ class KillRecordExtractor:
         names: list[str] = []
         fragmented_stat_names: set[str] = set()
         raw_images: dict[str, Frame] = {}
+        legacy_primary_images: dict[str, Frame] = {}
         purposes: dict[str, OCRPurpose] = {}
         for name, position in record_positions.items():
             purpose = _ocr_purpose_for_stat(name)
@@ -97,143 +98,46 @@ class KillRecordExtractor:
                     ):
                         rs = ds_runs[0][0]
                         re_idx = ds_runs[-1][1]
-                        proc = proc0[:, rs : re_idx + 1]
+                        # 桁の端まで切ると細い「1」が落ちるため、横に余白を残す。
+                        proc = proc0[
+                            :, max(0, rs - 5) : min(proc0.shape[1], re_idx + 6)
+                        ]
                         fragmented_stat_names.add(name)
                     else:
                         proc = proc0
                 except Exception:
                     proc = proc0
-            # For kill, crop to the right-most digit cluster when a thin left noise exists
-            elif name == "kill":
-                try:
-                    k_runs = self._active_column_runs(proc0)
-                    if k_runs:
-                        if len(k_runs) >= 2:
-                            # 複数のクラスタがある場合、最大幅との比率でノイズを除外
-                            widths = [
-                                run_e - run_s + 1 for run_s, run_e in k_runs
-                            ]
-                            max_width = max(widths)
-
-                            # クラスタ間のギャップを計算
-                            gaps: list[int] = []
-                            for i in range(len(k_runs) - 1):
-                                gap = k_runs[i + 1][0] - k_runs[i][1] - 1
-                                gaps.append(gap)
-
-                            k_valid_runs: list[tuple[int, int]] = []
-                            for idx_val, ((run_s, run_e), w) in enumerate(
-                                zip(k_runs, widths)
-                            ):
-                                # ノイズ判定を改善:
-                                # 1. 最大幅の60%未満かつ絶対幅が20未満は細いノイズ（以前は50%, 15）
-                                # 2. 複数クラスタがある場合、最大幅のクラスタのみを残す戦略も追加
-                                width_ratio = (
-                                    w / max_width if max_width > 0 else 0
-                                )
-                                is_noise = width_ratio < 0.60 and w < 20
-
-                                if is_noise:
-                                    continue
-                                k_valid_runs.append((run_s, run_e))
-
-                            if len(k_valid_runs) == 0:
-                                # 全てノイズだった場合は元のまま
-                                proc = proc0
-                            elif len(k_valid_runs) == 1:
-                                # 有効なクラスタが1つだけの場合
-                                # クラスタ切り出しは行わず、全体画像を使用
-                                # 理由: 小さく切り出すとOCRの精度が低下するため
-                                proc = proc0
-                            else:
-                                # 複数の有効クラスタがある場合
-                                # まず全体範囲を設定(デフォルト)
-                                left = k_valid_runs[0][0]
-                                right = k_valid_runs[-1][1]
-                                if self._looks_like_separate_digit_runs(
-                                    k_valid_runs
-                                ):
-                                    proc = proc0
-                                else:
-                                    proc = proc0[:, left : right + 1]
-
-                                # killフィールドでは各クラスタを個別にOCRして結合を試みる
-                                if name == "kill" and len(k_valid_runs) == 2:
-                                    # 2つのクラスタを個別にOCR
-                                    cluster_results: list[str] = []
-                                    for run_s, run_e in k_valid_runs:
-                                        cluster_img = proc0[
-                                            :, run_s : run_e + 1
-                                        ]
-                                        try:
-                                            cluster_text = (
-                                                await self._ocr.recognize_text(
-                                                    cluster_img,
-                                                    ps_mode="SINGLE_LINE",
-                                                    whitelist="0123456789",
-                                                    purpose=purpose,
-                                                )
-                                            )
-                                            if cluster_text:
-                                                # 数字のみ抽出
-                                                cluster_digits = re.sub(
-                                                    r"\D",
-                                                    "",
-                                                    cluster_text.strip(),
-                                                )
-                                                if cluster_digits:
-                                                    cluster_results.append(
-                                                        cluster_digits
-                                                    )
-                                        except Exception:
-                                            pass
-
-                                    # 個別OCRが成功した場合、結果を結合
-                                    if len(cluster_results) == 2:
-                                        combined = "".join(cluster_results)
-                                        # 結合結果が妥当な範囲(0-99)の場合に使用
-                                        # ただし、実テストデータで確認された誤認識パターンは除外:
-                                        # - 値1: 正解7が['0','1']と誤認識されるケース
-                                        # - 値11: 正解10/17が['1','1']と誤認識されるケース
-                                        # これらの場合は全体画像OCRにフォールバック
-                                        if (
-                                            len(combined) <= 2
-                                            and combined.isdigit()
-                                        ):
-                                            val = int(combined)
-                                            if 0 <= val <= 99 and val not in (
-                                                1,
-                                                11,
-                                            ):
-                                                # 個別OCRの結果を使用
-                                                records[name] = val
-                                                # このnameのOCRタスクをスキップ
-                                                proc = None
-
-                                # 個別OCRが失敗した場合、または他のケースではprocを使用
-                                # (procは既に全体範囲で初期化済み)
-                        else:
-                            rs, re_idx = k_runs[-1]
-                            proc = proc0[:, rs : re_idx + 1]
-                    else:
-                        proc = proc0
-                except Exception:
-                    proc = proc0
             else:
+                # killはクラスタ分割せず、ROI全体をOCRする。
                 proc = proc0
 
-            # procがNoneの場合はOCRタスクをスキップ(個別OCR済み)
-            if proc is not None:
-                task = asyncio.create_task(
-                    self._ocr.recognize_text(
-                        proc,
-                        ps_mode="SINGLE_LINE",
-                        whitelist="0123456789",
-                        purpose=purpose,
-                    )
+            # bbox 前の従来 primary を fallback に使えるよう保持する。
+            legacy_primary_images[name] = proc
+
+            # 前景の外接矩形に切り出し、OCRしやすい白15pxの余白を加える。
+            foreground_y, foreground_x = np.where(np.asarray(proc) < 128)
+            if foreground_x.size:
+                x1 = int(foreground_x.min())
+                x2 = int(foreground_x.max()) + 1
+                y1 = int(foreground_y.min())
+                y2 = int(foreground_y.max()) + 1
+                proc = np.pad(
+                    proc[y1:y2, x1:x2],
+                    ((15, 15), (15, 15)),
+                    mode="constant",
+                    constant_values=255,
                 )
-                ocr_tasks.append(task)
-                names.append(name)
+
+            task = asyncio.create_task(
+                self._ocr.recognize_text(
+                    proc,
+                    ps_mode="SINGLE_LINE",
+                    whitelist="0123456789",
+                    purpose=purpose,
+                )
+            )
+            ocr_tasks.append(task)
+            names.append(name)
 
         ocr_results = await asyncio.gather(*ocr_tasks, return_exceptions=True)
 
@@ -249,6 +153,7 @@ class KillRecordExtractor:
                 fallback_text = await self._recognize_fixed_width_stat(
                     raw_images[name],
                     purposes[name],
+                    legacy_primary_images[name],
                 )
                 fallback_digits = self._extract_numeric_ocr_digits(
                     fallback_text
@@ -303,8 +208,27 @@ class KillRecordExtractor:
         self,
         raw: Frame,
         purpose: OCRPurpose,
+        legacy_primary: Frame,
     ) -> Optional[str]:
         """二桁表示が途中で欠落した場合に、最小前処理で再認識する。"""
+        raw_text = await self._ocr.recognize_text(
+            raw,
+            ps_mode="SINGLE_LINE",
+            whitelist="0123456789",
+            purpose=purpose,
+        )
+        if len(self._extract_numeric_ocr_digits(raw_text)) == 2:
+            return raw_text
+
+        legacy_primary_text = await self._ocr.recognize_text(
+            legacy_primary,
+            ps_mode="SINGLE_LINE",
+            whitelist="0123456789",
+            purpose=purpose,
+        )
+        if len(self._extract_numeric_ocr_digits(legacy_primary_text)) == 2:
+            return legacy_primary_text
+
         latest_text: Optional[str] = None
         for scale, padding, erosion in (
             (1, 0, 0),

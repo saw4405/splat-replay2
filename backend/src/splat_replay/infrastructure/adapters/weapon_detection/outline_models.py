@@ -158,20 +158,52 @@ def _find_best_shift(
     target_mask: np.ndarray,
     max_shift: int,
 ) -> tuple[int, int, np.ndarray]:
+    """同じサイズの2D mask間で最良の整数shiftを探す。"""
     ref_x, ref_y = _mask_center(reference_mask)
     tgt_x, tgt_y = _mask_center(target_mask)
     base_dx = int(round(ref_x - tgt_x))
     base_dy = int(round(ref_y - tgt_y))
 
+    reference_positive = reference_mask > 0
+    target_positive = target_mask > 0
+    reference_area = int(np.count_nonzero(reference_positive))
+    height, width = reference_positive.shape[:2]
+
+    def score_shift(dx: int, dy: int) -> float:
+        src_x_start = max(0, -dx)
+        src_y_start = max(0, -dy)
+        src_x_end = min(width, width - dx)
+        src_y_end = min(height, height - dy)
+        if src_x_end <= src_x_start or src_y_end <= src_y_start:
+            target_area = 0
+            intersection = 0
+        else:
+            dst_x_start = src_x_start + dx
+            dst_y_start = src_y_start + dy
+            dst_x_end = dst_x_start + (src_x_end - src_x_start)
+            dst_y_end = dst_y_start + (src_y_end - src_y_start)
+            target_view = target_positive[
+                src_y_start:src_y_end, src_x_start:src_x_end
+            ]
+            reference_view = reference_positive[
+                dst_y_start:dst_y_end, dst_x_start:dst_x_end
+            ]
+            target_area = int(np.count_nonzero(target_view))
+            intersection = int(
+                np.count_nonzero(np.logical_and(reference_view, target_view))
+            )
+        union = reference_area + target_area - intersection
+        if union == 0:
+            return 0.0
+        return intersection / float(union)
+
     best_dx = base_dx
     best_dy = base_dy
-    best_mask = _shift_mask(target_mask, base_dx, base_dy)
-    best_score = _iou_score(reference_mask, best_mask)
+    best_score = score_shift(base_dx, base_dy)
 
     for dy in range(base_dy - max_shift, base_dy + max_shift + 1):
         for dx in range(base_dx - max_shift, base_dx + max_shift + 1):
-            shifted = _shift_mask(target_mask, dx, dy)
-            score = _iou_score(reference_mask, shifted)
+            score = score_shift(dx, dy)
             is_better = score > best_score
             is_tie = abs(score - best_score) <= constants.SCORE_TIE_EPSILON
             is_shorter_shift = (dx * dx + dy * dy) < (
@@ -181,8 +213,8 @@ def _find_best_shift(
                 best_score = score
                 best_dx = dx
                 best_dy = dy
-                best_mask = shifted
 
+    best_mask = _shift_mask(target_mask, best_dx, best_dy)
     return best_dx, best_dy, best_mask
 
 
@@ -201,24 +233,31 @@ def _mask_center(mask: np.ndarray) -> tuple[float, float]:
 
 def _shift_mask(mask: np.ndarray, dx: int, dy: int) -> np.ndarray:
     """マスク画像をdx, dy方向にシフトする。"""
-    transform = np.array(
-        [[1.0, 0.0, float(dx)], [0.0, 1.0, float(dy)]], dtype=np.float32
-    )
-    # OpenCVの型推論は厳密だが、実行時には問題なく動作するため型チェックを無効化
-    shifted = cv2.warpAffine(  # type: ignore[no-overload]
-        mask,
-        transform,
-        (mask.shape[1], mask.shape[0]),
-        flags=cv2.INTER_NEAREST,
-        borderMode=cv2.BORDER_CONSTANT,
-        borderValue=0,
-    )
+    height, width = mask.shape[:2]
+    shifted = np.zeros_like(mask, order="C")
+    src_x_start = max(0, -dx)
+    src_y_start = max(0, -dy)
+    src_x_end = min(width, width - dx)
+    src_y_end = min(height, height - dy)
+
+    if src_x_end > src_x_start and src_y_end > src_y_start:
+        dst_x_start = src_x_start + dx
+        dst_y_start = src_y_start + dy
+        dst_x_end = dst_x_start + (src_x_end - src_x_start)
+        dst_y_end = dst_y_start + (src_y_end - src_y_start)
+        shifted[dst_y_start:dst_y_end, dst_x_start:dst_x_end] = mask[
+            src_y_start:src_y_end, src_x_start:src_x_end
+        ]
     return (shifted > 0).astype(np.uint8)
 
 
 def _iou_score(mask_a: np.ndarray, mask_b: np.ndarray) -> float:
-    intersection = int(np.logical_and(mask_a > 0, mask_b > 0).sum())
-    union = int(np.logical_or(mask_a > 0, mask_b > 0).sum())
+    positive_a = mask_a > 0
+    positive_b = mask_b > 0
+    intersection = int(
+        np.count_nonzero(np.logical_and(positive_a, positive_b))
+    )
+    union = int(np.count_nonzero(np.logical_or(positive_a, positive_b)))
     if union == 0:
         return 0.0
     return intersection / float(union)

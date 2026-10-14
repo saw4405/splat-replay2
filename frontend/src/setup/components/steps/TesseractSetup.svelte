@@ -6,6 +6,9 @@
   import { setupState } from '../../stores/state';
   import { type SystemCheckResult, SetupStep } from '../../types';
   import NotificationDialog from '../../../common/components/NotificationDialog.svelte';
+  import { getSetupPlatform } from '../../platform';
+
+  const setupPlatform = getSetupPlatform();
 
   const SUBSTEP_STORAGE_KEY = 'tesseract_substep_index';
 
@@ -124,7 +127,11 @@
       await checkTesseractInstallation();
       if (!tesseractInstalled) {
         showDialog(
-          'Tesseract が検出されませんでした。インストールしてから次へ進んでください。',
+          setupPlatform === 'macos'
+            ? 'Tesseract と日本語 OCR データがまだ利用できません。導入を開始し、完了後に再確認してください。'
+            : setupPlatform === 'windows'
+              ? 'Tesseract が検出されませんでした。インストールしてから次へ進んでください。'
+              : 'OS を判別できないため、この環境向けのセットアップを実行できません。',
           'warning'
         );
         return true;
@@ -158,7 +165,9 @@
       tesseractInstalled = result.is_installed;
       _tesseractVersion = result.version || null;
 
-      if (tesseractInstalled) {
+      if (setupPlatform === 'macos') {
+        await syncMacTesseractSteps(tesseractInstalled);
+      } else if (tesseractInstalled) {
         await markSubstepCompleted(SetupStep.TESSERACT_SETUP, 'tesseract-install', true);
       }
     } catch (error) {
@@ -168,25 +177,75 @@
     }
   }
 
+  async function syncMacTesseractSteps(completed: boolean): Promise<void> {
+    const savedSteps = $setupState?.step_details?.[SetupStep.TESSERACT_SETUP] || {};
+    for (const step of setupSteps) {
+      const wasCompleted = savedSteps[step.id] || step.completed;
+      step.completed = completed;
+      if (completed || wasCompleted) {
+        await markSubstepCompleted(SetupStep.TESSERACT_SETUP, step.id, completed);
+      }
+    }
+  }
+
   async function toggleStep(index: number): Promise<void> {
     const step = setupSteps[index];
+
+    if (setupPlatform !== 'windows' && index !== 0) {
+      showDialog(
+        setupPlatform === 'macos'
+          ? 'macOS では Tesseract と日本語 OCR データの導入を再確認すると、両方の手順が完了します。'
+          : 'OS を判別できないため、この環境向けの手順を完了できません。',
+        'warning'
+      );
+      return;
+    }
 
     // インストール済みならチェックを外せないようにする
     if (index === 0 && tesseractInstalled) return;
 
     if (index === 0 && !step.completed) {
+      if (setupPlatform === 'unknown') {
+        await checkTesseractInstallation();
+        if (!tesseractInstalled) {
+          showDialog(
+            'OS を判別できないため、この環境向けのセットアップを実行できません。',
+            'warning'
+          );
+        }
+        return;
+      }
+
       // Check installation when user clicks checkbox for install step
       isChecking = true;
 
       try {
         const result = await setupTesseract();
 
+        if (setupPlatform === 'macos') {
+          if (result.is_installed) {
+            await checkTesseractInstallation();
+            if (tesseractInstalled) return;
+          } else {
+            await syncMacTesseractSteps(false);
+          }
+          showDialog(
+            result.error_message ||
+              'Tesseract と日本語 OCR データの導入後に、インストール状態を再確認してください。',
+            'info'
+          );
+          return;
+        }
+
         if (result.is_installed) {
           tesseractInstalled = true;
           _tesseractVersion = result.version || null;
           await markSubstepCompleted(SetupStep.TESSERACT_SETUP, step.id, true);
         } else {
-          showDialog('Tesseract が検出されませんでした。', 'warning');
+          showDialog(
+            result.error_message || 'Tesseract がまだ利用できません。導入後に再確認してください。',
+            'warning'
+          );
         }
       } catch (error) {
         console.error('Tesseract setup failed', error);
@@ -200,6 +259,8 @@
   }
 
   function handleCardClick(event: Event) {
+    if (setupPlatform !== 'windows') return;
+
     // テキスト選択中は反応しない
     if (window.getSelection()?.toString()) {
       return;
@@ -229,10 +290,6 @@
     if (event.key === 'Enter') {
       handleCardClick(event);
     }
-  }
-
-  function openUrl(url: string): void {
-    window.open(url, '_blank');
   }
 
   function showDialog(
@@ -287,21 +344,45 @@
           </div>
 
           <div class="card-body">
-            {#if currentSubStepIndex === 0}
+            {#if setupPlatform !== 'windows'}
+              <p class="step-note">
+                {#if setupPlatform === 'macos'}
+                  Homebrew、Tesseract、日本語 OCR データの導入を開始します。Homebrew
+                  が未導入の場合は公式インストーラーを含む Terminal
+                  が開きます。表示内容を確認して操作し、終わったらこの画面で再確認してください。
+                {:else}
+                  OS を判別できないため、この環境向けの案内を表示できません。
+                {/if}
+              </p>
+              {#if setupPlatform === 'macos'}
+                <button
+                  class="link-button"
+                  type="button"
+                  onclick={() => toggleStep(0)}
+                  disabled={isChecking || tesseractInstalled}
+                >
+                  Tesseract と日本語 OCR データの導入を開始
+                </button>
+              {/if}
+              <button class="link-button" type="button" onclick={checkTesseractInstallation}>
+                インストール状態を再確認
+              </button>
+            {:else if currentSubStepIndex === 0}
               <!-- Tesseract Install -->
               <ol class="instruction-list">
                 <li>
                   下のボタンからダウンロードページを開き、「tesseract-ocr-w64-setup-*.exe」をダウンロードします
                   <div style="margin-top: 1rem;">
-                    <button
+                    <a
                       class="link-button"
-                      type="button"
-                      onclick={() => openUrl('https://github.com/UB-Mannheim/tesseract/wiki')}
+                      href="https://github.com/UB-Mannheim/tesseract/wiki"
+                      target="_blank"
+                      rel="noopener noreferrer"
                     >
                       <Download class="icon" size={16} />
                       ダウンロードページを開く
                       <ExternalLink class="icon" size={14} />
-                    </button>
+                    </a>
                   </div>
                 </li>
                 <li>インストーラーを実行してインストールします</li>
@@ -318,18 +399,16 @@
                     ><Download class="inline-icon" size={16} /></span
                   >(Download raw file)ボタンをクリックしてダウンロードします
                   <div style="margin-top: 1rem;">
-                    <button
+                    <a
                       class="link-button"
-                      type="button"
-                      onclick={() =>
-                        openUrl(
-                          'https://github.com/tesseract-ocr/tessdata_best/blob/main/eng.traineddata'
-                        )}
+                      href="https://github.com/tesseract-ocr/tessdata_best/blob/main/eng.traineddata"
+                      target="_blank"
+                      rel="noopener noreferrer"
                     >
                       <Download class="icon" size={16} />
                       eng.traineddata をダウンロード
                       <ExternalLink class="icon" size={14} />
-                    </button>
+                    </a>
                   </div>
                 </li>
                 <li>
@@ -481,6 +560,23 @@
     color: var(--text-secondary);
     cursor: pointer;
     transition: all 0.2s ease;
+  }
+
+  a.link-button {
+    text-decoration: none;
+  }
+
+  a.link-button:focus-visible {
+    outline: none;
+    box-shadow:
+      0 0 0 2px rgba(var(--theme-rgb-ring), 0.8),
+      0 0 0 4px rgba(var(--theme-rgb-accent), 0.28),
+      0 8px 18px rgba(var(--theme-rgb-accent), 0.18);
+  }
+
+  a.link-button:active {
+    transform: scale(0.97);
+    box-shadow: 0 0 8px rgba(var(--theme-rgb-accent), 0.4);
   }
 
   .path-box {

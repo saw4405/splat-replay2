@@ -5,6 +5,7 @@
   import NotificationDialog from '../../../common/components/NotificationDialog.svelte';
   import ConfirmDialog from '../../../common/components/ConfirmDialog.svelte';
   import { createVideoListActions } from './useVideoListActions.svelte';
+  import { getVideoUrl as buildVideoUrl } from './videoUrl';
 
   interface Props {
     videos?: EditedVideo[];
@@ -47,7 +48,7 @@
     if (video?.source === 'pending') {
       return '';
     }
-    return `/videos/edited/${encodeURIComponent(videoId)}`;
+    return buildVideoUrl('edited', videoId);
   }
 
   // 共通アクション（モーダル管理・削除・画像エラー処理）

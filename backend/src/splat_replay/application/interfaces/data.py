@@ -56,6 +56,14 @@ class SpeechSettingsView(Protocol):
     track_title: str
 
 
+class SpeechTranscriberSettingsView(Protocol):
+    """文字起こし機能の利用条件だけを読む設定ビュー。"""
+
+    enabled: bool
+    mic_device_name: str
+    groq_api_key: SecretStr
+
+
 class VideoEditSettingsView(Protocol):
     """Video edit settings shape exposed to application services."""
 

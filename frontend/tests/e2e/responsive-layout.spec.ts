@@ -184,6 +184,7 @@ async function mockStatisticsTabData(page: Page): Promise<void> {
         current_step: 'youtube_setup',
         completed_steps: ['youtube_setup'],
         step_details: {},
+        required_setup_issues: [],
       })
     )
   );
@@ -306,6 +307,7 @@ test('Capture Control keeps two manual actions inside its frame', async ({ page 
         current_step: 'youtube_setup',
         completed_steps: ['youtube_setup'],
         step_details: {},
+        required_setup_issues: [],
       })
     )
   );

@@ -68,6 +68,9 @@ class _SlotSignalMetrics:
     team_edge_ratio: float
 
 
+_OutlineInferenceCache = dict[tuple[str, int], tuple[str, np.ndarray]]
+
+
 class WeaponRecognitionAdapter(WeaponRecognitionPort):
     """TemplateMatcher を用いたブキ判別アダプタ。"""
 
@@ -126,6 +129,7 @@ class WeaponRecognitionAdapter(WeaponRecognitionPort):
         slot_images = crop_slot_images(frame)
         color_visible, metrics = detect_weapon_display_screen(slot_images)
         model_masks: dict[str, np.ndarray] | None = None
+        outline_inference_cache: _OutlineInferenceCache = {}
         aggregate_max_shift: int | None = None
         outline_matched_slots = 0
         processed_slots = 0
@@ -146,6 +150,7 @@ class WeaponRecognitionAdapter(WeaponRecognitionPort):
                 model_masks=model_masks,
                 cancel_generation=cancel_generation,
                 max_shift=constants.OUTLINE_ALIGN_FAST_MAX_SHIFT,
+                inference_cache=outline_inference_cache,
             )
             (
                 fast_matched_slots,
@@ -180,6 +185,7 @@ class WeaponRecognitionAdapter(WeaponRecognitionPort):
                     cancel_generation=cancel_generation,
                     max_shift=aggregate_max_shift,
                     stop_at_threshold=False,
+                    inference_cache=outline_inference_cache,
                 )
             )
 
@@ -253,6 +259,7 @@ class WeaponRecognitionAdapter(WeaponRecognitionPort):
                     iou_by_slot=outline_iou_by_slot,
                     model_masks=model_masks,
                     max_shift=aggregate_max_shift,
+                    inference_cache=outline_inference_cache,
                 )
             )
         if matched_slot_weapon_region_gray_std is not None:
@@ -426,6 +433,7 @@ class WeaponRecognitionAdapter(WeaponRecognitionPort):
         max_shift: int | None = None,
         slot_order: tuple[str, ...] | None = None,
         stop_at_threshold: bool = True,
+        inference_cache: _OutlineInferenceCache | None = None,
     ) -> tuple[int, dict[str, float], int, float | None]:
         if cancel_generation is None:
             cancel_generation = self._capture_cancel_generation()
@@ -446,10 +454,12 @@ class WeaponRecognitionAdapter(WeaponRecognitionPort):
             iou = 0.0
             aligned_model_mask: np.ndarray | None = None
             if int(detected_mask.sum()) > 0:
-                _, aligned_model_mask = outline_models.infer_species_and_mask(
+                _, aligned_model_mask = self._infer_species_and_mask(
+                    slot=slot,
                     detected_mask=detected_mask,
                     model_masks=model_masks,
                     max_shift=max_shift,
+                    inference_cache=inference_cache,
                 )
                 iou = self._calc_iou(detected_mask, aligned_model_mask)
 
@@ -532,6 +542,7 @@ class WeaponRecognitionAdapter(WeaponRecognitionPort):
         iou_by_slot: dict[str, float],
         model_masks: dict[str, np.ndarray],
         max_shift: int,
+        inference_cache: _OutlineInferenceCache | None = None,
     ) -> float | None:
         if not model_masks:
             return None
@@ -544,10 +555,12 @@ class WeaponRecognitionAdapter(WeaponRecognitionPort):
             detected_mask = detect_slot_team_region(slot_images[slot])
             if int(detected_mask.sum()) <= 0:
                 continue
-            _, aligned_model_mask = outline_models.infer_species_and_mask(
+            _, aligned_model_mask = self._infer_species_and_mask(
+                slot=slot,
                 detected_mask=detected_mask,
                 model_masks=model_masks,
                 max_shift=max_shift,
+                inference_cache=inference_cache,
             )
             weapon_region_mask = np.logical_and(
                 aligned_model_mask > 0,
@@ -561,6 +574,30 @@ class WeaponRecognitionAdapter(WeaponRecognitionPort):
         if not gray_stds:
             return None
         return float(np.mean(gray_stds))
+
+    @staticmethod
+    def _infer_species_and_mask(
+        *,
+        slot: str,
+        detected_mask: np.ndarray,
+        model_masks: dict[str, np.ndarray],
+        max_shift: int,
+        inference_cache: _OutlineInferenceCache | None,
+    ) -> tuple[str, np.ndarray]:
+        cache_key = (slot, max_shift)
+        if inference_cache is not None:
+            cached_result = inference_cache.get(cache_key)
+            if cached_result is not None:
+                return cached_result
+
+        result = outline_models.infer_species_and_mask(
+            detected_mask=detected_mask,
+            model_masks=model_masks,
+            max_shift=max_shift,
+        )
+        if inference_cache is not None:
+            inference_cache[cache_key] = result
+        return result
 
     @staticmethod
     def _calc_iou(mask_a: np.ndarray, mask_b: np.ndarray) -> float:

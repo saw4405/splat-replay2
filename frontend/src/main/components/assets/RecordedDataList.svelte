@@ -11,6 +11,7 @@
   import NotificationDialog from '../../../common/components/NotificationDialog.svelte';
   import ConfirmDialog from '../../../common/components/ConfirmDialog.svelte';
   import { createVideoListActions } from './useVideoListActions.svelte';
+  import { getVideoUrl as buildVideoUrl } from './videoUrl';
 
   interface Props {
     videos?: RecordedVideo[];
@@ -44,7 +45,7 @@
 
   function getVideoUrl(videoId: string): string {
     // videoIdはbase_dirからの相対パス（例: recorded/xxx.mkv）
-    return `/videos/recorded/${encodeURIComponent(videoId)}`;
+    return buildVideoUrl('recorded', videoId);
   }
 
   // 共通アクション（モーダル管理・削除・画像エラー処理）
@@ -140,7 +141,7 @@
   function handleEditSubtitle(event: MouseEvent, video: RecordedVideo): void {
     event.stopPropagation(); // メタデータダイアログが開かないようにする
     editingVideo = video;
-    actions.currentVideoUrl = getVideoUrl(video.path);
+    actions.currentVideoUrl = getVideoUrl(video.id);
     showSubtitleEditor = true;
   }
 
@@ -457,7 +458,7 @@
               onkeydown={(event) =>
                 triggerActionOnKeydown(event, () => {
                   editingVideo = video;
-                  actions.currentVideoUrl = getVideoUrl(video.path);
+                  actions.currentVideoUrl = getVideoUrl(video.id);
                   showSubtitleEditor = true;
                 })}
               role="button"

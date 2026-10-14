@@ -69,7 +69,7 @@
   function getAccessibleState(state: CaptureState): string {
     switch (state) {
       case 'armed':
-        return '次のバトルを自動録画する準備ができています';
+        return '自動録画の待機中です。マッチングを検出すると画面にマッチング開始時刻が表示されます';
       case 'waiting-for-power':
         return 'Switchの電源が入っていません';
       case 'recording':
@@ -143,6 +143,7 @@
       type="button"
       class="capture-beacon"
       aria-label={getTriggerLabel()}
+      title={accessibleState}
       aria-expanded={isExpanded}
       onclick={handleTriggerClick}
       onpointerdown={handlePointerDown}
@@ -168,7 +169,7 @@
       {/if}
     </button>
   {:else}
-    <div class="capture-beacon" role="img" aria-label={accessibleState}>
+    <div class="capture-beacon" role="img" aria-label={accessibleState} title={accessibleState}>
       <span class="capture-symbol" aria-hidden="true">
         {#if captureState === 'waiting-for-power'}
           <span class="power-off-symbol">

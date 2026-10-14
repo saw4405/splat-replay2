@@ -8,7 +8,7 @@
  */
 
 import { get } from 'svelte/store';
-import type { SetupStep, SetupState, StepResult } from '../types';
+import { SetupStep, type RequiredSetupIssue, type SetupState, type StepResult } from '../types';
 import {
   API_BASE_URL,
   isLoading,
@@ -16,6 +16,7 @@ import {
   setupState,
   fetchInstallationStatus,
   handleApiError,
+  isRequiredSetupIssues,
   safeParseJson,
   STEP_SUBSTEP_COUNTS,
 } from './state';
@@ -34,6 +35,65 @@ function getSubstepStorageKey(step: SetupStep): string {
     youtube_setup: 'youtube_substep_index',
   };
   return stepToKeyMap[step];
+}
+
+const STEP_SUBSTEP_IDS: Record<SetupStep, string[]> = {
+  hardware_check: [
+    'hardware-switch',
+    'hardware-capture',
+    'hardware-pc',
+    'hardware-network',
+    'hardware-connection',
+  ],
+  ffmpeg_setup: ['ffmpeg-download-extract'],
+  obs_setup: [
+    'obs-install',
+    'obs-ndi',
+    'ndi-runtime',
+    'video-capture-device',
+    'recording-settings',
+    'ndi-settings',
+    'websocket-password',
+  ],
+  tesseract_setup: ['tesseract-install', 'tesseract-lang-data'],
+  font_installation: ['font-download', 'font-place'],
+  transcription_setup: [
+    'transcription-enable',
+    'transcription-mic',
+    'transcription-groq',
+    'transcription-dictionary',
+  ],
+  youtube_setup: [
+    'youtube-create-project',
+    'youtube-enable-api',
+    'youtube-configure-consent',
+    'youtube-create-credentials',
+    'youtube-place-file',
+    'youtube-account-verification',
+    'youtube-privacy-status',
+  ],
+};
+
+export function getRequiredIssueSubstepStorageKey(issue: RequiredSetupIssue): string | null {
+  const substepIndex = getRequiredIssueSubstepIndex(issue);
+  return substepIndex < 0 ? null : getSubstepStorageKey(issue.step);
+}
+
+export function isRequiredIssueSubstepSupported(issue: RequiredSetupIssue): boolean {
+  return getRequiredIssueSubstepIndex(issue) >= 0;
+}
+
+export function setRequiredIssueSubstep(issue: RequiredSetupIssue): boolean {
+  const substepIndex = getRequiredIssueSubstepIndex(issue);
+  if (substepIndex < 0) return false;
+  setStepSubstepIndex(issue.step, substepIndex);
+  return true;
+}
+
+function getRequiredIssueSubstepIndex(issue: RequiredSetupIssue): number {
+  return issue.step === SetupStep.TRANSCRIPTION_SETUP && issue.substep_id === 'transcription-flac'
+    ? 0
+    : (STEP_SUBSTEP_IDS[issue.step]?.indexOf(issue.substep_id) ?? -1);
 }
 
 /**
@@ -137,6 +197,9 @@ export async function goToPreviousStep(): Promise<void> {
 
     // レスポンスから新しい状態を取得
     const newState = await safeParseJson<SetupState>(response);
+    if (!isRequiredSetupIssues(newState.required_setup_issues)) {
+      throw new Error('セットアップ状態を読み取れませんでした。もう一度お試しください。');
+    }
     const targetStep = newState.current_step;
 
     console.log(`[Navigation] goToPreviousStep: target step = ${targetStep}`);

@@ -11,6 +11,7 @@ from typing import cast
 
 import punq
 import pytest
+import splat_replay.infrastructure.di as di_module
 from splat_replay.application.interfaces import (
     CaptureDeviceEnumeratorPort,
     CaptureDevicePort,
@@ -99,6 +100,27 @@ def test_live_profile_resolves_adaptive_adapters() -> None:
     )
 
 
+def test_container_configures_opencv_before_runtime_start(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    events: list[str] = []
+
+    def configure_threads() -> None:
+        events.append("opencv")
+
+    def start_runtime(self: di_module.AppRuntime) -> None:
+        events.append("runtime")
+
+    monkeypatch.setattr(
+        di_module, "configure_opencv_thread_limit", configure_threads
+    )
+    monkeypatch.setattr(di_module.AppRuntime, "start", start_runtime)
+
+    configure_container(profile=RuntimeProfile.LIVE)
+
+    assert events == ["opencv", "runtime"]
+
+
 def test_replay_profile_registers_only_replay_device_adapters(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -154,9 +176,17 @@ def test_replay_profile_requires_input_before_adapter_registration(
     settings_path.parent.mkdir(parents=True)
     monkeypatch.setenv("SPLAT_REPLAY_SETTINGS_FILE", str(settings_path))
     monkeypatch.setattr(paths, "SETTINGS_FILE", settings_path)
+    opencv_configuration_calls: list[bool] = []
+    monkeypatch.setattr(
+        di_module,
+        "configure_opencv_thread_limit",
+        lambda: opencv_configuration_calls.append(True),
+    )
 
     with pytest.raises(RuntimeError, match="replay 入力"):
         configure_container(profile=RuntimeProfile.REPLAY)
+
+    assert opencv_configuration_calls == []
 
 
 def test_replay_profile_does_not_import_live_native_adapters(

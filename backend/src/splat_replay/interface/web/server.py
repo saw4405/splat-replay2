@@ -21,6 +21,9 @@ from splat_replay.application.services import (
     SystemCheckService,
     SystemSetupService,
 )
+from splat_replay.application.services.playback.video_preview import (
+    VideoPreviewService,
+)
 from splat_replay.application.services.common.settings_service import (
     SettingsService,
 )
@@ -77,6 +80,7 @@ class WebAPIServer:
     event_bus: EventBusPort
     frame_source: FrameSource
     frame_preview: FramePreviewPort
+    video_preview_service: VideoPreviewService
     preview_mode_resolver: Callable[[], Literal["live_capture", "video_file"]]
     project_root: Path
     runtime_root: Path
@@ -124,6 +128,7 @@ class WebAPIServer:
         event_bus: EventBusPort,
         frame_source: FrameSource,
         frame_preview: FramePreviewPort,
+        video_preview_service: VideoPreviewService,
         preview_mode_resolver: Callable[
             [], Literal["live_capture", "video_file"]
         ],
@@ -201,6 +206,7 @@ class WebAPIServer:
         self.event_bus = event_bus
         self.frame_source = frame_source
         self.frame_preview = frame_preview
+        self.video_preview_service = video_preview_service
         self.preview_mode_resolver = preview_mode_resolver
         self.project_root = project_root
         self.runtime_root = runtime_root

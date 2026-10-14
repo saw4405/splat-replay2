@@ -15,15 +15,19 @@ from splat_replay.application.interfaces import (
     ClockPort,
     ConfigPort,
     DomainEventPublisher,
+    EnvironmentPort,
     EventPublisher,
+    FileSystemPort,
     FramePublisher,
     LoggerPort,
     ReplayBootstrapResolverPort,
     RecorderWithTranscriptionPort,
     VideoAssetRepositoryPort,
+    VideoPreviewPort,
     VideoRecorderPort,
     WeaponRecognitionPort,
     XPDetectionDiagnosticsPort,
+    RequiredSetupIssueCachePort,
 )
 from splat_replay.application.services import (
     AutoEditor,
@@ -42,7 +46,9 @@ from splat_replay.application.services import (
     SystemSetupService,
 )
 from splat_replay.application.services.checkers import (
+    DistroAVChecker,
     FFMPEGChecker,
+    FLACChecker,
     OBSChecker,
     TesseractChecker,
 )
@@ -50,6 +56,9 @@ from splat_replay.application.services.common.queries import AssetQueryService
 from splat_replay.application.services.errors.error_logger import ErrorLogger
 from splat_replay.application.services.process.auto_process_service import (
     AutoProcessService,
+)
+from splat_replay.application.services.playback.video_preview import (
+    VideoPreviewService,
 )
 from splat_replay.application.services.recording.recording_audio_health import (
     RecordingAudioHealthService,
@@ -60,6 +69,15 @@ from splat_replay.application.use_cases.auto_recording_use_case import (
 from splat_replay.domain.config import AppSettings
 from splat_replay.domain.services import FrameAnalyzer
 from splat_replay.domain.services.state_machine import StateMachine
+from splat_replay.infrastructure.adapters.system.ndi_runtime_checker import (
+    NDIRuntimeChecker,
+)
+from splat_replay.infrastructure.adapters.system.obs_configuration_checker import (
+    OBSConfigurationChecker,
+)
+from splat_replay.infrastructure.adapters.system.required_setup_issue_cache import (
+    InMemoryRequiredSetupIssueCache,
+)
 
 
 def register_app_services(container: Container) -> None:
@@ -67,7 +85,21 @@ def register_app_services(container: Container) -> None:
     app_settings = container.resolve(AppSettings)
     base_dir = app_settings.storage.base_dir
 
+    container.register(
+        RequiredSetupIssueCachePort,
+        factory=InMemoryRequiredSetupIssueCache,
+        scope=punq.Scope.singleton,
+    )
+
     container.register(DeviceChecker, DeviceChecker)
+
+    container.register(
+        VideoPreviewService,
+        factory=lambda: VideoPreviewService(
+            container.resolve(VideoPreviewPort)
+        ),
+        scope=punq.Scope.singleton,
+    )
 
     def recording_audio_health_service_factory() -> (
         RecordingAudioHealthService
@@ -212,32 +244,58 @@ def register_app_services(container: Container) -> None:
     # Software checkers
     container.register(OBSChecker, OBSChecker)
     container.register(FFMPEGChecker, FFMPEGChecker)
+    container.register(FLACChecker, FLACChecker)
     container.register(TesseractChecker, TesseractChecker)
+    container.register(NDIRuntimeChecker, NDIRuntimeChecker)
+
+    def distroav_checker_factory() -> DistroAVChecker:
+        return DistroAVChecker(
+            logger=container.resolve(LoggerPort),
+            file_system=container.resolve(FileSystemPort),
+            obs_checker=container.resolve(OBSChecker),
+            environment=container.resolve(EnvironmentPort),
+        )
+
+    container.register(DistroAVChecker, factory=distroav_checker_factory)
 
     # SystemCheckService - Protocol型の依存を明示的に注入
     def system_check_service_factory() -> SystemCheckService:
         from splat_replay.application.interfaces import (
-            EnvironmentPort,
-            FileSystemPort,
             PathsPort,
+            ThumbnailFontResolverPort,
         )
 
         obs_checker = container.resolve(OBSChecker)
         ffmpeg_checker = container.resolve(FFMPEGChecker)
         tesseract_checker = container.resolve(TesseractChecker)
+        flac_checker = container.resolve(FLACChecker)
+        ndi_checker = container.resolve(NDIRuntimeChecker)
+        distroav_checker = container.resolve(DistroAVChecker)
+        font_resolver = container.resolve(ThumbnailFontResolverPort)
         paths = container.resolve(PathsPort)
         file_system = container.resolve(FileSystemPort)
         environment = container.resolve(EnvironmentPort)
         logger = container.resolve(LoggerPort)
+        obs_configuration_checker = OBSConfigurationChecker(
+            obs_checker=obs_checker,
+            environment=environment,
+            file_system=file_system,
+            logger=logger,
+        )
 
         return SystemCheckService(
             obs_checker=obs_checker,
             ffmpeg_checker=ffmpeg_checker,
             tesseract_checker=tesseract_checker,
+            flac_checker=flac_checker,
+            ndi_checker=ndi_checker,
+            font_resolver=font_resolver,
             paths=paths,
             file_system=file_system,
             environment=environment,
             logger=logger,
+            distroav_checker=distroav_checker,
+            obs_configuration_checker=obs_configuration_checker,
         )
 
     container.register(

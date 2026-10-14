@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import AsyncGenerator
 from pathlib import Path
 from typing import (
     TYPE_CHECKING,
@@ -74,7 +75,9 @@ class VideoRecorderPort(Protocol):
         self, input_name: str, *, sample_duration_seconds: float
     ) -> AudioInputHealthCheckResult: ...
 
-    async def try_recover_audio_input(self) -> bool: ...
+    def observe_audio_input_health(
+        self, input_name: str
+    ) -> AsyncGenerator[AudioInputHealthCheckResult, None]: ...
 
     def add_status_listener(
         self, listener: Callable[[RecorderStatus], Awaitable[None]]
@@ -107,6 +110,10 @@ class RecorderWithTranscriptionPort(Protocol):
     async def check_audio_input_health(
         self, input_name: str, *, sample_duration_seconds: float
     ) -> AudioInputHealthCheckResult: ...
+
+    def observe_audio_input_health(
+        self, input_name: str
+    ) -> AsyncGenerator[AudioInputHealthCheckResult, None]: ...
 
     def add_status_listener(
         self, listener: Callable[[RecorderStatus], Awaitable[None]]

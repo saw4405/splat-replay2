@@ -3,6 +3,11 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import EditedDataList from './EditedDataList.svelte';
 import type { EditedVideo } from '../../api/types';
 
+vi.mock('../../../setup/platform', () => ({
+  getSetupPlatform: () => 'macos',
+  getClientPlatform: () => 'macos',
+}));
+
 describe('EditedDataList', () => {
   const mockVideos: EditedVideo[] = [
     {
@@ -211,6 +216,23 @@ describe('EditedDataList', () => {
       await fireEvent.click(zoomButton);
 
       expect(modalOpenHandler).toHaveBeenCalled();
+    });
+
+    it('編集済みMKVの再生にmacOS用MP4 URLを使う', async () => {
+      const video: EditedVideo = {
+        ...mockVideos[0],
+        id: 'edited/match.mkv',
+        path: '/path/to/match.mkv',
+        filename: 'match.mkv',
+      };
+      render(EditedDataList, { props: { videos: [video] } });
+
+      await fireEvent.click(screen.getByTestId('edited-video-play-button'));
+
+      expect(screen.getByLabelText('動画再生を再生')).toHaveAttribute(
+        'src',
+        '/video-preview/edited.mp4?video_id=edited%2Fmatch.mkv'
+      );
     });
   });
 

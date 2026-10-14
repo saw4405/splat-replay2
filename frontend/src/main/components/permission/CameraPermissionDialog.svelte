@@ -1,11 +1,13 @@
 ﻿<script lang="ts">
   import BaseDialog from '../../../common/components/BaseDialog.svelte';
+  import { getClientPlatform } from '../../../setup/platform';
 
   interface Props {
     open?: boolean;
   }
 
   let { open = $bindable(false) }: Props = $props();
+  const clientPlatform = getClientPlatform();
 
   let dontShowAgain = $state(false);
 
@@ -40,10 +42,18 @@
   <div class="dialog-content">
     <div class="info-section">
       <p class="message">
-        ブラウザからカメラへのアクセス許可を求められた場合、「許可」を選択してください。
+        OBS のゲーム映像をプレビューするため、利用環境によって仮想カメラへの許可が必要です。
       </p>
       <p class="message">
-        このアプリは、OBSから出力されているゲーム映像をアプリ内で表示するため、カメラへアクセスします。
+        {#if clientPlatform === 'macos'}
+          macOS デスクトップ版では「システム設定」→「プライバシーとセキュリティ」→「カメラ」で Splat
+          Replay を許可し、内蔵 WebView から確認が出た場合も許可してください。
+        {/if}
+        localhost をブラウザで開いている場合は、そのブラウザのサイト設定でカメラを許可してください。
+      </p>
+      <p class="message">
+        LAN
+        で別端末から閲覧する場合、カメラ許可は不要で、この案内は通常表示されません。この案内が表示される端末で許可を拒否し、映像が表示されない場合は、該当する設定で許可を確認してから画面を再読み込みしてください。
       </p>
     </div>
 

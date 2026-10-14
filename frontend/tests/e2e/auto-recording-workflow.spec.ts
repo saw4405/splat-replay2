@@ -76,7 +76,7 @@ for (const replayAsset of earlyAbortReplayAssets) {
     await waitForRecordingLifecycle(page);
     await expect(
       page.getByRole('button', {
-        name: '次のバトルを自動録画する準備ができています。手動録画操作を開く',
+        name: '自動録画の待機中です。マッチングを検出すると画面にマッチング開始時刻が表示されます。手動録画操作を開く',
       })
     ).toBeVisible({ timeout: 300_000 });
     await page.getByTestId('metadata-toggle-button').click();

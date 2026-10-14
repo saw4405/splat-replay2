@@ -3,11 +3,12 @@ from __future__ import annotations
 import json
 import os
 from pathlib import Path
-from typing import TYPE_CHECKING, Callable, Iterator
+from typing import TYPE_CHECKING, Callable, Iterator, Literal
 
 import pytest
 from fastapi.testclient import TestClient
 
+from splat_replay.application.interfaces import SoftwareInstallAttempt
 from splat_replay.bootstrap.web_app import create_app
 from splat_replay.domain.config import CaptureDeviceSettings
 from splat_replay.infrastructure.config import (
@@ -60,6 +61,9 @@ def client(
     from splat_replay.infrastructure.adapters.obs.recorder_controller import (
         OBSRecorderController,
     )
+    from splat_replay.infrastructure.adapters.system.homebrew_software_installer import (
+        HomebrewSoftwareInstaller,
+    )
 
     async def mock_start(self) -> None:
         """モック: 録画開始（何もしない）"""
@@ -98,6 +102,16 @@ def client(
             peak_db=None,
         )
 
+    def mock_install(
+        self: HomebrewSoftwareInstaller,
+        software: Literal["ffmpeg", "tesseract", "flac"],
+    ) -> SoftwareInstallAttempt:
+        """テストでは Homebrew や対話インストーラーを起動しない。"""
+        return SoftwareInstallAttempt(
+            completed=False,
+            error_message=f"テストでは {software} を導入しません。",
+        )
+
     # MonkeyPatchでメソッドを差し替え
     monkeypatch.setattr(OBSRecorderController, "start", mock_start)
     monkeypatch.setattr(OBSRecorderController, "stop", mock_stop)
@@ -110,15 +124,18 @@ def client(
         "check_audio_input_health",
         mock_check_audio_input_health,
     )
+    monkeypatch.setattr(HomebrewSoftwareInstaller, "install", mock_install)
 
     test_settings_path = tmp_path / "config" / "settings.toml"
     settings = load_settings_from_toml(
         paths.SETTINGS_FILE, create_if_missing=False
     )
+    settings.storage.base_dir = tmp_path / "videos"
     settings.capture_device = CaptureDeviceSettings(name="Test Capture Device")
     settings.speech_transcriber.enabled = False
     save_settings_to_toml(settings, test_settings_path)
     monkeypatch.setenv("SPLAT_REPLAY_SETTINGS_FILE", str(test_settings_path))
+    monkeypatch.setenv("SPLAT_REPLAY_E2E_NOOP_UPLOAD", "1")
     monkeypatch.setattr(paths, "SETTINGS_FILE", test_settings_path)
 
     container = configure_container()

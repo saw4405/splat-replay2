@@ -6,6 +6,7 @@ import contextlib
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Request
+from splat_replay.application.interfaces import DesktopNotificationPort
 from starlette.middleware.base import RequestResponseEndpoint
 from starlette.responses import Response, JSONResponse
 from splat_replay.application.services.system.desktop_maintenance import (
@@ -48,7 +49,11 @@ def _frontend_file_response(file_path: str | Path) -> FileResponse:
     return FileResponse(path)
 
 
-def create_app(server: WebAPIServer, enable_lifespan: bool = True) -> FastAPI:
+def create_app(
+    server: WebAPIServer,
+    enable_lifespan: bool = True,
+    macos_notification_sender: DesktopNotificationPort | None = None,
+) -> FastAPI:
     """FastAPIアプリケーションを作成する。
 
     Args:
@@ -92,17 +97,42 @@ def create_app(server: WebAPIServer, enable_lifespan: bool = True) -> FastAPI:
             )
             auto_recording_use_case.maintenance_check = maintenance.check
 
-        async def run_workers() -> None:
+        async def wait_for_activation() -> None:
             if signals is not None:
                 while not signals.activated.is_set():
                     await asyncio.sleep(0.1)
+
+        async def run_auto_recording() -> None:
+            await wait_for_activation()
+            setup_status_error_logged = False
+            while True:
+                try:
+                    setup_completed = await asyncio.to_thread(
+                        setup_service.is_installation_completed
+                    )
+                except Exception as exc:  # noqa: BLE001
+                    if not setup_status_error_logged:
+                        logger.error(
+                            "自動録画開始前のセットアップ状態確認に失敗しました",
+                            error=str(exc),
+                        )
+                        setup_status_error_logged = True
+                else:
+                    setup_status_error_logged = False
+                    if setup_completed:
+                        break
+                await asyncio.sleep(1)
             await auto_recording_use_case.start_background()
+
+        async def run_auto_process() -> None:
+            await wait_for_activation()
             await server.auto_process_service.start()
 
-        auto_process_task = asyncio.create_task(run_workers())
+        auto_recording_task = asyncio.create_task(run_auto_recording())
+        auto_process_task = asyncio.create_task(run_auto_process())
 
         async def check_stopped_worker() -> None:
-            # 稼働中はフレーム境界が所有する。停止完了後だけここで判定する。
+            # 稼働中は録画ループが所有し、初回起動待機中と停止後に判定する。
             while True:
                 if signals is not None:
                     icon, text = describe_tray_status(
@@ -114,9 +144,14 @@ def create_app(server: WebAPIServer, enable_lifespan: bool = True) -> FastAPI:
                     signals.tray_status.value = f"{icon}|{text}".encode(
                         "utf-8"
                     )
-                if (
-                    maintenance is not None
-                    and auto_recording_use_case.status() == "stopped"
+                recording_status = auto_recording_use_case.status()
+                if maintenance is not None and (
+                    recording_status == "stopped"
+                    or (
+                        recording_status == "idle"
+                        and signals is not None
+                        and signals.activated.is_set()
+                    )
                 ):
                     maintenance.check()
                 await asyncio.sleep(0.1)
@@ -132,15 +167,21 @@ def create_app(server: WebAPIServer, enable_lifespan: bool = True) -> FastAPI:
             yield
         finally:
             # Shutdown
-            if maintenance_task is not None:
-                maintenance_task.cancel()
+            try:
+                if maintenance_task is not None:
+                    maintenance_task.cancel()
+                    with contextlib.suppress(asyncio.CancelledError):
+                        await maintenance_task
+                auto_recording_task.cancel()
                 with contextlib.suppress(asyncio.CancelledError):
-                    await maintenance_task
-            await auto_recording_use_case.stop_background()
-            auto_process_task.cancel()
-            with contextlib.suppress(asyncio.CancelledError):
-                await auto_process_task
-            auto_recording_use_case.maintenance_check = None
+                    await auto_recording_task
+                await auto_recording_use_case.stop_background()
+                auto_process_task.cancel()
+                with contextlib.suppress(asyncio.CancelledError):
+                    await auto_process_task
+                auto_recording_use_case.maintenance_check = None
+            finally:
+                await server.video_preview_service.close()
 
     # テスト時は lifespan を無効化
     if enable_lifespan:
@@ -232,7 +273,9 @@ def create_app(server: WebAPIServer, enable_lifespan: bool = True) -> FastAPI:
     app.include_router(file_serving_router)
 
     # 通知ルーターを登録
-    notifications_router = create_notifications_router(server.assets_dir)
+    notifications_router = create_notifications_router(
+        server.assets_dir, macos_notification_sender
+    )
     app.include_router(notifications_router)
 
     metadata_router = create_metadata_router(server)

@@ -25,7 +25,7 @@ describe('CaptureControl.svelte', () => {
     });
 
     const trigger = screen.getByRole('button', {
-      name: '次のバトルを自動録画する準備ができています。手動録画操作を開く',
+      name: '自動録画の待機中です。マッチングを検出すると画面にマッチング開始時刻が表示されます。手動録画操作を開く',
     });
     expect(screen.getByText('READY')).toBeInTheDocument();
     expect(screen.queryByText('Stopped')).not.toBeInTheDocument();
@@ -150,7 +150,7 @@ describe('CaptureControl.svelte', () => {
     expect(screen.getByText('READY')).toBeInTheDocument();
     expect(
       screen.getByRole('button', {
-        name: '次のバトルを自動録画する準備ができています。手動録画操作を開く',
+        name: '自動録画の待機中です。マッチングを検出すると画面にマッチング開始時刻が表示されます。手動録画操作を開く',
       })
     ).toBeInTheDocument();
   });
@@ -165,7 +165,7 @@ describe('CaptureControl.svelte', () => {
     });
 
     const trigger = screen.getByRole('button', {
-      name: '次のバトルを自動録画する準備ができています。手動録画操作を開く',
+      name: '自動録画の待機中です。マッチングを検出すると画面にマッチング開始時刻が表示されます。手動録画操作を開く',
     });
     await fireEvent.pointerDown(trigger, { pointerType: 'touch' });
     await fireEvent.click(trigger);

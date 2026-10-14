@@ -7,7 +7,12 @@ cd "$repo_root"
 export PRE_COMMIT_HOME="${PRE_COMMIT_HOME:-$repo_root/.pre-commit-cache}"
 export VIRTUALENV_OVERRIDE_APP_DATA="${VIRTUALENV_OVERRIDE_APP_DATA:-$repo_root/.pre-commit-cache/virtualenv-app-data}"
 
-exec backend/.venv/Scripts/python.exe -m pre_commit hook-impl \
+python=backend/.venv/bin/python
+if [ ! -x "$python" ]; then
+  python=backend/.venv/Scripts/python.exe
+fi
+
+exec "$python" -m pre_commit hook-impl \
   --config=.pre-commit-config.yaml \
   --hook-type=pre-push \
   --hook-dir "$repo_root/.githooks" \

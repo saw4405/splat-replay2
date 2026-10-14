@@ -17,6 +17,8 @@ from splat_replay.application.interfaces import (
     FileSystemPort,
     LoggerPort,
     PathsPort,
+    RequiredSetupConfigPort,
+    ThumbnailFontResolverPort,
 )
 from splat_replay.application.services import AutoRecorder
 from splat_replay.application.services.common.queries import AssetQueryService
@@ -28,6 +30,9 @@ from splat_replay.infrastructure.adapters.system.cross_cutting import (
     ProcessEnvironmentAdapter,
     StructlogLoggerAdapter,
     TomlConfigAdapter,
+)
+from splat_replay.infrastructure.adapters.image.thumbnail_font_resolver import (
+    ThumbnailFontResolver,
 )
 from splat_replay.infrastructure.di.adapters import register_adapters
 from splat_replay.infrastructure.di.app_services import register_app_services
@@ -42,6 +47,9 @@ from splat_replay.infrastructure.di.runtime_profile import RuntimeProfile
 from splat_replay.infrastructure.di.use_cases import register_app_usecases
 from splat_replay.infrastructure.logging import get_logger
 from splat_replay.infrastructure.runtime import AppRuntime
+from splat_replay.infrastructure.runtime.opencv_runtime import (
+    configure_opencv_thread_limit,
+)
 from splat_replay.infrastructure.test_input import (
     require_configured_test_video,
 )
@@ -56,6 +64,8 @@ def configure_container(
     if profile is RuntimeProfile.REPLAY:
         require_configured_test_video()
 
+    configure_opencv_thread_limit()
+
     container = punq.Container()
 
     # Cross-cutting concerns（横断的関心事）の登録
@@ -64,9 +74,15 @@ def configure_container(
 
     config_adapter = TomlConfigAdapter()
     container.register(ConfigPort, instance=config_adapter)
+    container.register(RequiredSetupConfigPort, instance=config_adapter)
 
     paths_adapter = FileSystemPathsAdapter()
     container.register(PathsPort, instance=paths_adapter)
+    container.register(
+        ThumbnailFontResolverPort,
+        ThumbnailFontResolver,
+        scope=punq.Scope.singleton,
+    )
 
     file_system_adapter = LocalFileSystemAdapter()
     container.register(FileSystemPort, instance=file_system_adapter)

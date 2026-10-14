@@ -10,11 +10,23 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 from fastapi import status
 from fastapi.testclient import TestClient
 
 from splat_replay.application.services import RecordingPreparationService
+from splat_replay.application.services import SetupService
+from splat_replay.application.interfaces import RequiredSetupIssue
+from splat_replay.application.services.setup.system_check_service import (
+    SoftwareCheckResult,
+    SystemCheckService,
+)
+from splat_replay.application.services.setup.system_setup_service import (
+    SystemSetupService,
+)
+import splat_replay.interface.web.schemas.setup as setup_schemas
 
 pytestmark = pytest.mark.contract
 
@@ -36,6 +48,7 @@ class TestSetupStatusEndpoints:
         assert "progress_percentage" in data
         assert "remaining_steps" in data
         assert "step_details" in data
+        assert isinstance(data["required_setup_issues"], list)
 
         # 型の検証
         assert isinstance(data["is_completed"], bool)
@@ -45,6 +58,48 @@ class TestSetupStatusEndpoints:
         assert isinstance(data["progress_percentage"], (int, float))
         assert isinstance(data["remaining_steps"], list)
         assert isinstance(data["step_details"], dict)
+
+    @pytest.mark.parametrize(
+        ("system_name", "expected_platform"),
+        [
+            ("Windows", "windows"),
+            ("Darwin", "macos"),
+            ("Linux", "unknown"),
+        ],
+    )
+    def test_server_platform_is_in_status_navigation_and_lifecycle_responses(
+        self,
+        client: TestClient,
+        monkeypatch: pytest.MonkeyPatch,
+        system_name: str,
+        expected_platform: str,
+    ) -> None:
+        """全OS判定値をstatus・navigation・lifecycle応答へ含める。"""
+        monkeypatch.setattr(
+            setup_schemas.platform, "system", lambda: system_name
+        )
+        monkeypatch.setattr(
+            SetupService,
+            "get_required_setup_issues",
+            lambda self, force_refresh=False, *, repair_legacy_state=False: [],
+        )
+
+        responses = [
+            client.get("/setup/status"),
+            client.post("/setup/start"),
+            client.post("/setup/steps/hardware_check/skip"),
+            client.post("/setup/navigation/next"),
+            client.post("/setup/navigation/previous"),
+            client.post("/setup/complete"),
+        ]
+
+        assert all(
+            response.status_code == status.HTTP_200_OK
+            for response in responses
+        )
+        assert [
+            response.json()["server_platform"] for response in responses
+        ] == [expected_platform] * len(responses)
 
 
 class TestSetupNavigationEndpoints:
@@ -75,6 +130,52 @@ class TestSetupNavigationEndpoints:
             status.HTTP_400_BAD_REQUEST,
         ]
 
+    def test_repair_returns_the_server_selected_issue(
+        self, client: TestClient, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        issue = RequiredSetupIssue(
+            code="distroav_missing",
+            step="obs_setup",
+            substep_id="obs-ndi",
+            message="OBS の DistroAV / obs-ndi プラグインが見つかりません。",
+        )
+        monkeypatch.setattr(
+            SetupService,
+            "select_required_setup_issue",
+            lambda self, code: issue,
+        )
+
+        response = client.post("/setup/repair/distroav_missing")
+
+        assert response.status_code == status.HTTP_200_OK
+        assert response.json() == {
+            "code": issue.code,
+            "step": issue.step,
+            "substep_id": issue.substep_id,
+            "message": issue.message,
+        }
+
+    def test_repair_rejects_issue_that_is_no_longer_missing(
+        self, client: TestClient, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        def reject_repair(self: SetupService, code: str) -> RequiredSetupIssue:
+            _ = self, code
+            raise ValueError("選択した必須設定は現在不足していません。")
+
+        monkeypatch.setattr(
+            SetupService,
+            "select_required_setup_issue",
+            reject_repair,
+        )
+
+        response = client.post("/setup/repair/obs_missing")
+
+        assert response.status_code == status.HTTP_400_BAD_REQUEST
+        assert (
+            response.json()["detail"]
+            == "選択した必須設定は現在不足していません。"
+        )
+
 
 class TestSetupLifecycleEndpoints:
     """セットアップライフサイクルエンドポイントのcontractテスト。"""
@@ -93,15 +194,50 @@ class TestSetupLifecycleEndpoints:
             data = response.json()
             assert "is_completed" in data
 
-    def test_complete_installation(self, client: TestClient) -> None:
+    def test_complete_installation(
+        self, client: TestClient, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         """POST /setup/complete - セットアップ完了。"""
+        monkeypatch.setattr(
+            SetupService,
+            "get_required_setup_issues",
+            lambda self, force_refresh=False, *, repair_legacy_state=False: [],
+        )
+        response = client.post("/setup/complete")
+        assert response.status_code == status.HTTP_200_OK
+
+    def test_complete_installation_returns_required_issue_contract(
+        self, client: TestClient, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """WebSocket設定不足を既存カード向けissueとして409で返す。"""
+        issue = RequiredSetupIssue(
+            code="obs_websocket_password_mismatch",
+            step="obs_setup",
+            substep_id="websocket-password",
+            message="OBS WebSocket の認証パスワードと保存した値が一致しません。",
+        )
+        monkeypatch.setattr(
+            SetupService,
+            "get_required_setup_issues",
+            lambda self, force_refresh=False, *, repair_legacy_state=False: [
+                issue
+            ],
+        )
+
         response = client.post("/setup/complete")
 
-        # 未完了の可能性もあるため複数ステータスを許容
-        assert response.status_code in [
-            status.HTTP_200_OK,
-            status.HTTP_400_BAD_REQUEST,
-        ]
+        assert response.status_code == status.HTTP_409_CONFLICT
+        assert response.json()["detail"] == {
+            "message": "アプリの利用に必要な設定が不足しています。",
+            "required_setup_issues": [
+                {
+                    "code": "obs_websocket_password_mismatch",
+                    "step": "obs_setup",
+                    "substep_id": "websocket-password",
+                    "message": "OBS WebSocket の認証パスワードと保存した値が一致しません。",
+                }
+            ],
+        }
 
 
 class TestSetupStepManagementEndpoints:
@@ -179,12 +315,30 @@ class TestSystemCheckEndpoints:
 
     @pytest.mark.parametrize(
         "software",
-        ["obs", "ffmpeg", "tesseract", "ndi", "font", "youtube"],
+        ["obs", "ffmpeg", "tesseract", "flac", "ndi", "font", "youtube"],
     )
     def test_check_system_software(
-        self, client: TestClient, software: str
+        self,
+        client: TestClient,
+        software: str,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         """GET /setup/system/check/{software} - システムソフトウェアチェック。"""
+        for method_name in (
+            "check_obs_installation",
+            "check_ffmpeg_installation",
+            "check_tesseract_installation",
+            "check_flac_installation",
+            "check_ndi_runtime_installation",
+            "check_font_installation",
+            "check_youtube_credentials",
+        ):
+            monkeypatch.setattr(
+                SystemCheckService,
+                method_name,
+                lambda self: SoftwareCheckResult(is_installed=False),
+            )
+
         response = client.get(f"/setup/system/check/{software}")
         assert response.status_code == status.HTTP_200_OK
 
@@ -212,6 +366,29 @@ class TestSystemCheckEndpoints:
         response = client.get("/setup/system/check/invalid_software")
         assert response.status_code == status.HTTP_400_BAD_REQUEST
 
+    def test_font_check_returns_the_resolved_os_font_path(
+        self, client: TestClient, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """フォント確認は代替 OS フォントの利用可能性を返す。"""
+        fallback_path = Path("/System/Library/Fonts/Hiragino Sans.ttc")
+        monkeypatch.setattr(
+            SystemCheckService,
+            "check_font_installation",
+            lambda self: SoftwareCheckResult(
+                is_installed=True, installation_path=fallback_path
+            ),
+        )
+
+        response = client.get("/setup/system/check/font")
+
+        assert response.status_code == status.HTTP_200_OK
+        assert response.json() == {
+            "is_installed": True,
+            "version": None,
+            "installation_path": str(fallback_path),
+            "error_message": None,
+        }
+
 
 class TestSystemSetupEndpoints:
     """システムセットアップエンドポイントのcontractテスト。"""
@@ -222,12 +399,28 @@ class TestSystemSetupEndpoints:
             "/setup/system/setup/ffmpeg",
             "/setup/system/setup/obs",
             "/setup/system/setup/tesseract",
+            "/setup/system/setup/flac",
         ],
     )
     def test_system_setup_endpoints(
-        self, client: TestClient, endpoint: str
+        self,
+        client: TestClient,
+        endpoint: str,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         """POST /setup/system/setup/{software} - システムセットアップ実行。"""
+        for method_name in (
+            "setup_ffmpeg",
+            "setup_obs",
+            "setup_tesseract",
+            "setup_flac",
+        ):
+            monkeypatch.setattr(
+                SystemSetupService,
+                method_name,
+                lambda self: SoftwareCheckResult(is_installed=False),
+            )
+
         response = client.post(endpoint)
 
         # セットアップ成功または既にインストール済み

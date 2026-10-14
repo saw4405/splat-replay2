@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+import sys
 from pathlib import Path
 from typing import Optional
 
@@ -41,7 +42,7 @@ class TesseractChecker:
 
         1. まずtesseractコマンドが実行可能かを確認
         2. 実行できない場合、C:\\Program Files\\Tesseract-OCR\\tesseract.exeが存在するかを確認
-        3. ファイルがあればインストール済として返す
+        3. macOS は jpn、Windows は実行時既定の eng データを確認する
 
         Returns:
             Tesseractのチェック結果
@@ -59,6 +60,38 @@ class TesseractChecker:
 
                 if result.success:
                     version = self._extract_tesseract_version(result.stdout)
+                    if sys.platform in {"darwin", "win32"}:
+                        required_language = (
+                            "jpn" if sys.platform == "darwin" else "eng"
+                        )
+                        if version is None:
+                            return SoftwareCheckResult(
+                                is_installed=False,
+                                error_message=(
+                                    "Tesseract のバージョンを確認できませんでした"
+                                ),
+                            )
+                        languages = self._command_port.execute_command(
+                            ["tesseract", "--list-langs"], timeout=5.0
+                        )
+                        if not languages.success:
+                            return SoftwareCheckResult(
+                                is_installed=False,
+                                error_message=(
+                                    "Tesseract OCR データを確認できませんでした"
+                                ),
+                            )
+                        if required_language not in {
+                            line.strip()
+                            for line in languages.stdout.splitlines()
+                        }:
+                            return SoftwareCheckResult(
+                                is_installed=False,
+                                version=version,
+                                error_message=(
+                                    f"必要な OCR データ ({required_language}) が見つかりませんでした"
+                                ),
+                            )
                     self._logger.info(
                         "Tesseract found via command", version=version
                     )
@@ -72,19 +105,46 @@ class TesseractChecker:
                     error=str(e),
                 )
 
-        # 2. C:\Program Files\Tesseract-OCR\tesseract.exeが存在するかを確認
+        # 2. PATH 外の標準 Windows 配置も、実行と既定の eng データを確認する。
         tesseract_exe = Path("C:/Program Files/Tesseract-OCR/tesseract.exe")
 
-        if self._file_system.is_file(tesseract_exe):
-            self._logger.info(
-                "Tesseract executable found", path=str(tesseract_exe)
-            )
-            # ファイルが存在すればインストール済とみなす
-            return SoftwareCheckResult(
-                is_installed=True,
-                version="Installed",
-                installation_path=tesseract_exe,
-            )
+        if sys.platform == "win32" and self._file_system.is_file(
+            tesseract_exe
+        ):
+            try:
+                result = self._command_port.execute_command(
+                    [str(tesseract_exe), "--version"], timeout=5.0
+                )
+                version = self._extract_tesseract_version(result.stdout)
+                languages = self._command_port.execute_command(
+                    [str(tesseract_exe), "--list-langs"], timeout=5.0
+                )
+            except CommandExecutionError as exc:
+                self._logger.warning(
+                    "Tesseract executable verification failed",
+                    error_type=type(exc).__name__,
+                )
+            else:
+                if (
+                    result.success
+                    and version is not None
+                    and languages.success
+                    and "eng"
+                    in {line.strip() for line in languages.stdout.splitlines()}
+                ):
+                    return SoftwareCheckResult(
+                        is_installed=True,
+                        version=version,
+                        installation_path=tesseract_exe,
+                    )
+                return SoftwareCheckResult(
+                    is_installed=False,
+                    version=version,
+                    installation_path=tesseract_exe,
+                    error_message=(
+                        "Tesseract または必要な OCR データ (eng) を確認できませんでした"
+                    ),
+                )
 
         # 3. どちらも見つからない場合
         self._logger.info("Tesseract not found")

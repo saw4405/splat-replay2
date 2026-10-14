@@ -20,6 +20,7 @@ describe('setup progressInfo', () => {
         },
         [SetupStep.FFMPEG_SETUP]: {},
       },
+      required_setup_issues: [],
       installation_date: null,
     };
 

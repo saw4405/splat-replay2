@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
+  import { get } from 'svelte/store';
   import type { Component } from 'svelte';
   import { ChevronLeft, ChevronRight } from 'lucide-svelte';
   import {
@@ -7,19 +8,27 @@
     isLoading,
     error,
     progressInfo,
+    API_BASE_URL,
     fetchInstallationStatus,
     clearError,
     completeInstallation,
+    handleApiError,
+    isRequiredSetupIssue,
+    safeParseJson,
   } from '../stores/state';
+  import {
+    getRequiredIssueSubstepStorageKey,
+    isRequiredIssueSubstepSupported,
+    setRequiredIssueSubstep,
+  } from '../stores/navigation';
   import {
     goToNextStep,
     goToPreviousStep,
     skipCurrentStep,
     executeStep,
   } from '../stores/navigation';
-  import { SetupStep } from '../types';
+  import { SetupStep, type RequiredSetupIssue } from '../types';
   import ErrorDialog from '../../common/components/ErrorDialog.svelte';
-  import NotificationDialog from '../../common/components/NotificationDialog.svelte';
 
   interface Props {
     currentStepComponent?: Component | null;
@@ -36,12 +45,22 @@
   let childStepCompleted = $state(false);
   let shouldShowCompletion = $state(false);
   let lastObservedStep = $state<SetupStep | null>(null);
+  let selectedIssue = $state<RequiredSetupIssue | null>(null);
+  let hasTriedCompletion = $state(false);
+  let repairVersion = $state(0);
+  let isRepairing = $state(false);
 
   let showErrorDialog = $state(false);
-  let showCompletionDialog = $state(false);
-  let showWarningDialog = $state(false);
-  let hasIncompleteTasksMessage = $state('');
-  let isAllTasksCompleted = $state(true);
+
+  const orderedSteps = [
+    SetupStep.HARDWARE_CHECK,
+    SetupStep.FFMPEG_SETUP,
+    SetupStep.OBS_SETUP,
+    SetupStep.TESSERACT_SETUP,
+    SetupStep.FONT_INSTALLATION,
+    SetupStep.TRANSCRIPTION_SETUP,
+    SetupStep.YOUTUBE_SETUP,
+  ];
 
   $effect(() => {
     if ($error) {
@@ -56,6 +75,14 @@
   const isLastStep = $derived(
     $setupState ? $setupState.current_step === SetupStep.YOUTUBE_SETUP : false
   );
+  const showRequiredIssues = $derived(
+    Boolean(
+      $setupState &&
+      $setupState.required_setup_issues.length > 0 &&
+      ($setupState.is_completed || hasTriedCompletion) &&
+      !selectedIssue
+    )
+  );
 
   $effect(() => {
     const currentStep = $setupState?.current_step ?? null;
@@ -68,60 +95,6 @@
   $effect(() => {
     shouldShowCompletion = isLastStep && childAtFinalSubstep;
   });
-
-  /**
-   * すべてのタスクが完了しているかチェック
-   * すべてのステップのすべてのタスクが完了している必要がある
-   */
-  function checkAllTasksCompleted(): boolean {
-    if (!$setupState) return false;
-
-    const { step_details, current_step, skipped_steps } = $setupState;
-    const incompleteSteps: string[] = [];
-
-    // すべてのステップをチェック
-    const allSteps = [
-      SetupStep.HARDWARE_CHECK,
-      SetupStep.FFMPEG_SETUP,
-      SetupStep.OBS_SETUP,
-      SetupStep.TESSERACT_SETUP,
-      SetupStep.FONT_INSTALLATION,
-      SetupStep.TRANSCRIPTION_SETUP,
-      SetupStep.YOUTUBE_SETUP,
-    ];
-
-    for (const step of allSteps) {
-      // まだ到達していないステップは除外
-      const currentStepIndex = allSteps.indexOf(current_step);
-      const stepIndex = allSteps.indexOf(step);
-      if (stepIndex > currentStepIndex) {
-        continue;
-      }
-
-      const details = step_details[step] || {};
-      const incompleteTasks = Object.entries(details)
-        .filter(([_key, completed]) => !completed)
-        .map(([key]) => key);
-
-      // タスクが存在しない、または一部でも未完了の場合
-      if (Object.keys(details).length === 0 || incompleteTasks.length > 0) {
-        // スキップされたステップかチェック
-        if (skipped_steps.includes(step)) {
-          incompleteSteps.push(`${step}: スキップされています`);
-        } else {
-          incompleteSteps.push(`${step}: ${incompleteTasks.join(', ')}`);
-        }
-      }
-    }
-
-    if (incompleteSteps.length > 0) {
-      hasIncompleteTasksMessage =
-        '以下のステップ・タスクが完了していません：\n\n' + incompleteSteps.join('\n');
-      return false;
-    }
-
-    return true;
-  }
 
   onMount(async () => {
     await fetchInstallationStatus();
@@ -137,18 +110,9 @@
       const handled = await instance.next({ skip: isSkipping });
       if (handled) return;
 
-      // 最後のステップで完了ダイアログを表示
+      // 最後のステップはサーバーで必須設定を再確認して完了する
       if (isLastStep) {
-        if (isSkipping) {
-          await skipCurrentStep();
-        }
-        // すべてのタスクが完了しているかチェック
-        isAllTasksCompleted = checkAllTasksCompleted();
-        if (isAllTasksCompleted) {
-          showCompletionDialog = true;
-        } else {
-          showWarningDialog = true;
-        }
+        await validateAndCompleteSetup();
         return;
       }
 
@@ -170,14 +134,9 @@
         return;
       }
 
-      // 最後のステップの場合は完了ダイアログを表示
+      // 最後のステップはサーバーで必須設定を再確認して完了する
       if (isLastStep) {
-        isAllTasksCompleted = checkAllTasksCompleted();
-        if (isAllTasksCompleted) {
-          showCompletionDialog = true;
-        } else {
-          showWarningDialog = true;
-        }
+        await validateAndCompleteSetup();
         return;
       }
     }
@@ -210,14 +169,116 @@
     await fetchInstallationStatus();
   }
 
-  async function handleCompletionContinue(): Promise<void> {
-    // インストール完了状態を保存してからページをリロードしてメインアプリに遷移
-    await completeInstallation();
-    window.location.reload();
+  async function validateAndCompleteSetup(): Promise<void> {
+    hasTriedCompletion = true;
+    try {
+      await completeInstallation();
+    } catch (err) {
+      const hasIssues = (get(setupState)?.required_setup_issues.length ?? 0) > 0;
+      if (hasIssues) {
+        selectedIssue = null;
+      }
+      if (!get(error)?.error || !hasJapaneseText(get(error)?.error ?? '')) {
+        error.set({
+          error: hasIssues
+            ? '必須設定の不足を確認してください。表示された項目を修復してください。'
+            : japaneseErrorMessage(
+                err,
+                'セットアップの完了確認に失敗しました。通信状況を確認して再試行してください。'
+              ),
+        });
+      }
+    }
   }
 
-  function handleWarningClose(): void {
-    showWarningDialog = false;
+  async function openRequiredIssue(issue: RequiredSetupIssue): Promise<void> {
+    if (isRepairing) return;
+    const storageKey = getRequiredIssueSubstepStorageKey(issue);
+    if (!storageKey || !isRequiredIssueSubstepSupported(issue)) {
+      error.set({
+        error: 'この必須項目の修復画面を開けませんでした。セットアップを再読み込みしてください。',
+      });
+      return;
+    }
+
+    isRepairing = true;
+    const previousSubstepIndex = window.sessionStorage.getItem(storageKey);
+    let failureMessage = '修復画面を開けませんでした。必須設定の状態を確認してください。';
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/setup/repair/${encodeURIComponent(issue.code)}`,
+        { method: 'POST' }
+      );
+      if (!response.ok) await handleApiError(response);
+
+      const target = await safeParseJson<unknown>(response);
+      if (
+        !isRequiredSetupIssue(target) ||
+        target.code !== issue.code ||
+        !isRequiredIssueSubstepSupported(target) ||
+        !setRequiredIssueSubstep(target)
+      ) {
+        throw new Error('修復先の情報を読み取れませんでした。もう一度お試しください。');
+      }
+
+      await fetchInstallationStatus({ refresh: true, throwOnError: true });
+      const state = get(setupState);
+      if (!state || state.current_step !== target.step) {
+        throw new Error('修復状態を再確認できませんでした。必須設定の一覧を更新してください。');
+      }
+
+      selectedIssue = target;
+      repairVersion += 1;
+    } catch (err) {
+      failureMessage = japaneseErrorMessage(
+        err,
+        '修復に失敗しました。通信状況を確認して再試行してください。'
+      );
+      if (previousSubstepIndex === null) {
+        window.sessionStorage.removeItem(storageKey);
+      } else {
+        window.sessionStorage.setItem(storageKey, previousSubstepIndex);
+      }
+      selectedIssue = null;
+
+      try {
+        await fetchInstallationStatus({ refresh: true, throwOnError: true });
+      } catch {
+        failureMessage =
+          '必須設定の一覧を更新できませんでした。通信状況を確認して再試行してください。';
+      }
+      error.set({ error: failureMessage });
+    } finally {
+      isRepairing = false;
+    }
+  }
+
+  async function returnToRequiredIssues(): Promise<void> {
+    if (get(isLoading)) return;
+
+    try {
+      await fetchInstallationStatus({ refresh: true, throwOnError: true });
+      selectedIssue = null;
+    } catch (err) {
+      error.set({
+        error: japaneseErrorMessage(
+          err,
+          '必須設定の再検査に失敗しました。通信状況を確認して再試行してください。'
+        ),
+      });
+    }
+  }
+
+  function canOpenRequiredIssue(issue: RequiredSetupIssue): boolean {
+    return orderedSteps.includes(issue.step) && isRequiredIssueSubstepSupported(issue);
+  }
+
+  function hasJapaneseText(message: string): boolean {
+    return /[\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Han}]/u.test(message);
+  }
+
+  function japaneseErrorMessage(err: unknown, fallback: string): string {
+    return err instanceof Error && hasJapaneseText(err.message) ? err.message : fallback;
   }
 </script>
 
@@ -251,23 +312,60 @@
         <p class="loading-text">読み込み中...</p>
       </div>
     {:else if $setupState}
-      <div class="step-container">
-        <div class="step-wrapper">
-          {#if currentStepComponent}
-            {@const StepComp = currentStepComponent as unknown as import('svelte').Component}
-            <StepComp
-              bind:this={stepComponentInstance}
-              bind:canGoBack={childCanGoBack}
-              bind:isStepCompleted={childStepCompleted}
-              onSubstepChange={handleSubstepChange}
-            />
-          {:else}
-            <div class="placeholder-content">
-              <p>ステップコンテンツがありません</p>
-            </div>
-          {/if}
+      {#if showRequiredIssues}
+        <section class="required-issues" aria-labelledby="required-issues-title" role="alert">
+          <h2 id="required-issues-title">起動に必要な設定が不足しています</h2>
+          <p>以下の項目を修復してください。</p>
+          <ul>
+            {#each $setupState.required_setup_issues as issue (issue.code)}
+              <li>
+                <span>{issue.message}</span>
+                <button
+                  class="button button-secondary"
+                  type="button"
+                  disabled={!canOpenRequiredIssue(issue) || $isLoading || isRepairing}
+                  onclick={() => openRequiredIssue(issue)}
+                >
+                  修復する
+                </button>
+                {#if !canOpenRequiredIssue(issue)}
+                  <small>修復画面を開けません。セットアップを再読み込みしてください。</small>
+                {/if}
+              </li>
+            {/each}
+          </ul>
+        </section>
+      {:else}
+        {#if $setupState.required_setup_issues.length > 0}
+          <button
+            class="button button-secondary repair-list-button"
+            type="button"
+            disabled={$isLoading}
+            onclick={returnToRequiredIssues}
+          >
+            再検査して不足一覧へ戻る
+          </button>
+        {/if}
+        <div class="step-container">
+          <div class="step-wrapper">
+            {#if currentStepComponent}
+              {#key repairVersion}
+                {@const StepComp = currentStepComponent as unknown as import('svelte').Component}
+                <StepComp
+                  bind:this={stepComponentInstance}
+                  bind:canGoBack={childCanGoBack}
+                  bind:isStepCompleted={childStepCompleted}
+                  onSubstepChange={handleSubstepChange}
+                />
+              {/key}
+            {:else}
+              <div class="placeholder-content">
+                <p>ステップコンテンツがありません</p>
+              </div>
+            {/if}
+          </div>
         </div>
-      </div>
+      {/if}
     {:else}
       <div class="error-container">
         <p class="error-text">インストール状態を読み込めませんでした</p>
@@ -275,32 +373,34 @@
     {/if}
   </div>
 
-  <div class="wizard-footer">
-    <div class="footer-actions">
-      <button
-        class="button button-secondary"
-        type="button"
-        disabled={(!canGoBack && !childCanGoBack) || $isLoading}
-        onclick={handleBack}
-      >
-        <ChevronLeft class="button-icon" size={20} />
-        戻る
-      </button>
+  {#if !showRequiredIssues}
+    <div class="wizard-footer">
+      <div class="footer-actions">
+        <button
+          class="button button-secondary"
+          type="button"
+          disabled={(!canGoBack && !childCanGoBack) || $isLoading}
+          onclick={handleBack}
+        >
+          <ChevronLeft class="button-icon" size={20} />
+          戻る
+        </button>
 
-      <div class="footer-spacer"></div>
+        <div class="footer-spacer"></div>
 
-      <button
-        class="button button-primary"
-        class:button-skip={!shouldShowCompletion && !childStepCompleted}
-        type="button"
-        disabled={$isLoading}
-        onclick={handleNext}
-      >
-        {shouldShowCompletion ? '完了' : childStepCompleted ? '次へ' : 'スキップ'}
-        <ChevronRight class="button-icon" size={20} />
-      </button>
+        <button
+          class="button button-primary"
+          class:button-skip={!shouldShowCompletion && !childStepCompleted}
+          type="button"
+          disabled={$isLoading}
+          onclick={handleNext}
+        >
+          {shouldShowCompletion ? '完了' : childStepCompleted ? '次へ' : 'スキップ'}
+          <ChevronRight class="button-icon" size={20} />
+        </button>
+      </div>
     </div>
-  </div>
+  {/if}
 </div>
 
 <ErrorDialog
@@ -308,25 +408,6 @@
   error={$error}
   onClose={handleErrorClose}
   onRetry={handleErrorRetry}
-/>
-
-<NotificationDialog
-  bind:isOpen={showCompletionDialog}
-  variant="success"
-  title="セットアップ完了！"
-  message="Splat Replay のセットアップが完了しました。"
-  buttonText="アプリケーションを開始"
-  onClose={handleCompletionContinue}
-/>
-
-<NotificationDialog
-  bind:isOpen={showWarningDialog}
-  variant="warning"
-  title="未完了のタスクがあります"
-  message={hasIncompleteTasksMessage +
-    '\n\nセットアップを完了させるには、すべてのタスクを完了してください。'}
-  buttonText="閉じる"
-  onClose={handleWarningClose}
 />
 
 <style>
@@ -354,6 +435,56 @@
     font-size: 2rem;
     font-weight: 700;
     color: var(--accent-color);
+  }
+
+  .required-issues {
+    display: flex;
+    flex: 1;
+    min-height: 0;
+    flex-direction: column;
+    gap: 0.75rem;
+    overflow-y: auto;
+    padding: 1rem 0;
+  }
+
+  .required-issues h2,
+  .required-issues p {
+    margin: 0;
+  }
+
+  .required-issues h2 {
+    color: var(--accent-color);
+    font-size: 1.25rem;
+  }
+
+  .required-issues ul {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .required-issues li {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 0.5rem 1rem;
+    padding: 0.75rem;
+    border: 1px solid var(--divider-color);
+    border-radius: 0.75rem;
+    background: var(--glass-bg);
+  }
+
+  .required-issues small {
+    grid-column: 1 / -1;
+    color: var(--text-secondary);
+  }
+
+  .repair-list-button {
+    align-self: flex-start;
+    margin-bottom: 0.75rem;
   }
 
   .progress-container {

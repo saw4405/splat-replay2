@@ -75,6 +75,9 @@ def create_settings_router(server: WebAPIServer) -> APIRouter:
                 server.device_checker.update_settings(
                     server.recording_preparation_service.get_capture_device_settings()
                 )
+            await asyncio.to_thread(
+                server.setup_service.invalidate_required_setup_issues
+            )
         except UnknownSettingsSectionError as exc:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)

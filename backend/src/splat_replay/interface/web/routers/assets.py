@@ -9,12 +9,17 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, List
+from pathlib import Path
+from typing import TYPE_CHECKING, List, Literal
 
 from fastapi import APIRouter, HTTPException, Query, status
 from fastapi.responses import FileResponse, JSONResponse, Response
 
 from splat_replay.application.dto.assets import EditUploadStatusDTO
+from splat_replay.application.interfaces import (
+    VideoPreviewError,
+    VideoPreviewUnavailableError,
+)
 from splat_replay.interface.web.converters import to_recorded_video_item
 from splat_replay.interface.web.schemas import (
     EditedVideoItem,
@@ -25,12 +30,18 @@ from splat_replay.interface.web.schemas import (
 )
 
 if TYPE_CHECKING:
-    from pathlib import Path
-
     from splat_replay.interface.web.server import WebAPIServer
 
 
 FRAME_RESPONSE_HEADERS = {"Cache-Control": "no-store"}
+
+
+def _video_media_type(video_path: Path) -> str:
+    return (
+        "video/x-matroska"
+        if video_path.suffix.lower() == ".mkv"
+        else "video/mp4"
+    )
 
 
 def create_assets_router(server: WebAPIServer) -> APIRouter:
@@ -324,6 +335,68 @@ def create_file_serving_router(server: WebAPIServer) -> APIRouter:
     """
     router = APIRouter(tags=["files"])
 
+    @router.get("/video-preview/{kind}.mp4")
+    async def get_video_preview(
+        kind: Literal["recorded", "edited"], video_id: str = Query(...)
+    ) -> FileResponse:
+        """保存済み動画を WebView 向け MP4 として配信する。"""
+        relative_path = Path(video_id)
+        if (
+            "\\" in video_id
+            or relative_path.is_absolute()
+            or ".." in relative_path.parts
+            or len(relative_path.parts) < 2
+            or relative_path.parts[0] != kind
+            or relative_path.suffix.lower() not in {".mkv", ".mp4"}
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid video_id",
+            )
+
+        video_path = (server.base_dir / relative_path).resolve()
+        allowed_root = (server.base_dir / kind).resolve()
+        try:
+            video_path.relative_to(allowed_root)
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid video_id",
+            ) from exc
+        if not video_path.is_file():
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Video file not found",
+            )
+
+        try:
+            preview_path = await server.video_preview_service.prepare(
+                video_path
+            )
+        except VideoPreviewUnavailableError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail=str(exc),
+            ) from exc
+        except VideoPreviewError as exc:
+            server.logger.error(
+                "一時 MP4 プレビューの生成に失敗しました",
+                video_id=video_id,
+                error=str(exc),
+            )
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="動画の再生用 MP4 を生成できませんでした。",
+            ) from exc
+
+        return FileResponse(
+            path=preview_path,
+            media_type="video/mp4",
+            filename=f"{video_path.stem}.mp4",
+            headers={"Cache-Control": "no-store"},
+            content_disposition_type="inline",
+        )
+
     # === 録画済みビデオファイル配信 ===
 
     @router.get("/videos/recorded/{video_id:path}")
@@ -370,7 +443,7 @@ def create_file_serving_router(server: WebAPIServer) -> APIRouter:
 
         return FileResponse(
             path=str(video_path),
-            media_type="video/mp4",
+            media_type=_video_media_type(video_path),
             filename=video_path.name,
         )
 
@@ -457,7 +530,7 @@ def create_file_serving_router(server: WebAPIServer) -> APIRouter:
 
         return FileResponse(
             path=str(video_path),
-            media_type="video/mp4",
+            media_type=_video_media_type(video_path),
             filename=video_path.name,
         )
 

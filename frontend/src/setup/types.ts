@@ -15,13 +15,24 @@ export enum SetupStep {
   YOUTUBE_SETUP = 'youtube_setup',
 }
 
+export type SetupPlatform = 'windows' | 'macos' | 'unknown';
+
+export interface RequiredSetupIssue {
+  code: string;
+  step: SetupStep;
+  substep_id: string;
+  message: string;
+}
+
 export interface SetupState {
   is_completed: boolean;
   current_step: SetupStep;
   completed_steps: SetupStep[];
   skipped_steps: SetupStep[];
   step_details: Record<string, Record<string, boolean>>;
+  required_setup_issues: RequiredSetupIssue[];
   installation_date: string | null;
+  server_platform?: SetupPlatform;
 }
 
 export interface StepResult {

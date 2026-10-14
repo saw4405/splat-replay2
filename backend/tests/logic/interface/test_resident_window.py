@@ -74,7 +74,7 @@ finally:
             [sys.executable, "-c", code],
             stdout=log,
             stderr=log,
-            creationflags=subprocess.CREATE_NO_WINDOW,
+            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
         )
         client: DesktopInstance | None = None
         try:

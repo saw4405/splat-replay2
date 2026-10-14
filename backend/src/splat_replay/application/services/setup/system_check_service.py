@@ -9,6 +9,8 @@ Phase 10 リファクタリング:
 
 from __future__ import annotations
 
+import json
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
@@ -18,7 +20,15 @@ from splat_replay.application.interfaces.common import (
     LoggerPort,
     PathsPort,
 )
+from splat_replay.application.interfaces.thumbnail_font import (
+    ThumbnailFontResolverPort,
+)
 from splat_replay.application.interfaces.system import EnvironmentPort
+from splat_replay.application.interfaces.system import (
+    OBSMainOutputCheckResult,
+    OBSConfigurationCheckerPort,
+    OBSWebSocketCheckResult,
+)
 from splat_replay.application.services.system.software_checker import (
     SoftwareChecker,
 )
@@ -55,10 +65,15 @@ class SystemCheckService:
         obs_checker: SoftwareChecker,
         ffmpeg_checker: SoftwareChecker,
         tesseract_checker: SoftwareChecker,
+        flac_checker: SoftwareChecker,
+        ndi_checker: SoftwareChecker,
+        font_resolver: ThumbnailFontResolverPort,
         paths: PathsPort,
         file_system: FileSystemPort,
         environment: EnvironmentPort,
         logger: LoggerPort,
+        distroav_checker: SoftwareChecker,
+        obs_configuration_checker: OBSConfigurationCheckerPort,
     ) -> None:
         """サービスを初期化する。
 
@@ -72,10 +87,27 @@ class SystemCheckService:
         self._obs_checker = obs_checker
         self._ffmpeg_checker = ffmpeg_checker
         self._tesseract_checker = tesseract_checker
+        self._flac_checker = flac_checker
+        self._ndi_checker = ndi_checker
+        self._font_resolver = font_resolver
         self._paths = paths
         self._file_system = file_system
         self._environment = environment
         self._logger = logger
+        self._distroav_checker = distroav_checker
+        self._obs_configuration_checker = obs_configuration_checker
+
+    def check_obs_main_output(self) -> OBSMainOutputCheckResult:
+        """OBS の保存済み NDI Main Output を確認する。"""
+        return self._obs_configuration_checker.check()
+
+    def check_obs_websocket_configuration(
+        self, host: str, port: int, password: str
+    ) -> OBSWebSocketCheckResult:
+        """OBS WebSocket の保存値を確認する。秘密値は結果に含めない。"""
+        return self._obs_configuration_checker.check_websocket(
+            host, port, password
+        )
 
     def check_obs_installation(self) -> SoftwareCheckResult:
         """OBSのインストール状態を確認する。
@@ -100,6 +132,15 @@ class SystemCheckService:
             Tesseractのチェック結果
         """
         return self._tesseract_checker.check()
+
+    def check_flac_installation(self) -> SoftwareCheckResult:
+        """PATH から FLAC を実行できるか確認する。"""
+        return self._flac_checker.check()
+
+    @staticmethod
+    def is_flac_required_for_transcription() -> bool:
+        """現在の実装で字幕音声変換にFLACが必要なOSかを返す。"""
+        return sys.platform == "darwin"
 
     def check_environment_variable(self, var_name: str) -> bool:
         """環境変数が設定されているかどうかを確認する。
@@ -154,27 +195,23 @@ class SystemCheckService:
         self._logger.info("Checking font installation", font_name=font_name)
 
         try:
-            # サムネイル用アセットディレクトリ (assets/thumbnail) を使用
-            font_dir = self._paths.get_thumbnail_assets_dir()
-            self._logger.info(
-                "Checking font directory", font_dir=str(font_dir)
-            )
-
-            # ikamodoki1.ttf ファイルをチェック
-            font_path = font_dir / f"{font_name}.ttf"
-            if self._file_system.is_file(font_path):
-                self._logger.info("Font found", path=str(font_path))
+            font_path = self._paths.get_thumbnail_asset(f"{font_name}.ttf")
+            resolved_path = self._font_resolver.resolve(font_path)
+            if resolved_path is not None:
+                self._logger.info("Font found", path=str(resolved_path))
                 return SoftwareCheckResult(
                     is_installed=True,
-                    installation_path=font_path,
+                    installation_path=resolved_path,
                 )
 
             self._logger.info(
-                "Font not found", font_name=font_name, font_dir=str(font_dir)
+                "Font not found", font_name=font_name, font_path=str(font_path)
             )
             return SoftwareCheckResult(
                 is_installed=False,
-                error_message=f"{font_name}.ttf フォントが見つかりませんでした",
+                error_message=(
+                    f"{font_name}.ttf と OS 標準の日本語フォントが見つかりませんでした"
+                ),
             )
         except Exception as e:
             self._logger.error("Font check error", error=str(e))
@@ -184,41 +221,66 @@ class SystemCheckService:
             )
 
     def check_youtube_credentials(self) -> SoftwareCheckResult:
-        """YouTube API 認証情報の存在を確認する。
+        """YouTube OAuth client JSON を読み、必要な項目を検証する。
 
         Returns:
             認証情報のチェック結果
         """
         self._logger.info("Checking YouTube credentials")
-
         try:
-            # configフォルダ内のclient_secret.jsonを確認
-            config_dir = self._paths.get_config_dir()
-            credentials_path = config_dir / "client_secret.json"
-            self._logger.info(
-                "Checking credentials path", path=str(credentials_path)
+            credentials_path = (
+                self._paths.get_config_dir() / "client_secret.json"
             )
+            if not self._file_system.is_file(credentials_path):
+                return self._missing_youtube_credentials()
 
-            if self._file_system.is_file(credentials_path):
-                self._logger.info(
-                    "YouTube credentials found", path=str(credentials_path)
-                )
-                return SoftwareCheckResult(
-                    is_installed=True,
-                    installation_path=credentials_path,
-                )
+            parsed: object = json.loads(
+                self._file_system.read_bytes(credentials_path).decode("utf-8")
+            )
+            if not isinstance(parsed, dict):
+                return self._missing_youtube_credentials()
 
-            self._logger.info("YouTube credentials not found")
+            client_config: object = parsed.get("installed") or parsed.get(
+                "web"
+            )
+            if not isinstance(client_config, dict):
+                return self._missing_youtube_credentials()
+
+            required_values = (
+                client_config.get("client_id"),
+                client_config.get("client_secret"),
+                client_config.get("auth_uri"),
+                client_config.get("token_uri"),
+            )
+            if not all(
+                isinstance(value, str) and bool(value.strip())
+                for value in required_values
+            ):
+                return self._missing_youtube_credentials()
+
+            self._logger.info("YouTube credentials are readable and valid")
+            return SoftwareCheckResult(is_installed=True)
+        except Exception as exc:  # noqa: BLE001
+            self._logger.warning(
+                "YouTube credentials could not be read or validated",
+                error_type=type(exc).__name__,
+            )
             return SoftwareCheckResult(
                 is_installed=False,
-                error_message="YouTube API 認証情報ファイルが見つかりませんでした",
+                error_message=(
+                    "YouTube API 認証情報ファイルを読み取れないか、"
+                    "形式が正しくありません"
+                ),
             )
-        except Exception as e:
-            self._logger.error("YouTube credentials check error", error=str(e))
-            return SoftwareCheckResult(
-                is_installed=False,
-                error_message=f"認証情報確認中にエラーが発生しました: {e}",
-            )
+
+    @staticmethod
+    def _missing_youtube_credentials() -> SoftwareCheckResult:
+        return SoftwareCheckResult(
+            is_installed=False,
+            error_message=(
+                "有効な YouTube OAuth client_secret.json が見つかりませんでした"
+            ),
+        )
 
     def check_ndi_runtime_installation(self) -> SoftwareCheckResult:
         """NDI Runtimeのインストール状態を確認する。
@@ -227,36 +289,8 @@ class SystemCheckService:
             NDI Runtimeのチェック結果
         """
         self._logger.info("Checking NDI Runtime installation")
+        return self._ndi_checker.check()
 
-        # NDI Runtimeの一般的なインストールパスをチェック
-        common_paths = [
-            Path("C:/Program Files/NDI/NDI 6 Runtime/v6"),
-            Path("C:/Program Files/NDI/NDI 5 Runtime/v5"),
-            Path("C:/Program Files (x86)/NDI/NDI 6 Runtime/v6"),
-            Path("C:/Program Files (x86)/NDI/NDI 5 Runtime/v5"),
-        ]
-
-        for path in common_paths:
-            if self._file_system.is_dir(path):
-                # Processing.NDI.Lib.x64.dll の存在を確認
-                dll_path = path / "Processing.NDI.Lib.x64.dll"
-                if self._file_system.exists(dll_path):
-                    self._logger.info("NDI Runtime found", path=str(path))
-                    # バージョン情報をパスから抽出
-                    version = None
-                    if "NDI 6" in str(path):
-                        version = "6.x"
-                    elif "NDI 5" in str(path):
-                        version = "5.x"
-
-                    return SoftwareCheckResult(
-                        is_installed=True,
-                        version=version,
-                        installation_path=path,
-                    )
-
-        self._logger.info("NDI Runtime not found")
-        return SoftwareCheckResult(
-            is_installed=False,
-            error_message="NDI Runtime が見つかりませんでした",
-        )
+    def check_distroav_installation(self) -> SoftwareCheckResult:
+        """OBSを起動せず、NDIプラグイン実行ファイルを確認する。"""
+        return self._distroav_checker.check()

@@ -3,7 +3,7 @@
  *
  * 責務：
  * - 外部ソフトウェアのチェック
- * - FFmpeg/Tesseractのセットアップ
+ * - FFmpeg/Tesseract/FLACのセットアップ
  */
 
 import type { SystemCheckResult } from '../types';
@@ -13,7 +13,7 @@ import { API_BASE_URL, isLoading, error, handleApiError, safeParseJson } from '.
  * システムチェックを実行
  */
 export async function checkSystem(
-  software: 'obs' | 'ffmpeg' | 'tesseract' | 'font' | 'youtube' | 'ndi'
+  software: 'obs' | 'ffmpeg' | 'tesseract' | 'flac' | 'font' | 'youtube' | 'ndi'
 ): Promise<SystemCheckResult> {
   isLoading.set(true);
   error.set(null);
@@ -84,6 +84,31 @@ export async function setupTesseract(): Promise<SystemCheckResult> {
     return result;
   } catch (err) {
     console.error('Failed to setup Tesseract:', err);
+    if (err instanceof Error) {
+      error.set({ error: err.message });
+    }
+    throw err;
+  } finally {
+    isLoading.set(false);
+  }
+}
+
+/** FLAC のセットアップを実行 */
+export async function setupFlac(): Promise<SystemCheckResult> {
+  isLoading.set(true);
+  error.set(null);
+
+  try {
+    const response = await fetch(`${API_BASE_URL}/setup/system/setup/flac`, {
+      method: 'POST',
+    });
+    if (!response.ok) {
+      await handleApiError(response);
+    }
+
+    return await safeParseJson<SystemCheckResult>(response);
+  } catch (err) {
+    console.error('Failed to setup FLAC:', err);
     if (err instanceof Error) {
       error.set({ error: err.message });
     }

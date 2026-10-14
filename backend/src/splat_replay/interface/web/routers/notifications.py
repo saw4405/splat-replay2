@@ -1,9 +1,4 @@
-"""通知API
-
-Windows通知を送信するためのAPIエンドポイント。
-pywebviewではブラウザのNotification APIが使えないため、
-バックエンド経由でWindows通知を送信する。
-"""
+"""デスクトップ通知 API。"""
 
 import sys
 from pathlib import Path
@@ -11,6 +6,11 @@ from typing import Literal
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
+from splat_replay.application.interfaces import DesktopNotificationPort
+from splat_replay.domain.exceptions import (
+    NotificationDeliveryError,
+    NotificationPermissionDeniedError,
+)
 
 if sys.platform == "win32":
     from winotify import Notification, audio
@@ -18,6 +18,7 @@ if sys.platform == "win32":
 
 def create_notifications_router(
     assets_dir: Path,
+    macos_notification_sender: DesktopNotificationPort | None = None,
 ) -> APIRouter:
     """通知ルーターを作成する。
 
@@ -50,10 +51,10 @@ def create_notifications_router(
     async def send_notification(
         request: NotificationRequest,
     ) -> dict[str, str]:
-        """Windows通知を送信する
+        """OS の通知センターへ通知を送る。
 
-        pywebview環境ではブラウザのNotification APIが使えないため、
-        winotifyライブラリを使用してWindows通知を表示する。
+        pywebview ではブラウザの Notification API が使えないため、
+        Windows は winotify、macOS は注入されたネイティブ通知 adapter を使う。
 
         Args:
             request: 通知リクエスト
@@ -65,11 +66,24 @@ def create_notifications_router(
             HTTPException: 通知の送信に失敗した場合
         """
         try:
-            # Windowsの場合のみ通知を送信
+            if sys.platform == "darwin":
+                if macos_notification_sender is None:
+                    raise HTTPException(
+                        status_code=503,
+                        detail="macOS notification adapter is unavailable",
+                    )
+                await macos_notification_sender.send(
+                    request.title, request.body
+                )
+                return {
+                    "status": "success",
+                    "message": "Notification accepted by macOS",
+                }
+
             if sys.platform != "win32":
                 return {
                     "status": "skipped",
-                    "message": "Notifications only supported on Windows",
+                    "message": "Desktop notifications are unavailable",
                 }
 
             notification = Notification(
@@ -91,8 +105,18 @@ def create_notifications_router(
         except ImportError as e:
             raise HTTPException(
                 status_code=500,
-                detail=f"winotify library not installed: {str(e)}",
+                detail=(
+                    f"macOS notification support unavailable: {e}"
+                    if sys.platform == "darwin"
+                    else f"winotify library not installed: {e}"
+                ),
             ) from e
+        except HTTPException:
+            raise
+        except NotificationPermissionDeniedError as e:
+            raise HTTPException(status_code=403, detail=str(e)) from e
+        except NotificationDeliveryError as e:
+            raise HTTPException(status_code=503, detail=str(e)) from e
         except Exception as e:
             raise HTTPException(
                 status_code=500,

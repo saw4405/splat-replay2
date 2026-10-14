@@ -7,8 +7,14 @@
  * - 進行状況の計算
  */
 
-import { writable, derived } from 'svelte/store';
-import type { SetupState, ProgressInfo, ApiError } from '../types';
+import { get, writable, derived } from 'svelte/store';
+import {
+  SetupStep,
+  type ApiError,
+  type ProgressInfo,
+  type RequiredSetupIssue,
+  type SetupState,
+} from '../types';
 
 // API ベース URL
 // 開発環境: 空文字列（Viteプロキシが /api を http://127.0.0.1:8000 に転送）
@@ -35,6 +41,23 @@ export const STEP_SUBSTEP_COUNTS: Record<string, number> = {
   transcription_setup: 4, // 文字起こし: 4つのサブステップ
   youtube_setup: 7, // YouTube: 7つのサブステップ
 };
+
+export function isRequiredSetupIssue(value: unknown): value is RequiredSetupIssue {
+  if (typeof value !== 'object' || value === null) return false;
+  const item = value as Record<string, unknown>;
+  const validSteps = new Set<string>(Object.values(SetupStep));
+  return (
+    typeof item.code === 'string' &&
+    typeof item.step === 'string' &&
+    validSteps.has(item.step) &&
+    typeof item.substep_id === 'string' &&
+    typeof item.message === 'string'
+  );
+}
+
+export function isRequiredSetupIssues(value: unknown): value is RequiredSetupIssue[] {
+  return Array.isArray(value) && value.every((issue: unknown) => isRequiredSetupIssue(issue));
+}
 
 // 進行状況の計算（サブステップを含む）
 export const progressInfo = derived(setupState, ($state): ProgressInfo | null => {
@@ -93,9 +116,15 @@ export async function handleApiError(response: Response): Promise<never> {
     const body = await response.json();
     // FastAPI の HTTPException は {"detail": "..."} 形式で返す。
     // 独自エラー形式 {"error": "..."} にも対応する。
+    const detail = body?.detail;
+    const detailMessage =
+      typeof detail === 'object' && detail !== null && 'message' in detail
+        ? detail.message
+        : undefined;
     const message: string =
       (typeof body?.error === 'string' && body.error) ||
-      (typeof body?.detail === 'string' && body.detail) ||
+      (typeof detail === 'string' && detail) ||
+      (typeof detailMessage === 'string' && detailMessage) ||
       `HTTP Error: ${response.status} ${response.statusText}`;
     errorData = { error: message };
   } catch {
@@ -144,23 +173,31 @@ export function clearError(): void {
 /**
  * インストール状態を取得
  */
-export async function fetchInstallationStatus(): Promise<void> {
+export async function fetchInstallationStatus(
+  options: { refresh?: boolean; throwOnError?: boolean } = {}
+): Promise<void> {
   isLoading.set(true);
   error.set(null);
 
   try {
-    const response = await fetch(`${API_BASE_URL}/setup/status`);
+    const response = await fetch(
+      `${API_BASE_URL}/setup/status${options.refresh ? '?refresh=true' : ''}`
+    );
     if (!response.ok) {
       await handleApiError(response);
     }
 
     const data = await safeParseJson<SetupState>(response);
+    if (!isRequiredSetupIssues(data.required_setup_issues)) {
+      throw new Error('必須設定の確認結果を読み取れませんでした。もう一度お試しください。');
+    }
     setupState.set(data);
   } catch (err) {
     console.error('Failed to fetch installation status:', err);
     if (err instanceof Error) {
       error.set({ error: err.message });
     }
+    if (options.throwOnError) throw err;
   } finally {
     isLoading.set(false);
   }
@@ -203,16 +240,42 @@ export async function completeInstallation(): Promise<void> {
     const response = await fetch(`${API_BASE_URL}/setup/complete`, {
       method: 'POST',
     });
+    if (response.status === 409) {
+      const body = await safeParseJson<{ detail?: unknown }>(response);
+      const detail = body.detail;
+      if (
+        typeof detail !== 'object' ||
+        detail === null ||
+        !('message' in detail) ||
+        typeof detail.message !== 'string' ||
+        !('required_setup_issues' in detail)
+      ) {
+        throw new Error('必須設定の不足一覧を読み取れませんでした。もう一度お試しください。');
+      }
+      const issues = detail.required_setup_issues;
+      if (!isRequiredSetupIssues(issues)) {
+        throw new Error('必須設定の不足一覧を読み取れませんでした。もう一度お試しください。');
+      }
+      const message = detail.message;
+      setupState.update((state) => (state ? { ...state, required_setup_issues: issues } : state));
+      error.set({ error: message });
+      throw new Error(message);
+    }
     if (!response.ok) {
       await handleApiError(response);
     }
 
-    await fetchInstallationStatus();
+    await fetchInstallationStatus({ refresh: true, throwOnError: true });
+    const state = get(setupState);
+    if (!state?.is_completed || state.required_setup_issues.length > 0) {
+      throw new Error('必須設定の再確認が完了していません。表示された項目を修復してください。');
+    }
   } catch (err) {
     console.error('Failed to complete installation:', err);
     if (err instanceof Error) {
       error.set({ error: err.message });
     }
+    throw err;
   } finally {
     isLoading.set(false);
   }

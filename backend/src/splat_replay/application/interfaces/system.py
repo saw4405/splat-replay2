@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Optional, Protocol
+from typing import Literal, Optional, Protocol
 
 
 @dataclass(frozen=True)
@@ -54,6 +54,65 @@ class SystemCommandPort(Protocol):
 
     def check_command_exists(self, command: str) -> bool:
         """Check if command exists in system."""
+        ...
+
+
+@dataclass(frozen=True)
+class SoftwareInstallAttempt:
+    """外部ソフト導入を開始または完了した結果。"""
+
+    completed: bool
+    error_message: Optional[str] = None
+
+
+class SoftwareInstallerPort(Protocol):
+    """対応済みの外部ソフトを導入するポート。"""
+
+    def install(
+        self, software: Literal["ffmpeg", "tesseract", "flac"]
+    ) -> SoftwareInstallAttempt:
+        """ソフト導入を実行するか、対話インストーラーを起動する。"""
+        ...
+
+
+OBSMainOutputStatus = Literal["enabled", "disabled", "unverified"]
+
+
+@dataclass(frozen=True)
+class OBSMainOutputCheckResult:
+    """OBS の NDI Main Output 保存値を確認した結果。"""
+
+    status: OBSMainOutputStatus
+
+
+OBSWebSocketStatus = Literal[
+    "ready",
+    "disabled",
+    "port_mismatch",
+    "password_mismatch",
+    "unverified",
+    "not_applicable",
+]
+
+
+@dataclass(frozen=True)
+class OBSWebSocketCheckResult:
+    """OBS WebSocket 保存値の確認結果。秘密値は含めない。"""
+
+    status: OBSWebSocketStatus
+
+
+class OBSConfigurationCheckerPort(Protocol):
+    """OBS を起動せず、既知の保存設定を読み取り確認する。"""
+
+    def check(self) -> OBSMainOutputCheckResult:
+        """構成有効・無効・確認不能のいずれかを返す。"""
+        ...
+
+    def check_websocket(
+        self, host: str, port: int, password: str
+    ) -> OBSWebSocketCheckResult:
+        """loopback接続先に対するWebSocket保存設定を確認する。"""
         ...
 
 

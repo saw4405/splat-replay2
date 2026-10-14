@@ -6,6 +6,9 @@
   import { setupState } from '../../stores/state';
   import { type SystemCheckResult, SetupStep } from '../../types';
   import NotificationDialog from '../../../common/components/NotificationDialog.svelte';
+  import { getSetupPlatform } from '../../platform';
+
+  const setupPlatform = getSetupPlatform();
 
   let ffmpegInstalled = $state(false);
   let _ffmpegVersion = $state<string | null>(null);
@@ -53,10 +56,18 @@
 
   export async function next(options: { skip?: boolean } = {}): Promise<boolean> {
     if (!ffmpegInstalled) {
-      await handleSetup();
+      if (setupPlatform === 'windows') {
+        await handleSetup();
+      } else {
+        await checkFFMPEGInstallation();
+      }
       if (!ffmpegInstalled) {
         showDialog(
-          'FFMPEG が検出されませんでした。インストールしてから次へ進んでください。',
+          setupPlatform === 'macos'
+            ? 'FFmpeg がまだ利用できません。導入を開始し、完了後にインストール状態を再確認してください。'
+            : setupPlatform === 'windows'
+              ? 'FFMPEG が検出されませんでした。インストールしてから次へ進んでください。'
+              : 'OS を判別できないため、この環境向けのセットアップを実行できません。',
           'warning'
         );
         return true;
@@ -87,6 +98,9 @@
 
       if (ffmpegInstalled) {
         await markSubstepCompleted(SetupStep.FFMPEG_SETUP, 'ffmpeg-download-extract', true);
+      } else if (setupCompleted.downloadAndExtract) {
+        setupCompleted.downloadAndExtract = false;
+        await markSubstepCompleted(SetupStep.FFMPEG_SETUP, 'ffmpeg-download-extract', false);
       }
     } catch (error) {
       checkError =
@@ -97,6 +111,11 @@
   }
 
   async function handleSetup(): Promise<void> {
+    if (setupPlatform === 'unknown') {
+      await checkFFMPEGInstallation();
+      return;
+    }
+
     if (setupCompleted.downloadAndExtract) {
       if (ffmpegInstalled) return;
 
@@ -110,6 +129,24 @@
     try {
       const result = await setupFFMPEG();
 
+      if (setupPlatform === 'macos') {
+        if (result.is_installed) {
+          await checkFFMPEGInstallation();
+          if (ffmpegInstalled) return;
+        }
+
+        const wasCompleted = setupCompleted.downloadAndExtract;
+        setupCompleted.downloadAndExtract = false;
+        if (wasCompleted) {
+          await markSubstepCompleted(SetupStep.FFMPEG_SETUP, 'ffmpeg-download-extract', false);
+        }
+        showDialog(
+          result.error_message || 'FFmpeg の導入後に、インストール状態を再確認してください。',
+          'info'
+        );
+        return;
+      }
+
       if (result.is_installed) {
         ffmpegInstalled = true;
         _ffmpegVersion = result.version || null;
@@ -117,7 +154,11 @@
         await markSubstepCompleted(SetupStep.FFMPEG_SETUP, 'ffmpeg-download-extract', true);
       } else {
         checkError = result.error_message || 'セットアップに失敗しました';
+        const wasCompleted = setupCompleted.downloadAndExtract;
         setupCompleted.downloadAndExtract = false;
+        if (wasCompleted) {
+          await markSubstepCompleted(SetupStep.FFMPEG_SETUP, 'ffmpeg-download-extract', false);
+        }
         showDialog(checkError, 'error');
       }
     } catch (error) {
@@ -127,10 +168,6 @@
     } finally {
       isChecking = false;
     }
-  }
-
-  function openUrl(url: string): void {
-    window.open(url, '_blank');
   }
 
   function showDialog(
@@ -144,7 +181,11 @@
   }
 
   function handleCardClick(event: Event) {
-    if (isChecking || (setupCompleted.downloadAndExtract && ffmpegInstalled)) {
+    if (
+      setupPlatform !== 'windows' ||
+      isChecking ||
+      (setupCompleted.downloadAndExtract && ffmpegInstalled)
+    ) {
       return;
     }
 
@@ -228,41 +269,62 @@
         </div>
 
         <div class="card-body">
-          <ol class="instruction-list">
-            <li>
-              FFMPEG 配布先から最新版(Latest)を探す
-              <div style="margin-top: 1rem;">
-                <button
-                  class="link-button"
-                  type="button"
-                  onclick={() =>
-                    openUrl('https://github.com/BtbN/FFmpeg-Builds/releases/tag/latest')}
-                >
-                  <Download class="icon" size={16} />
-                  FFMPEG をダウンロード
-                  <ExternalLink class="icon" size={14} />
-                </button>
-              </div>
-            </li>
-            <li>「Assets」エリアから「ffmpeg-*-win64-gpl-shared.zip」をダウンロードします</li>
-            <li>
-              ダウンロードした ZIP ファイルを展開し、フォルダ名を <code>ffmpeg</code>
-              に変更して Cドライブ直下に配置します
-            </li>
-            <li>
-              下記のフォルダに「ffmpeg.exe」があることを確認します
-              <div class="path-box">
-                <FolderOpen class="icon" size={20} />
-                <div class="path-content">
-                  <code class="path-value">C:\ffmpeg\bin</code>
+          {#if setupPlatform === 'windows'}
+            <ol class="instruction-list">
+              <li>
+                FFMPEG 配布先から最新版(Latest)を探す
+                <div style="margin-top: 1rem;">
+                  <a
+                    class="link-button"
+                    href="https://github.com/BtbN/FFmpeg-Builds/releases/tag/latest"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    <Download class="icon" size={16} />
+                    FFMPEG をダウンロード
+                    <ExternalLink class="icon" size={14} />
+                  </a>
                 </div>
-              </div>
-            </li>
-          </ol>
-          <p class="step-note">
-            ※ 配置後、カードをクリックすると、自動的に環境変数 PATH
-            の設定とインストール確認が行われます。
-          </p>
+              </li>
+              <li>「Assets」エリアから「ffmpeg-*-win64-gpl-shared.zip」をダウンロードします</li>
+              <li>
+                ダウンロードした ZIP ファイルを展開し、フォルダ名を <code>ffmpeg</code>
+                に変更して Cドライブ直下に配置します
+              </li>
+              <li>
+                下記のフォルダに「ffmpeg.exe」があることを確認します
+                <div class="path-box">
+                  <FolderOpen class="icon" size={20} />
+                  <div class="path-content">
+                    <code class="path-value">C:\ffmpeg\bin</code>
+                  </div>
+                </div>
+              </li>
+            </ol>
+            <p class="step-note">
+              ※ 配置後、カードをクリックすると、自動的に環境変数 PATH
+              の設定とインストール確認が行われます。
+            </p>
+          {:else if setupPlatform === 'macos'}
+            <p class="step-note">
+              導入開始後、Homebrew が未導入の場合は公式インストーラーを含む Terminal
+              が開きます。Terminal
+              の表示を確認して操作し、導入が終わったらこの画面で再確認してください。
+            </p>
+            <button class="link-button" type="button" onclick={handleSetup} disabled={isChecking}>
+              FFmpeg の導入を開始
+            </button>
+            <button
+              class="link-button"
+              type="button"
+              onclick={checkFFMPEGInstallation}
+              disabled={isChecking}
+            >
+              インストール状態を再確認
+            </button>
+          {:else}
+            <p class="step-note">OS を判別できないため、この環境向けの案内を表示できません。</p>
+          {/if}
         </div>
       </div>
     </div>
@@ -475,6 +537,23 @@
   .link-button:hover {
     background: rgba(var(--theme-rgb-white), 0.1);
     border-color: rgba(var(--theme-rgb-white), 0.3);
+  }
+
+  a.link-button {
+    text-decoration: none;
+  }
+
+  a.link-button:focus-visible {
+    outline: none;
+    box-shadow:
+      0 0 0 2px rgba(var(--theme-rgb-ring), 0.8),
+      0 0 0 4px rgba(var(--theme-rgb-accent), 0.28),
+      0 8px 18px rgba(var(--theme-rgb-accent), 0.18);
+  }
+
+  a.link-button:active {
+    transform: scale(0.97);
+    box-shadow: 0 0 8px rgba(var(--theme-rgb-accent), 0.4);
   }
 
   .path-box {

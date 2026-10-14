@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 from pathlib import Path
 from typing import (
     Awaitable,
@@ -56,16 +55,16 @@ class MatchExpression(BaseModel):
             return not await self.not_.evaluate(fn)
 
         if self.and_ is not None:
-            results = await asyncio.gather(
-                *(expr.evaluate(fn) for expr in self.and_)
-            )
-            return all(results)
+            for expression in self.and_:
+                if not await expression.evaluate(fn):
+                    return False
+            return True
 
         if self.or_ is not None:
-            results = await asyncio.gather(
-                *(expr.evaluate(fn) for expr in self.or_)
-            )
-            return any(results)
+            for expression in self.or_:
+                if await expression.evaluate(fn):
+                    return True
+            return False
 
         return False
 
