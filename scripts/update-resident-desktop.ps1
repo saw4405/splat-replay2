@@ -75,6 +75,10 @@ function Invoke-ResidentUpdateCore {
     }
     $oldProcesses = @(Get-TargetProcesses $executable)
     if ($oldProcesses.Count -gt 0) {
+        foreach ($process in $oldProcesses) {
+            # PS 5ではHandleプロパティの取得失敗がnullに隠れるためgetterを直接呼ぶ。
+            $null = $process.get_Handle()
+        }
         if ((Invoke-DesktopCommand $executable 'update') -ne 0) { throw 'Could not reserve the update.' }
         Write-Host 'Switchのスリープと編集・アップロード完了を待っています。通知領域から取り消せます。'
         $deadline = (Get-Date).AddSeconds($WaitLimit)

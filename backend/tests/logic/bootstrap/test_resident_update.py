@@ -10,6 +10,38 @@ from pathlib import Path
 import pytest
 
 
+def _create_update_roots(tmp_path: Path) -> tuple[Path, Path]:
+    source, target = tmp_path / "source", tmp_path / "target"
+    for directory, value in ((source, "new"), (target, "old")):
+        for name in ("_internal/runtime", "assets/icon", "SplatReplay.exe"):
+            file = directory / name
+            file.parent.mkdir(parents=True, exist_ok=True)
+            file.write_text(value, encoding="utf-8")
+        (directory / "assets/desktop-control.json").write_text(
+            '{"version":1}', encoding="utf-8"
+        )
+    return source, target
+
+
+def _run_powershell(script: str) -> subprocess.CompletedProcess[str]:
+    encoded = base64.b64encode(script.encode("utf-16-le")).decode()
+    return subprocess.run(
+        [
+            "powershell",
+            "-NoProfile",
+            "-ExecutionPolicy",
+            "Bypass",
+            "-EncodedCommand",
+            encoded,
+        ],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        timeout=30,
+        check=True,
+    )
+
+
 @pytest.mark.parametrize("fail_startup", [False, True])
 def test_update_preserves_data_and_rolls_back(
     tmp_path: Path, fail_startup: bool
@@ -23,15 +55,7 @@ def test_update_preserves_data_and_rolls_back(
             "update-resident-desktop.ps1 の検証にはPowerShellが必要です"
         )
 
-    source, target = tmp_path / "source", tmp_path / "target"
-    for directory, value in ((source, "new"), (target, "old")):
-        for name in ("_internal/runtime", "assets/icon", "SplatReplay.exe"):
-            file = directory / name
-            file.parent.mkdir(parents=True, exist_ok=True)
-            file.write_text(value, encoding="utf-8")
-        (directory / "assets/desktop-control.json").write_text(
-            '{"version":1}', encoding="utf-8"
-        )
+    source, target = _create_update_roots(tmp_path)
     for name in (
         "config/settings.toml",
         "videos/recorded/a.mp4",
@@ -63,22 +87,7 @@ $failed = $false
 try {{ Invoke-ResidentUpdate {quote(source)} {quote(target)} 1 1 }} catch {{ $failed = $true }}
 Write-Output ('RESULT:' + (@{{ failed = $failed }} | ConvertTo-Json -Compress))
 """
-    encoded = base64.b64encode(script.encode("utf-16-le")).decode()
-    result = subprocess.run(
-        [
-            "powershell",
-            "-NoProfile",
-            "-ExecutionPolicy",
-            "Bypass",
-            "-EncodedCommand",
-            encoded,
-        ],
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-        timeout=30,
-        check=True,
-    )
+    result = _run_powershell(script)
     payload = next(
         line[7:]
         for line in result.stdout.splitlines()
@@ -96,6 +105,160 @@ Write-Output ('RESULT:' + (@{{ failed = $failed }} | ConvertTo-Json -Compress))
         "assets/thumbnail/ikamodoki1.ttf",
     ):
         assert (target / name).read_text() == "keep"
+
+
+# integration: Windowsの実プロセス終了コードとOSハンドルの境界を検証する。
+@pytest.mark.parametrize(
+    ("child_exit_code", "expected_failed", "expected_target"),
+    [(0, False, "new"), (17, True, "old")],
+)
+def test_update_reads_real_process_exit_code(
+    tmp_path: Path,
+    child_exit_code: int,
+    expected_failed: bool,
+    expected_target: str,
+) -> None:
+    if os.name != "nt":
+        pytest.skip("実プロセス終了コードの検証にはWindowsが必要です")
+    powershell = shutil.which("powershell")
+    if powershell is None:
+        pytest.skip(
+            "実プロセス終了コードの検証にはWindows PowerShellが必要です"
+        )
+    assert powershell is not None
+
+    source, target = _create_update_roots(tmp_path)
+    script_path = (
+        Path(__file__).resolve().parents[4]
+        / "scripts/update-resident-desktop.ps1"
+    )
+    child_script = tmp_path / "wait-for-update.ps1"
+    child_script.write_text(
+        """param([string]$GatePath, [int]$ExitCode)
+$deadline = (Get-Date).AddSeconds(60)
+while (-not (Test-Path -LiteralPath $GatePath)) {
+    if ((Get-Date) -ge $deadline) { exit 91 }
+    Start-Sleep -Milliseconds 20
+}
+exit $ExitCode
+""",
+        encoding="utf-8",
+    )
+    gate_path = tmp_path / "update-requested"
+    child = subprocess.Popen(
+        [
+            powershell,
+            "-NoProfile",
+            "-ExecutionPolicy",
+            "Bypass",
+            "-File",
+            str(child_script),
+            str(gate_path),
+            str(child_exit_code),
+        ],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        creationflags=int(getattr(subprocess, "CREATE_NO_WINDOW", 0)),
+    )
+
+    def quote(path: Path) -> str:
+        return "'" + str(path).replace("'", "''") + "'"
+
+    try:
+        script = f"""
+$ErrorActionPreference = 'Stop'
+[Console]::OutputEncoding = [Text.UTF8Encoding]::new($false)
+. {quote(script_path)}
+$script:childId = {child.pid}
+$script:childPath = (Get-Process -Id $script:childId -ErrorAction Stop).Path
+if ([string]::IsNullOrWhiteSpace($script:childPath)) {{ throw 'Child process path was unavailable.' }}
+$script:updateRequestCount = 0
+function Get-TargetProcesses {{
+    $process = Get-Process -Id $script:childId -ErrorAction SilentlyContinue
+    if ($null -ne $process -and $process.Path -eq $script:childPath) {{ return @($process) }}
+    return @()
+}}
+function Invoke-DesktopCommand {{
+    [CmdletBinding()]param([string]$Executable, [string]$Command)
+    if ($Command -eq 'update') {{
+        $script:updateRequestCount++
+        Set-Content -LiteralPath {quote(gate_path)} -Value 'release'
+    }}
+    return 0
+}}
+function Start-Process {{ return $null }}
+function Wait-DesktopState {{ return }}
+$failed = $false
+try {{ Invoke-ResidentUpdate {quote(source)} {quote(target)} 10 10 }} catch {{ $failed = $true }}
+Write-Output ('RESULT:' + (@{{ failed = $failed; updateRequestCount = $script:updateRequestCount }} | ConvertTo-Json -Compress))
+"""
+        result = _run_powershell(script)
+        payload = next(
+            line[7:]
+            for line in result.stdout.splitlines()
+            if line.startswith("RESULT:")
+        )
+        assert json.loads(payload) == {
+            "failed": expected_failed,
+            "updateRequestCount": 1,
+        }, result.stderr
+        assert (target / "SplatReplay.exe").read_text() == expected_target
+    finally:
+        if child.poll() is None:
+            child.terminate()
+        try:
+            child.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            child.kill()
+            child.wait(timeout=5)
+
+
+def test_update_aborts_before_request_when_process_handle_is_unavailable(
+    tmp_path: Path,
+) -> None:
+    if os.name != "nt":
+        pytest.skip("実プロセス終了コードの検証にはWindowsが必要です")
+    if shutil.which("powershell") is None:
+        pytest.skip(
+            "実プロセス終了コードの検証にはWindows PowerShellが必要です"
+        )
+
+    source, target = _create_update_roots(tmp_path)
+    script_path = (
+        Path(__file__).resolve().parents[4]
+        / "scripts/update-resident-desktop.ps1"
+    )
+
+    def quote(path: Path) -> str:
+        return "'" + str(path).replace("'", "''") + "'"
+
+    script = f"""
+$ErrorActionPreference = 'Stop'
+[Console]::OutputEncoding = [Text.UTF8Encoding]::new($false)
+. {quote(script_path)}
+$script:updateRequestCount = 0
+function Get-TargetProcesses {{ return @(New-Object System.Diagnostics.Process) }}
+function Invoke-DesktopCommand {{
+    [CmdletBinding()]param([string]$Executable, [string]$Command)
+    if ($Command -eq 'update') {{ $script:updateRequestCount++ }}
+    return 0
+}}
+function Start-Process {{ return $null }}
+function Wait-DesktopState {{ return }}
+$failed = $false
+try {{ Invoke-ResidentUpdate {quote(source)} {quote(target)} 10 10 }} catch {{ $failed = $true }}
+Write-Output ('RESULT:' + (@{{ failed = $failed; updateRequestCount = $script:updateRequestCount }} | ConvertTo-Json -Compress))
+"""
+    result = _run_powershell(script)
+    payload = next(
+        line[7:]
+        for line in result.stdout.splitlines()
+        if line.startswith("RESULT:")
+    )
+    assert json.loads(payload) == {"failed": True, "updateRequestCount": 0}, (
+        result.stderr
+    )
+    assert (target / "SplatReplay.exe").read_text() == "old"
 
 
 def test_legacy_deploy_only_targets_its_executable() -> None:
