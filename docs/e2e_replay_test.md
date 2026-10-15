@@ -121,7 +121,7 @@ Playwright の backend は `SPLAT_REPLAY_RUNTIME_PROFILE=replay` で起動しま
 
 spec 実行中に `configureReplayAsset()` が replay 入力を切り替える既存の挙動は維持します。入力が無くなった場合に実機入力へ黙って戻ることはありません。
 
-WSL2 / Linux での `workflow:full` 合格は、ハードウェア非依存の replay E2E 可搬性ゲートです。将来の macOS 製品対応（ネイティブ依存、配布、実機連携）の検証を代替するものではありません。
+WSL2 / Linux での `workflow:full` 合格は、ハードウェア非依存の replay E2E 可搬性ゲートです。macOS での製品配布、OS 連携、実機との接続を検証するものではありません。
 
 sidecar は `schema_version`、`scenario`、`observations`、`expected` を分離します。
 replay backend には `scenario` と `observations` だけを渡し、`expected` は UI の独立した期待値です。
@@ -130,10 +130,12 @@ replay backend には `scenario` と `observations` だけを渡し、`expected`
 
 ## 7. 実行コマンド
 
+以下は Windows の実行例です。macOS / WSL2 / Linux ではチェックアウトの場所に読み替え、`cd /d` を `cd` に、Task コマンドの `task.exe` を `task` に置き換えてください。
+
 ### 7.1. suite 全体
 
 ```bat
-cd /d C:\Users\shogo\repo\splat-replay2
+cd /d C:\path\to\splat-replay2
 task.exe test:e2e
 task.exe test:e2e:headed
 task.exe test:workflow:smoke
@@ -143,7 +145,7 @@ task.exe test:workflow:full
 ### 7.2. replay を使う spec
 
 ```bat
-cd /d C:\Users\shogo\repo\splat-replay2\frontend
+cd /d C:\path\to\splat-replay2\frontend
 npm run test:e2e -- tests/e2e/auto-recording-workflow.spec.ts
 npm run test:e2e -- tests/e2e/recording-metadata-edit-workflow.spec.ts
 npm run test:e2e -- tests/e2e/error-recovery-recording-live.spec.ts
@@ -152,7 +154,7 @@ npm run test:e2e -- tests/e2e/error-recovery-recording-live.spec.ts
 ### 7.3. recorded seed の spec
 
 ```bat
-cd /d C:\Users\shogo\repo\splat-replay2\frontend
+cd /d C:\path\to\splat-replay2\frontend
 npm run test:e2e -- tests/e2e/edit-upload-workflow.spec.ts
 npm run test:e2e -- tests/e2e/multi-video-management.spec.ts
 npm run test:e2e -- tests/e2e/recorded-metadata-edit-workflow.spec.ts
@@ -162,7 +164,7 @@ npm run test:e2e -- tests/e2e/error-recovery-recorded-assets.spec.ts
 ### 7.4. no-video の spec
 
 ```bat
-cd /d C:\Users\shogo\repo\splat-replay2\frontend
+cd /d C:\path\to\splat-replay2\frontend
 npm run test:e2e -- tests/e2e/settings-persistence.spec.ts
 ```
 

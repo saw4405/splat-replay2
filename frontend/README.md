@@ -1,6 +1,6 @@
 # Splat Replay Frontend
 
-Splat Replay の Web GUI フロントエンドです。Svelte 4 / Vite / TypeScript を使って実装しています。
+Splat Replay の Web GUI フロントエンドです。Svelte 5 / Vite / TypeScript を使って実装しています。
 
 この README では、frontend のローカル開発・ビルド・検証だけを扱います。リポジトリ全体のセットアップや backend を含む開発フローは [`docs/DEVELOPMENT.md`](../docs/DEVELOPMENT.md) を参照してください。
 
@@ -20,6 +20,8 @@ Splat Replay の Web GUI フロントエンドです。Svelte 4 / Vite / TypeScr
 ## 前提条件
 
 - Node.js 24.12.0+
+
+以下の Task コマンドは Windows では `task.exe`、macOS では `task` を使います。`npm` コマンドは共通です。
 
 補足:
 
@@ -48,7 +50,7 @@ npm run dev
 
 ### backend 連携が必要な場合
 
-この frontend は、既定で `http://localhost:8000` の backend API / SSE / preview エンドポイントを前提に動作します。録画開始、設定保存、プレビュー確認など backend 依存の機能を試す場合は、リポジトリルートから `task.exe dev` または `uv run splat-replay web --dev` を使って全体を起動してください。詳細は [`docs/DEVELOPMENT.md`](../docs/DEVELOPMENT.md) を参照してください。
+この frontend は相対 URL で API / SSE / preview にアクセスし、Vite 開発サーバーが `http://127.0.0.1:8000` の backend へ転送します。録画開始、設定保存、プレビュー確認など backend 依存の機能を試す場合は、リポジトリルートから `task.exe dev` を使って全体を起動してください。詳細は [`docs/DEVELOPMENT.md`](../docs/DEVELOPMENT.md) を参照してください。
 
 ## 主要コマンド
 
@@ -82,7 +84,7 @@ npm run build
 
 ## デバッグ
 
-- ブラウザ開発者ツールは Chrome / Edge の `F12`
+- ブラウザ開発者ツールは Chrome / Edge のメニューから開けます（Windows: `F12`、macOS: `Option+Cmd+I`）。
 - Network タブで `/api/events/*` や `/api/recorder/preview-frame` を確認可能
 - API 呼び出し失敗時は Console と Network を合わせて確認
 
@@ -90,17 +92,27 @@ npm run build
 
 ### `5173` 番ポートが既に使用されている
 
+Windows:
+
 ```powershell
 netstat -ano | findstr :5173
-taskkill /PID <プロセスID> /F
 ```
+
+macOS:
+
+```sh
+lsof -nP -iTCP:5173 -sTCP:LISTEN
+```
+
+使用中のアプリを確認し、自分で起動した開発サーバーならそのターミナルで `Ctrl+C` を押して終了します。別のアプリが使っている場合は、開発サーバーのポートを変更してください。
 
 ### `npm install` が失敗する
 
-```powershell
+依存を入れ直す場合は、`frontend` ディレクトリでロックファイルを保持したまま再インストールします。
+
+```sh
 cd frontend
-Remove-Item -Recurse -Force node_modules, package-lock.json
-npm install
+npm ci
 ```
 
 ### API やプレビューに接続できない

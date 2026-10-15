@@ -109,6 +109,15 @@ graph LR
 | `backend/src/splat_replay/infrastructure/config/` | 設定ロード / 保存 |
 | `backend/src/splat_replay/infrastructure/logging/` | structlog 初期化 |
 
+OS 固有の具象実装:
+
+| パス | 主な責務 |
+| --- | --- |
+| `backend/src/splat_replay/infrastructure/adapters/upload/macos_keychain.py` | macOS Keychain で YouTube OAuth 認証情報を保存・取得 |
+| `backend/src/splat_replay/infrastructure/adapters/system/macos_notification.py` | macOS UserNotifications への通知登録 |
+| `backend/src/splat_replay/infrastructure/adapters/system/system_power.py` | OS ごとのスリープ指示。macOS は `pmset sleepnow` |
+| `backend/src/splat_replay/interface/gui/macos_desktop_tray.py` | macOS メニューバー項目、操作メニュー、状態表示 |
+
 ### 2.2 frontend
 
 | パス | 主な責務 |
@@ -128,6 +137,7 @@ graph LR
   - 録画・編集結果・ログの保存先
 
 通常開発時、これらは backend 側の runtime root 配下に作成されます。
+frozen macOS 版の runtime root は `~/Library/Application Support/io.github.saw4405.splatreplay/`、Windows frozen 版は実行ファイルのあるディレクトリです。
 
 ## 3. レイヤ責務と AGENTS.md との違い
 
@@ -177,14 +187,25 @@ graph LR
 ### 5.1 自動録画
 
 1. `bootstrap.web_app.create_app()` が DI コンテナを構成し、
-   `WebAPIServer` を組み立てます。
-2. `interface/web/routers/recording.py` が `/api/recorder/*` を受け取り、
+   `WebAPIServer` を組み立てます。フロントエンドは起動時に
+   `SetupService` の完了状態と必須不足を確認し、未完了または不足ありなら
+   セットアップ画面を表示します。
+2. `interface/web/app_factory.py` の lifespan は自動録画タスクを起動し、
+   `SetupService.is_installation_completed()` が true になるまで待ちます。
+   この判定にはセットアップ履歴と現在の必須ソフトウェア・保存設定の検査が含まれます。
+   この gate は Web アプリ起動後の最初の自動録画開始前に限られ、自動録画開始後の再判定や
+   CLI `auto` の実行には適用されません。
+3. `interface/web/routers/recording.py` が `/api/recorder/*` を受け取り、
    `AutoRecordingUseCase` や `AutoRecorder` に委譲します。
-3. `AutoRecordingUseCase` はセットアップ後、
+4. `AutoRecordingUseCase` は開始後、
    `FrameCaptureProducer` と `PublisherWorker` を起動します。
-4. メインループでは、フレーム取得、状態判定、ハンドラーによる
+5. メインループでは、フレーム取得、Switch 電源状態とゲーム状態の判定、ハンドラーによる
    `RecordingCommand` 生成、録画セッション制御を繰り返します。
-5. 録画結果は repository 群で保存され、イベントバス経由で UI 更新へ伝播します。
+6. Switch 電源 ON 後、`STANDBY` で OBS 音量の継続観測を始めます。結果が `silent` の間だけ
+   観測を続け、`silent` 以外の結果（`unknown` や `muted` など）を受け取ると終了します。
+   `STANDBY` 以外（マッチング開始など）へ移った場合も終了し、無音以外の結果後は同じ
+   電源 ON 周期で再開しません。音量状態を理由に OBS を再起動する経路はありません。
+7. 録画結果は repository 群で保存され、イベントバス経由で UI 更新へ伝播します。
 
 ### 5.2 編集・アップロード
 
@@ -204,10 +225,16 @@ graph LR
    `/api/events/progress` を `EventSource` で購読します。
 2. `frontend/src/main/domainEvents.ts` が受信イベントを UI 通知用メッセージへ変換します。
 3. プレビューは入力種別で動作が分かれます。
-4. `live_capture` ではブラウザの `getUserMedia()` で
-   OBS Virtual Camera を取得して表示します。
-5. `video_file` では `/api/recorder/preview-frame` をポーリングし、
-   JPEG フレームとして表示します。
+4. ローカル接続の `live_capture` はブラウザの `getUserMedia()` で
+   OBS Virtual Camera を取得して表示します。取得要求は 1920×1080・60 FPS を
+   希望値として指定し、実際の解像度・フレームレートは機器側に依存します。
+5. `video_file` と LAN などローカル以外から接続した `live_capture` は
+   `/api/recorder/preview-frame` をポーリングし、JPEG フレームとして表示します。
+
+保存済み動画のブラウザー再生では `VideoPreviewService` が形式を確認します。
+MP4 はそのまま返し、MKV には一時 MP4 を用意します。MP4 の作成は FFmpeg アダプターに委譲されます。
+FastAPI lifespan の終了処理で `VideoPreviewService.close()` を呼び、プロセス専用の一時ディレクトリを削除します。
+異常終了時の削除は保証しません。
 
 ## 6. 横断関心事
 
@@ -218,6 +245,8 @@ graph LR
 - 現行の主な保存先は `config/settings.toml` と
   `config/image_matching.yaml` です。
 - 設定 UI 用の field metadata も backend 側で生成します。
+- macOS YouTube OAuth 認証情報は `infrastructure/adapters/upload/macos_keychain.py` を
+  通して Keychain に保存します。OAuth クライアントファイルは設定フォルダに置きます。
 
 ### 6.2 DI とランタイム
 

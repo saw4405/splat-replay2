@@ -1,173 +1,73 @@
-# パフォーマンステスト拡充ガイド
+# パフォーマンステストガイド
 
-## 概要
+性能に影響する変更とリリース前の検証に使います。テストの選定と合否の扱いは [テスト戦略](../../docs/test_strategy.md) に従います。
 
-このドキュメントは、Splat Replay のパフォーマンステストの現状と拡充方針を記述します。
+## 現在の構成
 
-## 現在のパフォーマンステスト構成
+対象は `backend/tests/performance/` にあります。
 
-### テストファイル
+| ファイル | 保証対象 |
+| --- | --- |
+| `test_frame_analyzer_performance.py` | 画面判定・XP・結果解析の平均処理時間 |
+| `test_weapon_recognition_performance.py` | レポート出力なしのブキ認識の正確性と平均処理時間 |
+| `test_weapon_display_detection_performance.py` | ブキ表示あり・なしの正確性と平均検出時間 |
+| `test_handler_performance.py` | InGamePhaseHandler のフレーム処理時間 |
+| `test_frame_capture_producer_performance.py` | 電源 ON 待機中の取得間隔と停止時の応答時間 |
+| `test_recording_start_latency.py` | 字幕準備が録画開始を待たせないこと |
 
-1. **test_weapon_recognition_performance.py** - ブキ判定処理時間の閾値付き回帰
-   - 録画中に使うレポート出力なしの処理時間を測定
-   - 統計情報: 平均・中央値・最小・最大・標準偏差
-   - アサート: 正確性の前提と平均処理時間の閾値
+閾値の正本は各テストです。現在の主要な値は次の通りです。
 
-2. **test_weapon_display_detection_performance.py** - ブキ表示検出時間の閾値付き回帰
-   - 表示あり/なしフレームでの処理時間比較
-   - 統計情報: 平均・最小・最大
-   - アサート: 正確性と平均処理時間の閾値
+- FrameAnalyzer の既定値: `(1 / 30 / 4) × 3 = 25 ms`。
+- FrameAnalyzer の個別値: XP 取得 `extract_rate` は 1,000 ms、結果解析 `extract_session_result` は 3,000 ms。個別値が既定値より優先されます。
+- InGamePhaseHandler: `(1 / 30) × 2 ≈ 66.67 ms`。
+- FrameAnalyzer と InGamePhaseHandler の本計測は各 5 回です。プレビューの 60 FPS 要求は、これらの判定処理の実行頻度や時間予算とは別です。
 
-3. **test_frame_analyzer_performance.py** - FrameAnalyzer メソッド閾値判定
-   - デフォルト閾値: 1/30秒/4 = 約8.33ms（30fpsで1フレーム当たり4解析を想定）
-   - 個別閾値: OCR含む処理は緩和（例: extract_rate=100ms, extract_session_result=500ms）
-   - 判定: 閾値超過時は pytest.fail() / xfail 設定可能
-   - 測定回数: 5回（ITER=5）
-   - 対象メソッド数: 20以上（SpeedCase配列）
+## 実行する
 
-4. **test_handler_performance.py** - InGamePhaseHandler 処理時間の閾値付き回帰
-   - 目標閾値: 1/30秒 = 約33.33ms
-   - 測定回数: 5回（ITER=5）
-   - アサート: 平均処理時間の閾値
-
-### 実行方法
+リポジトリルートで実行します。Windows は `task.exe`、macOS は `task` を使います。
 
 ```powershell
-# パフォーマンステストのみ実行
+# 閾値付き性能回帰だけを実行
 task.exe test:performance
 
-# または直接pytest
-cd backend
-uv run pytest -m perf -v -s
+# 性能を含むリリース前の総合確認
+task.exe test:release:performance
+
+# 時間予算が未確定の観測用測定（リリース合否には使わない）
+task.exe test:benchmark
 ```
 
-### perf_recorder フィクスチャ
+対象を絞る場合は、`backend` を作業ディレクトリにして repo 管理ラッパーを使います。
 
-`tests/conftest.py` で定義されており、各テストがパフォーマンスデータを記録できます。
-
-```python
-@pytest.fixture()
-def perf_recorder() -> Iterator[Callable[[PerfRecord], None]]:
-    # パフォーマンス記録を保存
-    ...
+```sh
+uv run python ../scripts/run-backend-pytest.py -q -m "perf and not benchmark" tests/performance/test_frame_analyzer_performance.py
 ```
 
-## 拡充方針
+## 測定条件をそろえる
 
-### 1. 閾値の適正化
+- 比較するコード、OS、Python・OpenCV 等のバージョン、画像・動画、電源状態、プロセス優先度、同時に動くアプリを記録します。旧版と変更版は同じ条件で比較します。
+- Windows での比較は AC 電源接続と通常のプロセス優先度をそろえます。バッテリー駆動や優先度が異なる測定値を、そのまま変更による劣化・改善と扱いません。
+- performance の共通 fixture は本番と同じ OpenCV 初期化を呼びます。Windows では worker 数が 4 を超える場合だけ上限 4 を適用し、macOS の値は変更しません。
+- FrameAnalyzer の `PERF_THRESHOLD_SEC` は既定閾値の上書き用です。個別閾値は上書きしません。診断目的で値を変えた結果を、既存基準の合格として報告しないでください。
+- 閾値超過を理由に `xfail`、skip、閾値緩和、`benchmark` 化で合格にしません。測定条件を確認して実装改善を検討します。
 
-**現状**:
+## 結果を保存する
 
-- 実行時導線に入る処理は `perf` とし、閾値付きで検出する
-- 診断レポート出力など、ユーザー導線の時間予算から外す測定だけを `benchmark` にする
+`backend/tests/conftest.py` の `perf_recorder` は、利用しているテストの測定値を記録します。全テストが同じ形式の記録を出すわけではありません。
+`PERF_RECORD_PATH` を指定すると、各テスト終了時に JSON Lines として追記します。相対パスは `backend/tests/` が基準です。
 
-**拡充案**:
+Windows PowerShell の例:
 
-- 閾値の根拠を、録画ループ、判定間隔、検知窓、過去安定値のどれに基づくか明記する
-- 閾値超過が続く項目は `benchmark` へ落とすのではなく、まず実装改善対象として扱う
+```powershell
+$env:PERF_RECORD_PATH = "../outputs/performance/current.jsonl"
+task.exe test:performance
+Remove-Item Env:PERF_RECORD_PATH
+```
 
-### 2. カバレッジ拡大
+macOS の例:
 
-**不足している測定対象**:
+```sh
+PERF_RECORD_PATH=../outputs/performance/current.jsonl task test:performance
+```
 
-- 動画編集処理（ffmpeg呼び出し）
-- YouTube アップロード処理
-- 画像マッチング（テンプレートマッチング）
-- 対戦履歴の読み書き（JSON シリアライズ）
-- メタデータ変換処理
-
-**追加候補**:
-
-- `test_video_processing_performance.py` - 動画編集・エンコード時間
-- `test_upload_performance.py` - YouTube API呼び出し時間（モック化必要）
-- `test_image_matching_performance.py` - テンプレートマッチング時間
-- `test_persistence_performance.py` - ファイルI/O・JSON処理時間
-
-### 3. xfail 設定の明確化
-
-**現状**:
-
-- `SpeedCase.xfail` フィールドはあるが、実際には使われていない
-
-**対応案**:
-
-- 現状で閾値を超えているメソッドを特定
-- 将来的に改善予定のものに `xfail=True` を設定
-- xfail理由をコメントで記載
-
-### 4. 環境変数による閾値調整
-
-**現状**:
-
-- `test_frame_analyzer_performance.py` は `PERF_THRESHOLD_SEC` 環境変数で閾値上書き可能
-
-**拡充案**:
-
-- 他のテストにも環境変数オーバーライドを追加
-- CI環境とローカル環境で異なる閾値を使用可能にする
-
-### 5. 測定結果の可視化
-
-**現状**:
-
-- コンソール出力のみ
-- `perf_recorder` がデータを記録するが、活用されていない
-
-**拡充案**:
-
-- JSON/CSV形式で測定結果を出力
-- 時系列グラフ化（回帰検出）
-- CI/CDでの自動比較
-
-## 実装計画
-
-### Phase 1: 既存テストの強化
-
-1. ✅ `test_weapon_recognition_performance.py` に閾値追加
-2. ✅ `test_weapon_display_detection_performance.py` に閾値追加
-3. ✅ `test_handler_performance.py` にアサート追加
-4. ✅ `test_frame_analyzer_performance.py` の xfail 設定見直し
-
-### Phase 2: 新規パフォーマンステスト
-
-1. ⏸️ `test_video_processing_performance.py` 作成（編集・エンコード）
-2. ⏸️ `test_image_matching_performance.py` 作成（テンプレートマッチング）
-3. ⏸️ `test_persistence_performance.py` 作成（ファイルI/O・JSON）
-
-### Phase 3: 測定基盤の改善
-
-1. ⏸️ 測定結果のJSON出力
-2. ⏸️ 環境変数による閾値オーバーライド統一
-3. ⏸️ CI/CDでの自動回帰検出
-
-## 閾値設定の指針
-
-### 30fps録画対応の閾値
-
-- **1フレーム処理時間**: 1/30秒 = 33.33ms
-  - 複数解析を行う場合は分割（例: 4解析なら 8.33ms/解析）
-
-### 画像認識の閾値
-
-- **軽量検出** (フレームごとの単純判定): 1フレーム処理時間を目安にする
-- **間隔付きバックグラウンド検出**: 起動間隔内で完了することを目安にする
-- **重量認識**: 検知窓内で複数回試行できることを目安にする
-
-### I/O処理の閾値
-
-- **ファイル読み** (JSON < 100KB): < 10ms
-- **ファイル書き** (JSON < 100KB): < 20ms
-- **動画エンコード** (1分動画): < 30秒
-
-## 参考: test_strategy.md との関係
-
-`docs/test_strategy.md` では、パフォーマンステストは以下のように位置づけられています:
-
-- 分類: `performance`
-- 実行タイミング: 影響変更時とリリース前
-- 入口: `task.exe test:performance` または `task.exe test:release:performance`
-- 目的: 閾値付き性能回帰の検出
-
-## 変更履歴
-
-- 2026-03-14: 初版作成（既存テスト棚卸し・拡充方針策定）
+この例の保存先は Git 対象外の `backend/outputs/performance/` です。測定ごとに別の出力先を使い、pytest のログ・終了コードと測定条件も残してください。生成物はコミットしません。

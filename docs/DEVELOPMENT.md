@@ -28,15 +28,15 @@ how-to です。特別な注記がない限り、コマンドはリポジトリ�
 
 ### 製品の実行・配布
 
-- OS: Windows 11
-- シェル: PowerShell
+- OS: Windows 11、Apple Silicon 搭載 macOS
+- 開発コマンドのシェル: Windows は PowerShell、macOS は zsh / bash
+- 配布版の導入・利用手順: [ユーザーガイド](./usage.md)
 
 ### 開発と replay E2E 可搬性ゲート
 
-- OS: Windows 11 または Linux（WSL2 を含む）
+- OS: Windows 11、Apple Silicon 搭載 macOS、Linux（WSL2 を含む）
 - Linux では、実機 NDI / OBS を使わない replay E2E を実行できます。
 - この Linux 合格は、macOS の製品実行・配布を保証するものではありません。
-- Apple Silicon 搭載 macOS 版は開発・検証用で、正式対応ではありません。2026-10-02〜03 に実ゲームの自動録画・編集・アップロード・matching 表示などを確認しましたが、実マイクから字幕までの統合、通知表示、常駐メニューの実操作、初回導入の全経路、Windows 実機、LFS 3 オブジェクト不足による workflow、実スリープ復帰は未確認または未実施です。進捗と受け入れ条件は [`macOS 対応計画`](./macos_support_plan.md) を参照してください。
 
 共通の前提ツール:
 
@@ -70,7 +70,7 @@ git lfs version
 
 ## 初回セットアップ
 
-### Apple Silicon 搭載 macOS での調査用セットアップ
+### Apple Silicon 搭載 macOS での開発環境セットアップ
 
 Python 3.13、Node.js 24.12 以上、npm、uv、Task、Git を用意します。音声入力用の PyAudio をビルドするため、先に [PortAudio](https://pypi.org/project/PyAudio/) を導入します。Homebrew を使う場合は `brew install portaudio` です。replay workflow E2E を行う場合は Git LFS と FFmpeg も必要です。
 
@@ -335,7 +335,7 @@ Windows:
 task.exe build
 ```
 
-Apple Silicon macOS（開発・検証用。固定した自己署名証明書で署名し、公証なし）:
+Apple Silicon macOS（固定した自己署名証明書で署名し、公証なし）:
 
 ```sh
 task build:macos:candidate
@@ -354,7 +354,7 @@ task build:macos:candidate
 - `task build:macos` は `task build:macos:candidate` と同じ隔離ビルドを実行します。候補は既存 `dist/SplatReplay.app` / DMG や Windows ZIP を消さず、固有のUTC時刻の出力先が既に存在すれば停止します。`task clean:macos` は明示実行用で、既定の `dist`、`backend/build`、`frontend/dist` を削除します。既存 `.app` からの DMG 再生成は `task build:macos:dmg`、既存 DMG の検証は `task verify:macos:dmg` です。
 - 固定証明書は SHA-256 `2b617e1206573418df294b7cb8f256f0aa0ee5ed556df9be32064774de8d20b5` の `Splat Replay Local Code Signing` です。ビルド前に login Keychain の証明書と対応する秘密鍵を照合し、有効期間と Code Signing 用途を確認します。PyInstaller の中間 `.app` は ad hoc のまま生成し、最終 `.app` 外側だけを同じ証明書で署名します。ビルドは証明書を生成・更新せず、Keychain の信頼設定や ACL も変更しません。初回に `codesign` が秘密鍵を使う時、macOS がアクセス確認を表示する場合があります。表示された実行元と対象鍵を確認し、本人が許可を判断してください。
 - この helper の `preflight` / `verify` は署名ビルド用 Mac の login Keychain に同じ証明書と秘密鍵があることを要求します。配布先での公開署名検査とは別の、ビルド元の固定identity検査です。固定自己署名証明書は公証済み Developer ID ではないため、初回起動で Gatekeeper の手動許可が必要になる場合があります。署名を固定しても Gatekeeper、カメラ/マイク等のOS許可、YouTube Keychain 項目の許可が一度化する保証はありません。Windows のビルド経路には変更を加えていません。
-- Windows の実行は `dist/SplatReplay/SplatReplay.exe`、通常の macOS `task run` は `dist/SplatReplay.app` を使います。新しい候補を起動する場合は候補の `.app` を直接開くか、`task run DIST_ROOT=dist/macos-candidates/<UTC時刻>` を指定します。Windows は `task.exe run` で起動できます。実機導線の一部は確認済みですが、初回導入を含む全機能の受け入れは未完了です。確認範囲は [`macOS 対応計画`](./macos_support_plan.md) を参照してください。
+- Windows の実行は `dist/SplatReplay/SplatReplay.exe`、通常の macOS `task run` は `dist/SplatReplay.app` を使います。新しい候補を起動する場合は候補の `.app` を直接開くか、`task run DIST_ROOT=dist/macos-candidates/<UTC時刻>` を指定します。Windows は `task.exe run` で起動できます。
 - macOS 版の設定・ログ・動画は `~/Library/Application Support/io.github.saw4405.splatreplay/` に保存します。`.app` 内のファイルはユーザーデータとして編集しません。
 
 ### ビルド済みアプリの起動

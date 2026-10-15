@@ -2,7 +2,7 @@
 
 ## 1. 目的
 
-Windows 11 PC 上でスプラトゥーン 3 のプレイ映像を録画・確認し、
+Windows 11 PC または Apple Silicon 搭載 Mac でスプラトゥーン 3 のプレイ映像を録画・確認し、
 必要に応じて編集・アップロードまで行える環境を提供する。
 
 本アプリは、セットアップ、録画、メタデータ管理、編集、アップロードの導線を一体で提供し、
@@ -15,10 +15,10 @@ Windows 11 PC 上でスプラトゥーン 3 のプレイ映像を録画・確認
 | 対象ユーザ   | 個人プレイヤー                                   |
 | 主な利用目的 | ① 録画と振り返り ② YouTube などへの共有          |
 | 対応ゲーム   | スプラトゥーン 3                                 |
-| 対応 OS      | Windows 11 64bit                                 |
-| 主な外部連携 | HDMI / USB / OBS Studio / YouTube API / Groq API |
+| 対応 OS      | Windows 11 64bit、Apple Silicon 搭載 macOS       |
+| 主な外部連携 | HDMI / USB / OBS Studio / NDI / YouTube API / Groq API |
 
-Apple Silicon macOS 版は開発・検証用です。2026-10-02〜03 に実ゲームの録画・編集・アップロードや matching 表示など一部の導線を利用者が確認しましたが、受け入れ全体は未完了のため対応 OS の範囲には含めません。確認範囲と未確認事項は[macOS 対応調査](macos_support_plan.md)を参照してください。
+macOS 版は Apple Silicon のみを対象とします。配布 DMG 内の `.app` は固定の自己署名証明書で署名し、公証しません。
 
 ---
 
@@ -37,18 +37,20 @@ graph LR
         CaptureDevice[キャプチャデバイス]
         Microphone[マイク]
         OBS[OBS Studio]
+        NDI[DistroAV / NDI Runtime]
         FFmpeg[FFmpeg]
         Tesseract[Tesseract]
         Groq[Groq]
         YouTube[YouTube]
-        Runtime[Windows / WebView実行環境]
+        Runtime[Windows / macOS / WebView実行環境]
     end
     subgraph Inside[システム境界内]
         App[本アプリ]
     end
 
     User --> App
-    Switch --> CaptureDevice --> OBS --> App
+    Switch --> CaptureDevice --> OBS --> NDI --> App
+    OBS -- 録画データ --> App
     Microphone --> App
     Runtime --> App
     App --> FFmpeg
@@ -58,7 +60,7 @@ graph LR
 ```
 
 - `GUI` や `Web API` は、本アプリが利用者へ提供する接点として扱う。
-- `OBS Studio`、`FFmpeg`、`Tesseract`、`Groq`、`YouTube` は、本アプリが利用する外部要素として扱う。
+- `OBS Studio`、`DistroAV / NDI Runtime`、`FFmpeg`、`Tesseract`、`Groq`、`YouTube` は、本アプリが利用する外部要素として扱う。
 
 ### 3.2 主体別の責務
 
@@ -67,13 +69,14 @@ graph LR
 | 利用者                    | 機材・認証情報の準備、初期設定、必要時の確認や修正                                             | 録画制御や外部連携の内部処理                               |
 | 本アプリ                  | セットアップ案内、録画準備、録画制御、メタデータ管理、編集、アップロード、状態表示、エラー通知 | ゲーム映像生成、外部製品の内部仕様保証、外部障害の恒久解消 |
 | Switch                    | ゲーム映像の出力                                                                               | 録画や保存の制御                                           |
-| キャプチャデバイス        | 映像を PC へ入力可能な形で中継                                                                 | 録画状態やメタデータの管理                                 |
+| キャプチャデバイス        | 映像を PC または Mac へ入力可能な形で中継                                                       | 録画状態やメタデータの管理                                 |
 | マイク                    | 音声入力の提供                                                                                 | 文字起こしや字幕化                                         |
 | OBS Studio                | 映像入力の取り込み、録画実行基盤の提供                                                         | 本アプリの業務判断、動画整理、アップロード                 |
 | FFmpeg                    | 動画・音声の編集処理                                                                           | 編集対象の業務判断                                         |
 | Tesseract / Groq          | OCR、文字起こしなどの専用処理                                                                  | 録画制御、保存、公開判断                                   |
 | YouTube                   | 動画公開、字幕付与、プレイリスト管理の受け皿                                                   | ローカル動画編集、録画データ管理                           |
-| Windows / WebView実行環境 | デスクトップ実行基盤の提供                                                                     | 業務機能の実行判断                                         |
+| Windows / macOS / WebView実行環境 | デスクトップ実行基盤の提供 | 業務機能の実行判断 |
+| DistroAV / NDI Runtime     | OBS の NDI 映像出力とアプリへの映像転送                                                        | 録画やメタデータの管理                                     |
 
 ### 3.3 本アプリが担わない責務
 
@@ -88,7 +91,7 @@ graph LR
 ```mermaid
 graph LR
     Switch[Switch] -- HDMI --> CaptureDevice[キャプチャデバイス]
-    CaptureDevice -- USB --> PC[Windows11 PC]
+    CaptureDevice -- USB --> PC[Windows 11 PC / Apple Silicon Mac]
     Microphone[マイク] -- USB --> PC
     CaptureDevice -- HDMI --> Monitor[外部モニター]
 ```
@@ -105,6 +108,7 @@ graph TD
     end
     subgraph ExternalSoftwareServices["外部ソフトウェア・サービス"]
         OBS[OBS Studio]
+        NDI[DistroAV / NDI Runtime]
         FFmpeg[FFmpeg]
         Tesseract[Tesseract]
         Groq[Groq]
@@ -116,7 +120,9 @@ graph TD
 
     CaptureDevice --> OBS
     App -- OBS 起動 / WebSocket 録画制御 --> OBS
-    OBS -- 仮想カメラ(画面表示)、NDI(映像入力)、録画データ --> App
+    OBS -- 仮想カメラ(画面表示) --> App
+    OBS -- DistroAV / NDI映像入力 --> NDI --> App
+    OBS -- 録画データ --> App
     Microphone -- 音声データ --> App
     App -- 動画処理要求 --> FFmpeg
     App -- OCR要求 --> Tesseract
@@ -132,6 +138,7 @@ graph TD
 - **uv**（仮想環境管理）
 - **Node.js 24.12.0+**（フロントエンドビルド）
 - **NDI 6 Runtime**（OBS からの映像取り込み）
+- **DistroAV**（OBS の NDI 出力プラグイン）
 - **FFmpeg**（動画編集 CLI）
 - **Google YouTube Data API v3**（アップロード）
 - **Groq API**（音声認識）
@@ -147,11 +154,11 @@ sequenceDiagram
     participant App as 本アプリ
     participant OBS
     participant YT as YouTube
-    App->>App: セットアップ状態を確認
-    alt セットアップ未完了
-        App->>User: セットアップウィザードを表示
-        User->>App: セットアップ完了
-    else セットアップ完了
+    App->>App: セットアップ履歴・必須ソフト・保存設定を確認
+    alt 未完了または必須項目に不足
+        App->>User: セットアップ / 不足項目の修復画面を表示
+        User->>App: 不足項目を修復
+    else 完了し不足なし
         App->>User: メイン画面を表示
     end
     App->>OBS: 録画準備
@@ -177,9 +184,12 @@ sequenceDiagram
 
 ### 6.1 起動と画面遷移
 
-- 起動時にセットアップ完了状態を確認し、判定中はローディング画面を表示する。
-- セットアップ未完了の場合はセットアップ画面を表示する。
-- セットアップ完了の場合はメイン画面を表示する。
+- 起動時にセットアップ履歴と録画・判定・編集・YouTube アップロードに必要なソフトウェアおよび保存設定を確認し、判定中はローディング画面を表示する。
+- 初回セットアップ未完了、または既存環境に必須項目の不足がある場合は、通常画面と自動録画を開始せず、セットアップ画面に不足項目と修復先を表示する。
+- 既存環境はセットアップ履歴を保持し、不足している項目だけを修復できること。
+- この起動時判定は Web GUI / WebView 起動後の最初の自動録画開始前に行う。自動録画開始後の再判定と CLI `auto` の開始判定は対象外とする。
+- Switch の電源 OFF、キャプチャデバイスの一時切断、入力された PC 要件、一時的なネットワーク障害は起動時の必須ソフト・保存設定検査の不足として扱わない。
+- 必須項目がそろった場合はメイン画面を表示する。
 - Web GUI と WebView GUI は同一の画面構成で動作する。
 
 ### 6.2 セットアップ
@@ -189,17 +199,20 @@ sequenceDiagram
   - FFmpeg セットアップ
   - OBS セットアップ
   - Tesseract セットアップ
-  - フォントインストール
+  - サムネイル用フォント確認（OS 標準フォントで代替可能）
   - 文字起こし設定
   - YouTube API 設定
-- 各手順の完了状態またはスキップ状態を保持できること。
-- すべての必要手順が完了した後にメイン画面へ遷移できること。
+- 専用フォントがない場合は OS 標準フォントを利用できること。文字起こしを無効にした場合、文字起こし用マイク・API キー・FLAC は必須としない。
+- 起動時に必要ソフトウェアと保存設定を再検査し、不足項目を個別に修復できること。
+- 初回セットアップと必須項目の修復が完了するまでメイン画面および自動録画を開始しないこと。
 
 ### 6.3 録画準備
 
 - キャプチャデバイスの接続状態を確認し、未接続の場合は利用者へ案内を表示する。
+- キャプチャデバイスは保存した表示名で識別し、同じ表示名の機器を継続して利用できること。
 - OBS の起動状態を確認し、未起動の場合は起動する。
 - OBS の仮想カメラを有効化する。
+- ローカルプレビューは 1920×1080・60 FPS を要求する。取得可能な解像度・フレームレートは機器や OS の実装に従う。
 - プレビュー入力種別を取得できること。
   - `live_capture`
   - `video_file`
@@ -224,6 +237,8 @@ stateDiagram-v2
 - 最新プレビューフレームを取得し、GUI に表示できること。
 - 録画中のリアルタイムメタデータを取得・更新できること。
 - 録画停止後は、録画済データとして動画と関連メタデータを保存すること。
+- Switch 電源 ON 後に OBS 音量の観測を始め、無音の結果が続く待機中だけ観測を継続すること。無音以外の結果、またはマッチング開始で観測を終了する。
+- 無音以外の結果を確認した後は、同じ Switch 電源 ON 周期で音声観測を再開しないこと。無音を理由に OBS を再起動しないこと。
 - サーモンランの自動録画は現状未対応とする。
 
 ### 6.5 編集・アップロード
@@ -257,6 +272,7 @@ stateDiagram-v2
   - タイトル・説明・タグ・公開範囲の反映
   - 字幕の付与
   - プレイリスト追加
+- 録画は MKV で保持する。アプリ内再生では MKV に対して一時 MP4 を用意し、MP4 は変換せずそのまま使うこと。
 - 実行中の編集・アップロード処理に対して、今回の処理に限った `sleep_after_upload` の一時設定を更新できること。
 
 ### 6.6 設定
@@ -272,12 +288,14 @@ stateDiagram-v2
   - YouTube アップロード設定
   - WebView 表示設定
 - カメラ権限ダイアログおよび YouTube 権限ダイアログの表示済状態を保持できること。
+- macOS の YouTube OAuth 認証情報は Keychain に保存すること。OAuth クライアントファイルは設定フォルダに置く。
 
 ### 6.7 スリープ
 
 - `アップロード終了後にスリープする` が有効な場合、編集・アップロード完了後にスリープ開始予告を表示できること。
 - スリープ開始予告はカウントダウン付きで表示し、利用者がキャンセルできること。
-- 条件成立時に PC をスリープできること。
+- 条件成立時に Windows PC または Mac をスリープできること。
+- macOS では OS の `pmset sleepnow` を使ってスリープを要求すること。
 
 ## 7. 非機能要件
 
@@ -384,7 +402,10 @@ GUI はセットアップ画面とメイン画面の 2 画面で構成する。
 - 編集・アップロード処理の開始ボタンを表示できること。
 - 編集・アップロード処理の進捗ダイアログを表示できること。
 - 自動処理開始予告およびスリープ開始予告を通知できること。
+- macOS の通知名は「Splat Replay」とし、表示には macOS の通知許可を使うこと。
 - 設定ダイアログで設定変更できること。
+- macOS でウィンドウを閉じた場合はアプリを終了せず、メニューバーから画面を再表示または完全終了できること。
+- macOS のメニューバー常駐アイコンは処理状態を示し、アプリアイコンの左下に状態記号を重ねて表示すること。
 
 > **UX 指針** : 主要操作は 1〜2 クリック以内で完結し、リアルタイム反映されること。
 

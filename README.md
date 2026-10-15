@@ -30,20 +30,27 @@ Splat Replay は、スプラトゥーン 3 のプレイ動画を自動で録画�
 
 ### インストール
 
-Windows:
+Windows 11 と Apple Silicon 搭載の macOS に対応しています。
+
+**Windows**
 
 1. [GitHub リリースページ](https://github.com/saw4405/splat-replay2/releases)にある最新のリリースから、`SplatReplay.zip` をダウンロードする
 2. ダウンロードした ZIP ファイルを展開する
 
+**macOS（Apple Silicon）**
+
+1. [GitHub リリースページ](https://github.com/saw4405/splat-replay2/releases)で macOS 用 DMG が掲載されているリリースからダウンロードする
+2. DMG を開き、`SplatReplay.app` を「アプリケーション」へドラッグして、DMG を取り出す
+
+macOS 版は自己署名・公証なしのため、初回にシステム設定から起動を許可する場合があります。[macOS の導入手順](./docs/usage.md#macos-apple-silicon)を参照してください。
+
 ### 起動
 
-Windows:
-
-1. 展開したフォルダ内の `SplatReplay.exe` を実行してアプリを起動する
-2. （初回のみ）セットアップウィザードに従い、必要なアプリのインストールや設定を行う
+1. Windows は展開したフォルダの `SplatReplay.exe`、macOS は「アプリケーション」の `SplatReplay.app` を開く
+2. 初回はセットアップウィザードに従い、録画・判定・編集・YouTube アップロードに必要なソフトと設定をそろえる。不足がある場合は通常画面へ進む前に修復する
 3. Switch の映像を監視し、設定に応じてバトルを自動録画する。編集・アップロードは「処理開始」から手動で行うか、対応設定を有効にして電源 OFF 検出後の予告から開始する
 
-Apple Silicon macOS 版は開発・検証用で、正式対応ではありません。実ゲームの録画からアップロードなど一部の利用者確認は済んでいますが、全機能の受け入れは未完了です。確認範囲と未確認事項は[macOS 対応調査](./docs/macos_support_plan.md)を、DMG の導入手順は[ユーザーガイド](./docs/usage.md#macos-apple-silicon)を参照してください。
+詳しい設定と日常の使い方は[ユーザーガイド](./docs/usage.md)を参照してください。
 
 ## 開発者向け情報
 

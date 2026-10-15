@@ -21,7 +21,10 @@ Splat Replay の backend パッケージです。Python 3.13 / uv を前提に�
 
 - Python 3.13
 - `uv`
-- Windows 前提の依存を含むため、主な開発環境は Windows 11
+- Windows 11 または Apple Silicon 搭載 macOS（Windows 専用の実行依存は Windows にのみインストールされます）
+- macOS は PyAudio のビルドに PortAudio が必要です。[macOS の開発環境セットアップ](../docs/DEVELOPMENT.md#apple-silicon-搭載-macos-での開発環境セットアップ)を参照してください。
+
+以下の Task コマンドは Windows では `task.exe`、macOS では `task` を使います。
 
 補足:
 
@@ -73,7 +76,7 @@ backend は Clean Architecture を前提に、主に次の層で構成されて�
 ```powershell
 cd backend
 
-uv run pytest -q
+uv run python ../scripts/run-backend-pytest.py -q
 uv run ruff format . --check
 uv run ruff check .
 uv run ty check
@@ -90,12 +93,12 @@ task.exe verify
 
 補足:
 
-- `task.exe verify` は frontend も含む全体確認です。
-- backend 単体の切り分けでは `uv` 直叩きが便利ですが、日常運用では Taskfile の入口が優先です。
+- `task.exe verify` は frontend も含む全体確認です。実行条件は [テスト戦略](../docs/test_strategy.md) に従います。
+- 対象を絞る場合は、`scripts/run-backend-pytest.py` にテストファイルや node ID を指定します。
 
 ## テストと検証
 
-- 既定の backend テスト: `task.exe test:backend` または `cd backend && uv run pytest -q`
+- 既定の backend テスト: `task.exe test:backend`。対象指定は `backend` で `uv run python ../scripts/run-backend-pytest.py -q <対象>` を実行します。
 - レイヤ依存の検証: `task.exe import-lint` または `cd backend && uv run lint-imports --no-cache`
 - 型検査: `task.exe type-check:backend` または `cd backend && uv run ty check`
 
@@ -112,10 +115,19 @@ uv sync --reinstall
 
 ### `8000` 番ポートが既に使用されている
 
+Windows:
+
 ```powershell
 netstat -ano | findstr :8000
-taskkill /PID <プロセスID> /F
 ```
+
+macOS:
+
+```sh
+lsof -nP -iTCP:8000 -sTCP:LISTEN
+```
+
+使用中のアプリを確認してください。Splat Replay が稼働中の場合は、録画・後処理の完了を待ってメニューから完全終了します。別のアプリを使い続ける場合は、開発サーバーのポートを変更してください。
 
 ### import-lint が失敗する
 

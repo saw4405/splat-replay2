@@ -24,7 +24,7 @@
 - **Code Font**: monospace (Weight 400).
 
 ## Iconography
-- **Icons**: Google Material Symbols (Rounded style). Standard weight (300~400). Unfilled (outline) preferred. Use `currentColor` for fills to inherit text states. Base size 24px.
+- **Icons**: 現行実装は `lucide-svelte` のアウトラインアイコン。既存コンポーネントと同じアイコンを使い、色は `currentColor` で文字色を継承する。基準サイズは 24px。
 
 ## Surface & Shape
 - **Corner Radius**: 8px (Inputs, Checkboxes), 12px (Cards, standard containers), 18px (Modals, Drawers). 999px for Pills and circular Icon Buttons.
