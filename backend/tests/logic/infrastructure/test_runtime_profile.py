@@ -17,10 +17,19 @@ from splat_replay.application.interfaces import (
     CaptureDevicePort,
     CapturePort,
     MicrophoneEnumeratorPort,
+    PathsPort,
     OCRPort,
     PowerPort,
+    UploadPort,
     VideoRecorderPort,
     WeaponRecognitionPort,
+)
+from splat_replay.application.services.checkers import (
+    DistroAVChecker,
+    OBSChecker,
+)
+from splat_replay.application.services.setup.system_check_service import (
+    SystemCheckService,
 )
 from splat_replay.domain.ports import BattleMedalRecognizerPort
 from splat_replay.infrastructure.adapters.capture.adaptive_capture import (
@@ -36,7 +45,12 @@ from splat_replay.infrastructure.adapters.system.replay_runtime import (
     ReplayCaptureDeviceEnumerator,
     ReplayMicrophoneEnumerator,
     ReplayPower,
+    ReplaySoftwareChecker,
 )
+from splat_replay.infrastructure.adapters.system.ndi_runtime_checker import (
+    NDIRuntimeChecker,
+)
+from splat_replay.infrastructure.adapters.upload import NoOpUploadPort
 from splat_replay.infrastructure.adapters.text.replay_ocr import (
     ReplayOCRAdapter,
 )
@@ -63,11 +77,16 @@ def _configure_replay_input(
     replay_video = tmp_path / "replay.mkv"
     replay_video.write_bytes(b"replay input")
     settings_path.parent.mkdir(parents=True)
-    settings_path.write_text("[storage]\n", encoding="utf-8")
+    settings_path.write_text(
+        f"[storage]\nbase_dir = {json.dumps(str(tmp_path / 'videos'))}\n",
+        encoding="utf-8",
+    )
     (settings_path.parent / "e2e-replay-input.json").write_text(
         json.dumps({"video_path": str(replay_video)}), encoding="utf-8"
     )
     monkeypatch.setenv("SPLAT_REPLAY_SETTINGS_FILE", str(settings_path))
+    monkeypatch.setenv("SPLAT_REPLAY_E2E_ROOT", str(tmp_path))
+    monkeypatch.setenv("SPLAT_REPLAY_E2E_NOOP_UPLOAD", "1")
     monkeypatch.setattr(paths, "SETTINGS_FILE", settings_path)
 
 
@@ -98,6 +117,8 @@ def test_live_profile_resolves_adaptive_adapters() -> None:
     assert isinstance(
         resolve(container, VideoRecorderPort), AdaptiveVideoRecorder
     )
+    assert isinstance(resolve(container, OBSChecker), OBSChecker)
+    assert isinstance(resolve(container, NDIRuntimeChecker), NDIRuntimeChecker)
 
 
 def test_container_configures_opencv_before_runtime_start(
@@ -156,6 +177,175 @@ def test_replay_profile_registers_only_replay_device_adapters(
     )
 
 
+def test_replay_profile_isolates_external_setup_checks_and_oauth_path(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _configure_replay_input(tmp_path, monkeypatch)
+    container = configure_container(profile=RuntimeProfile.REPLAY)
+
+    assert isinstance(resolve(container, OBSChecker), ReplaySoftwareChecker)
+    assert isinstance(
+        resolve(container, DistroAVChecker), ReplaySoftwareChecker
+    )
+    assert isinstance(
+        resolve(container, NDIRuntimeChecker), ReplaySoftwareChecker
+    )
+    assert isinstance(resolve(container, UploadPort), NoOpUploadPort)
+
+    paths_port = resolve(container, PathsPort)
+    assert paths_port.get_config_dir() == tmp_path / "config"
+
+    config_dir = paths_port.get_config_dir()
+    config_dir.mkdir(parents=True, exist_ok=True)
+    credentials_path = config_dir / "client_secret.json"
+    credentials_path.write_text(
+        json.dumps(
+            {
+                "installed": {
+                    "client_id": "replay-test.invalid",
+                    "client_secret": "not-a-credential",
+                    "auth_uri": "https://example.invalid/auth",
+                    "token_uri": "https://example.invalid/token",
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    checks = resolve(container, SystemCheckService)
+    assert checks.check_obs_installation().is_installed
+    assert checks.check_distroav_installation().is_installed
+    assert checks.check_ndi_runtime_installation().is_installed
+    assert checks.check_obs_main_output().status == "enabled"
+    assert (
+        checks.check_obs_websocket_configuration(
+            "127.0.0.1", 4455, "e2e-only-not-a-real-password"
+        ).status
+        == "ready"
+    )
+    assert checks.check_youtube_credentials().is_installed
+
+    credentials_path.unlink()
+    assert not checks.check_youtube_credentials().is_installed
+
+
+def test_replay_rejects_external_storage_without_changing_its_contents(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    e2e_root = tmp_path / "e2e-root"
+    config_dir = e2e_root / "config"
+    config_dir.mkdir(parents=True)
+    settings_path = config_dir / "settings.toml"
+    replay_video = e2e_root / "replay.mkv"
+    replay_video.write_bytes(b"replay input")
+    (config_dir / "e2e-replay-input.json").write_text(
+        json.dumps({"video_path": str(replay_video)}), encoding="utf-8"
+    )
+
+    external_storage = tmp_path / "external-storage"
+    external_storage.mkdir()
+    (external_storage / "recorded.mkv").write_bytes(b"recording")
+    (external_storage / "recorded.json").write_text(
+        "metadata", encoding="utf-8"
+    )
+    before = {
+        path.relative_to(external_storage): path.read_bytes()
+        for path in external_storage.rglob("*")
+        if path.is_file()
+    }
+    settings_path.write_text(
+        f"[storage]\nbase_dir = {json.dumps(str(external_storage))}\n",
+        encoding="utf-8",
+    )
+
+    monkeypatch.setenv("SPLAT_REPLAY_E2E_ROOT", str(e2e_root))
+    monkeypatch.setenv("SPLAT_REPLAY_SETTINGS_FILE", str(settings_path))
+    monkeypatch.setenv("SPLAT_REPLAY_E2E_NOOP_UPLOAD", "1")
+    monkeypatch.setattr(paths, "SETTINGS_FILE", settings_path)
+    runtime_start_calls: list[bool] = []
+    monkeypatch.setattr(
+        di_module.AppRuntime,
+        "start",
+        lambda self: runtime_start_calls.append(True),
+    )
+
+    with pytest.raises(RuntimeError, match="動画保存先"):
+        configure_container(profile=RuntimeProfile.REPLAY)
+
+    after = {
+        path.relative_to(external_storage): path.read_bytes()
+        for path in external_storage.rglob("*")
+        if path.is_file()
+    }
+    assert after == before
+    assert runtime_start_calls == []
+
+
+@pytest.mark.parametrize(
+    ("root_value", "settings_path_kind"),
+    [
+        (None, "inside"),
+        ("relative-e2e-root", "inside"),
+        ("absolute", "relative"),
+        ("absolute", "outside"),
+    ],
+)
+def test_replay_rejects_nonisolated_settings_paths_before_reading_toml(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    root_value: str | None,
+    settings_path_kind: str,
+) -> None:
+    isolation_root = tmp_path / "e2e-root"
+    config_dir = isolation_root / "config"
+    config_dir.mkdir(parents=True)
+    inside_settings = config_dir / "settings.toml"
+    inside_settings.write_text("malformed = [", encoding="utf-8")
+    replay_video = tmp_path / "replay.mkv"
+    replay_video.write_bytes(b"replay input")
+    (config_dir / "e2e-replay-input.json").write_text(
+        json.dumps({"video_path": str(replay_video)}), encoding="utf-8"
+    )
+
+    if root_value is None:
+        monkeypatch.delenv("SPLAT_REPLAY_E2E_ROOT", raising=False)
+    elif root_value == "absolute":
+        monkeypatch.setenv("SPLAT_REPLAY_E2E_ROOT", str(isolation_root))
+    else:
+        monkeypatch.setenv("SPLAT_REPLAY_E2E_ROOT", root_value)
+
+    if settings_path_kind == "inside":
+        settings_path = inside_settings
+    elif settings_path_kind == "relative":
+        settings_path = Path("relative-settings/settings.toml")
+    else:
+        settings_path = tmp_path / "outside" / "settings.toml"
+    monkeypatch.setattr(paths, "SETTINGS_FILE", settings_path)
+    monkeypatch.setenv("SPLAT_REPLAY_SETTINGS_FILE", str(settings_path))
+    monkeypatch.setenv("SPLAT_REPLAY_E2E_NOOP_UPLOAD", "1")
+
+    error = (
+        "SPLAT_REPLAY_E2E_ROOT"
+        if root_value in {None, "relative-e2e-root"}
+        else "設定ファイル"
+    )
+    with pytest.raises(RuntimeError, match=error):
+        configure_container(profile=RuntimeProfile.REPLAY)
+
+
+def test_replay_requires_noop_upload_to_avoid_youtube_authentication(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _configure_replay_input(tmp_path, monkeypatch)
+    monkeypatch.delenv("SPLAT_REPLAY_E2E_NOOP_UPLOAD")
+
+    with pytest.raises(RuntimeError, match="SPLAT_REPLAY_E2E_NOOP_UPLOAD=1"):
+        configure_container(profile=RuntimeProfile.REPLAY)
+
+
 @pytest.mark.asyncio
 async def test_replay_profile_rejects_power_operation(
     tmp_path: Path,
@@ -175,6 +365,8 @@ def test_replay_profile_requires_input_before_adapter_registration(
     settings_path = tmp_path / "config" / "settings.toml"
     settings_path.parent.mkdir(parents=True)
     monkeypatch.setenv("SPLAT_REPLAY_SETTINGS_FILE", str(settings_path))
+    monkeypatch.setenv("SPLAT_REPLAY_E2E_ROOT", str(tmp_path))
+    monkeypatch.setenv("SPLAT_REPLAY_E2E_NOOP_UPLOAD", "1")
     monkeypatch.setattr(paths, "SETTINGS_FILE", settings_path)
     opencv_configuration_calls: list[bool] = []
     monkeypatch.setattr(

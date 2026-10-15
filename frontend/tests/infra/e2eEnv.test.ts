@@ -51,6 +51,38 @@ describe('e2eEnv installation state bootstrap', () => {
     expect(content).not.toContain('[setup]');
   });
 
+  it('writes required REPLAY settings and an isolated fake OAuth client fixture', () => {
+    const rootDir = mkdtempSync(join(tmpdir(), 'splat-replay-e2e-setup-'));
+    const settingsFile = join(rootDir, 'config', 'settings.toml');
+    temporaryRoots.push(rootDir);
+
+    vi.stubEnv('SPLAT_REPLAY_E2E_ROOT', rootDir);
+    vi.stubEnv('SPLAT_REPLAY_SETTINGS_FILE', settingsFile);
+    vi.stubEnv('SPLAT_REPLAY_E2E_MODE', 'smoke');
+
+    const environment = bootstrapE2EEnvironment(true);
+    const settings = readFileSync(environment.settingsFile, 'utf-8');
+    const clientSecret = JSON.parse(readFileSync(environment.clientSecretFile, 'utf-8')) as {
+      installed?: Record<string, unknown>;
+    };
+
+    expect(environment.configDir).toBe(join(rootDir, 'config'));
+    expect(environment.clientSecretFile).toBe(join(environment.configDir, 'client_secret.json'));
+    expect(settings).toContain('[capture_device]');
+    expect(settings).toContain('name = "E2E Replay Capture"');
+    expect(settings).toContain('[obs]');
+    expect(settings).toContain('websocket_port = 4455');
+    expect(settings).toContain('[upload]');
+    expect(settings).toContain('privacy_status = "private"');
+    expect(clientSecret.installed).toMatchObject({
+      client_id: expect.any(String),
+      client_secret: expect.any(String),
+      auth_uri: expect.any(String),
+      token_uri: expect.any(String),
+      project_id: 'splat-replay-e2e-invalid',
+    });
+  });
+
   it('identifies WSL without treating native macOS as a mounted Windows path runtime', () => {
     expect(isWslRuntime('linux', { WSL_DISTRO_NAME: 'Ubuntu' }, '')).toBe(true);
     expect(isWslRuntime('linux', {}, '5.15.153.1-microsoft-standard-WSL2')).toBe(true);

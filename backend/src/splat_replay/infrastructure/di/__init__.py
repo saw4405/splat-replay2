@@ -31,6 +31,9 @@ from splat_replay.infrastructure.adapters.system.cross_cutting import (
     StructlogLoggerAdapter,
     TomlConfigAdapter,
 )
+from splat_replay.infrastructure.adapters.system.replay_runtime import (
+    ReplayPathsAdapter,
+)
 from splat_replay.infrastructure.adapters.image.thumbnail_font_resolver import (
     ThumbnailFontResolver,
 )
@@ -61,7 +64,19 @@ def configure_container(
     profile: RuntimeProfile = RuntimeProfile.LIVE,
 ) -> punq.Container:
     """アプリで利用する依存関係を登録する。"""
+    environment_adapter = ProcessEnvironmentAdapter()
+    paths_adapter: PathsPort = FileSystemPathsAdapter()
+    replay_paths_adapter: ReplayPathsAdapter | None = None
     if profile is RuntimeProfile.REPLAY:
+        replay_paths_adapter = ReplayPathsAdapter(
+            paths_adapter, environment_adapter
+        )
+        replay_paths_adapter.validate_isolation()
+        if environment_adapter.get("SPLAT_REPLAY_E2E_NOOP_UPLOAD") != "1":
+            raise RuntimeError(
+                "REPLAY では SPLAT_REPLAY_E2E_NOOP_UPLOAD=1 が必要です"
+            )
+        paths_adapter = replay_paths_adapter
         require_configured_test_video()
 
     configure_opencv_thread_limit()
@@ -76,7 +91,6 @@ def configure_container(
     container.register(ConfigPort, instance=config_adapter)
     container.register(RequiredSetupConfigPort, instance=config_adapter)
 
-    paths_adapter = FileSystemPathsAdapter()
     container.register(PathsPort, instance=paths_adapter)
     container.register(
         ThumbnailFontResolverPort,
@@ -87,7 +101,6 @@ def configure_container(
     file_system_adapter = LocalFileSystemAdapter()
     container.register(FileSystemPort, instance=file_system_adapter)
 
-    environment_adapter = ProcessEnvironmentAdapter()
     container.register(EnvironmentPort, instance=environment_adapter)
 
     # インフラ実装で利用する BoundLogger を登録
@@ -99,15 +112,20 @@ def configure_container(
 
     # Runtime (async loop & buses)
     runtime = AppRuntime()
-    runtime.start()
     container.register(AppRuntime, instance=runtime)
 
     app_settings = register_config(container)
     container.register(AppSettings, instance=app_settings)
+    if profile is RuntimeProfile.REPLAY:
+        assert replay_paths_adapter is not None
+        replay_paths_adapter.validate_storage_dir(
+            app_settings.storage.base_dir
+        )
+    runtime.start()
     register_image_matching_settings(container)
     register_adapters(container, profile=profile)
     register_domain_services(container)
-    register_app_services(container)
+    register_app_services(container, profile=profile)
     register_app_usecases(container)
 
     try:

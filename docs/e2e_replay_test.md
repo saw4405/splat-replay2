@@ -117,16 +117,22 @@ replay fixture は次のディレクトリに配置しています。
 
 ## 6. replay 実行プロファイル
 
-Playwright の backend は `SPLAT_REPLAY_RUNTIME_PROFILE=replay` で起動します。replay プロファイルでは、起動時から有効な replay 入力を必須とし、NDI、OBS、実機キャプチャデバイス・マイクの列挙、および OS の電源操作を利用しません。
+Playwright の backend は `SPLAT_REPLAY_RUNTIME_PROFILE=replay` で起動します。有効な replay 入力が無ければ起動時に失敗します。この profile は録画・キャプチャ・電源の入力を replay adapter に置き換えます。OBS/NDI、実機キャプチャデバイス・マイク、OS の電源操作を使った録画確認ではありません。
 
 spec 実行中に `configureReplayAsset()` が replay 入力を切り替える既存の挙動は維持します。入力が無くなった場合に実機入力へ黙って戻ることはありません。
 
-WSL2 / Linux での `workflow:full` 合格は、ハードウェア非依存の replay E2E 可搬性ゲートです。macOS での製品配布、OS 連携、実機との接続を検証するものではありません。
+WSL2 / Linux での `workflow:full` 合格は、その環境で bundled replay workflow が通ることを示す可搬性ゲートです。別 OS の製品配布、初回導入、OS 権限、実機との接続を検証するものではありません。VM / WSL2 の結果は記録した構成・候補に限り、別候補や実機へ一般化しません。
 
 sidecar は `schema_version`、`scenario`、`observations`、`expected` を分離します。
 replay backend には `scenario` と `observations` だけを渡し、`expected` は UI の独立した期待値です。
 
-`observations` の武器認識・OCR・表彰認識は既存ポートで返します。その後の録画状態遷移、メタデータ更新、保存、API、UI は実装を通るため、workflow E2E は外部認識結果が伝播する結線を保証します。一方、実 Tesseract / 実ブキ・表彰 CV の精度・性能は固定フレームの lower integration / performance テストで別に保証します。実 OCR 統合テストを実行する場合だけ、OS 側の `tesseract` コマンドが必要です。
+`scenario` と `observations` で差し替えるのは外部入力です。武器認識・OCR・表彰認識の結果は既存ポートから返し、その後の録画状態遷移、メタデータ更新、実 storage への保存、API/UI は実装を通ります。編集 workflow は実 FFmpeg とファイル副作用を通ります。`backend/tests/contract/test_ffmpeg_output_contract.py`（contract）は、ffmpeg / ffprobe がある環境で実出力の連結順・期間・title metadata とキャンセル時の子プロセス終了を確認します。外部観測結果が後段へ伝播する結線は保証しますが、実 OBS/NDI/音声・キャプチャ機器、OS 権限、実 Tesseract / CV の精度・性能は保証しません。実 Tesseract / CV の精度・性能は固定フレームの lower integration / performance テストで測ります。実 OCR 統合テストには OS 側の `tesseract` コマンドが必要です。
+
+Playwright backend は `SPLAT_REPLAY_E2E_NOOP_UPLOAD=1` で起動し、アップロード先を `NoOpUploadPort` にします。`edit-upload-workflow.spec.ts` は完了 UI、成功状態、録画・編集済み asset 一覧が空であることを確認します。これはアプリ内処理と削除結果までを示し、YouTube 外部認証や実アップロードを示しません。
+
+E2E helper は一時 root の設定と storage を使い、spec 間の初期化もその storage 内に限定します。REPLAY の `SPLAT_REPLAY_E2E_ROOT` は絶対パスにし、`SPLAT_REPLAY_SETTINGS_FILE` または `SPLAT_REPLAY_E2E_STORAGE_DIR` を上書きする場合も、絶対 root 配下の隔離先を指定してください。root 外・相対の設定先や保存先は拒否されます。LIVE の保存先仕様には適用されません。
+
+セットアップ gate の範囲も分けて扱います。`RuntimeProfile.REPLAY` でも `SetupService` / `SystemCheckService` の必須判定・集約経路を維持し、LIVE の必須 gate を無効にしません。Composition Root で REPLAY adapter に差し替えるのは OBS / DistroAV / NDI 等の外部観測 checker だけです。Playwright の E2E 環境は導入履歴を完了状態で用意するため、通常 workflow は初回導入全体を検証しません。`required-setup-gate.spec.ts` は setup API を stub して不足時の UI 表示・修復先を検証します。backend の `test_required_setup_service.py` は有効設定 fixture と不足条件を使って `SetupService` の判定を確認しますが、外部 checker を制御するため実 OS への導入確認ではありません。新しい必須条件を加えるときは、有効 fixture で不足なしとなることと、その条件を欠く fixture で gate が拒否することを service の実判定で確認します。
 
 ## 7. 実行コマンド
 

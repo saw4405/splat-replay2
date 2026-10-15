@@ -10,18 +10,40 @@
 
 from __future__ import annotations
 
+from datetime import datetime
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Any, cast
+from typing import Any, Iterator, cast
+from unittest.mock import MagicMock
 
 import pytest
 from fastapi import FastAPI, status
 from fastapi.testclient import TestClient
 
 from splat_replay.application.dto.assets import EditUploadStatusDTO
+from splat_replay.application.use_cases.assets.list_edited_videos import (
+    ListEditedVideosUseCase,
+)
+from splat_replay.application.use_cases.assets.list_recorded_videos import (
+    ListRecordedVideosUseCase,
+)
 from splat_replay.application.interfaces import (
+    VideoEditorPort,
     VideoPreviewError,
     VideoPreviewUnavailableError,
+)
+from splat_replay.domain.config import VideoStorageSettings
+from splat_replay.domain.models import (
+    BattleResult,
+    GameMode,
+    Judgement,
+    Match,
+    RecordingMetadata,
+    Rule,
+    Stage,
+)
+from splat_replay.infrastructure.repositories.video_asset_repo import (
+    FileVideoAssetRepository,
 )
 from splat_replay.interface.web.routers.assets import (
     create_assets_router,
@@ -562,77 +584,205 @@ class TestEditUploadProcessEndpoints:
         assert response.status_code == status.HTTP_422_UNPROCESSABLE_CONTENT
 
 
+class _MapperContractVideoEditor:
+    async def get_video_length(self, video: Path) -> float:
+        _ = video
+        return 123.5
+
+
+@pytest.fixture
+def assets_mapper_contract_client(
+    tmp_path: Path,
+) -> Iterator[tuple[TestClient, FileVideoAssetRepository]]:
+    settings = VideoStorageSettings(base_dir=tmp_path / "videos")
+    logger = MagicMock()
+    repository = FileVideoAssetRepository(
+        settings=settings,
+        logger=logger,
+        publisher=MagicMock(),
+    )
+    video_editor = _MapperContractVideoEditor()
+    server = cast(
+        Any,
+        SimpleNamespace(
+            base_dir=settings.base_dir,
+            logger=logger,
+            list_recorded_videos_uc=ListRecordedVideosUseCase(
+                repository=repository,
+                logger=logger,
+                base_dir=settings.base_dir,
+                video_editor=cast(VideoEditorPort, video_editor),
+            ),
+            list_edited_videos_uc=ListEditedVideosUseCase(
+                repository=repository,
+                logger=logger,
+                base_dir=settings.base_dir,
+                video_editor=cast(VideoEditorPort, video_editor),
+            ),
+        ),
+    )
+    app = FastAPI()
+    app.include_router(create_assets_router(server))
+
+    with TestClient(app) as client:
+        yield client, repository
+
+
 class TestAssetsMapperContract:
     """Mapper変換の契約テスト（snake_case ↔ camelCase）。"""
 
     def test_recorded_video_snake_case_fields(
-        self, client: TestClient
+        self,
+        assets_mapper_contract_client: tuple[
+            TestClient, FileVideoAssetRepository
+        ],
+        tmp_path: Path,
     ) -> None:
-        """録画済みビデオのレスポンスがsnake_case形式であることを確認。"""
+        """非空の録画済み一覧を実HTTP JSONでsnake_caseに変換する。"""
+        client, repository = assets_mapper_contract_client
+        source = tmp_path / "incoming" / "recording.mkv"
+        source.parent.mkdir(parents=True)
+        source_bytes = b"synthetic-recording"
+        source.write_bytes(source_bytes)
+        metadata = RecordingMetadata(
+            game_mode=GameMode.BATTLE,
+            started_at=datetime(2026, 10, 16, 12, 34, 56),
+            judgement=Judgement.WIN,
+            allies=("A", "B", "C", "D"),
+            enemies=("E", "F", "G", "H"),
+            result=BattleResult(
+                match=Match.X,
+                rule=Rule.RAINMAKER,
+                stage=Stage.HAMMERHEAD_BRIDGE,
+                kill=7,
+                death=5,
+                special=2,
+                gold_medals=2,
+                silver_medals=1,
+            ),
+        )
+        asset = repository.save_recording(
+            source,
+            srt=None,
+            screenshot=None,
+            metadata=metadata,
+        )
+        asset.video.with_suffix(".srt").write_text("caption", encoding="utf-8")
+        asset.video.with_suffix(".png").write_bytes(b"thumbnail")
+
         response = client.get("/api/assets/recorded")
         assert response.status_code == status.HTTP_200_OK
 
         data = response.json()
-        if not data:
-            pytest.skip("録画済みビデオが存在しないためスキップ")
+        assert len(data) == 1
 
         video = data[0]
-        # Snake_case フィールドの存在確認
-        snake_case_fields = [
-            "started_at",
-            "game_mode",
-            "has_subtitle",
-            "has_thumbnail",
-            "duration_seconds",
-            "size_bytes",
-            "gold_medals",
-            "silver_medals",
-            "golden_egg",
-            "power_egg",
-        ]
+        assert video["id"] == asset.video.relative_to(
+            repository.settings.base_dir
+        ).as_posix()
+        assert video["path"] == str(asset.video)
+        assert video["filename"] == asset.video.name
+        assert video["started_at"] == "2026-10-16T12:34:56"
+        assert video["game_mode"] == "BATTLE"
+        assert video["match"] == "X"
+        assert video["rule"] == "RAINMAKER"
+        assert video["stage"] == "HAMMERHEAD_BRIDGE"
+        assert video["judgement"] == "WIN"
+        assert video["kill"] == 7
+        assert video["death"] == 5
+        assert video["special"] == 2
+        assert video["gold_medals"] == 2
+        assert video["silver_medals"] == 1
+        assert video["rate"] is None
+        assert video["golden_egg"] is None
+        assert video["power_egg"] is None
+        assert video["allies"] == ["A", "B", "C", "D"]
+        assert video["enemies"] == ["E", "F", "G", "H"]
+        assert video["has_subtitle"] is True
+        assert video["has_thumbnail"] is True
+        assert video["duration_seconds"] == 123.5
+        assert video["size_bytes"] == len(source_bytes)
+        for field, expected_type in {
+            "id": str,
+            "game_mode": str,
+            "kill": int,
+            "allies": list,
+            "has_subtitle": bool,
+            "duration_seconds": float,
+            "size_bytes": int,
+        }.items():
+            assert type(video[field]) is expected_type
 
-        for field in snake_case_fields:
-            # フィールドがレスポンスに含まれていることを必須とする
-            assert field in video, (
-                f"Required field '{field}' is missing in video response"
-            )
-            # 型が正しいことを確認（stringまたはnumber、boolean）
-            assert video[field] is None or isinstance(
-                video[field], (str, int, float, bool)
-            )
+        assert "video_id" not in video
 
-        # camelCase 形式のフィールドが混入していないことを検証
+        # camelCase形式のフィールドが混入していないことを検証
         for key in video.keys():
             assert not any(c.isupper() for c in key), (
                 f"Key '{key}' contains uppercase characters (expected snake_case)"
             )
 
-    def test_edited_video_snake_case_fields(self, client: TestClient) -> None:
-        """編集済みビデオのレスポンスがsnake_case形式であることを確認。"""
+    def test_edited_video_snake_case_fields(
+        self,
+        assets_mapper_contract_client: tuple[
+            TestClient, FileVideoAssetRepository
+        ],
+    ) -> None:
+        """非空の編集済み一覧を実HTTP JSONでsnake_caseに変換する。"""
+        client, repository = assets_mapper_contract_client
+        edited = repository.settings.edited_dir / "edited-contract.mkv"
+        edited.parent.mkdir(parents=True)
+        edited_bytes = b"synthetic-edited-video"
+        edited.write_bytes(edited_bytes)
+        edited.with_suffix(".srt").write_text("caption", encoding="utf-8")
+        edited.with_suffix(".png").write_bytes(b"thumbnail")
+        assert repository.save_edited_metadata_dict(
+            edited,
+            {"title": "Contract title", "description": "Contract description"},
+        )
+
         response = client.get("/api/assets/edited")
         assert response.status_code == status.HTTP_200_OK
 
         data = response.json()
-        if not data:
-            pytest.skip("編集済みビデオが存在しないためスキップ")
+        assert len(data) == 1
 
         video = data[0]
-        # Snake_case フィールドの存在確認
-        snake_case_fields = [
-            "has_subtitle",
-            "has_thumbnail",
-            "duration_seconds",
-            "updated_at",
-            "size_bytes",
-        ]
+        assert video["id"] == "edited/edited-contract.mkv"
+        assert video["path"] == str(edited)
+        assert video["filename"] == edited.name
+        assert video["source"] == "edited"
+        assert video["playable"] is True
+        assert video["recorded_video_ids"] == []
+        assert video["thumbnail_source"] == "edited"
+        assert video["thumbnail_filename"] == edited.name
+        assert video["duration_seconds"] == 123.5
+        assert video["has_subtitle"] is True
+        assert video["has_thumbnail"] is True
+        assert video["metadata"] == {
+            "title": "Contract title",
+            "description": "Contract description",
+        }
+        assert video["updated_at"]
+        assert video["size_bytes"] == len(edited_bytes)
+        assert video["title"] == "Contract title"
+        assert video["description"] == "Contract description"
+        for field, expected_type in {
+            "id": str,
+            "source": str,
+            "playable": bool,
+            "recorded_video_ids": list,
+            "duration_seconds": float,
+            "has_subtitle": bool,
+            "has_thumbnail": bool,
+            "metadata": dict,
+            "updated_at": str,
+            "size_bytes": int,
+            "title": str,
+            "description": str,
+        }.items():
+            assert type(video[field]) is expected_type
 
-        for field in snake_case_fields:
-            assert field in video, (
-                f"Required field '{field}' is missing in edited video response"
-            )
-            assert video[field] is None or isinstance(
-                video[field], (str, int, float, bool)
-            )
+        assert "video_id" not in video
 
         # camelCase 形式のフィールドが混入していないことを検証
         for key in video.keys():

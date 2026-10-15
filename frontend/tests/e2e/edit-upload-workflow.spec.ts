@@ -117,5 +117,9 @@ test('進捗ダイアログは一部画像APIが失敗しても動画枠とシ�
   expect(recordedAssetsResponse.ok()).toBeTruthy();
   expect(await recordedAssetsResponse.json()).toHaveLength(0);
 
+  const editedAssetsResponse = await page.request.get('/api/assets/edited');
+  expect(editedAssetsResponse.ok()).toBeTruthy();
+  expect(await editedAssetsResponse.json()).toHaveLength(0);
+
   await completionDialog.getByRole('button', { name: '閉じる' }).click();
 });

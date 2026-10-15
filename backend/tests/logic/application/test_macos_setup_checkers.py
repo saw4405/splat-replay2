@@ -166,7 +166,7 @@ def test_windows_tesseract_path_fallback_accepts_default_english_language(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr("sys.platform", "win32")
-    executable = "C:/Program Files/Tesseract-OCR/tesseract.exe"
+    executable = str(Path("C:/Program Files/Tesseract-OCR/tesseract.exe"))
     checker = TesseractChecker(
         FakeCommandPort(
             {
@@ -195,7 +195,7 @@ def test_windows_tesseract_path_fallback_requires_default_english_language(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr("sys.platform", "win32")
-    executable = "C:/Program Files/Tesseract-OCR/tesseract.exe"
+    executable = str(Path("C:/Program Files/Tesseract-OCR/tesseract.exe"))
     checker = TesseractChecker(
         FakeCommandPort(
             {

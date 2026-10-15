@@ -126,7 +126,7 @@ def test_macos_reads_enabled_from_default_user_config_without_logging_values(
         "[NDIPlugin]\nMainOutputEnabled=true\n[Private]\nvalue=do-not-log\n",
     )
     checker, logger = _checker(
-        Path("/Applications/OBS.app/Contents/MacOS/OBS"),
+        tmp_path / "OBS.app/Contents/MacOS/OBS",
         {"HOME": str(tmp_path)},
     )
 
@@ -145,7 +145,7 @@ def test_missing_or_false_setting_is_reported_disabled(
         "[NDIPlugin]\nMainOutputEnabled=false\n",
     )
     checker, _ = _checker(
-        Path("/Applications/OBS.app/Contents/MacOS/OBS"),
+        tmp_path / "OBS.app/Contents/MacOS/OBS",
         {"HOME": str(tmp_path)},
     )
 
@@ -159,7 +159,7 @@ def test_legacy_global_value_is_used_but_conflicting_values_are_unverified(
     config = tmp_path / "Library/Application Support/obs-studio"
     _write_ini(config / "global.ini", "[NDIPlugin]\nMainOutputEnabled=true\n")
     checker, _ = _checker(
-        Path("/Applications/OBS.app/Contents/MacOS/OBS"),
+        tmp_path / "OBS.app/Contents/MacOS/OBS",
         {"HOME": str(tmp_path)},
     )
     assert checker.check().status == "enabled"
@@ -183,7 +183,7 @@ def test_macos_reads_configured_location_and_falls_back_when_it_is_missing(
         "[NDIPlugin]\nMainOutputEnabled=true\n",
     )
     checker, _ = _checker(
-        Path("/Applications/OBS.app/Contents/MacOS/OBS"),
+        tmp_path / "OBS.app/Contents/MacOS/OBS",
         {"HOME": str(tmp_path)},
     )
     assert checker.check().status == "enabled"
@@ -211,7 +211,7 @@ def test_macos_relative_configuration_location_is_unverified(
         "[NDIPlugin]\nMainOutputEnabled=true\n",
     )
     checker, _ = _checker(
-        Path("/Applications/OBS.app/Contents/MacOS/OBS"),
+        tmp_path / "OBS.app/Contents/MacOS/OBS",
         {"HOME": str(tmp_path)},
     )
 
@@ -234,7 +234,7 @@ def test_existing_non_directory_configuration_location_is_unverified(
         "[NDIPlugin]\nMainOutputEnabled=true\n",
     )
     checker, _ = _checker(
-        Path("/Applications/OBS.app/Contents/MacOS/OBS"),
+        tmp_path / "OBS.app/Contents/MacOS/OBS",
         {"HOME": str(tmp_path)},
     )
 
@@ -282,7 +282,7 @@ def test_unparseable_config_is_unverified_instead_of_silent_success(
         "this is not an ini file",
     )
     checker, _ = _checker(
-        Path("/Applications/OBS.app/Contents/MacOS/OBS"),
+        tmp_path / "OBS.app/Contents/MacOS/OBS",
         {"HOME": str(tmp_path)},
     )
 
@@ -306,7 +306,7 @@ def test_local_websocket_matches_saved_server_settings_without_exposing_secret(
         ),
     )
     checker, logger = _checker(
-        Path("/Applications/OBS.app/Contents/MacOS/OBS"),
+        tmp_path / "OBS.app/Contents/MacOS/OBS",
         {"HOME": str(tmp_path)},
     )
 
@@ -347,7 +347,7 @@ def test_websocket_reads_global_module_config_not_location_override(
     if override_content is not None:
         _write_websocket_config_at(custom_base, override_content)
     checker, _ = _checker(
-        Path("/Applications/OBS.app/Contents/MacOS/OBS"),
+        tmp_path / "OBS.app/Contents/MacOS/OBS",
         {"HOME": str(tmp_path)},
     )
 
@@ -379,7 +379,7 @@ def test_websocket_checks_global_module_config_with_invalid_location_override(
         ),
     )
     checker, _ = _checker(
-        Path("/Applications/OBS.app/Contents/MacOS/OBS"),
+        tmp_path / "OBS.app/Contents/MacOS/OBS",
         {"HOME": str(tmp_path)},
     )
 
@@ -413,7 +413,7 @@ def test_complete_legacy_settings_take_precedence_over_conflicting_json(
         ),
     )
     checker, logger = _checker(
-        Path("/Applications/OBS.app/Contents/MacOS/OBS"),
+        tmp_path / "OBS.app/Contents/MacOS/OBS",
         {"HOME": str(tmp_path)},
     )
 
@@ -449,7 +449,7 @@ def test_partial_legacy_settings_are_unverified_even_with_ready_json(
         ),
     )
     checker, logger = _checker(
-        Path("/Applications/OBS.app/Contents/MacOS/OBS"),
+        tmp_path / "OBS.app/Contents/MacOS/OBS",
         {"HOME": str(tmp_path)},
     )
 
@@ -504,7 +504,7 @@ def test_complete_legacy_file_settings_are_compared_without_json(
         _legacy_websocket_section(overrides),
     )
     checker, logger = _checker(
-        Path("/Applications/OBS.app/Contents/MacOS/OBS"),
+        tmp_path / "OBS.app/Contents/MacOS/OBS",
         {"HOME": str(tmp_path)},
     )
 
@@ -542,7 +542,7 @@ def test_empty_or_unknown_legacy_websocket_section_does_not_block_json(
         ),
     )
     checker, _ = _checker(
-        Path("/Applications/OBS.app/Contents/MacOS/OBS"),
+        tmp_path / "OBS.app/Contents/MacOS/OBS",
         {"HOME": str(tmp_path)},
     )
 
@@ -567,7 +567,7 @@ def test_ipv4_mapped_ipv6_loopback_is_checked_locally(
         ),
     )
     checker, _ = _checker(
-        Path("/Applications/OBS.app/Contents/MacOS/OBS"),
+        tmp_path / "OBS.app/Contents/MacOS/OBS",
         {"HOME": str(tmp_path)},
     )
 
@@ -628,7 +628,7 @@ def test_local_websocket_reports_only_required_saved_config_mismatches(
     secret = str(config.get("server_password", ""))
     _write_websocket_config(tmp_path, json.dumps(config))
     checker, logger = _checker(
-        Path("/Applications/OBS.app/Contents/MacOS/OBS"),
+        tmp_path / "OBS.app/Contents/MacOS/OBS",
         {"HOME": str(tmp_path)},
     )
 
@@ -661,7 +661,7 @@ def test_unreadable_websocket_json_is_unverified_without_logging_content(
     secret = "do-not-log-websocket-password"
     _write_websocket_config(tmp_path, f"not-json {secret}")
     checker, logger = _checker(
-        Path("/Applications/OBS.app/Contents/MacOS/OBS"),
+        tmp_path / "OBS.app/Contents/MacOS/OBS",
         {"HOME": str(tmp_path)},
     )
 

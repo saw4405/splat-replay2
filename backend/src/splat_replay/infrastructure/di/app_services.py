@@ -20,6 +20,7 @@ from splat_replay.application.interfaces import (
     FileSystemPort,
     FramePublisher,
     LoggerPort,
+    OBSConfigurationCheckerPort,
     ReplayBootstrapResolverPort,
     RecorderWithTranscriptionPort,
     VideoAssetRepositoryPort,
@@ -78,9 +79,17 @@ from splat_replay.infrastructure.adapters.system.obs_configuration_checker impor
 from splat_replay.infrastructure.adapters.system.required_setup_issue_cache import (
     InMemoryRequiredSetupIssueCache,
 )
+from splat_replay.infrastructure.adapters.system.replay_runtime import (
+    ReplayOBSConfigurationChecker,
+    ReplaySoftwareChecker,
+)
+from splat_replay.infrastructure.di.runtime_profile import RuntimeProfile
 
 
-def register_app_services(container: Container) -> None:
+def register_app_services(
+    container: Container,
+    profile: RuntimeProfile = RuntimeProfile.LIVE,
+) -> None:
     """アプリケーションサービスを DI コンテナに登録する。"""
     app_settings = container.resolve(AppSettings)
     base_dir = app_settings.storage.base_dir
@@ -242,21 +251,35 @@ def register_app_services(container: Container) -> None:
     container.register(ErrorHandler, factory=error_handler_factory)
 
     # Software checkers
-    container.register(OBSChecker, OBSChecker)
+    if profile is RuntimeProfile.REPLAY:
+        # REPLAY は外部 OBS / DistroAV / NDI の存在だけを固定観測にする。
+        # FFmpeg、FLAC、Tesseract、フォント、OAuth JSON は実検査を保つ。
+        container.register(OBSChecker, factory=ReplaySoftwareChecker)
+        container.register(DistroAVChecker, factory=ReplaySoftwareChecker)
+        container.register(NDIRuntimeChecker, factory=ReplaySoftwareChecker)
+        container.register(
+            OBSConfigurationCheckerPort,
+            factory=ReplayOBSConfigurationChecker,
+        )
+    else:
+        container.register(OBSChecker, OBSChecker)
+        container.register(NDIRuntimeChecker, NDIRuntimeChecker)
+
     container.register(FFMPEGChecker, FFMPEGChecker)
     container.register(FLACChecker, FLACChecker)
     container.register(TesseractChecker, TesseractChecker)
-    container.register(NDIRuntimeChecker, NDIRuntimeChecker)
 
-    def distroav_checker_factory() -> DistroAVChecker:
-        return DistroAVChecker(
-            logger=container.resolve(LoggerPort),
-            file_system=container.resolve(FileSystemPort),
-            obs_checker=container.resolve(OBSChecker),
-            environment=container.resolve(EnvironmentPort),
-        )
+    if profile is RuntimeProfile.LIVE:
 
-    container.register(DistroAVChecker, factory=distroav_checker_factory)
+        def distroav_checker_factory() -> DistroAVChecker:
+            return DistroAVChecker(
+                logger=container.resolve(LoggerPort),
+                file_system=container.resolve(FileSystemPort),
+                obs_checker=container.resolve(OBSChecker),
+                environment=container.resolve(EnvironmentPort),
+            )
+
+        container.register(DistroAVChecker, factory=distroav_checker_factory)
 
     # SystemCheckService - Protocol型の依存を明示的に注入
     def system_check_service_factory() -> SystemCheckService:
@@ -276,12 +299,17 @@ def register_app_services(container: Container) -> None:
         file_system = container.resolve(FileSystemPort)
         environment = container.resolve(EnvironmentPort)
         logger = container.resolve(LoggerPort)
-        obs_configuration_checker = OBSConfigurationChecker(
-            obs_checker=obs_checker,
-            environment=environment,
-            file_system=file_system,
-            logger=logger,
-        )
+        if profile is RuntimeProfile.REPLAY:
+            obs_configuration_checker = container.resolve(
+                OBSConfigurationCheckerPort
+            )
+        else:
+            obs_configuration_checker = OBSConfigurationChecker(
+                obs_checker=obs_checker,
+                environment=environment,
+                file_system=file_system,
+                logger=logger,
+            )
 
         return SystemCheckService(
             obs_checker=obs_checker,

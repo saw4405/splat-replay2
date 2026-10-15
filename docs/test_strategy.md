@@ -60,6 +60,7 @@
 - ユーザー主要導線は `workflow` で守る。
 - 性能回帰は `performance` で別枠管理する。通常のマージ必須 gate には含めず、性能影響のある変更時とリリース前に使う。
 - `benchmark` と `coverage` は補助測定であり、保証分類ではない。
+- テスト件数、カバレッジ率、アプリが一度起動した事実だけでは、保証対象の振る舞い・配布物・各 OS の受け入れを示しません。
 
 ## 2. 分類と入口
 
@@ -120,6 +121,22 @@ backend の配置と marker:
 - 基本入口: `task.exe test:release`
 - 認識、解析、録画時間判定、閾値に関係する場合: `task.exe test:release:performance`
 
+### リリース検査の保証範囲
+
+各検査の合格は、その行に書いた対象だけを保証します。未実施の環境・導線は未確認として扱います。
+
+| 検査 | 保証する範囲 | 保証しない範囲・実行条件 |
+| ---- | ------------ | ------------------------ |
+| `test:release` | `verify` の静的検査・backend/frontend の通常テストと、全 bundled asset を使う `workflow:full` | ビルド済み配布物、実機、OS 権限、外部認証・外部サービスの実動作 |
+| `test:release:performance` | 上記と同じ release 回帰に、閾値付き `performance` を加えた範囲 | `test:release` の全工程を含むため、両方を続けて実行する必要はない |
+| replay workflow | replay 観測を受けた後の状態遷移、保存、API/UI、および対象 workflow で通る実 FFmpeg 編集・隔離 storage 処理（個々の assert 範囲は spec ごと） | REPLAY が固定観測に置き換える OBS/DistroAV/NDI の存在・構成、実機音声・キャプチャ、OS 権限、実 YouTube 認証・アップロード。詳細は [E2E の境界](./e2e_replay_test.md) を参照 |
+| 固定入力の lower integration / performance | 固定フレームに対する OCR/CV の認識結果・閾値・時間予算 | 動画全体や実機入力での認識品質、ユーザー workflow |
+| 配布物検査 | macOS の `build:macos:candidate` / `verify:macos:dmg` は arm64、識別子、署名、必須 asset、DMG 構造を検査。Windows の `task.exe build` は package を生成 | 構造検査はアプリ起動や実機連携を保証しない。Windows の `task.exe build` に macOS と同等の package 検証はない |
+| 実 OS・実機での受け入れ | 確認した OS・利用者 session・機器・導線で実際に観測した結果 | 他 OS、未操作の権限や機器、別 artifact へ一般化しない。認証情報の入力・新たな OS 権限の許可判断は本人が行う。実ゲーム・機器操作や実スリープは、本人操作または明示許可の範囲で実施する |
+| VM / WSL2 | 記録した VM/WSL2 構成での再現性・可搬性 | 実機、別 OS、最新候補の受け入れ。過去の候補・VM の結果を現候補の合格へ読み替えない |
+
+リリースの判定では、現候補の自動検査と実機での利用者確認を別々に記録し、revision / artifact、OS、実行した導線、未確認範囲を対応づけます。検査後にコードまたは artifact が変わった場合は、影響する検査を変更後の対象で再実行します。確認していない OS・外部連携・初回導入は、他の gate の成功から推定しません。同じ一般業務ロジックを Windows と macOS で全件重ねて実行する必要はありませんが、OS 固有の OCR / FFmpeg 条件、ファイルロック、分岐、package import / load は対象 OS ごとに確認します。常に全 OS で同じ実機確認を重ねるのではなく、変更とリリースで主張する保証に対応する検査を選びます。
+
 ## 4. テスト追加判断
 
 新規テストを書くとき:
@@ -130,6 +147,7 @@ backend の配置と marker:
 - ユーザー主要導線の追加・変更: `workflow:smoke` を追加または更新する。
 - 永続化、ファイル操作、非同期処理: 成功系、代表的な失敗系、cleanup / rollback / state reset のいずれかを確認する。
 - 認識、解析、閾値: 代表入力を fixture として固定する。
+- 必須 setup 判定を追加・変更するとき: 有効な保存設定 fixture では不足なしとなり、新たに必須とした項目の不足 fixture では不足 issue が返り gate が拒否することを `SetupService` の実判定で確認する。外部 checker の結果は fixture 化できるが、service 全体を mock して判定を通したことにしない。実機への導入・権限・外部認証は別の保証範囲として扱う。
 
 新規テストを書かないとき:
 
@@ -190,6 +208,8 @@ Performance:
 Workflow:
 
 - `workflow:smoke` は軽量でも、代表的なユーザー主要導線を実際に守る必要があります。
+- 起動成功、ready、HTTP 200 だけで workflow を合格にしない。対象導線に応じて UI の状態遷移と保存後の状態を確認し、録画なら生成ファイルと metadata、編集なら編集結果、失敗・キャンセルなら必要なデータの保持や復旧後の状態を観測する。毎回すべてを重複させず、その workflow が守る結果を assert する。
+- workflow の storage・設定・入力は隔離領域を使い、実利用者の設定・録画を変更しない。実アップロードを行わない E2E は明示した no-op 境界を使い、成功を外部サービスの成功に読み替えない。
 - smoke 用 fixture の選択で対象導線が全て skip される場合は偽合格です。recordable / no-video / error recovery など、導線ごとの前提に合う fixture を明示的に選ぶ。
 - `test:e2e -- --list` は spec の読み込みとテスト列挙だけを確認する入口です。workflow の成功として扱わない。
 - E2E を通すためだけに sidecar 期待値を緩めない。sidecar の変更は、仕様変更または実 fixture の source of truth 更新として説明できる場合だけ行う。

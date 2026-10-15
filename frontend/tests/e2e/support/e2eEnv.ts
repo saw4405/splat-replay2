@@ -32,7 +32,9 @@ export type E2EMode = 'smoke' | 'full';
 export type E2EEnvironment = {
   mode: E2EMode;
   rootDir: string;
+  configDir: string;
   settingsFile: string;
+  clientSecretFile: string;
   replayInputFile: string;
   storageDir: string;
   autoRecordingReplayDir: string;
@@ -250,10 +252,35 @@ function buildSettingsToml(storageDir: string): string {
     'vad_min_speech_frames = 3',
     'vad_min_speech_ratio = 0.1',
     '',
+    '[capture_device]',
+    'name = "E2E Replay Capture"',
+    '',
+    '[obs]',
+    'websocket_host = "127.0.0.1"',
+    'websocket_port = 4455',
+    'websocket_password = "e2e-only-not-a-real-password"',
+    '',
     '[storage]',
     `base_dir = "${escapeTomlString(storageDir)}"`,
     '',
+    '[upload]',
+    'privacy_status = "private"',
+    '',
   ].join('\n');
+}
+
+function writeE2EClientSecret(environment: E2EEnvironment): void {
+  mkdirSync(environment.configDir, { recursive: true });
+  const fixturePath = resolve(
+    SUPPORT_DIR,
+    '..',
+    '..',
+    'fixtures',
+    'e2e',
+    'setup',
+    'e2e-client-secret.json'
+  );
+  writeFileSync(environment.clientSecretFile, readFileSync(fixturePath, 'utf-8'), 'utf-8');
 }
 
 function buildInstallationStateToml(): string {
@@ -339,12 +366,15 @@ export function ensureE2EEnvironment(): E2EEnvironment {
   }
 
   const settingsFile = process.env.SPLAT_REPLAY_SETTINGS_FILE ?? join(rootDir, 'settings.toml');
+  const configDir = join(rootDir, 'config');
+  const clientSecretFile = join(configDir, 'client_secret.json');
   const replayInputFile = join(rootDir, 'e2e-replay-input.json');
   const storageDir = process.env.SPLAT_REPLAY_E2E_STORAGE_DIR ?? join(rootDir, 'videos');
   const allReplayAssets = listReplayAssets(autoRecordingReplayDir);
   const replayAssets = mode === 'smoke' ? [allReplayAssets[0]] : allReplayAssets;
 
   mkdirSync(rootDir, { recursive: true });
+  mkdirSync(configDir, { recursive: true });
   mkdirSync(storageDir, { recursive: true });
   mkdirSync(dirname(settingsFile), { recursive: true });
 
@@ -356,7 +386,9 @@ export function ensureE2EEnvironment(): E2EEnvironment {
   return {
     mode,
     rootDir,
+    configDir,
     settingsFile,
+    clientSecretFile,
     replayInputFile,
     storageDir,
     autoRecordingReplayDir,
@@ -366,6 +398,9 @@ export function ensureE2EEnvironment(): E2EEnvironment {
 
 export function bootstrapE2EEnvironment(force = false): E2EEnvironment {
   const environment = ensureE2EEnvironment();
+  if (force || !existsSync(environment.clientSecretFile)) {
+    writeE2EClientSecret(environment);
+  }
   if (force || process.env[BOOTSTRAP_FLAG] !== '1' || !existsSync(environment.settingsFile)) {
     writeFileSync(environment.settingsFile, buildSettingsToml(environment.storageDir), 'utf-8');
 
@@ -409,6 +444,7 @@ export function configureReplayAsset(
 
 export function resetE2EState(environment: E2EEnvironment): void {
   clearDirectoryContents(environment.storageDir);
+  writeE2EClientSecret(environment);
   writeFileSync(environment.settingsFile, buildSettingsToml(environment.storageDir), 'utf-8');
 
   // installation_state.tomlファイルを作成（YouTube権限ダイアログを承認済みに設定）
