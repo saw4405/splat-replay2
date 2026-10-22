@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any, cast
 
 import pytest
@@ -19,6 +20,7 @@ from splat_replay.application.services.system.power_manager import PowerManager
 from splat_replay.application.use_cases.assets.start_edit_upload import (
     StartEditUploadUseCase,
 )
+from splat_replay.domain.events import AutoProcessPending
 from splat_replay.domain.models import VideoAsset
 
 
@@ -49,8 +51,11 @@ class _Subscription:
 
 
 class _EventBus:
+    def __init__(self) -> None:
+        self.events: list[object] = []
+
     def publish_domain_event(self, event: object) -> None:
-        _ = event
+        self.events.append(event)
 
     def subscribe(self, event_types: set[str] | None = None) -> _Subscription:
         _ = event_types
@@ -95,7 +100,7 @@ class _ProcessUseCase:
         self.state = "idle"
 
     def is_running(self) -> bool:
-        return False
+        return self.state in ("running", "cancelling")
 
     def get_state(self) -> str:
         return self.state
@@ -153,6 +158,42 @@ async def _wait_until(predicate: Any) -> None:
             return
         await asyncio.sleep(0)
     raise AssertionError("条件が成立しませんでした")
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("state", "auto_processing", "expected_notice"),
+    [
+        ("idle", False, True),
+        ("running", False, False),
+        ("running", True, False),
+        ("cancelling", False, False),
+        ("cancelling", True, False),
+    ],
+)
+async def test_power_off_notice_only_when_process_is_not_running(
+    state: str, auto_processing: bool, expected_notice: bool
+) -> None:
+    repo = _Repository(["recorded/pending.mp4"])
+    use_case = _ProcessUseCase(repo)
+    use_case.state = state
+    service = _build_service(repo, use_case)
+    service._is_auto_processing = auto_processing
+
+    await service.handle_power_off_detected(
+        SimpleNamespace(payload={"final": True})
+    )
+
+    event_bus = cast(_EventBus, service.event_bus)
+    notices = [
+        event
+        for event in event_bus.events
+        if isinstance(event, AutoProcessPending)
+    ]
+    assert bool(notices) is expected_notice
+    assert service.power_off_count == 1
+    assert service._scan_generation == 1
+    assert not service.is_idle()
 
 
 @pytest.mark.asyncio

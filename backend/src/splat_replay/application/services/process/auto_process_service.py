@@ -168,17 +168,17 @@ class AutoProcessService:
             "電源OFFを検出しました。自動編集・アップロードをスケジュールします。"
         )
 
-        # 1. 自動処理開始予告イベントを発行
         timeout_seconds = 15.0
-        self.event_bus.publish_domain_event(
-            AutoProcessPending(
-                timeout_seconds=timeout_seconds,
-                message=(
-                    "電源OFFを検知しました。15秒後に自動編集・アップロードを開始します。"
-                    "不要な場合はキャンセルしてください。"
+        if not self.start_edit_upload_uc.is_running():
+            self.event_bus.publish_domain_event(
+                AutoProcessPending(
+                    timeout_seconds=timeout_seconds,
+                    message=(
+                        "電源OFFを検知しました。15秒後に自動編集・アップロードを開始します。"
+                        "不要な場合はキャンセルしてください。"
+                    ),
                 ),
             )
-        )
         self._request_scan(delay_seconds=timeout_seconds)
 
     def _has_pending_assets(self) -> bool:
