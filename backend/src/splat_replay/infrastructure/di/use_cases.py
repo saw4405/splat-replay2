@@ -14,7 +14,7 @@ from splat_replay.application.interfaces import (
     ImageSelector,
     LoggerPort,
     PathsPort,
-    ThumbnailFontResolverPort,
+    ThumbnailRuleImageResolverPort,
     VideoAssetRepositoryPort,
     VideoEditorPort,
 )
@@ -84,7 +84,9 @@ def register_app_usecases(container: punq.Container) -> None:
                 paths=container.resolve(PathsPort),
                 image_selector=container.resolve(ImageSelector),
                 file_system=file_system,
-                font_resolver=container.resolve(ThumbnailFontResolverPort),
+                rule_image_resolver=container.resolve(
+                    ThumbnailRuleImageResolverPort
+                ),
             ),
             file_system=file_system,
         )

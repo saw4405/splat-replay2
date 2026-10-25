@@ -18,7 +18,7 @@ from splat_replay.application.interfaces import (
     LoggerPort,
     PathsPort,
     RequiredSetupConfigPort,
-    ThumbnailFontResolverPort,
+    ThumbnailRuleImageResolverPort,
 )
 from splat_replay.application.services import AutoRecorder
 from splat_replay.application.services.common.queries import AssetQueryService
@@ -34,8 +34,8 @@ from splat_replay.infrastructure.adapters.system.cross_cutting import (
 from splat_replay.infrastructure.adapters.system.replay_runtime import (
     ReplayPathsAdapter,
 )
-from splat_replay.infrastructure.adapters.image.thumbnail_font_resolver import (
-    ThumbnailFontResolver,
+from splat_replay.infrastructure.adapters.image.thumbnail_rule_image_resolver import (
+    ThumbnailRuleImageResolver,
 )
 from splat_replay.infrastructure.di.adapters import register_adapters
 from splat_replay.infrastructure.di.app_services import register_app_services
@@ -93,8 +93,8 @@ def configure_container(
 
     container.register(PathsPort, instance=paths_adapter)
     container.register(
-        ThumbnailFontResolverPort,
-        ThumbnailFontResolver,
+        ThumbnailRuleImageResolverPort,
+        ThumbnailRuleImageResolver,
         scope=punq.Scope.singleton,
     )
 

@@ -20,9 +20,6 @@ from splat_replay.application.interfaces.common import (
     LoggerPort,
     PathsPort,
 )
-from splat_replay.application.interfaces.thumbnail_font import (
-    ThumbnailFontResolverPort,
-)
 from splat_replay.application.interfaces.system import EnvironmentPort
 from splat_replay.application.interfaces.system import (
     OBSMainOutputCheckResult,
@@ -57,7 +54,7 @@ class SystemCheckService:
     責務:
     - 各種チェッカーの統合
     - 環境変数・ファイル存在チェック
-    - フォント・認証情報・NDI Runtimeのチェック
+    - 認証情報・NDI Runtimeのチェック
     """
 
     def __init__(
@@ -67,7 +64,6 @@ class SystemCheckService:
         tesseract_checker: SoftwareChecker,
         flac_checker: SoftwareChecker,
         ndi_checker: SoftwareChecker,
-        font_resolver: ThumbnailFontResolverPort,
         paths: PathsPort,
         file_system: FileSystemPort,
         environment: EnvironmentPort,
@@ -89,7 +85,6 @@ class SystemCheckService:
         self._tesseract_checker = tesseract_checker
         self._flac_checker = flac_checker
         self._ndi_checker = ndi_checker
-        self._font_resolver = font_resolver
         self._paths = paths
         self._file_system = file_system
         self._environment = environment
@@ -180,45 +175,6 @@ class SystemCheckService:
         )
 
         return exists
-
-    def check_font_installation(
-        self, font_name: str = "ikamodoki1"
-    ) -> SoftwareCheckResult:
-        """フォントのインストール状態を確認する。
-
-        Args:
-            font_name: 確認するフォント名（拡張子なし）
-
-        Returns:
-            フォントのチェック結果
-        """
-        self._logger.info("Checking font installation", font_name=font_name)
-
-        try:
-            font_path = self._paths.get_thumbnail_asset(f"{font_name}.ttf")
-            resolved_path = self._font_resolver.resolve(font_path)
-            if resolved_path is not None:
-                self._logger.info("Font found", path=str(resolved_path))
-                return SoftwareCheckResult(
-                    is_installed=True,
-                    installation_path=resolved_path,
-                )
-
-            self._logger.info(
-                "Font not found", font_name=font_name, font_path=str(font_path)
-            )
-            return SoftwareCheckResult(
-                is_installed=False,
-                error_message=(
-                    f"{font_name}.ttf と OS 標準の日本語フォントが見つかりませんでした"
-                ),
-            )
-        except Exception as e:
-            self._logger.error("Font check error", error=str(e))
-            return SoftwareCheckResult(
-                is_installed=False,
-                error_message=f"フォント確認中にエラーが発生しました: {e}",
-            )
 
     def check_youtube_credentials(self) -> SoftwareCheckResult:
         """YouTube OAuth client JSON を読み、必要な項目を検証する。

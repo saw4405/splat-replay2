@@ -8,7 +8,6 @@
     OBSSetup,
     FFMPEGSetup,
     TesseractSetup,
-    FontInstallation,
     TranscriptionSetup,
     YouTubeSetup,
   } from './components/steps';
@@ -31,9 +30,6 @@
           break;
         case SetupStep.TESSERACT_SETUP:
           currentStepComponent = TesseractSetup;
-          break;
-        case SetupStep.FONT_INSTALLATION:
-          currentStepComponent = FontInstallation;
           break;
         case SetupStep.TRANSCRIPTION_SETUP:
           currentStepComponent = TranscriptionSetup;

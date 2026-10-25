@@ -102,8 +102,8 @@ from splat_replay.application.interfaces.upload import (
     AuthenticatedClientPort,
     UploadPort,
 )
-from splat_replay.application.interfaces.thumbnail_font import (
-    ThumbnailFontResolverPort,
+from splat_replay.application.interfaces.thumbnail_rule_image import (
+    ThumbnailRuleImageResolverPort,
 )
 from splat_replay.application.interfaces.video import (
     FramePreviewPort,
@@ -145,7 +145,7 @@ __all__ = [
     "LoggerPort",
     "PathsPort",
     "RequiredSetupConfigPort",
-    "ThumbnailFontResolverPort",
+    "ThumbnailRuleImageResolverPort",
     # Data
     "AudioInputHealthCheckResult",
     "AudioInputHealthStatus",

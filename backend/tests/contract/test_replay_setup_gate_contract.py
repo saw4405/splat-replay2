@@ -113,13 +113,6 @@ def _create_replay_setup_client(
         "check_tesseract_installation",
         lambda self: SoftwareCheckResult(is_installed=True),
     )
-    monkeypatch.setattr(
-        SystemCheckService,
-        "check_font_installation",
-        lambda self, font_name="ikamodoki1": SoftwareCheckResult(
-            is_installed=True
-        ),
-    )
 
     container = configure_container(profile=RuntimeProfile.REPLAY)
     assert isinstance(resolve(container, UploadPort), NoOpUploadPort)

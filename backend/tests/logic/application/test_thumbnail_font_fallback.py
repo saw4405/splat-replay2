@@ -10,19 +10,14 @@ from splat_replay.application.interfaces import (
     ImageSelector,
     LoggerPort,
     OBSMainOutputCheckResult,
-    OBSConfigurationCheckerPort,
     PathsPort,
-    ThumbnailFontResolverPort,
+    ThumbnailRuleImageResolverPort,
 )
 from splat_replay.application.services.editing.thumbnail_generator import (
     ThumbnailGenerator,
 )
 from splat_replay.application.services.setup.system_check_service import (
     SoftwareCheckResult,
-    SystemCheckService,
-)
-from splat_replay.application.services.system.software_checker import (
-    SoftwareChecker,
 )
 from splat_replay.domain.models import (
     BattleResult,
@@ -45,7 +40,7 @@ class _Logger:
         _ = event, kw
 
 
-class _FontResolver:
+class _ImageResolver:
     def __init__(self, resolved: Path | None) -> None:
         self.resolved = resolved
         self.preferred_paths: list[Path] = []
@@ -134,28 +129,6 @@ class _Drawer:
         path.write_bytes(b"thumbnail")
 
 
-def _system_check_service(
-    root: Path, resolver: _FontResolver
-) -> SystemCheckService:
-    checker = cast(SoftwareChecker, _Checker())
-    return SystemCheckService(
-        obs_checker=checker,
-        ffmpeg_checker=checker,
-        tesseract_checker=checker,
-        flac_checker=checker,
-        ndi_checker=checker,
-        font_resolver=cast(ThumbnailFontResolverPort, resolver),
-        paths=cast(PathsPort, _Paths(root)),
-        file_system=cast(FileSystemPort, _FileSystem()),
-        environment=cast(Any, _Environment()),
-        logger=cast(LoggerPort, _Logger()),
-        distroav_checker=checker,
-        obs_configuration_checker=cast(
-            OBSConfigurationCheckerPort, _OBSConfigurationChecker()
-        ),
-    )
-
-
 def _asset(tmp_path: Path) -> VideoAsset:
     video = tmp_path / "match.mp4"
     thumbnail = tmp_path / "match.png"
@@ -180,57 +153,34 @@ def _asset(tmp_path: Path) -> VideoAsset:
     )
 
 
-def test_setup_check_accepts_the_same_resolved_system_font(
+def test_thumbnail_uses_rule_image_and_rejects_missing_image(
     tmp_path: Path,
 ) -> None:
-    fallback = tmp_path / "Hiragino Sans.ttc"
-    resolver = _FontResolver(fallback)
-
-    result = _system_check_service(
-        tmp_path, resolver
-    ).check_font_installation()
-
-    assert result.is_installed
-    assert result.installation_path == fallback
-    assert resolver.preferred_paths == [tmp_path / "ikamodoki1.ttf"]
-
-
-def test_setup_check_does_not_report_success_without_a_usable_font(
-    tmp_path: Path,
-) -> None:
-    result = _system_check_service(
-        tmp_path, _FontResolver(None)
-    ).check_font_installation()
-
-    assert not result.is_installed
-    assert "日本語フォント" in (result.error_message or "")
-
-
-def test_thumbnail_uses_resolved_font_and_fails_when_no_fallback_exists(
-    tmp_path: Path,
-) -> None:
-    fallback = tmp_path / "Hiragino Sans.ttc"
-    resolver = _FontResolver(fallback)
+    fallback = tmp_path / "label.png"
+    resolver = _ImageResolver(fallback)
     drawer = _Drawer()
     generator = ThumbnailGenerator(
         logger=cast(LoggerPort, _Logger()),
         paths=cast(PathsPort, _Paths(tmp_path)),
         image_selector=cast(ImageSelector, lambda *_args: drawer),
         file_system=cast(FileSystemPort, _FileSystem()),
-        font_resolver=cast(ThumbnailFontResolverPort, resolver),
+        rule_image_resolver=cast(ThumbnailRuleImageResolverPort, resolver),
     )
 
     output = generator.create([_asset(tmp_path)])
 
     assert output is not None
-    assert str(fallback) in drawer.font_names
+    assert str(fallback) not in drawer.font_names
+    assert resolver.preferred_paths == [tmp_path / "rule-labels/rainmaker.png"]
 
     unavailable_generator = ThumbnailGenerator(
         logger=cast(LoggerPort, _Logger()),
         paths=cast(PathsPort, _Paths(tmp_path)),
         image_selector=cast(ImageSelector, lambda *_args: _Drawer()),
         file_system=cast(FileSystemPort, _FileSystem()),
-        font_resolver=cast(ThumbnailFontResolverPort, _FontResolver(None)),
+        rule_image_resolver=cast(
+            ThumbnailRuleImageResolverPort, _ImageResolver(None)
+        ),
     )
-    with pytest.raises(RuntimeError, match="日本語フォントを利用できません"):
+    with pytest.raises(RuntimeError, match="ルール名画像が未配置または不正"):
         unavailable_generator.create([_asset(tmp_path)])

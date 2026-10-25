@@ -414,11 +414,16 @@ function Invoke-DesktopDeployCopy {
 
     Copy-Item -LiteralPath $sourceInternalDir -Destination $DestinationDir -Recurse -Force -ErrorAction Stop
 
-    # 再配布対象外の個別導入フォントは、assets の更新でも保持する。
-    $userFontPath = Join-Path $targetAssetsDir "thumbnail\ikamodoki1.ttf"
-    $userFontBytes = if (Test-Path -LiteralPath $userFontPath -PathType Leaf) {
-        [System.IO.File]::ReadAllBytes($userFontPath)
-    } else { $null }
+    # 配布物にない利用者追加ファイルは、assets 更新でも保持する。
+    $userAssets = @{}
+    if (Test-Path -LiteralPath $targetAssetsDir) {
+        foreach ($file in Get-ChildItem -LiteralPath $targetAssetsDir -File -Recurse) {
+            $relative = $file.FullName.Substring($targetAssetsDir.Length).TrimStart([char[]]'\/')
+            if (-not (Test-Path -LiteralPath (Join-Path $sourceAssetsDir $relative))) {
+                $userAssets[$relative] = [System.IO.File]::ReadAllBytes($file.FullName)
+            }
+        }
+    }
     try {
         if (Test-Path -LiteralPath $targetAssetsDir) {
             Remove-Item -LiteralPath $targetAssetsDir -Recurse -Force -ErrorAction Stop
@@ -426,9 +431,10 @@ function Invoke-DesktopDeployCopy {
         Copy-Item -LiteralPath $sourceAssetsDir -Destination $DestinationDir -Recurse -Force -ErrorAction Stop
     }
     finally {
-        if ($null -ne $userFontBytes) {
-            [System.IO.Directory]::CreateDirectory((Split-Path -Parent $userFontPath)) | Out-Null
-            [System.IO.File]::WriteAllBytes($userFontPath, [byte[]]$userFontBytes)
+        foreach ($relative in $userAssets.Keys) {
+            $path = Join-Path $targetAssetsDir $relative
+            [System.IO.Directory]::CreateDirectory((Split-Path -Parent $path)) | Out-Null
+            [System.IO.File]::WriteAllBytes($path, [byte[]]$userAssets[$relative])
         }
     }
 

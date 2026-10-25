@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+from dataclasses import replace
 from pathlib import Path
+
+import pytest
 from typing import Any, cast
 
 from splat_replay.application.interfaces import (
@@ -8,7 +11,7 @@ from splat_replay.application.interfaces import (
     ImageSelector,
     LoggerPort,
     PathsPort,
-    ThumbnailFontResolverPort,
+    ThumbnailRuleImageResolverPort,
 )
 from splat_replay.application.services.editing.thumbnail_generator import (
     ThumbnailGenerator,
@@ -66,6 +69,7 @@ class _Drawer:
     def __init__(self, out: Path) -> None:
         self.out = out
         self.drawn_texts: list[str] = []
+        self.drawn_images: list[tuple[Path, tuple[int, int]]] = []
         self.drawn_text_calls: list[tuple[str, dict[str, Any]]] = []
 
     def draw_text_with_outline(
@@ -80,7 +84,7 @@ class _Drawer:
         return self
 
     def draw_image(self, *args: Any, **kw: Any) -> "_Drawer":
-        _ = args, kw
+        self.drawn_images.append((args[0], args[1]))
         return self
 
     def draw_text(self, text: str, *args: Any, **kw: Any) -> "_Drawer":
@@ -164,7 +168,9 @@ def _generator(
         paths=cast(PathsPort, _Paths(tmp_path)),
         image_selector=cast(ImageSelector, selector),
         file_system=cast(FileSystemPort, _FileSystem()),
-        font_resolver=cast(ThumbnailFontResolverPort, _FontResolver()),
+        rule_image_resolver=cast(
+            ThumbnailRuleImageResolverPort, _FontResolver()
+        ),
     )
     return generator, selector
 
@@ -272,7 +278,34 @@ def test_thumbnail_returns_none_when_no_source_thumbnail_is_available(
         paths=cast(PathsPort, _Paths(tmp_path)),
         image_selector=cast(ImageSelector, select_missing_image),
         file_system=cast(FileSystemPort, _FileSystem()),
-        font_resolver=cast(ThumbnailFontResolverPort, _FontResolver()),
+        rule_image_resolver=cast(
+            ThumbnailRuleImageResolverPort, _FontResolver()
+        ),
     )
 
     assert generator.create([asset]) is None
+
+
+@pytest.mark.parametrize("rule", list(Rule))
+def test_rule_name_uses_image_at_fixed_position_without_japanese_font(
+    tmp_path: Path, rule: Rule
+) -> None:
+    generator, selector = _generator(tmp_path)
+    asset = _asset(
+        tmp_path=tmp_path, name="battle", match=Match.REGULAR, rate=XP(2000)
+    )
+    assert asset.metadata is not None and isinstance(
+        asset.metadata.result, BattleResult
+    )
+    asset = replace(
+        asset,
+        metadata=replace(
+            asset.metadata, result=replace(asset.metadata.result, rule=rule)
+        ),
+    )
+    assert generator.create([asset]) is not None
+    assert (
+        tmp_path / f"rule-labels/{rule.name.lower()}.png",
+        (1120, 71),
+    ) in selector.drawer.drawn_images
+    assert rule.value not in selector.drawer.drawn_texts

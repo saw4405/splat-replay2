@@ -285,7 +285,6 @@ def register_app_services(
     def system_check_service_factory() -> SystemCheckService:
         from splat_replay.application.interfaces import (
             PathsPort,
-            ThumbnailFontResolverPort,
         )
 
         obs_checker = container.resolve(OBSChecker)
@@ -294,7 +293,6 @@ def register_app_services(
         flac_checker = container.resolve(FLACChecker)
         ndi_checker = container.resolve(NDIRuntimeChecker)
         distroav_checker = container.resolve(DistroAVChecker)
-        font_resolver = container.resolve(ThumbnailFontResolverPort)
         paths = container.resolve(PathsPort)
         file_system = container.resolve(FileSystemPort)
         environment = container.resolve(EnvironmentPort)
@@ -317,7 +315,6 @@ def register_app_services(
             tesseract_checker=tesseract_checker,
             flac_checker=flac_checker,
             ndi_checker=ndi_checker,
-            font_resolver=font_resolver,
             paths=paths,
             file_system=file_system,
             environment=environment,

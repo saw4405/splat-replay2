@@ -87,6 +87,9 @@ class SetupStateSerializer:
             SetupStep,
             SetupStep.HARDWARE_CHECK,
         )
+        # 廃止した手順で中断した旧設定は、次の有効手順へ進める。
+        if current_step is SetupStep.FONT_INSTALLATION:
+            current_step = SetupStep.TRANSCRIPTION_SETUP
         completed_steps = self._extract_enum_list(
             installer_data, "completed_steps", SetupStep
         )

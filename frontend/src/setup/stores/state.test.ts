@@ -28,7 +28,7 @@ describe('setup progressInfo', () => {
 
     expect(get(progressInfo)).toMatchObject({
       current_step_index: 1,
-      total_steps: 7,
+      total_steps: 6,
       current_step_name: SetupStep.FFMPEG_SETUP,
     });
   });

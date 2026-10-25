@@ -277,7 +277,7 @@ def test_deploy_replaces_assets_without_touching_user_data(
         deploy_dir / "outputs" / "result.mp4": b"output",
         deploy_dir / "logs" / "app.log": b"log",
     }
-    font_path = deploy_dir / "assets" / "thumbnail" / "ikamodoki1.ttf"
+    font_path = deploy_dir / "assets" / "thumbnail" / "user-note.txt"
     if has_user_font:
         user_data[font_path] = b"user-installed font"
     for path, contents in user_data.items():

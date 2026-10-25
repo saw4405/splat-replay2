@@ -245,7 +245,6 @@ tasks:
           test ! -e "$app/Contents/Resources/config/settings.toml"
           test ! -e "$app/Contents/Resources/videos"
           test -z "$(find "$app" -name flac-mac -print -quit)"
-          test -z "$(find "$app" -name ikamodoki1.ttf -print -quit)"
           "{{.VENV_PYTHON}}" scripts/macos_code_signing.py verify "$app"
         platforms: [darwin]
       - cmd: echo "Verified {{.DIST_ROOT}}/SplatReplay.app (arm64, io.github.saw4405.splatreplay)"
@@ -376,7 +375,6 @@ tasks:
   build:remove-restricted:
     desc: Remove redistribution-prohibited files
     cmds:
-      - cmd: powershell -NoProfile -Command "if (Test-Path '{{.BUILD_DIST_DIR}}\assets\thumbnail\ikamodoki1.ttf') { Remove-Item -Force '{{.BUILD_DIST_DIR}}\assets\thumbnail\ikamodoki1.ttf' }"
         ignore_error: true
 
   build:create-build-warning:

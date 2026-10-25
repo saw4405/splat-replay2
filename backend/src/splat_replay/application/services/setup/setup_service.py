@@ -159,14 +159,6 @@ class SetupService:
             substep_id="tesseract-install",
             message="Tesseract OCR が利用できません。",
         )
-        self._append_software_issue(
-            issues,
-            self._system_check_service.check_font_installation,
-            code="japanese_font_unavailable",
-            step=SetupStep.FONT_INSTALLATION,
-            substep_id="font-place",
-            message="サムネイル表示に使える日本語フォントがありません。付属フォントまたは OS の日本語フォントを利用できるようにしてください。",
-        )
 
         self._append_saved_configuration_issues(
             issues, obs_installed=obs_installed

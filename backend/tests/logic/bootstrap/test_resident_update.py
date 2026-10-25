@@ -61,7 +61,7 @@ def test_update_preserves_data_and_rolls_back(
         "videos/recorded/a.mp4",
         "outputs/file",
         "logs/file",
-        "assets/thumbnail/ikamodoki1.ttf",
+        "assets/thumbnail/user-note.txt",
     ):
         file = target / name
         file.parent.mkdir(parents=True, exist_ok=True)
@@ -102,7 +102,7 @@ Write-Output ('RESULT:' + (@{{ failed = $failed }} | ConvertTo-Json -Compress))
         "videos/recorded/a.mp4",
         "outputs/file",
         "logs/file",
-        "assets/thumbnail/ikamodoki1.ttf",
+        "assets/thumbnail/user-note.txt",
     ):
         assert (target / name).read_text() == "keep"
 

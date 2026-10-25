@@ -57,7 +57,6 @@
     SetupStep.FFMPEG_SETUP,
     SetupStep.OBS_SETUP,
     SetupStep.TESSERACT_SETUP,
-    SetupStep.FONT_INSTALLATION,
     SetupStep.TRANSCRIPTION_SETUP,
     SetupStep.YOUTUBE_SETUP,
   ];

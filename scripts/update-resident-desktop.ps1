@@ -67,11 +67,17 @@ function Invoke-ResidentUpdateCore {
     $backup = Join-Path $transaction 'previous'
     New-Item -ItemType Directory -Path $candidate, $backup | Out-Null
     foreach ($part in $parts) { Copy-Item -LiteralPath (Join-Path $sourcePath $part) -Destination $candidate -Recurse -ErrorAction Stop }
-    $font = Join-Path $targetPath 'assets\thumbnail\ikamodoki1.ttf'
-    if (Test-Path -LiteralPath $font) {
-        $fontDir = Join-Path $candidate 'assets\thumbnail'
-        New-Item -ItemType Directory -Path $fontDir -Force | Out-Null
-        Copy-Item -LiteralPath $font -Destination $fontDir -Force
+    $targetAssets = Join-Path $targetPath 'assets'
+    $candidateAssets = Join-Path $candidate 'assets'
+    if (Test-Path -LiteralPath $targetAssets) {
+        foreach ($file in Get-ChildItem -LiteralPath $targetAssets -File -Recurse) {
+            $relative = $file.FullName.Substring($targetAssets.Length).TrimStart([char[]]'\/')
+            $destination = Join-Path $candidateAssets $relative
+            if (-not (Test-Path -LiteralPath $destination)) {
+                New-Item -ItemType Directory -Path (Split-Path -Parent $destination) -Force | Out-Null
+                Copy-Item -LiteralPath $file.FullName -Destination $destination
+            }
+        }
     }
     $oldProcesses = @(Get-TargetProcesses $executable)
     if ($oldProcesses.Count -gt 0) {

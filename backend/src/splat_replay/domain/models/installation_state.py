@@ -27,7 +27,6 @@ class SetupStep(Enum):
             cls.FFMPEG_SETUP,
             cls.OBS_SETUP,
             cls.TESSERACT_SETUP,
-            cls.FONT_INSTALLATION,
             cls.TRANSCRIPTION_SETUP,
             cls.YOUTUBE_SETUP,
         ]
@@ -61,7 +60,6 @@ class SetupStep(Enum):
             SetupStep.FFMPEG_SETUP: "FFMPEGセットアップ",
             SetupStep.OBS_SETUP: "OBSセットアップ",
             SetupStep.TESSERACT_SETUP: "Tesseractセットアップ",
-            SetupStep.FONT_INSTALLATION: "フォントインストール",
             SetupStep.TRANSCRIPTION_SETUP: "文字起こし設定",
             SetupStep.YOUTUBE_SETUP: "YouTube API設定",
         }
@@ -254,7 +252,9 @@ class SetupState:
         if total_steps == 0:
             return 100.0
 
-        processed_steps = len(self.completed_steps) + len(self.skipped_steps)
+        processed_steps = len(
+            set(self.completed_steps + self.skipped_steps) & set(all_steps)
+        )
         return (processed_steps / total_steps) * 100.0
 
     def get_remaining_steps(self) -> List[SetupStep]:

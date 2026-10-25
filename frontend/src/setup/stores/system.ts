@@ -13,7 +13,7 @@ import { API_BASE_URL, isLoading, error, handleApiError, safeParseJson } from '.
  * システムチェックを実行
  */
 export async function checkSystem(
-  software: 'obs' | 'ffmpeg' | 'tesseract' | 'flac' | 'font' | 'youtube' | 'ndi'
+  software: 'obs' | 'ffmpeg' | 'tesseract' | 'flac' | 'youtube' | 'ndi'
 ): Promise<SystemCheckResult> {
   isLoading.set(true);
   error.set(null);

@@ -71,7 +71,6 @@ def make_service(
         "check_obs_main_output",
         "check_obs_websocket_configuration",
         "check_tesseract_installation",
-        "check_font_installation",
         "check_flac_installation",
         "check_youtube_credentials",
     ):
@@ -344,3 +343,9 @@ def test_explicit_repair_selection_can_choose_later_issue_without_rewind() -> (
     # The initial legacy repair route must not override an explicit target.
     service.get_required_setup_issues(repair_legacy_state=True)
     assert repository.state.current_step is SetupStep.OBS_SETUP
+
+
+def test_removed_image_setup_check_does_not_gate_startup() -> None:
+    service, _, checks, _ = make_service()
+    assert not hasattr(SystemCheckService, "check_font_installation")
+    assert service.get_required_setup_issues(force_refresh=True) == []

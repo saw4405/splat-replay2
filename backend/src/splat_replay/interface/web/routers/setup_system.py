@@ -142,10 +142,6 @@ def create_setup_system_router(
                 result = await run_in_threadpool(
                     system_check_service.check_distroav_installation
                 )
-            elif software == "font":
-                result = await run_in_threadpool(
-                    system_check_service.check_font_installation
-                )
             elif software == "youtube":
                 result = await run_in_threadpool(
                     system_check_service.check_youtube_credentials

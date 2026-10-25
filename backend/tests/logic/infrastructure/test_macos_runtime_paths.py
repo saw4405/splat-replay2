@@ -410,8 +410,8 @@ def test_macos_thumbnail_assets_prefer_user_files_and_fall_back_to_bundle(
     assert adapter.get_thumbnail_asset("stage.png") == (
         bundled_thumbnail_dir / "stage.png"
     )
-    assert adapter.get_thumbnail_asset("ikamodoki1.ttf") == (
-        user_thumbnail_dir / "ikamodoki1.ttf"
+    assert adapter.get_thumbnail_asset("user-note.txt") == (
+        user_thumbnail_dir / "user-note.txt"
     )
 
     user_thumbnail_dir.mkdir(parents=True)

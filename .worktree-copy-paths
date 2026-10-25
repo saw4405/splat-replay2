@@ -8,4 +8,3 @@ backend/config/client_secret.json
 backend/config/installation_state.toml
 backend/config/settings.toml
 backend/config/token.pickle
-backend/assets/thumbnail/ikamodoki1.ttf

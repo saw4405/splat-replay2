@@ -16,7 +16,6 @@ from splat_replay.application.interfaces import (
     LoggerPort,
     OBSConfigurationCheckerPort,
     PathsPort,
-    ThumbnailFontResolverPort,
 )
 from splat_replay.application.services.setup.system_check_service import (
     SystemCheckService,
@@ -50,7 +49,6 @@ def _system_check_service(
         tesseract_checker=checker,
         flac_checker=checker,
         ndi_checker=checker,
-        font_resolver=cast(ThumbnailFontResolverPort, MagicMock()),
         paths=cast(
             PathsPort,
             SimpleNamespace(get_config_dir=lambda: config_dir),

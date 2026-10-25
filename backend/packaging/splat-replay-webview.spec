@@ -49,7 +49,7 @@ if is_macos:
             str(Path('assets') / path.relative_to(assets_root).parent),
         )
         for path in assets_root.rglob('*')
-        if path.is_file() and path.name != 'ikamodoki1.ttf'
+        if path.is_file()
     )
     datas.append(
         (str(backend_root / 'config' / 'image_matching.yaml'), 'config')

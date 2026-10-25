@@ -10,8 +10,6 @@
 
 from __future__ import annotations
 
-from pathlib import Path
-
 import pytest
 from fastapi import status
 from fastapi.testclient import TestClient
@@ -315,7 +313,7 @@ class TestSystemCheckEndpoints:
 
     @pytest.mark.parametrize(
         "software",
-        ["obs", "ffmpeg", "tesseract", "flac", "ndi", "font", "youtube"],
+        ["obs", "ffmpeg", "tesseract", "flac", "ndi", "youtube"],
     )
     def test_check_system_software(
         self,
@@ -330,7 +328,6 @@ class TestSystemCheckEndpoints:
             "check_tesseract_installation",
             "check_flac_installation",
             "check_ndi_runtime_installation",
-            "check_font_installation",
             "check_youtube_credentials",
         ):
             monkeypatch.setattr(
@@ -366,28 +363,10 @@ class TestSystemCheckEndpoints:
         response = client.get("/setup/system/check/invalid_software")
         assert response.status_code == status.HTTP_400_BAD_REQUEST
 
-    def test_font_check_returns_the_resolved_os_font_path(
-        self, client: TestClient, monkeypatch: pytest.MonkeyPatch
+    def test_removed_font_check_is_not_a_setup_requirement(
+        self, client: TestClient
     ) -> None:
-        """フォント確認は代替 OS フォントの利用可能性を返す。"""
-        fallback_path = Path("/System/Library/Fonts/Hiragino Sans.ttc")
-        monkeypatch.setattr(
-            SystemCheckService,
-            "check_font_installation",
-            lambda self: SoftwareCheckResult(
-                is_installed=True, installation_path=fallback_path
-            ),
-        )
-
-        response = client.get("/setup/system/check/font")
-
-        assert response.status_code == status.HTTP_200_OK
-        assert response.json() == {
-            "is_installed": True,
-            "version": None,
-            "installation_path": str(fallback_path),
-            "error_message": None,
-        }
+        assert client.get("/setup/system/check/font").status_code == 400
 
 
 class TestSystemSetupEndpoints:

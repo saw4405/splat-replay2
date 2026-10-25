@@ -14,7 +14,7 @@ from splat_replay.application.interfaces import (
     ImageSelector,
     LoggerPort,
     PathsPort,
-    ThumbnailFontResolverPort,
+    ThumbnailRuleImageResolverPort,
 )
 from splat_replay.domain.models import (
     BattleResult,
@@ -34,13 +34,13 @@ class ThumbnailGenerator:
         paths: PathsPort,
         image_selector: ImageSelector,
         file_system: FileSystemPort,
-        font_resolver: ThumbnailFontResolverPort,
+        rule_image_resolver: ThumbnailRuleImageResolverPort,
     ):
         self.logger = logger
         self.paths = paths
         self.image_selector = image_selector
         self._file_system = file_system
-        self._font_resolver = font_resolver
+        self._rule_image_resolver = rule_image_resolver
 
     def create(self, assets: List[VideoAsset]) -> Path | None:
         """明るいサムネイルを選び描画する。
@@ -192,12 +192,21 @@ class ThumbnailGenerator:
             )
             return None
 
-        font_ikamodoki_path = self._font_resolver.resolve(
-            self.paths.get_thumbnail_asset("ikamodoki1.ttf")
+        label_path = self.paths.get_thumbnail_asset(
+            f"rule-labels/{result.rule.name.lower()}.png"
         )
-        if font_ikamodoki_path is None:
-            raise RuntimeError("サムネイル用の日本語フォントを利用できません")
-        font_ikamodoki = str(font_ikamodoki_path)
+        rule_label = self._rule_image_resolver.resolve(label_path)
+        if rule_label is None:
+            raise RuntimeError(
+                f"ルール名画像が未配置または不正です: {label_path}"
+            )
+        rule_icon_exists = self._file_system.is_file(rule_image_path)
+        if not rule_icon_exists:
+            self.logger.warning(
+                "ルール用アイコンがないため省略します",
+                rule=rule_name,
+                path=str(rule_image_path),
+            )
 
         with tempfile.NamedTemporaryFile(
             dir=assets[0].video.parent,
@@ -232,14 +241,13 @@ class ThumbnailGenerator:
                 # マッチを描画
                 .draw_image(match_image_path, (800, 40), size=(300, 300))
                 # ルールを記載し描画
-                .draw_text(
-                    rule_name,
-                    (1120, 50),
-                    font_ikamodoki,
-                    140,
-                    fill_color="white",
+                .draw_image(rule_label, (1120, 71))
+                .when(
+                    rule_icon_exists,
+                    lambda d: d.draw_image(
+                        rule_image_path, (1660, 70), size=(150, 150)
+                    ),
                 )
-                .draw_image(rule_image_path, (1660, 70), size=(150, 150))
                 # レートを記載し描画
                 .when(
                     rate is not None,
