@@ -71,6 +71,9 @@ class _DummyConfig:
     def get_video_edit_settings(self):
         raise NotImplementedError
 
+    def get_video_storage_settings(self) -> VideoStorageSettings:
+        return VideoStorageSettings()
+
     def get_obs_settings(self):
         raise NotImplementedError
 

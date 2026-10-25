@@ -2514,3 +2514,39 @@ simple_matchers:
     mask_path: "assets/matching/weapon/ジェットスイーパー_mask.png"
     threshold: 0.82
     description: "ブキ照合テンプレート（代替外観）"
+
+  switch_capture_video_icon:
+    type: "template"
+    template_path: "assets/matching/switch_capture_video_icon.png"
+    mask_path: "assets/matching/switch_capture_video_icon_mask.png"
+    roi:
+      x: 127
+      y: 82
+      width: 44
+      height: 31
+    threshold: 0.9
+    description: "Switch動画保存通知の動画アイコンを検出する"
+
+  switch_capture_saving:
+    type: "template"
+    template_path: "assets/matching/switch_capture_saving.png"
+    mask_path: "assets/matching/switch_capture_saving_mask.png"
+    roi:
+      x: 235
+      y: 47
+      width: 196
+      height: 36
+    threshold: 0.9
+    description: "Switch動画の保存中を検出する"
+
+  switch_capture_saved:
+    type: "template"
+    template_path: "assets/matching/switch_capture_saved.png"
+    mask_path: "assets/matching/switch_capture_saved_mask.png"
+    roi:
+      x: 175
+      y: 47
+      width: 168
+      height: 36
+    threshold: 0.9
+    description: "Switch動画の保存完了を検出する"

@@ -2,10 +2,23 @@ import queue
 import threading
 import time
 from collections.abc import Callable
+from dataclasses import dataclass
 from typing import Optional
 
-from splat_replay.application.interfaces import CapturePort, FramePublisher
+from splat_replay.application.interfaces import (
+    CapturePort,
+    ClockPort,
+    FramePublisher,
+)
 from splat_replay.domain.models import Frame
+
+
+@dataclass(frozen=True)
+class CapturedFrame:
+    """取得した画像と、録画時計と同じ時間軸の取得時刻。"""
+
+    frame: Frame
+    captured_at: float
 
 
 class FrameCaptureProducer:
@@ -25,10 +38,13 @@ class FrameCaptureProducer:
         queue_put_timeout: float = 0.001,
         monotonic: Callable[[], float] = time.monotonic,
         schedule_wait: Callable[[float], bool] | None = None,
+        clock: ClockPort | None = None,
     ) -> None:
         self._capture = capture
         self._frame_publisher = frame_publisher
-        self._queue: queue.Queue[Frame] = queue.Queue(maxsize=queue_maxsize)
+        self._queue: queue.Queue[CapturedFrame] = queue.Queue(
+            maxsize=queue_maxsize
+        )
         self._device_retry_sleep = device_retry_sleep
         self._queue_put_timeout = queue_put_timeout
         self._thread: Optional[threading.Thread] = None
@@ -38,6 +54,7 @@ class FrameCaptureProducer:
         self._capture_interval_lock = threading.Lock()
         self._capture_interval_seconds = 0.0
         self._monotonic = monotonic
+        self._now = clock.now if clock is not None else time.time
         self._schedule_changed = threading.Event()
         self._schedule_wait = schedule_wait or self._schedule_changed.wait
 
@@ -68,6 +85,11 @@ class FrameCaptureProducer:
         self._drain_queue()
 
     def get_frame(self, timeout: float) -> Frame | None:
+        captured = self.get_captured_frame(timeout)
+        return captured.frame if captured is not None else None
+
+    def get_captured_frame(self, timeout: float) -> CapturedFrame | None:
+        """取得時刻を画像と同じキュー要素から返す。"""
         try:
             return self._queue.get(True, timeout)
         except queue.Empty:
@@ -94,7 +116,7 @@ class FrameCaptureProducer:
         while True:
             try:
                 item = self._queue.get_nowait()
-                last = item
+                last = item.frame
             except queue.Empty:
                 break
         return last
@@ -163,6 +185,8 @@ class FrameCaptureProducer:
                     time.sleep(self._device_retry_sleep)
                     continue
 
+                captured = CapturedFrame(frame, self._now())
+
                 # publish latest to GUI
                 if self._frame_publisher is not None:
                     try:
@@ -172,14 +196,14 @@ class FrameCaptureProducer:
 
                 # enqueue (replace oldest if full)
                 try:
-                    self._queue.put(frame, timeout=self._queue_put_timeout)
+                    self._queue.put(captured, timeout=self._queue_put_timeout)
                 except queue.Full:
                     try:
                         _ = self._queue.get_nowait()
                     except queue.Empty:
                         pass
                     try:
-                        self._queue.put_nowait(frame)
+                        self._queue.put_nowait(captured)
                     except queue.Full:
                         pass
             except Exception:

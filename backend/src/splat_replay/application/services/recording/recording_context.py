@@ -11,6 +11,7 @@ from splat_replay.domain.models import (
     RecordingMetadata,
 )
 from splat_replay.domain.services import RecordState
+from splat_replay.domain.models.switch_capture import SwitchCaptureTracker
 
 if TYPE_CHECKING:
     from splat_replay.application.interfaces import WeaponSlotResult
@@ -54,6 +55,9 @@ class RecordingContext:
     manual_fields: frozenset[str] = field(default_factory=frozenset)
     pending_result_updates: dict[str, object] = field(default_factory=dict)
     battle_started_at: float = 0.0
+    switch_capture_tracker: SwitchCaptureTracker = field(
+        default_factory=SwitchCaptureTracker
+    )
     finish: bool = False
     result_frame: Optional[Frame] = None
     resume_trigger: Optional[ResumeTrigger] = None

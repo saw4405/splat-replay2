@@ -164,10 +164,28 @@ tasks:
       - task: build:postprocess
 
   build:macos:
-    desc: Build an isolated fixed-identity signed Apple Silicon macOS candidate
+    desc: 固定出力先の macOS アプリを同じ署名で更新する
     platforms: [darwin]
+    deps:
+      - build:macos:dependencies
     cmds:
-      - task: build:macos:candidate
+      - cmd: test "$(/usr/bin/uname -m)" = "arm64"
+      - "{{.VENV_PYTHON}} scripts/macos_code_signing.py preflight"
+      - cmd: |
+          "{{.VENV_PYTHON}}" - "{{.DIST_ROOT}}/SplatReplay.app/Contents/MacOS/SplatReplay" <<'PY'
+          from pathlib import Path
+          import sys
+          import psutil
+
+          executable = str(Path(sys.argv[1]).resolve())
+          if any(process.info['exe'] == executable for process in psutil.process_iter(['exe'])):
+              sys.exit('更新先の SplatReplay を終了してから再実行してください。')
+          PY
+      - task: build:frontend
+      - task: build:macos:backend
+      - task: build:macos:sign
+      - task: build:macos:verify
+      - task: build:macos:dmg
 
   build:macos:candidate:
     desc: Build a fixed-identity signed macOS candidate in an isolated output directory
@@ -213,7 +231,7 @@ tasks:
     deps:
       - build:macos:dependencies
     cmds:
-      - /usr/bin/env PYINSTALLER_CONFIG_DIR="{{.ROOT_DIR}}/{{.BUILD_DIR}}" {{.VENV_PYINSTALLER}} {{.BACKEND_SPEC}} --clean --distpath ../{{.DIST_ROOT}} --workpath ../{{.BUILD_DIR}}
+      - /usr/bin/env PYINSTALLER_CONFIG_DIR="{{.ROOT_DIR}}/{{.BUILD_DIR}}" {{.VENV_PYINSTALLER}} {{.BACKEND_SPEC}} --noconfirm --clean --distpath ../{{.DIST_ROOT}} --workpath ../{{.BUILD_DIR}}
 
   build:macos:dependencies:
     desc: Synchronize locked macOS build dependencies
@@ -298,6 +316,7 @@ tasks:
           "{{.VENV_PYTHON}}" scripts/macos_code_signing.py verify "$app"
           echo "Verified {{.DIST_ROOT}}/SplatReplay.dmg"
         platforms: [darwin]
+
 
   clean:macos:
     desc: Clean macOS app bundle build artifacts

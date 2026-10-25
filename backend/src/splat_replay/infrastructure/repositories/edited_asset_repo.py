@@ -150,6 +150,21 @@ class EditedAssetRepository:
             and (pending_thumbnail is None or not pending_thumbnail.exists())
         )
 
+    def retain_edited(self, video: Path) -> Path:
+        """編集済み動画と関連ファイルを保持専用フォルダへ移す。"""
+        target = self._file_ops.retain_asset(
+            video, self.settings.retained_edited_dir
+        )
+        self._event_publisher.publish_edited_deleted(video.resolve())
+        return target
+
+    def complete_pending_retention(self) -> None:
+        """編集済み動画の保持途中に残った移動記録を再開する。"""
+        for video in self._file_ops.list_pending_retention(
+            self.settings.edited_dir
+        ):
+            self.retain_edited(video)
+
     def get_subtitle(self, video: Path) -> str | None:
         """字幕を取得する。
 

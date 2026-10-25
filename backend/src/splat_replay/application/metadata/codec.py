@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from math import isfinite
 from typing import Final
 
 from splat_replay.domain.models import (
@@ -19,7 +20,7 @@ from .schema import (
     SALMON_METADATA_FIELD_DEFINITIONS,
 )
 
-MetadataValue = str | int | list[str] | None
+MetadataValue = str | int | list[str] | list[float] | None
 MISSING: Final = object()
 
 
@@ -50,8 +51,11 @@ def recording_metadata_to_dict(
 
     payload: dict[str, MetadataValue] = {}
     for field in COMMON_METADATA_FIELD_DEFINITIONS:
-        payload[field.key] = serialize_metadata_value(
-            getattr(metadata, field.attr_name)
+        value = getattr(metadata, field.attr_name)
+        payload[field.key] = (
+            list(metadata.switch_capture_elapsed_seconds)
+            if field.value_kind == "elapsed_seconds"
+            else serialize_metadata_value(value)
         )
 
     result = metadata.result
@@ -73,6 +77,21 @@ def parse_metadata_field_update(
     field: MetadataFieldDefinition, raw: object
 ) -> object:
     """更新入力をドメイン値へ変換する。"""
+
+    if field.value_kind == "elapsed_seconds":
+        if not isinstance(raw, (list, tuple)):
+            return MISSING
+        values: list[float] = []
+        for item in raw:
+            if (
+                isinstance(item, bool)
+                or not isinstance(item, (int, float))
+                or not isfinite(item)
+                or item < 0
+            ):
+                return MISSING
+            values.append(float(item))
+        return tuple(values)
 
     if field.value_kind == "enum":
         if not isinstance(raw, str) or field.enum_type is None:

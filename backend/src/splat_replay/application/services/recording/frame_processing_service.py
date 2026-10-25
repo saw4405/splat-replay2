@@ -12,6 +12,7 @@ from splat_replay.application.interfaces import (
     LoggerPort,
 )
 from splat_replay.application.services.recording.frame_capture_producer import (
+    CapturedFrame,
     FrameCaptureProducer,
 )
 from splat_replay.domain.events import PowerOffDetected
@@ -53,9 +54,14 @@ class FrameProcessingService:
         Returns:
             取得したフレーム（取得失敗時は None）
         """
+        captured = await self.acquire_captured_frame()
+        return captured.frame if captured is not None else None
+
+    async def acquire_captured_frame(self) -> CapturedFrame | None:
+        """フレームと取得時刻を一緒に取得する。"""
         try:
             return await asyncio.to_thread(
-                self._capture_producer.get_frame, 0.1
+                self._capture_producer.get_captured_frame, 0.1
             )
         except Exception as e:
             self.logger.warning("フレーム取得エラー", error=str(e))

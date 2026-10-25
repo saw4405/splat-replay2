@@ -110,6 +110,59 @@ class TestSettingsEndpoints:
         assert isinstance(enabled["value"], bool)
         assert enabled["user_editable"] is True
 
+    def test_video_retention_toggles_are_exposed_and_persisted(
+        self, client: TestClient
+    ) -> None:
+        """保持設定はboolean設定として表示され、storage sectionへ保存される。"""
+        response = client.get("/api/settings")
+        assert response.status_code == status.HTTP_200_OK
+        sections = response.json()["sections"]
+        storage = next(
+            section for section in sections if section["id"] == "storage"
+        )
+        fields = {field["id"]: field for field in storage["fields"]}
+
+        recorded = fields["keep_recordings_after_edit"]
+        edited = fields["keep_edited_after_upload"]
+        assert recorded["type"] == "boolean"
+        assert edited["type"] == "boolean"
+        assert recorded["display_level"] == "basic"
+        assert edited["display_level"] == "basic"
+        assert recorded["user_editable"] is True
+        assert edited["user_editable"] is True
+        assert "retained/recorded" in recorded["description"]
+        assert "Switch" in recorded["description"]
+        assert "retained/edited" in edited["description"]
+        assert "保管先:" in recorded["description"]
+        assert "保管先:" in edited["description"]
+
+        update = client.put(
+            "/api/settings",
+            json={
+                "sections": [
+                    {
+                        "id": "storage",
+                        "values": {
+                            "keep_recordings_after_edit": True,
+                            "keep_edited_after_upload": True,
+                        },
+                    }
+                ]
+            },
+        )
+        assert update.status_code == status.HTTP_200_OK
+
+        persisted = client.get("/api/settings")
+        assert persisted.status_code == status.HTTP_200_OK
+        storage = next(
+            section
+            for section in persisted.json()["sections"]
+            if section["id"] == "storage"
+        )
+        values = {field["id"]: field["value"] for field in storage["fields"]}
+        assert values["keep_recordings_after_edit"] is True
+        assert values["keep_edited_after_upload"] is True
+
     def test_get_settings_exposes_requirement_and_display_level(
         self, client: TestClient
     ) -> None:

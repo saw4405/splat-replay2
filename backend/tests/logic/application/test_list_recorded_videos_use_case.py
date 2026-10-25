@@ -9,6 +9,7 @@
 分類: logic
 """
 
+from dataclasses import replace
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -200,6 +201,9 @@ class TestListRecordedVideosIntegration:
         battle_metadata,
     ):
         """DTOに全フィールドがマッピングされる。"""
+        battle_metadata = replace(
+            battle_metadata, switch_capture_elapsed_seconds=(42.35, 128.7)
+        )
         video_path = base_dir / "recorded" / "full_test.mp4"
         video_path.parent.mkdir(parents=True)
         video_path.touch()
@@ -221,3 +225,4 @@ class TestListRecordedVideosIntegration:
         assert dto.duration_seconds == 123.45
         assert dto.size_bytes == 999888
         assert dto.game_mode == "BATTLE"
+        assert dto.switch_capture_elapsed_seconds == [42.35, 128.7]

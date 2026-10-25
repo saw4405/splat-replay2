@@ -16,6 +16,8 @@
   import { getDeviceStatusPollIntervalMs, renderMode } from '../../renderMode';
   import { shouldUseBackendPreviewFrame } from '../../clientEnvironment';
 
+  let { onRecordingReady }: { onRecordingReady?: () => void } = $props();
+
   type PreviewState = 'checking' | 'connected' | 'disconnected' | 'error';
 
   type PrepareRecordingResponse = {
@@ -617,6 +619,9 @@
       const state = await getAutoRecorderState();
       const previousPowerState = switchPowerState;
       switchPowerState = state.power_state;
+      if (state.power_state === 'armed' && previousPowerState !== 'armed') {
+        onRecordingReady?.();
+      }
       if (
         !isVideoFileInput &&
         state.power_state === 'capture_disconnected' &&

@@ -193,6 +193,69 @@ describe('ProgressDialog', () => {
   }
 
   describe('ダイアログ表示', () => {
+    it('次回表示は前回のアップロード完了を残さず編集表示から始める', async () => {
+      mockIdleStatusResponse();
+      const { rerender } = render(ProgressDialog, { props: { isOpen: true } });
+      await vi.waitFor(() => expect(registeredEventHandler('progress_event')).toBeDefined());
+      emitProgressEvent({ task_id: 'auto_upload', kind: 'start', total: 1, completed: 0 });
+      emitProgressEvent({
+        task_id: 'auto_upload',
+        kind: 'finish',
+        success: true,
+        total: 1,
+        completed: 1,
+      });
+      await vi.waitFor(() =>
+        expect(screen.getByRole('status', { name: 'アップロード完了' })).toBeVisible()
+      );
+      emitProgressEvent({ task_id: 'auto_edit', kind: 'start', total: 1, completed: 0 });
+      await vi.waitFor(() => {
+        expect(screen.queryByRole('status', { name: 'アップロード完了' })).not.toBeInTheDocument();
+        expect(screen.getByRole('region', { name: '1. 編集' })).toHaveAttribute(
+          'aria-current',
+          'step'
+        );
+      });
+      emitProgressEvent({ task_id: 'auto_upload', kind: 'start', total: 1, completed: 0 });
+      emitProgressEvent({
+        task_id: 'auto_upload',
+        kind: 'finish',
+        success: true,
+        total: 1,
+        completed: 1,
+      });
+      await vi.waitFor(() =>
+        expect(screen.getByRole('status', { name: 'アップロード完了' })).toBeVisible()
+      );
+      await rerender({ isOpen: false });
+      await rerender({ isOpen: true });
+      await vi.waitFor(() => {
+        expect(screen.queryByRole('status', { name: 'アップロード完了' })).not.toBeInTheDocument();
+        expect(screen.getByRole('region', { name: '1. 編集' })).toHaveAttribute(
+          'aria-current',
+          'step'
+        );
+      });
+      emitProgressEvent({ task_id: 'auto_edit', kind: 'start', total: 0, completed: 0 });
+      emitProgressEvent({
+        task_id: 'auto_edit',
+        kind: 'finish',
+        success: true,
+        total: 0,
+        completed: 0,
+      });
+      emitProgressEvent({ task_id: 'auto_upload', kind: 'start', total: 1, completed: 0 });
+      await vi.waitFor(() =>
+        expect(screen.getByRole('region', { name: '3. アップロード' })).toHaveAttribute(
+          'aria-current',
+          'step'
+        )
+      );
+      expect(
+        screen.getByRole('region', { name: 'YouTubeアップロードエリア 展開中' })
+      ).toBeVisible();
+    });
+
     it('isOpenがtrueの場合、ダイアログが表示される', async () => {
       fetchMock.mockResolvedValue(
         new Response(

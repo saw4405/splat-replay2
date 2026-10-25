@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import asyncio
+import threading
 from typing import Any, cast
 
 import pytest
@@ -41,6 +43,11 @@ class _VideoRecorderStub:
         self._events.append("video")
         for listener in self._listeners:
             await listener("started")
+
+    async def stop(self) -> None:
+        for listener in self._listeners:
+            await listener("stopped")
+        return None
 
     def add_status_listener(self, listener: object) -> None:
         self._listeners.append(listener)
@@ -114,12 +121,12 @@ async def test_transcriber_is_prepared_before_recording_hot_path() -> None:
     await recorder.prepare_transcription()
     await recorder.start()
 
-    assert factory_calls == 1
+    assert factory_calls == 2
     assert events == ["video", "state", "transcription", "microphone"]
 
 
 @pytest.mark.asyncio
-async def test_recording_start_never_constructs_transcriber() -> None:
+async def test_recording_start_reads_latest_disabled_setting() -> None:
     events: list[str] = []
     factory_calls = 0
 
@@ -132,24 +139,149 @@ async def test_recording_start_never_constructs_transcriber() -> None:
 
     await recorder.start()
 
-    assert factory_calls == 0
+    assert factory_calls == 1
     assert events == ["video"]
 
 
 @pytest.mark.asyncio
-async def test_late_transcriber_preparation_joins_active_recording() -> None:
+async def test_disabled_transcription_preparation_keeps_video_recording_available() -> (
+    None
+):
+    events: list[str] = []
+    factory_calls = 0
+
+    def disabled_factory() -> tuple[None, str]:
+        nonlocal factory_calls
+        factory_calls += 1
+        return None, "disabled"
+
+    recorder = _recorder(
+        _VideoRecorderStub(events), None, factory=disabled_factory
+    )
+
+    await recorder.prepare_transcription()
+    await recorder.start()
+
+    assert factory_calls == 2
+    assert events == ["video"]
+
+
+@pytest.mark.asyncio
+async def test_transcription_preparation_during_recording_waits_until_next_start() -> (
+    None
+):
     events: list[str] = []
     transcriber = _TranscriberStub(events)
+    selected: tuple[SpeechTranscriberPort | None, str] = (
+        cast(SpeechTranscriberPort, transcriber),
+        "enabled-v1",
+    )
+    factory_calls = 0
 
-    def factory() -> tuple[SpeechTranscriberPort, str]:
-        return cast(SpeechTranscriberPort, transcriber), "settings-v1"
+    def factory() -> tuple[SpeechTranscriberPort | None, str]:
+        nonlocal factory_calls
+        factory_calls += 1
+        return selected
+
+    video = _VideoRecorderStub(events)
+    recorder = _recorder(video, None, factory=factory)
+
+    await recorder.start()
+    selected = (None, "disabled-v2")
+    await recorder.prepare_transcription()
+    await recorder.start()
+
+    assert events == ["video", "transcription", "microphone"]
+    assert factory_calls == 1
+    assert transcriber.stop_calls == 0
+    await recorder.stop()
+    assert transcriber.stop_calls == 1
+    await recorder.start()
+    assert factory_calls == 2
+    assert events == ["video", "transcription", "microphone", "video"]
+
+
+@pytest.mark.asyncio
+async def test_changed_setting_is_loaded_on_the_next_recording_start() -> None:
+    events: list[str] = []
+    transcriber = _TranscriberStub(events)
+    selected: tuple[SpeechTranscriberPort | None, str] = (None, "disabled-v1")
+    factory_calls = 0
+
+    def factory() -> tuple[SpeechTranscriberPort | None, str]:
+        nonlocal factory_calls
+        factory_calls += 1
+        return selected
+
+    video = _VideoRecorderStub(events)
+    recorder = _recorder(video, None, factory=factory)
+
+    await recorder.start()
+    selected = (cast(SpeechTranscriberPort, transcriber), "enabled-v2")
+    await recorder.stop()
+    await recorder.start()
+
+    assert factory_calls == 2
+    assert events == ["video", "video", "transcription", "microphone"]
+
+
+@pytest.mark.asyncio
+async def test_transcriber_retries_initialization_with_same_settings_fingerprint() -> (
+    None
+):
+    events: list[str] = []
+    transcriber = _TranscriberStub(events)
+    selected: tuple[SpeechTranscriberPort | None, str] = (
+        None,
+        "same-settings",
+    )
+
+    def factory() -> tuple[SpeechTranscriberPort | None, str]:
+        return selected
 
     recorder = _recorder(_VideoRecorderStub(events), None, factory=factory)
 
     await recorder.start()
-    await recorder.prepare_transcription()
+    await recorder.stop()
+    selected = (cast(SpeechTranscriberPort, transcriber), "same-settings")
+    await recorder.start()
 
+    assert events == ["video", "video", "transcription", "microphone"]
+
+
+@pytest.mark.asyncio
+async def test_armed_preparation_cannot_overwrite_settings_reloaded_at_start() -> (
+    None
+):
+    events: list[str] = []
+    armed_transcriber = _TranscriberStub(events)
+    start_transcriber = _TranscriberStub(events)
+    first_factory_started = threading.Event()
+    release_first_factory = threading.Event()
+    factory_calls = 0
+
+    def factory() -> tuple[SpeechTranscriberPort, str]:
+        nonlocal factory_calls
+        factory_calls += 1
+        if factory_calls == 1:
+            first_factory_started.set()
+            if not release_first_factory.wait(timeout=3):
+                raise TimeoutError("テスト用の準備待機がタイムアウトしました")
+            return cast(SpeechTranscriberPort, armed_transcriber), "armed-v1"
+        return cast(SpeechTranscriberPort, start_transcriber), "started-v2"
+
+    recorder = _recorder(_VideoRecorderStub(events), None, factory=factory)
+    prepare_task = asyncio.create_task(recorder.prepare_transcription())
+    assert await asyncio.to_thread(first_factory_started.wait, 1)
+
+    start_task = asyncio.create_task(recorder.start())
+    await asyncio.sleep(0)
+    release_first_factory.set()
+    await asyncio.gather(prepare_task, start_task)
+
+    assert factory_calls == 2
     assert events == ["video", "transcription", "microphone"]
+    assert armed_transcriber.stop_calls == 0
 
 
 @pytest.mark.asyncio

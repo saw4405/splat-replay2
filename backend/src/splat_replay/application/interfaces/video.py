@@ -192,6 +192,14 @@ class VideoAssetRepositoryPort(Protocol):
         """Delete recorded video."""
         ...
 
+    def retain_recording(self, video: Path) -> Path:
+        """保管先へ元録画と関連ファイルを移す。"""
+        ...
+
+    def complete_pending_recording_retention(self) -> None:
+        """中断した元録画の保持処理を再開する。"""
+        ...
+
     def get_subtitle(self, video: Path) -> Optional[str]:
         """Get subtitle for recorded video."""
         ...
@@ -210,6 +218,14 @@ class VideoAssetRepositoryPort(Protocol):
 
     def delete_edited(self, video: Path) -> bool:
         """Delete edited video."""
+        ...
+
+    def retain_edited(self, video: Path) -> Path:
+        """保管先へ編集済み動画と関連ファイルを移す。"""
+        ...
+
+    def complete_pending_edited_retention(self) -> None:
+        """中断した編集済み動画の保持処理を再開する。"""
         ...
 
     def get_edited_subtitle(self, video: Path) -> Optional[str]:

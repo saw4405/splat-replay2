@@ -2,7 +2,7 @@ import asyncio
 import io
 import math
 import os
-from typing import Any, Optional
+from typing import Any, Optional, Protocol, cast
 
 import speech_recognition as sr
 import webrtcvad
@@ -17,7 +17,19 @@ class RecognitionResult(BaseModel):
     reason: str
 
 
+class _GoogleRecognitionPort(Protocol):
+    def recognize_google(
+        self,
+        audio: sr.AudioData,
+        *,
+        language: str,
+        endpoint: str,
+    ) -> str: ...
+
+
 class IntegratedSpeechRecognizer:
+    _GOOGLE_ENDPOINT = "https://www.google.com/speech-api/v2/recognize"
+
     def __init__(
         self,
         settings: SpeechTranscriberSettings,
@@ -45,7 +57,8 @@ class IntegratedSpeechRecognizer:
             pcm16 = audio.get_raw_data(convert_rate=16000, convert_width=2)
         except Exception as exc:
             self._logger.error(
-                f"音声データの変換に失敗したためVADを実行できません: {exc}"
+                "音声データの変換に失敗したためVADを実行できません",
+                error_type=type(exc).__name__,
             )
             return True
 
@@ -115,12 +128,14 @@ class IntegratedSpeechRecognizer:
         if google is None:
             self._logger.debug(
                 "Google音声認識の結果が空のためスキップします (音声なしと判断)",
-                groq=groq,
+                groq_result_length=len(groq or ""),
             )
             return None
         result = await self._estimate_speech(f"google: {google}\ngroq: {groq}")
-        self._logger.info(f"音声認識結果: {result.estimated_text!r}")
-        self._logger.debug(f"推定理由: {result.reason}")
+        self._logger.info(
+            "音声認識結果を統合しました",
+            result_length=len(result.estimated_text),
+        )
         return result.estimated_text or None
 
     async def recognize_google(
@@ -128,15 +143,26 @@ class IntegratedSpeechRecognizer:
     ) -> Optional[str]:
         def _recognize_google() -> Optional[str]:
             try:
-                result = self._recognizer.recognize_google(
-                    audio, language=language
+                google_recognizer = cast(
+                    _GoogleRecognitionPort, self._recognizer
                 )
-                self._logger.debug(f"google: {result}")
+                result = google_recognizer.recognize_google(
+                    audio,
+                    language=language,
+                    endpoint=self._GOOGLE_ENDPOINT,
+                )
+                self._logger.debug(
+                    "Google音声認識が完了しました",
+                    result_length=len(result),
+                )
                 return result
             except sr.UnknownValueError:
                 return None
             except sr.RequestError as e:
-                self._logger.error("Google音声認識エラー", error=str(e))
+                self._logger.error(
+                    "Google音声認識エラー",
+                    error_type=type(e).__name__,
+                )
                 return None
 
         return await asyncio.to_thread(_recognize_google)
@@ -156,7 +182,9 @@ class IntegratedSpeechRecognizer:
                 response_format="verbose_json",
             )
         except Exception as e:
-            self._logger.error("Groq音声認識エラー", error=str(e))
+            self._logger.error(
+                "Groq音声認識エラー", error_type=type(e).__name__
+            )
             return None
 
         # no_speech_prob で無音判定（segments は dict のリスト）
@@ -171,10 +199,7 @@ class IntegratedSpeechRecognizer:
                 "Groq no_speech_prob",
                 avg=avg_no_speech_prob,
                 threshold=self._no_speech_prob_threshold,
-                segments=[
-                    (s.get("text", ""), s.get("no_speech_prob"))
-                    for s in segments
-                ],
+                segment_count=len(segments),
             )
             if avg_no_speech_prob >= self._no_speech_prob_threshold:
                 self._logger.info(
@@ -189,7 +214,9 @@ class IntegratedSpeechRecognizer:
             )
 
         text = (transcription.text or "").strip()
-        self._logger.debug(f"groq: {text!r}")
+        self._logger.debug(
+            "Groq音声認識が完了しました", result_length=len(text)
+        )
         return text or None
 
     async def _estimate_speech(self, results: str) -> RecognitionResult:
@@ -232,11 +259,11 @@ class IntegratedSpeechRecognizer:
         )
         res = chat_completion.choices[0].message.content
         if res is None:
-            raise RuntimeError("Failed to estimate speech")
+            raise RuntimeError("音声認識結果を統合できませんでした")
 
         try:
             return RecognitionResult.parse_raw(res)
-        except Exception as e:
+        except Exception:
             raise RuntimeError(
-                f"Failed to validate JSON: {e}\nraw response: {res}"
-            )
+                "音声認識の統合結果を読み取れませんでした"
+            ) from None

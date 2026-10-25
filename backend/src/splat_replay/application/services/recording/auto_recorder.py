@@ -108,6 +108,7 @@ class AutoRecorder:
             queue_maxsize=FRAME_QUEUE_MAXSIZE,
             device_retry_sleep=FRAME_DEVICE_RETRY_SLEEP,
             queue_put_timeout=FRAME_QUEUE_PUT_TIMEOUT,
+            clock=clock,
         )
         self._publisher_worker = PublisherWorker(
             publisher,

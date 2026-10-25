@@ -112,6 +112,14 @@ class FileVideoAssetRepository(VideoAssetRepositoryPort):
         """録画ファイルを削除する（RecordedAssetRepositoryに委譲）。"""
         return self._recorded_repo.delete_recording(video)
 
+    def retain_recording(self, video: Path) -> Path:
+        """録画ファイルを保持専用フォルダへ移す。"""
+        return self._recorded_repo.retain_recording(video)
+
+    def complete_pending_recording_retention(self) -> None:
+        """中断した元録画の保持処理を再開する。"""
+        self._recorded_repo.complete_pending_retention()
+
     def get_subtitle(self, video: Path) -> str | None:
         """録画の字幕を取得する（RecordedAssetRepositoryに委譲）。"""
         return self._recorded_repo.get_subtitle(video)
@@ -131,6 +139,14 @@ class FileVideoAssetRepository(VideoAssetRepositoryPort):
     def delete_edited(self, video: Path) -> bool:
         """編集済みファイルを削除する（EditedAssetRepositoryに委譲）。"""
         return self._edited_repo.delete_edited(video)
+
+    def retain_edited(self, video: Path) -> Path:
+        """編集済み動画を保持専用フォルダへ移す。"""
+        return self._edited_repo.retain_edited(video)
+
+    def complete_pending_edited_retention(self) -> None:
+        """中断した編集済み動画の保持処理を再開する。"""
+        self._edited_repo.complete_pending_retention()
 
     def get_edited_subtitle(self, video: Path) -> str | None:
         """編集済み動画の字幕を取得する（EditedAssetRepositoryに委譲）。"""

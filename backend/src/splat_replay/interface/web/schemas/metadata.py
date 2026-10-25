@@ -105,6 +105,10 @@ class RecordingMetadataResponse(BaseModel):
     silver_medals: int | None = Field(None, description="銀表彰数")
     allies: list[str] | None = Field(None, description="味方4人のブキ")
     enemies: list[str] | None = Field(None, description="敵4人のブキ")
+    switch_capture_elapsed_seconds: list[float] = Field(
+        default_factory=list,
+        description="録画開始からSwitch動画保存通知までの経過秒",
+    )
     hazard: int | None = Field(None, description="危険度")
     golden_egg: int | None = Field(None, description="金イクラ数")
     power_egg: int | None = Field(None, description="イクラ数")

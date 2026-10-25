@@ -102,6 +102,51 @@ def test_save_edited_rolls_back_sidecars_when_video_move_fails(
     assert publisher.events == []
 
 
+def test_retain_edited_resumes_sidecar_cleanup_after_video_move(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    repository, _, settings = _build_repository(tmp_path)
+    source = settings.edited_dir / "edited.mp4"
+    source.parent.mkdir(parents=True)
+    source.write_bytes(b"video")
+    metadata = source.with_suffix(".json")
+    metadata.write_text('{"title":"saved"}', encoding="utf-8")
+    real_unlink = Path.unlink
+    failed = False
+
+    def fail_original_metadata_cleanup(
+        path: Path, *, missing_ok: bool = False
+    ) -> None:
+        nonlocal failed
+        if path == metadata and not source.exists() and not failed:
+            failed = True
+            raise OSError("interrupted after video move")
+        real_unlink(path, missing_ok=missing_ok)
+
+    monkeypatch.setattr(Path, "unlink", fail_original_metadata_cleanup)
+
+    with pytest.raises(OSError, match="interrupted after video move"):
+        repository.retain_edited(source)
+
+    retained = settings.retained_edited_dir / source.name
+    assert retained.read_bytes() == b"video"
+    assert (
+        retained.with_suffix(".json").read_text(encoding="utf-8")
+        == '{"title":"saved"}'
+    )
+    assert metadata.exists()
+    assert list(settings.edited_dir.glob(".*.retention.json"))
+
+    monkeypatch.undo()
+    repository.complete_pending_retention()
+
+    assert not source.exists()
+    assert not metadata.exists()
+    assert repository.list_edited() == []
+    assert not list(settings.edited_dir.glob(".*.retention.json"))
+
+
 def test_delete_edited_removes_pending_thumbnail_for_hashed_video(
     tmp_path: Path,
 ) -> None:

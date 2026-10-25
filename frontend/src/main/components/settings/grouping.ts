@@ -39,6 +39,7 @@ const SETTINGS_GROUPS: SettingsGroupDefinition[] = [
   },
   { id: 'edit', label: '編集', sourceSectionIds: ['video_edit'], layout: 'flat' },
   { id: 'upload', label: 'アップロード', sourceSectionIds: ['upload'], layout: 'flat' },
+  { id: 'storage', label: '保存', sourceSectionIds: ['storage'], layout: 'flat' },
 ];
 
 const SOURCE_SECTION_LABELS: Record<string, string> = {

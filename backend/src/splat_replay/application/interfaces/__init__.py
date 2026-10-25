@@ -55,6 +55,7 @@ from splat_replay.application.interfaces.data import (
     SpeechSynthesisResult,
     UploadSettingsView,
     VideoEditSettingsView,
+    VideoStorageSettingsView,
 )
 from splat_replay.application.interfaces.image import (
     Color,
@@ -173,6 +174,7 @@ __all__ = [
     "SpeechSynthesisResult",
     "UploadSettingsView",
     "VideoEditSettingsView",
+    "VideoStorageSettingsView",
     # Recording
     "CaptureDeviceEnumeratorPort",
     "CaptureDevicePort",

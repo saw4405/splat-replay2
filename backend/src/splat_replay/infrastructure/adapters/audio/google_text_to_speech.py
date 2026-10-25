@@ -58,7 +58,7 @@ class GoogleTextToSpeech(TextToSpeechPort):
 
         self._logger.info(
             "Google TTS へリクエストを送信します",
-            payload={"text": request.text},
+            text_length=len(request.text),
         )
         try:
             response = httpx.post(
@@ -69,11 +69,12 @@ class GoogleTextToSpeech(TextToSpeechPort):
             response.raise_for_status()
         except httpx.HTTPError as exc:
             self._logger.error(
-                "Google TTS リクエストに失敗しました", error=str(exc)
+                "Google TTS リクエストに失敗しました",
+                error_type=type(exc).__name__,
             )
             raise RuntimeError(
                 "Google Text-to-Speech の呼び出しに失敗しました"
-            ) from exc
+            ) from None
 
         data = response.json()
         if not isinstance(data, dict):
@@ -90,10 +91,13 @@ class GoogleTextToSpeech(TextToSpeechPort):
         try:
             audio_bytes = base64.b64decode(audio_content)
         except Exception as exc:  # noqa: BLE001
-            self._logger.error("Google TTS 音声デコード失敗", error=str(exc))
+            self._logger.error(
+                "Google TTS 音声デコード失敗",
+                error_type=type(exc).__name__,
+            )
             raise RuntimeError(
                 "Google Text-to-Speech の音声データをデコードできませんでした"
-            ) from exc
+            ) from None
 
         return SpeechSynthesisResult(
             audio=audio_bytes, sample_rate_hz=request.sample_rate_hz

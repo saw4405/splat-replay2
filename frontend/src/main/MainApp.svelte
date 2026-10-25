@@ -111,7 +111,9 @@
   </div>
 
   <div class="preview-container">
-    <VideoPreviewContainer />
+    <VideoPreviewContainer
+      onRecordingReady={() => bottomDrawerRef?.dismissCompletionNotification()}
+    />
   </div>
 
   <BottomDrawer bind:this={bottomDrawerRef} onRecordedCountChange={updateRecordedDataCount} />

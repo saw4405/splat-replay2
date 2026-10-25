@@ -804,6 +804,27 @@ describe('ProgressStateMachine', () => {
       expect(item.activeStepKey).toBe('collect');
     });
 
+    it('保持イベントは削除表示を残さずファイル整理ステップに集約する', () => {
+      sm.applyEvent(
+        makeEvent({ task_id: 'auto_upload', kind: 'start', items: ['動画A'], total: 1 })
+      );
+      sm.applyEvent(
+        makeEvent({
+          task_id: 'auto_upload',
+          kind: 'item_stage',
+          item_index: 0,
+          item_key: 'retain',
+          item_label: '編集済み動画を保持中',
+        })
+      );
+
+      const item = sm.tasks['auto_upload'].items[0];
+      expect(item.steps.some((step) => step.label === 'ファイル削除')).toBe(false);
+      expect(item.steps.find((step) => step.key === 'delete')?.label).toBe('ファイル整理');
+      expect(item.steps.some((step) => step.key === 'retain')).toBe(false);
+      expect(item.activeStepKey).toBe('delete');
+    });
+
     it('totalItemsProcessed は全タスクの completed 合計を返す', () => {
       sm.applyEvent(makeEvent({ task_id: 'auto_edit', kind: 'start', total: 3, completed: 2 }));
       sm.applyEvent(makeEvent({ task_id: 'auto_upload', kind: 'start', total: 2, completed: 1 }));

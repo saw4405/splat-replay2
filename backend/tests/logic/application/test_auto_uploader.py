@@ -5,6 +5,7 @@
 
 import asyncio
 from pathlib import Path
+from types import SimpleNamespace
 from typing import cast
 from unittest.mock import AsyncMock, MagicMock
 
@@ -99,6 +100,64 @@ async def test_execute_deletes_edited_video_after_upload_succeeds() -> None:
     await uploader.execute()
 
     repo.delete_edited.assert_called_once_with(video)
+
+
+@pytest.mark.asyncio
+async def test_execute_retains_edited_video_after_success_when_enabled() -> (
+    None
+):
+    video = Path("edited/succeeded.mkv")
+    repo = MagicMock()
+    repo.list_edited.return_value = [video]
+    repo.get_edited_metadata.return_value = {}
+    repo.get_edited_thumbnail.return_value = None
+    repo.get_edited_subtitle.return_value = None
+    config = MagicMock()
+    config.get_video_storage_settings.return_value = SimpleNamespace(
+        keep_edited_after_upload=True
+    )
+    video_editor = MagicMock()
+    video_editor.get_metadata = AsyncMock(return_value={"title": "succeeded"})
+    uploader = AutoUploader(
+        uploader=cast(UploadPort, MagicMock()),
+        video_editor=cast(VideoEditorPort, video_editor),
+        config=cast(ConfigPort, config),
+        repo=cast(VideoAssetRepositoryPort, repo),
+        logger=cast(LoggerPort, MagicMock()),
+        file_system=cast(FileSystemPort, MagicMock()),
+        progress=cast(ProgressReporter, MagicMock()),
+    )
+
+    await uploader.execute()
+
+    repo.complete_pending_edited_retention.assert_called_once_with()
+    repo.retain_edited.assert_called_once_with(video)
+    repo.delete_edited.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_pending_edited_retention_completes_before_upload_listing() -> (
+    None
+):
+    events: list[str] = []
+    repo = MagicMock()
+    repo.complete_pending_edited_retention.side_effect = lambda: events.append(
+        "retention resumed"
+    )
+    repo.list_edited.side_effect = lambda: events.append("list edited") or []
+    uploader = AutoUploader(
+        uploader=cast(UploadPort, MagicMock()),
+        video_editor=cast(VideoEditorPort, MagicMock()),
+        config=cast(ConfigPort, MagicMock()),
+        repo=cast(VideoAssetRepositoryPort, repo),
+        logger=cast(LoggerPort, MagicMock()),
+        file_system=cast(FileSystemPort, MagicMock()),
+        progress=cast(ProgressReporter, MagicMock()),
+    )
+
+    await uploader.execute()
+
+    assert events == ["retention resumed", "list edited"]
 
 
 @pytest.mark.asyncio

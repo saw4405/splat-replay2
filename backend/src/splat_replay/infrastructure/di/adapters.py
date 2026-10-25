@@ -421,9 +421,13 @@ def register_adapters(
         VideoAssetRepositoryPort, factory=_video_asset_repo_factory
     )
 
+    cached_speech_fingerprint: str | None = None
+    cached_speech_transcriber: SpeechTranscriberPort | None = None
+
     def _build_speech_transcriber() -> tuple[
         Optional[SpeechTranscriberPort], str
     ]:
+        nonlocal cached_speech_fingerprint, cached_speech_transcriber
         logger = cast(BoundLogger, container.resolve(BoundLogger))
         event_publisher = cast(
             DomainEventPublisher, container.resolve(DomainEventPublisher)
@@ -452,11 +456,17 @@ def register_adapters(
         fingerprint = hashlib.sha256(
             fingerprint_payload.encode("utf-8")
         ).hexdigest()
+        if fingerprint == cached_speech_fingerprint:
+            return cached_speech_transcriber, fingerprint
         if not speech_settings.enabled:
             logger.info("文字起こしを無効化します", reason="無効設定")
+            cached_speech_fingerprint = fingerprint
+            cached_speech_transcriber = None
             return None, fingerprint
         if not speech_settings.mic_device_name.strip():
             logger.info("文字起こしを無効化します", reason="マイク名が未設定")
+            cached_speech_fingerprint = fingerprint
+            cached_speech_transcriber = None
             return None, fingerprint
         try:
             from splat_replay.infrastructure.adapters.audio.integrated_speech_recognition import (
@@ -467,14 +477,20 @@ def register_adapters(
             )
 
             recognizer = IntegratedSpeechRecognizer(speech_settings, logger)
+            transcriber = SpeechTranscriber(
+                speech_settings, recognizer, logger, event_publisher
+            )
+            cached_speech_fingerprint = fingerprint
+            cached_speech_transcriber = transcriber
             return (
-                SpeechTranscriber(
-                    speech_settings, recognizer, logger, event_publisher
-                ),
+                transcriber,
                 fingerprint,
             )
         except Exception as exc:
-            logger.warning("文字起こしの初期化に失敗しました", error=str(exc))
+            logger.warning(
+                "文字起こしの初期化に失敗しました",
+                error_type=type(exc).__name__,
+            )
             return None, fingerprint
 
     recorder_with_transcription_instance = RecorderWithTranscription(

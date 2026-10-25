@@ -27,6 +27,7 @@ def to_recorded_video_item(dto: RecordedVideoDTO) -> RecordedVideoItem:
         silver_medals=dto.silver_medals,
         allies=dto.allies,
         enemies=dto.enemies,
+        switch_capture_elapsed_seconds=dto.switch_capture_elapsed_seconds,
         hazard=dto.hazard,
         golden_egg=dto.golden_egg,
         power_egg=dto.power_egg,

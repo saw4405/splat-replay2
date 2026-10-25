@@ -1003,10 +1003,8 @@
     if (isOpen !== wasOpen) {
       wasOpen = isOpen;
       if (isOpen) {
+        resetProgress();
         optionErrorMessage = '';
-        completedVideos = [];
-        uploadedVideoIds = [];
-        resetUploadTransfer(0, null);
         void loadEditUploadStatus();
       } else {
         optionErrorMessage = '';
@@ -1258,8 +1256,23 @@
     }
   }
 
+  function resetProgress(): void {
+    sm.reset();
+    tasksVersion++;
+    completedVideos = [];
+    uploadedVideoIds = [];
+    resetUploadTransfer(0, null);
+    lastPreviewSourceUrl = '';
+    previewList = [];
+    prevPreviewImage = '';
+    prevPreviewIsFinal = false;
+  }
+
   function applyEvent(event: ProgressEvent): void {
     const isStart = event.kind === 'start';
+    if (isStart && event.task_id === 'auto_edit') {
+      resetProgress();
+    }
     sm.applyEvent(event);
     tasksVersion++;
     if (

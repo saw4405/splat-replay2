@@ -39,7 +39,9 @@ class RecorderWithTranscription(RecorderWithTranscriptionPort):
         self._transcriber_factory = transcriber_factory
         self._transcriber_fingerprint: str | None = None
         self._recording_started = False
+        self._recording_starting = False
         self._transcriber_started = False
+        self._transcription_settings_lock = asyncio.Lock()
         self._status_listeners: List[
             Callable[[RecorderStatus], Awaitable[None]]
         ] = []
@@ -50,6 +52,14 @@ class RecorderWithTranscription(RecorderWithTranscriptionPort):
 
     async def prepare_transcription(self) -> None:
         """録画開始を待たせないよう、文字起こしを事前構築する。"""
+        async with self._transcription_settings_lock:
+            # ARMED後の準備が録画開始後に遅れて完了しても、進行中の録画へ
+            # 設定を適用しない。実際の開始時には最新設定を再読込する。
+            if self._recording_started or self._recording_starting:
+                return
+            await self._reload_transcription_settings()
+
+    async def _reload_transcription_settings(self) -> None:
         if self._transcriber_factory is None:
             return
         try:
@@ -59,20 +69,30 @@ class RecorderWithTranscription(RecorderWithTranscriptionPort):
         except Exception as exc:
             self.logger.error(
                 "文字起こし設定の再読み込みに失敗しました",
-                error=str(exc),
+                error_type=type(exc).__name__,
             )
             self.transcriber = None
+            self._transcriber_fingerprint = None
             return
-        if fingerprint != self._transcriber_fingerprint:
+        if fingerprint != self._transcriber_fingerprint or (
+            self.transcriber is None and transcriber is not None
+        ):
             self.transcriber = transcriber
             self._transcriber_fingerprint = fingerprint
-        if self._recording_started:
-            await self._start_transcription()
 
     async def start(self) -> None:
-        await self.recorder.start()
-        self._recording_started = True
-        await self._start_transcription()
+        async with self._transcription_settings_lock:
+            if self._recording_started or self._recording_starting:
+                self.logger.warning("録画開始をスキップします（既に開始済み）")
+                return
+            self._recording_starting = True
+            try:
+                await self._reload_transcription_settings()
+                await self.recorder.start()
+                self._recording_started = True
+                await self._start_transcription()
+            finally:
+                self._recording_starting = False
 
     async def _start_transcription(self) -> None:
         if self.transcriber is None or self._transcriber_started:
@@ -90,36 +110,39 @@ class RecorderWithTranscription(RecorderWithTranscriptionPort):
         except Exception as exc:
             self.logger.warning(
                 "文字起こしを開始できませんでした。映像録画は継続します。",
-                error=str(exc),
+                error_type=type(exc).__name__,
             )
             with suppress(Exception):
                 self.transcriber.stop()
             self._transcriber_started = False
 
     async def stop(self) -> Tuple[Optional[Path], Optional[Path]]:
-        video_path = await self.recorder.stop()
-        self._recording_started = False
+        async with self._transcription_settings_lock:
+            video_path = await self.recorder.stop()
+            self._recording_started = False
+            subtitle: str | None = None
+            if self.transcriber is not None and self._transcriber_started:
+                try:
+                    subtitle = self.transcriber.stop()
+                finally:
+                    self._transcriber_started = False
         srt_path = None
-        if self.transcriber is not None and self._transcriber_started:
-            try:
-                subtitle = self.transcriber.stop()
-            finally:
-                self._transcriber_started = False
-            if video_path:
-                srt_path = video_path.parent / f"{video_path.stem}.srt"
-                await asyncio.to_thread(
-                    srt_path.write_text, subtitle, encoding="utf-8"
-                )
+        if video_path and subtitle is not None:
+            srt_path = video_path.parent / f"{video_path.stem}.srt"
+            await asyncio.to_thread(
+                srt_path.write_text, subtitle, encoding="utf-8"
+            )
         return video_path, srt_path
 
     async def cancel(self) -> None:
-        video_path = await self.recorder.stop()
-        self._recording_started = False
-        if self.transcriber is not None and self._transcriber_started:
-            try:
-                self.transcriber.stop()
-            finally:
-                self._transcriber_started = False
+        async with self._transcription_settings_lock:
+            video_path = await self.recorder.stop()
+            self._recording_started = False
+            if self.transcriber is not None and self._transcriber_started:
+                try:
+                    self.transcriber.stop()
+                finally:
+                    self._transcriber_started = False
         if video_path is None:
             self.logger.warning(
                 "録画中止時に削除対象ファイルを取得できませんでした"

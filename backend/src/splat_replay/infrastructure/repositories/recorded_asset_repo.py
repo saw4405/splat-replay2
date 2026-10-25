@@ -205,6 +205,21 @@ class RecordedAssetRepository:
             and not video.with_suffix(".json").exists()
         )
 
+    def retain_recording(self, video: Path) -> Path:
+        """元録画と関連ファイルを保持専用フォルダへ移す。"""
+        target = self._file_ops.retain_asset(
+            video, self.settings.retained_recorded_dir
+        )
+        self._event_publisher.publish_recorded_deleted(video.resolve())
+        return target
+
+    def complete_pending_retention(self) -> None:
+        """元録画の保持途中に残った移動記録を再開する。"""
+        for video in self._file_ops.list_pending_retention(
+            self.settings.recorded_dir
+        ):
+            self.retain_recording(video)
+
     def get_subtitle(self, video: Path) -> str | None:
         """字幕を取得する。
 

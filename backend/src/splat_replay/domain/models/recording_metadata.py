@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime
+from math import isfinite
 
 from .game_mode import GameMode
 from .judgement import Judgement
@@ -28,3 +29,16 @@ class RecordingMetadata:
     allies: tuple[str, str, str, str] | None = None
     enemies: tuple[str, str, str, str] | None = None
     result: Result | None = None
+    switch_capture_elapsed_seconds: tuple[float, ...] = ()
+
+    def __post_init__(self) -> None:
+        if any(
+            isinstance(seconds, bool)
+            or not isinstance(seconds, (int, float))
+            or not isfinite(seconds)
+            or seconds < 0
+            for seconds in self.switch_capture_elapsed_seconds
+        ):
+            raise ValueError(
+                "Switch録画の経過秒は有限の非負数で指定してください"
+            )

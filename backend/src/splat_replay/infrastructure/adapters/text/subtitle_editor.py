@@ -12,7 +12,9 @@ class SubtitleEditor(SubtitleEditorPort):
     def __init__(self, logger: BoundLogger) -> None:
         self.logger = logger
 
-    def merge(self, subtitles: List[Path], video_length: List[float]) -> str:
+    def merge(
+        self, subtitles: List[Path | None], video_length: List[float]
+    ) -> str:
         if len(subtitles) != len(video_length):
             raise ValueError(
                 "字幕ファイルと動画の長さのリストの長さが一致しません。"
@@ -22,7 +24,7 @@ class SubtitleEditor(SubtitleEditorPort):
         combined_subtitles: List[srt.Subtitle] = []
         offset = datetime.timedelta(seconds=0)
         for subtitle_path, length in zip(subtitles, video_length):
-            if subtitle_path.exists():
+            if subtitle_path is not None and subtitle_path.exists():
                 srt_str = subtitle_path.read_text(encoding="utf-8")
                 sts = list(srt.parse(srt_str))
                 for st in sts:

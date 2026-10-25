@@ -10,7 +10,9 @@ from splat_replay.domain.models import GameMode, Judgement, Match, Rule, Stage
 
 MetadataFieldCategory = Literal["common", "battle", "salmon"]
 MetadataFieldOwner = Literal["metadata", "battle_result", "salmon_result"]
-MetadataValueKind = Literal["enum", "datetime", "rate", "int", "weapon_slots"]
+MetadataValueKind = Literal[
+    "enum", "datetime", "rate", "int", "weapon_slots", "elapsed_seconds"
+]
 
 
 @dataclass(frozen=True)
@@ -82,8 +84,15 @@ COMMON_METADATA_FIELD_DEFINITIONS: tuple[MetadataFieldDefinition, ...] = (
         value_kind="weapon_slots",
         editable=True,
     ),
+    MetadataFieldDefinition(
+        key="switch_capture_elapsed_seconds",
+        category="common",
+        owner="metadata",
+        attr_name="switch_capture_elapsed_seconds",
+        value_kind="elapsed_seconds",
+        editable=False,
+    ),
 )
-
 
 BATTLE_METADATA_FIELD_DEFINITIONS: tuple[MetadataFieldDefinition, ...] = (
     MetadataFieldDefinition(

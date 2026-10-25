@@ -35,6 +35,7 @@ class RecordedVideoItem(BaseModel):
     silver_medals: Optional[int] = None
     allies: Optional[list[str]] = None
     enemies: Optional[list[str]] = None
+    switch_capture_elapsed_seconds: list[float] = Field(default_factory=list)
     hazard: Optional[int] = None
     golden_egg: Optional[int] = None
     power_egg: Optional[int] = None

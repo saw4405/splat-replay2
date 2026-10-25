@@ -196,6 +196,140 @@ def test_save_recording_succeeds_with_all_files(tmp_path: Path) -> None:
     assert not subtitle.exists()
 
 
+def test_retain_recording_moves_video_and_all_sidecars(tmp_path: Path) -> None:
+    repository, _, settings = _build_repository(tmp_path)
+    source = settings.recorded_dir / "capture.mp4"
+    source.parent.mkdir(parents=True)
+    source.write_bytes(b"video")
+    source.with_suffix(".srt").write_text("subtitle", encoding="utf-8")
+    source.with_suffix(".png").write_bytes(b"thumbnail")
+    source.with_suffix(".json").write_text('{"value":1}', encoding="utf-8")
+
+    target = repository.retain_recording(source)
+
+    assert target == settings.retained_recorded_dir / source.name
+    assert target.read_bytes() == b"video"
+    assert target.with_suffix(".srt").read_text(encoding="utf-8") == "subtitle"
+    assert target.with_suffix(".png").read_bytes() == b"thumbnail"
+    assert (
+        target.with_suffix(".json").read_text(encoding="utf-8")
+        == '{"value":1}'
+    )
+    assert not source.exists()
+    assert not source.with_suffix(".srt").exists()
+    assert repository.list_recordings() == []
+    assert not list(settings.recorded_dir.glob(".*.retention.json"))
+
+
+def test_retain_recording_resumes_after_video_move_failure(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    repository, _, settings = _build_repository(tmp_path)
+    source = settings.recorded_dir / "capture.mp4"
+    source.parent.mkdir(parents=True)
+    source.write_bytes(b"video")
+    metadata = source.with_suffix(".json")
+    metadata.write_text('{"value":1}', encoding="utf-8")
+    real_rename = Path.rename
+
+    def fail_video_rename(path: Path, target: Path) -> Path:
+        if path == source:
+            raise OSError("interrupted after sidecar copy")
+        return real_rename(path, target)
+
+    monkeypatch.setattr(Path, "rename", fail_video_rename)
+
+    with pytest.raises(OSError, match="interrupted after sidecar copy"):
+        repository.retain_recording(source)
+
+    retained_metadata = (
+        settings.retained_recorded_dir / source.with_suffix(".json").name
+    )
+    assert source.read_bytes() == b"video"
+    assert metadata.read_text(encoding="utf-8") == '{"value":1}'
+    assert retained_metadata.read_text(encoding="utf-8") == '{"value":1}'
+    assert list(settings.recorded_dir.glob(".*.retention.json"))
+
+    monkeypatch.undo()
+    repository.complete_pending_retention()
+
+    retained_video = settings.retained_recorded_dir / source.name
+    assert retained_video.read_bytes() == b"video"
+    assert (
+        retained_video.with_suffix(".json").read_text(encoding="utf-8")
+        == '{"value":1}'
+    )
+    assert not source.exists()
+    assert not metadata.exists()
+    assert not list(settings.recorded_dir.glob(".*.retention.json"))
+
+
+def test_retain_recording_replaces_its_partial_sidecar_copy_on_retry(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    repository, _, settings = _build_repository(tmp_path)
+    source = settings.recorded_dir / "capture.mp4"
+    source.parent.mkdir(parents=True)
+    source.write_bytes(b"video")
+    metadata = source.with_suffix(".json")
+    metadata.write_text('{"value":1}', encoding="utf-8")
+    temporary = settings.retained_recorded_dir / ".capture.json.retaining"
+
+    def fail_after_partial_copy(source_path: Path, target_path: Path) -> None:
+        _ = source_path
+        target_path.write_bytes(b"partial")
+        raise OSError("interrupted sidecar copy")
+
+    monkeypatch.setattr(
+        "splat_replay.infrastructure.repositories.asset_file_operations.shutil.copy2",
+        fail_after_partial_copy,
+    )
+
+    with pytest.raises(OSError, match="interrupted sidecar copy"):
+        repository.retain_recording(source)
+
+    assert source.read_bytes() == b"video"
+    assert metadata.read_text(encoding="utf-8") == '{"value":1}'
+    assert temporary.read_bytes() == b"partial"
+
+    monkeypatch.undo()
+    repository.complete_pending_retention()
+
+    retained = settings.retained_recorded_dir / source.name
+    assert retained.read_bytes() == b"video"
+    assert (
+        retained.with_suffix(".json").read_text(encoding="utf-8")
+        == '{"value":1}'
+    )
+    assert not temporary.exists()
+    assert repository.list_recordings() == []
+
+
+def test_retain_recording_preserves_source_on_destination_collision(
+    tmp_path: Path,
+) -> None:
+    repository, _, settings = _build_repository(tmp_path)
+    source = settings.recorded_dir / "capture.mp4"
+    source.parent.mkdir(parents=True)
+    source.write_bytes(b"source video")
+    source.with_suffix(".json").write_text("source metadata", encoding="utf-8")
+    target = settings.retained_recorded_dir / source.name
+    target.parent.mkdir(parents=True)
+    target.write_bytes(b"other video")
+
+    with pytest.raises(FileExistsError, match="保持先に同名ファイル"):
+        repository.retain_recording(source)
+
+    assert source.read_bytes() == b"source video"
+    assert (
+        source.with_suffix(".json").read_text(encoding="utf-8")
+        == "source metadata"
+    )
+    assert target.read_bytes() == b"other video"
+
+
 def test_list_recorded_returns_empty_list_initially(tmp_path: Path) -> None:
     """初期状態では空のリストを返す。"""
     repository, _, _ = _build_repository(tmp_path)

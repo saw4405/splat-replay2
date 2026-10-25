@@ -454,6 +454,24 @@ describe('BottomDrawer.svelte', () => {
     editedResponse.resolve(jsonResponse([]));
   });
 
+  it.each([true, false])(
+    '録画準備への復帰時は成功通知だけを閉じる（success=%s）',
+    async (success) => {
+      installDefaultResponses([]);
+      const { component } = render(BottomDrawer);
+      await waitFor(() => expect(domainEventHandler).not.toBeNull());
+      emitDomainEvent({
+        type: 'domain.process.edit_upload_completed',
+        payload: { success, message: success ? '完了しました' : '失敗しました' },
+      });
+      await screen.findByTestId('notification-dialog-stub');
+      component.dismissCompletionNotification();
+      await waitFor(() => {
+        expect(screen.queryByTestId('notification-dialog-stub') !== null).toBe(!success);
+      });
+    }
+  );
+
   it('編集アップロード成功ダイアログを閉じても自動録画APIを呼ばない', async () => {
     installDefaultResponses([
       {

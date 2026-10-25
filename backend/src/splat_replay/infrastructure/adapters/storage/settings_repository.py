@@ -130,6 +130,20 @@ class TomlSettingsRepository(SettingsRepositoryPort):
         for field_name, model_field in model_cls.__fields__.items():
             label = model_field.field_info.title or field_name
             description = model_field.field_info.description or ""
+            if section_id == "storage":
+                retained_path_field = {
+                    "keep_recordings_after_edit": "retained_recorded_dir",
+                    "keep_edited_after_upload": "retained_edited_dir",
+                }.get(field_name)
+                retained_path = (
+                    getattr(model_value, retained_path_field, None)
+                    if retained_path_field is not None
+                    else None
+                )
+                if isinstance(retained_path, Path):
+                    description = (
+                        f"{description} 保管先: {retained_path}"
+                    ).strip()
             requirement = cast(
                 SettingRequirement,
                 model_field.field_info.extra.get("requirement", "optional"),

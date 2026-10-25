@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Literal
 
 
@@ -40,6 +40,7 @@ class RecordedVideoDTO:
         silver_medals: 銀表彰数
         allies: 味方4人のブキ
         enemies: 敵4人のブキ
+        switch_capture_elapsed_seconds: 録画開始からSwitch動画保存通知までの経過秒
         hazard: 危険度（サーモンラン）
         golden_egg: 金イクラ数
         power_egg: イクラ数
@@ -77,6 +78,7 @@ class RecordedVideoDTO:
     has_thumbnail: bool
     duration_seconds: float | None
     size_bytes: int | None
+    switch_capture_elapsed_seconds: list[float] = field(default_factory=list)
 
 
 @dataclass(frozen=True)

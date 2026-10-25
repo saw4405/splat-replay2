@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import cast
 
 from splat_replay.application.dto import RecordedVideoDTO
 from splat_replay.application.interfaces import (
@@ -27,7 +28,7 @@ def _as_str_list(value: MetadataValue | None) -> list[str] | None:
     if isinstance(value, list) and all(
         isinstance(item, str) for item in value
     ):
-        return value
+        return cast(list[str], value)
     return None
 
 
@@ -86,6 +87,9 @@ async def build_recorded_video_dto(
         silver_medals=_as_int(payload.get("silver_medals")),
         allies=_as_str_list(payload.get("allies")),
         enemies=_as_str_list(payload.get("enemies")),
+        switch_capture_elapsed_seconds=list(
+            metadata.switch_capture_elapsed_seconds
+        ),
         hazard=_as_int(payload.get("hazard")),
         golden_egg=_as_int(payload.get("golden_egg")),
         power_egg=_as_int(payload.get("power_egg")),

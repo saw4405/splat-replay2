@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 from collections.abc import Iterator
 import datetime
+import json
 import os
 from pathlib import Path
 from types import SimpleNamespace
@@ -14,11 +15,13 @@ import pytest
 from splat_replay.application.services.editing.auto_editor import (
     AutoEditor,
     EditedCommitCleanupError,
+    RETAINED_SOURCE_RECORDINGS_METADATA_KEY,
     SOURCE_RECORDINGS_METADATA_KEY,
 )
 from splat_replay.application.services.editing.editing_state import (
     EditingState,
 )
+from splat_replay.domain.models import RecordingMetadata, VideoAsset
 
 
 class _FakeThumbnailGenerator:
@@ -206,6 +209,7 @@ async def test_execute_saves_group_without_frame_preview_dependency(
     asset = SimpleNamespace(
         video=source_video,
         metadata=SimpleNamespace(
+            switch_capture_elapsed_seconds=(),
             judgement=SimpleNamespace(value="WIN"),
             result=SimpleNamespace(
                 stage=SimpleNamespace(value="海女美術大学"),
@@ -230,6 +234,9 @@ async def test_execute_saves_group_without_frame_preview_dependency(
         def get_video_edit_settings(self) -> object:
             return object()
 
+        def get_video_storage_settings(self) -> object:
+            return SimpleNamespace(keep_recordings_after_edit=False)
+
     deleted_videos: list[Path] = []
 
     class _Repo:
@@ -241,6 +248,9 @@ async def test_execute_saves_group_without_frame_preview_dependency(
 
         def list_edited(self) -> list[Path]:
             return []
+
+        def complete_pending_recording_retention(self) -> None:
+            pass
 
         def save_edited(self, target: Path) -> Path:
             return target
@@ -316,7 +326,7 @@ async def test_execute_saves_group_without_frame_preview_dependency(
         call["task_id"] == "auto_edit"
         and call["item_index"] == 0
         and call["stage_key"] == "save"
-        and call["stage_label"] == "録画済動画削除・編集済動画保存"
+        and call["stage_label"] == "元録画の整理・編集済動画保存"
         for call in progress.item_stage_calls
     )
     assert deleted_videos == [source_video]
@@ -350,6 +360,91 @@ def test_make_filename_is_stable_for_same_inputs(tmp_path: Path) -> None:
 
 
 @pytest.mark.asyncio
+async def test_metadata_snapshots_retention_setting_and_switch_exception(
+    tmp_path: Path,
+) -> None:
+    editor = AutoEditor.__new__(AutoEditor)
+    editor._cancelled = False
+    editor._keep_recordings_after_edit = False
+    editor.logger = MagicMock()
+    editor.title_generator = SimpleNamespace(
+        generate=AsyncMock(return_value=("title", "description"))
+    )
+    regular = VideoAsset(
+        video=tmp_path / "regular.mp4", metadata=RecordingMetadata()
+    )
+    short_source = VideoAsset(
+        video=tmp_path / "switch.mp4",
+        metadata=RecordingMetadata(switch_capture_elapsed_seconds=(12.0,)),
+    )
+
+    metadata = await editor._prepare_metadata(
+        [regular, short_source], datetime.date(2026, 10, 23), datetime.time(20)
+    )
+
+    assert json.loads(metadata[RETAINED_SOURCE_RECORDINGS_METADATA_KEY]) == [
+        "switch.mp4"
+    ]
+
+    editor._keep_recordings_after_edit = True
+    metadata = await editor._prepare_metadata(
+        [regular, short_source], datetime.date(2026, 10, 23), datetime.time(20)
+    )
+
+    assert json.loads(metadata[RETAINED_SOURCE_RECORDINGS_METADATA_KEY]) == [
+        "regular.mp4",
+        "switch.mp4",
+    ]
+
+
+@pytest.mark.asyncio
+async def test_retention_collision_after_commit_stops_editing(
+    tmp_path: Path,
+) -> None:
+    editor, asset, source, edited_dir, key = _build_cancellable_editor(
+        tmp_path
+    )
+    committed = edited_dir / editor._make_filename([asset], *key).name
+    editor.config = SimpleNamespace(
+        get_video_edit_settings=lambda: SimpleNamespace(),
+        get_video_storage_settings=lambda: SimpleNamespace(
+            keep_recordings_after_edit=True
+        ),
+    )
+    editor.repo = MagicMock()
+    editor.repo.list_recordings.return_value = [asset]
+    editor.repo.list_edited.return_value = []
+    editor.repo.get_edited_dir.return_value = edited_dir
+    editor.repo.save_edited.return_value = committed
+    editor.repo.retain_recording.side_effect = FileExistsError("name conflict")
+    setattr(
+        editor,
+        "_edit",
+        AsyncMock(
+            return_value=(
+                tmp_path / "working.mp4",
+                {
+                    "title": "committed",
+                    RETAINED_SOURCE_RECORDINGS_METADATA_KEY: json.dumps(
+                        [source.name]
+                    ),
+                },
+            )
+        ),
+    )
+    progress = _FakeProgress()
+    editor.progress = progress
+
+    with pytest.raises(EditedCommitCleanupError, match="保持または削除"):
+        await editor.execute()
+
+    editor.repo.delete_recording.assert_not_called()
+    editor.repo.retain_recording.assert_called_once_with(source)
+    assert progress.finish_calls[-1]["success"] is False
+    assert "保持・削除" in str(progress.finish_calls[-1]["message"])
+
+
+@pytest.mark.asyncio
 async def test_committed_manifest_recovers_partial_cleanup_without_reediting(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -373,6 +468,9 @@ async def test_committed_manifest_recovers_partial_cleanup_without_reediting(
         def get_video_edit_settings(self) -> object:
             return object()
 
+        def get_video_storage_settings(self) -> object:
+            return SimpleNamespace(keep_recordings_after_edit=False)
+
     class _Grouping:
         def group_by_timeslot(
             self, assets: list[object]
@@ -381,6 +479,9 @@ async def test_committed_manifest_recovers_partial_cleanup_without_reediting(
             return {}
 
     class _Repo:
+        def complete_pending_recording_retention(self) -> None:
+            pass
+
         def list_recordings(self) -> list[object]:
             return [remaining]
 
@@ -415,6 +516,84 @@ async def test_committed_manifest_recovers_partial_cleanup_without_reediting(
     assert result == [committed]
     assert deleted == [remaining.video, remaining.video]
     sleep.assert_awaited_once_with(0.5)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("retained_names", "switch_elapsed_seconds"),
+    [(["source.mkv"], ()), ([], (12.0,))],
+)
+async def test_committed_manifest_retains_saved_or_switch_sources(
+    tmp_path: Path,
+    retained_names: list[str],
+    switch_elapsed_seconds: tuple[float, ...],
+) -> None:
+    source = tmp_path / "recorded" / "source.mkv"
+    asset = VideoAsset(
+        video=source,
+        metadata=RecordingMetadata(
+            switch_capture_elapsed_seconds=switch_elapsed_seconds
+        ),
+    )
+    committed = tmp_path / "edited" / "combined.mkv"
+
+    class _Config:
+        def get_video_edit_settings(self) -> object:
+            return object()
+
+        def get_video_storage_settings(self) -> object:
+            return SimpleNamespace(keep_recordings_after_edit=False)
+
+    class _Repo:
+        def __init__(self) -> None:
+            self.retained: list[Path] = []
+            self.deleted: list[Path] = []
+
+        def complete_pending_recording_retention(self) -> None:
+            pass
+
+        def list_recordings(self) -> list[VideoAsset]:
+            return [asset]
+
+        def list_edited(self) -> list[Path]:
+            return [committed]
+
+        def get_edited_metadata(self, video: Path) -> dict[str, str]:
+            assert video == committed
+            return {
+                SOURCE_RECORDINGS_METADATA_KEY: json.dumps([source.name]),
+                RETAINED_SOURCE_RECORDINGS_METADATA_KEY: json.dumps(
+                    retained_names
+                ),
+            }
+
+        def retain_recording(self, video: Path) -> Path:
+            self.retained.append(video)
+            return tmp_path / "retained" / video.name
+
+        def delete_recording(self, video: Path) -> bool:
+            self.deleted.append(video)
+            return True
+
+    class _Logger:
+        def info(self, *args: object, **kwargs: object) -> None:
+            _ = args, kwargs
+
+    editor = AutoEditor.__new__(AutoEditor)
+    repo = _Repo()
+    editor.logger = _Logger()
+    editor.config = _Config()
+    editor.repo = repo
+    editor.grouping = SimpleNamespace(group_by_timeslot=lambda assets: {})
+    editor.progress = _FakeProgress()
+    editor._cancelled = False
+    editor._state = EditingState()
+
+    result = await editor.execute()
+
+    assert result == [committed]
+    assert repo.retained == [source]
+    assert repo.deleted == []
 
 
 @pytest.mark.asyncio
@@ -455,6 +634,9 @@ async def test_committed_edit_cleanup_failure_stops_before_upload(
         def get_video_edit_settings(self) -> object:
             return object()
 
+        def get_video_storage_settings(self) -> object:
+            return SimpleNamespace(keep_recordings_after_edit=False)
+
     class _Grouping:
         def group_by_timeslot(
             self, assets: list[object]
@@ -471,6 +653,9 @@ async def test_committed_edit_cleanup_failure_stops_before_upload(
     committed = tmp_path / "edited" / editor._make_filename([asset], *key).name
 
     class _Repo:
+        def complete_pending_recording_retention(self) -> None:
+            pass
+
         def list_recordings(self) -> list[object]:
             return [asset]
 
@@ -521,7 +706,10 @@ def _build_cancellable_editor(
     editor = AutoEditor.__new__(AutoEditor)
     editor.logger = MagicMock()
     editor.config = SimpleNamespace(
-        get_video_edit_settings=lambda: SimpleNamespace()
+        get_video_edit_settings=lambda: SimpleNamespace(),
+        get_video_storage_settings=lambda: SimpleNamespace(
+            keep_recordings_after_edit=False
+        ),
     )
     editor.grouping = SimpleNamespace(
         group_by_timeslot=lambda assets: {key: assets}

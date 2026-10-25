@@ -31,6 +31,7 @@ from splat_replay.application.metadata import (
     SALMON_METADATA_FIELDS,
 )
 from splat_replay.application.services.recording.frame_capture_producer import (
+    CapturedFrame,
     FrameCaptureProducer,
 )
 from splat_replay.application.services.recording.frame_processing_service import (
@@ -317,7 +318,7 @@ class AutoRecordingUseCase:
         last_device_check = 0.0
         device_is_connected = True
         saw_power_off = False
-        pending_power_on_frames: list[Frame] = []
+        pending_power_on_frames: list[CapturedFrame] = []
 
         while not self._stop_event.is_set():
             # フレーム処理の境界でのみ保守へ移行し、録画開始と競合させない。
@@ -325,7 +326,8 @@ class AutoRecordingUseCase:
                 await asyncio.sleep(0.1)
                 continue
             # フレーム取得
-            frame = await self._frame_processor.acquire_frame()
+            captured = await self._frame_processor.acquire_captured_frame()
+            frame = captured.frame if captured is not None else None
             synced = await self._sync_context_if_state_changed()
             now = asyncio.get_running_loop().time()
             if (
@@ -368,7 +370,8 @@ class AutoRecordingUseCase:
                         power_is_off is False
                         and previous_power_state is not SwitchPowerState.ARMED
                     ):
-                        pending_power_on_frames.append(frame)
+                        assert captured is not None
+                        pending_power_on_frames.append(captured)
                         pending_power_on_frames = pending_power_on_frames[
                             -self._power_monitor.on_threshold :
                         ]
@@ -396,12 +399,15 @@ class AutoRecordingUseCase:
                 if self._power_monitor.state is not SwitchPowerState.ARMED:
                     continue
 
-                frames_to_process = pending_power_on_frames or [frame]
+                assert captured is not None
+                frames_to_process = pending_power_on_frames or [captured]
                 pending_power_on_frames = []
                 for armed_frame in frames_to_process:
                     if self._stop_event.is_set():
                         break
-                    await self._process_armed_frame_safely(armed_frame)
+                    await self._process_armed_frame_safely(
+                        armed_frame.frame, armed_frame.captured_at
+                    )
 
             except Exception as e:
                 pending_power_on_frames.clear()
@@ -414,10 +420,12 @@ class AutoRecordingUseCase:
 
         return saw_power_off
 
-    async def _process_armed_frame_safely(self, frame: Frame) -> None:
+    async def _process_armed_frame_safely(
+        self, frame: Frame, captured_at: float | None = None
+    ) -> None:
         """ON確定後の一フレームを処理し、他の候補フレームへ影響させない。"""
         try:
-            await self._process_armed_frame(frame)
+            await self._process_armed_frame(frame, captured_at)
         except Exception as exc:  # noqa: BLE001
             self.logger.exception(
                 "メインループ内でのフレーム解析に失敗しました。フレームをスキップして処理を継続します。",
@@ -425,7 +433,9 @@ class AutoRecordingUseCase:
             )
             await asyncio.sleep(0.01)
 
-    async def _process_armed_frame(self, frame: Frame) -> None:
+    async def _process_armed_frame(
+        self, frame: Frame, captured_at: float | None = None
+    ) -> None:
         """電源ON確定済みのフレームを現在のフェーズへ一度だけ渡す。"""
         context_snapshot, revision_snapshot = await self._snapshot_context()
         phase = context_snapshot.phase(self._session.state)
@@ -437,7 +447,10 @@ class AutoRecordingUseCase:
             self.last_phase = phase
 
         command = await self._phase_handlers.handle_frame(
-            frame, context_snapshot, self._session.state
+            frame,
+            context_snapshot,
+            self._session.state,
+            captured_at=captured_at,
         )
         await self._apply_command_context(
             base_context=context_snapshot,

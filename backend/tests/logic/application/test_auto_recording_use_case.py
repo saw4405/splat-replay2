@@ -16,6 +16,7 @@ from splat_replay.application.interfaces import (
     LoggerPort,
 )
 from splat_replay.application.services.recording.frame_capture_producer import (
+    CapturedFrame,
     FrameCaptureProducer,
 )
 from splat_replay.application.services.recording.frame_processing_service import (
@@ -84,7 +85,11 @@ class _PhaseHandlersSpy:
         self.handled_frames: list[Frame] = []
 
     async def handle_frame(
-        self, frame: Frame, context: RecordingContext, state: RecordState
+        self,
+        frame: Frame,
+        context: RecordingContext,
+        state: RecordState,
+        captured_at: float | None = None,
     ) -> RecordingCommand:
         _ = state
         self.handle_frame_calls += 1
@@ -387,7 +392,11 @@ async def test_matching_start_does_not_wait_for_audio_disconnect_cleanup() -> (
 
     class _MatchingHandler(_PhaseHandlersSpy):
         async def handle_frame(
-            self, frame: Frame, context: RecordingContext, state: RecordState
+            self,
+            frame: Frame,
+            context: RecordingContext,
+            state: RecordState,
+            captured_at: float | None = None,
         ) -> RecordingCommand:
             return RecordingCommand.start_recording(matching_context)
 
@@ -539,7 +548,16 @@ async def test_stop_recording_handles_result_frame_without_context_equality() ->
     assert events == ["update", "drain", "update", "stop", "cancel"]
 
 
-class _DummyFrameProcessorWithException:
+class _CapturedFrameProcessor:
+    async def acquire_frame(self) -> Frame | None:
+        raise NotImplementedError
+
+    async def acquire_captured_frame(self) -> CapturedFrame | None:
+        frame = await self.acquire_frame()
+        return CapturedFrame(frame, 1000.0) if frame is not None else None
+
+
+class _DummyFrameProcessorWithException(_CapturedFrameProcessor):
     def __init__(
         self,
         frames: list[Frame | None],
@@ -585,7 +603,7 @@ async def test_main_loop_recovers_from_analysis_exception() -> None:
         events=events,
     )
 
-    class _FrameProcessorStub:
+    class _FrameProcessorStub(_CapturedFrameProcessor):
         def __init__(self, impl: _DummyFrameProcessorWithException) -> None:
             self._impl = impl
 
@@ -623,7 +641,7 @@ async def test_main_loop_recovers_from_analysis_exception() -> None:
     assert processor.observe_power_off_calls == 2
 
 
-class _PowerCycleFrameProcessor:
+class _PowerCycleFrameProcessor(_CapturedFrameProcessor):
     def __init__(self, observations: list[bool]) -> None:
         self._observations = list(observations)
         self._next_index = 0
@@ -768,7 +786,7 @@ async def test_main_loop_replays_all_frames_used_to_confirm_power_on() -> None:
         for value in (1, 2, 3)
     ]
 
-    class _OnCandidateFrameProcessor:
+    class _OnCandidateFrameProcessor(_CapturedFrameProcessor):
         def __init__(self) -> None:
             self.frames = list(on_candidate_frames)
             self.use_case: AutoRecordingUseCase | None = None
@@ -830,7 +848,7 @@ async def test_capture_disconnect_does_not_publish_power_off(
 ) -> None:
     events: list[str] = []
 
-    class _NoFrameProcessor:
+    class _NoFrameProcessor(_CapturedFrameProcessor):
         def __init__(self) -> None:
             self.power_off_events = 0
 
@@ -1001,7 +1019,7 @@ async def test_stop_background_waits_for_recorder_cleanup() -> None:
         def stop(self) -> None:
             events.append(f"{self.name}_stop")
 
-    class _NoFrameProcessor:
+    class _NoFrameProcessor(_CapturedFrameProcessor):
         async def acquire_frame(self) -> Frame | None:
             return None
 

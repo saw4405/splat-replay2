@@ -1,5 +1,6 @@
 import { expect, test, type Locator, type Page, type TestInfo } from '@playwright/test';
 import type { ProgressEvent } from '../../src/main/api/types';
+import type { DomainEvent } from '../../src/main/domainEvents';
 
 import { environment, gotoMain, resetReplayTestState } from './support/appHelpers';
 
@@ -668,6 +669,7 @@ async function mockProgressFrameImages(page: Page): Promise<void> {
 
 type ProgressEventControllerWindow = Window & {
   __emitProgressEvent?: (event: ProgressEvent) => number;
+  __emitDomainEvent?: (event: DomainEvent) => number;
 };
 
 async function installControllableProgressEventSource(page: Page): Promise<void> {
@@ -719,6 +721,15 @@ async function installControllableProgressEventSource(page: Page): Promise<void>
     });
 
     const controllerWindow = window as ProgressEventControllerWindow;
+    controllerWindow.__emitDomainEvent = (payload: DomainEvent): number => {
+      let receiverCount = 0;
+      for (const source of MockEventSource.sources) {
+        if (!source.url.endsWith('/api/events/domain-events')) continue;
+        source.dispatchEvent(new MessageEvent('domain_event', { data: JSON.stringify(payload) }));
+        receiverCount++;
+      }
+      return receiverCount;
+    };
     controllerWindow.__emitProgressEvent = (payload: ProgressEvent): number => {
       let receiverCount = 0;
 
@@ -754,6 +765,47 @@ async function emitProgressEvent(page: Page, event: ProgressEvent): Promise<void
 
   expect(receiverCount, 'progress event should reach an active EventSource').toBeGreaterThan(0);
 }
+
+test('完了通知はSwitchの録画準備復帰で閉じ、次回の進捗は編集表示から始まる', async ({ page }) => {
+  resetReplayTestState(e2eEnvironment);
+  await installControllableProgressEventSource(page);
+  await mockRunningProcessStatus(page);
+  let armed = false;
+  await page.route('**/api/recorder/auto-state', (route) =>
+    route.fulfill(
+      jsonResponse({ state: 'running', power_state: armed ? 'armed' : 'waiting_for_power_on' })
+    )
+  );
+  await gotoMain(page);
+  const progress = page.getByRole('dialog', { name: '進捗', exact: true });
+  await expect(progress).toBeVisible();
+  await expect(page.getByText('編集・アップロード処理が完了しました', { exact: true })).toHaveCount(
+    0
+  );
+  const receiverCount = await page.evaluate(() =>
+    (window as ProgressEventControllerWindow).__emitDomainEvent?.({
+      type: 'domain.process.edit_upload_completed',
+      payload: { success: true, message: '編集・アップロード処理が完了しました' },
+    })
+  );
+  expect(receiverCount).toBeGreaterThan(0);
+  const completion = page.getByRole('dialog', { name: '完了', exact: true });
+  await expect(completion).toBeVisible();
+  armed = true;
+  await expect(completion).toBeHidden();
+  await page.evaluate(() =>
+    (window as ProgressEventControllerWindow).__emitDomainEvent?.({
+      type: 'domain.process.started',
+      payload: {},
+    })
+  );
+  await expect(progress).toBeVisible();
+  await expect(progress.getByRole('region', { name: '1. 編集', exact: true })).toHaveAttribute(
+    'aria-current',
+    'step'
+  );
+  await expect(progress.getByRole('status', { name: 'アップロード完了' })).toHaveCount(0);
+});
 
 for (const viewportCase of progressDialogViewportCases) {
   test(`progress dialog responsive: ${viewportCase.name}`, async ({ page }) => {

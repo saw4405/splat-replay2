@@ -129,8 +129,10 @@ class ImageEditorPort(Protocol):
 class SubtitleEditorPort(Protocol):
     """字幕編集処理を提供するポート。"""
 
-    def merge(self, subtitles: List[Path], video_length: List[float]) -> str:
-        """Merge multiple subtitle files."""
+    def merge(
+        self, subtitles: List[Path | None], video_length: List[float]
+    ) -> str:
+        """動画順に字幕を結合する。字幕のない動画はNoneと動画長で表す。"""
         ...
 
 

@@ -21,7 +21,7 @@ function field(id: string, label = id, value: string | boolean = 'value') {
 }
 
 describe('settings grouping', () => {
-  it('既存 section を固定順の5グループへ変換する', () => {
+  it('既存 section を固定順の6グループへ変換する', () => {
     const grouped = groupSettingsSections([
       { id: 'upload', label: 'アップロード', fields: [field('privacy_status')] },
       { id: 'speech_transcriber', label: '文字起こし', fields: [field('enabled', '有効', true)] },
@@ -31,6 +31,11 @@ describe('settings grouping', () => {
       { id: 'capture_device', label: 'Capture device settings.', fields: [field('name')] },
       { id: 'behavior', label: '動作', fields: [field('edit_after_power_off', '編集開始', true)] },
       { id: 'record', label: '録画', fields: [field('width', '幅')] },
+      {
+        id: 'storage',
+        label: '動画保存',
+        fields: [field('keep_recordings_after_edit', '元録画を保持', false)],
+      },
     ]);
 
     expect(grouped.map((section) => [section.id, section.label])).toEqual([
@@ -39,6 +44,35 @@ describe('settings grouping', () => {
       ['recording', '録画'],
       ['edit', '編集'],
       ['upload', 'アップロード'],
+      ['storage', '保存'],
+    ]);
+  });
+
+  it('storage の保持トグルを保存グループに置き元sectionへ保存する', () => {
+    const grouped = groupSettingsSections([
+      {
+        id: 'storage',
+        label: '動画保存',
+        fields: [
+          field('keep_recordings_after_edit', '編集後も元録画を保持', true),
+          field('keep_edited_after_upload', 'アップロード後も編集済み動画を保持', false),
+        ],
+      },
+    ]);
+
+    const storage = grouped.find((section) => section.id === 'storage');
+    expect(storage?.fields.map((item) => [item.id, item.type])).toEqual([
+      ['keep_recordings_after_edit', 'boolean'],
+      ['keep_edited_after_upload', 'boolean'],
+    ]);
+    expect(collectSettingsUpdateSections(grouped)).toEqual([
+      {
+        id: 'storage',
+        values: {
+          keep_recordings_after_edit: true,
+          keep_edited_after_upload: false,
+        },
+      },
     ]);
   });
 

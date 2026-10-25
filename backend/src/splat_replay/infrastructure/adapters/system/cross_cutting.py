@@ -26,6 +26,7 @@ from splat_replay.application.interfaces.data import (
     SpeechTranscriberSettingsView,
     UploadSettingsView,
     VideoEditSettingsView,
+    VideoStorageSettingsView,
 )
 from splat_replay.application.interfaces.system import EnvironmentPort
 from splat_replay.domain.config import (
@@ -84,6 +85,9 @@ class TomlConfigAdapter(ConfigPort):
 
     def get_video_edit_settings(self) -> VideoEditSettingsView:
         return cast(VideoEditSettingsView, self._load_settings().video_edit)
+
+    def get_video_storage_settings(self) -> VideoStorageSettingsView:
+        return cast(VideoStorageSettingsView, self._load_settings().storage)
 
     def get_obs_settings(self) -> OBSSettingsView:
         return cast(OBSSettingsView, self._load_settings().obs)

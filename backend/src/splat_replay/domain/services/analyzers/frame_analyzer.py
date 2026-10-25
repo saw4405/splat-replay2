@@ -13,6 +13,8 @@ from splat_replay.domain.models import (
     Result,
 )
 
+from splat_replay.domain.models.switch_capture import SwitchCaptureStatus
+
 from .battle_analyzer import BattleFrameAnalyzer
 from splat_replay.domain.ports import ImageMatcherPort
 from .salmon_analyzer import SalmonFrameAnalyzer
@@ -34,6 +36,18 @@ class FrameAnalyzer:
             GameMode.SALMON: salmon_plugin,
         }
         self.matcher = matcher
+
+    async def detect_switch_capture(
+        self, frame: Frame
+    ) -> SwitchCaptureStatus | None:
+        """動画アイコンと保存文字からSwitch動画保存通知を判定する。"""
+        if not await self.matcher.match("switch_capture_video_icon", frame):
+            return None
+        if await self.matcher.match("switch_capture_saving", frame):
+            return "saving"
+        if await self.matcher.match("switch_capture_saved", frame):
+            return "saved"
+        return None
 
     async def detect_power_off(self, frame: Frame) -> bool:
         """Switch の電源 OFF を検出する。"""

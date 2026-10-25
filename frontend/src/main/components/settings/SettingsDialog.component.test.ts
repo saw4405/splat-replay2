@@ -43,6 +43,87 @@ describe('SettingsDialog.svelte', () => {
   // 初期表示テスト
   // ========================================
 
+  it('保存区分に保持トグルと保存先を表示し現在値を保存する', async () => {
+    const user = userEvent.setup();
+    const mockSections: SettingsSection[] = [
+      {
+        id: 'storage',
+        label: '動画保存',
+        fields: [
+          {
+            id: 'keep_recordings_after_edit',
+            label: '編集後も元録画を保持',
+            description: 'オン: 保持 / オフ: 削除。保管先: /videos/retained/recorded',
+            type: 'boolean',
+            requirement: 'optional',
+            display_level: 'basic',
+            value: false,
+            user_editable: true,
+          },
+          {
+            id: 'keep_edited_after_upload',
+            label: 'アップロード後も編集済み動画を保持',
+            description: 'オン: 保持 / オフ: 削除。保管先: /videos/retained/edited',
+            type: 'boolean',
+            requirement: 'optional',
+            display_level: 'basic',
+            value: false,
+            user_editable: true,
+          },
+        ],
+      },
+    ];
+    fetchMock.mockResolvedValue({
+      ok: true,
+      json: async () => ({ sections: mockSections }),
+    });
+
+    render(SettingsDialog, { props: { open: true } });
+
+    await user.click(await screen.findByRole('radio', { name: 'すべての設定' }));
+    await user.click(await screen.findByTestId('settings-section-storage'));
+    const recordedField = screen.getByTestId(
+      'settings-field-storage-storage-keep_recordings_after_edit'
+    );
+    const editedField = screen.getByTestId(
+      'settings-field-storage-storage-keep_edited_after_upload'
+    );
+    const recordedCheckbox = within(recordedField).getByRole('checkbox', {
+      name: '編集後も元録画を保持',
+    });
+    const editedCheckbox = within(editedField).getByRole('checkbox', {
+      name: 'アップロード後も編集済み動画を保持',
+    });
+
+    expect(recordedCheckbox).not.toBeChecked();
+    expect(editedCheckbox).not.toBeChecked();
+    expect(recordedField).toHaveTextContent('オン: 保持 / オフ: 削除');
+    expect(recordedField).toHaveTextContent('/videos/retained/recorded');
+    expect(editedField).toHaveTextContent('/videos/retained/edited');
+
+    await user.click(recordedCheckbox);
+    await user.click(editedCheckbox);
+    await user.click(screen.getByRole('button', { name: '保存' }));
+
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog', { name: '設定' })).not.toBeInTheDocument();
+    });
+    const updateCall = fetchMock.mock.calls.find(
+      ([url, options]) => url === '/api/settings' && options?.method === 'PUT'
+    );
+    expect(updateCall).toBeDefined();
+    const updatePayload = JSON.parse(updateCall?.[1]?.body as string) as {
+      sections: Array<{ id: string; values: Record<string, boolean> }>;
+    };
+    expect(updatePayload.sections).toContainEqual({
+      id: 'storage',
+      values: {
+        keep_recordings_after_edit: true,
+        keep_edited_after_upload: true,
+      },
+    });
+  });
+
   it('open=falseの時はダイアログが表示されない', () => {
     render(SettingsDialog, { props: { open: false } });
 

@@ -74,6 +74,13 @@ class VideoEditSettingsView(Protocol):
     speech: SpeechSettingsView
 
 
+class VideoStorageSettingsView(Protocol):
+    """動画の保持設定だけを読むアプリケーション向けビュー。"""
+
+    keep_recordings_after_edit: bool
+    keep_edited_after_upload: bool
+
+
 class CaptureDeviceSettingsView(Protocol):
     """Capture device settings shape passed to hardware ports."""
 

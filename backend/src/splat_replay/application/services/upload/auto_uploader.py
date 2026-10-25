@@ -39,6 +39,7 @@ class AutoUploader:
         self.config = config
         self._file_system = file_system
         self._cached_settings: Optional[UploadSettingsView] = None
+        self._keep_edited_after_upload = False
         self.progress = progress
         self._cancelled: bool = False
 
@@ -90,6 +91,11 @@ class AutoUploader:
     async def execute(self) -> None:
         self.logger.info("自動アップロードを開始します")
         self._cached_settings = self.config.get_upload_settings()
+        storage_settings = self.config.get_video_storage_settings()
+        self._keep_edited_after_upload = (
+            storage_settings.keep_edited_after_upload is True
+        )
+        self.repo.complete_pending_edited_retention()
 
         videos = self.repo.list_edited()
 
@@ -115,11 +121,19 @@ class AutoUploader:
             except asyncio.CancelledError:
                 self._finish_cancelled(task_id)
                 return
-            self.progress.item_stage(task_id, idx, "delete", "ファイル削除中")
-            if not self.repo.delete_edited(video):
-                raise RuntimeError(
-                    f"アップロード済み動画を削除できませんでした: {video}"
+            if self._keep_edited_after_upload:
+                self.progress.item_stage(
+                    task_id, idx, "retain", "編集済み動画を保持中"
                 )
+                self.repo.retain_edited(video)
+            else:
+                self.progress.item_stage(
+                    task_id, idx, "delete", "ファイル削除中"
+                )
+                if not self.repo.delete_edited(video):
+                    raise RuntimeError(
+                        f"アップロード済み動画を削除できませんでした: {video}"
+                    )
 
             self.progress.advance(task_id)
             if self._cancelled:

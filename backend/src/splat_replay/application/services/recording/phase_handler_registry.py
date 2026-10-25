@@ -5,6 +5,7 @@ Phase 4 Refactoring: Handler が Command を返すように変更し、UseCase �
 
 from __future__ import annotations
 
+from dataclasses import replace
 from typing import TYPE_CHECKING
 
 from splat_replay.application.interfaces import (
@@ -64,6 +65,7 @@ class PhaseHandlerRegistry:
         clock: ClockPort | None = None,
         xp_detection_diagnostics: XPDetectionDiagnosticsPort | None = None,
     ):
+        self._analyzer = analyzer
         # フェーズハンドラの初期化
         self._standby = StandbyPhaseHandler(
             analyzer,
@@ -94,7 +96,11 @@ class PhaseHandlerRegistry:
         }
 
     async def handle_frame(
-        self, frame: Frame, ctx: RecordingContext, state: RecordState
+        self,
+        frame: Frame,
+        ctx: RecordingContext,
+        state: RecordState,
+        captured_at: float | None = None,
     ) -> RecordingCommand:
         """フレームを現在のフェーズに応じて処理する。
 
@@ -106,6 +112,27 @@ class PhaseHandlerRegistry:
         Returns:
             RecordingCommand: 実行すべきコマンドと更新されたコンテキスト
         """
+        if (
+            state in (RecordState.RECORDING, RecordState.PAUSED)
+            and captured_at is not None
+            and ctx.battle_started_at > 0
+            and captured_at >= ctx.battle_started_at
+        ):
+            status = await self._analyzer.detect_switch_capture(frame)
+            tracker, detected = ctx.switch_capture_tracker.observe(status)
+            metadata = ctx.metadata
+            if detected:
+                metadata = replace(
+                    metadata,
+                    switch_capture_elapsed_seconds=(
+                        *metadata.switch_capture_elapsed_seconds,
+                        round(captured_at - ctx.battle_started_at, 3),
+                    ),
+                )
+            ctx = replace(
+                ctx, switch_capture_tracker=tracker, metadata=metadata
+            )
+
         # PAUSED 状態は特別扱い（どのフェーズでも可能）
         if state is RecordState.PAUSED:
             return await self._paused.handle(frame, ctx, state)

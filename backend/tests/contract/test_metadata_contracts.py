@@ -417,6 +417,7 @@ def test_recorded_video_item_converter_stays_in_sync_with_recorded_video_dto() -
     None
 ):
     dto = RecordedVideoDTO(
+        switch_capture_elapsed_seconds=[42.35, 128.7],
         video_id="recorded/test.mp4",
         path=str(Path("/tmp/recorded/test.mp4")),
         filename="test.mp4",
@@ -454,6 +455,10 @@ def test_recorded_video_item_converter_stays_in_sync_with_recorded_video_dto() -
     assert item.silver_medals == dto.silver_medals
     assert item.allies == dto.allies
     assert item.enemies == dto.enemies
+    assert (
+        item.switch_capture_elapsed_seconds
+        == dto.switch_capture_elapsed_seconds
+    )
 
 
 def test_recorded_video_dto_metadata_fields_match_schema() -> None:
@@ -472,3 +477,63 @@ def test_recorded_video_dto_metadata_fields_match_schema() -> None:
         | BATTLE_METADATA_FIELDS
         | SALMON_METADATA_FIELDS
     )
+
+
+def test_switch_capture_json_round_trip_and_legacy_default(
+    tmp_path: Path,
+) -> None:
+    import json
+    import structlog
+    from splat_replay.infrastructure.repositories.asset_file_operations import (
+        AssetFileOperations,
+    )
+
+    operations = AssetFileOperations(structlog.get_logger())
+    metadata = RecordingMetadata(switch_capture_elapsed_seconds=(42.35, 128.7))
+    path = tmp_path / "recording.mp4"
+    assert operations.save_metadata(path, metadata)
+    payload = json.loads(path.with_suffix(".json").read_text())
+    assert payload["switch_capture_elapsed_seconds"] == [42.35, 128.7]
+    assert all(
+        isinstance(value, float)
+        for value in payload["switch_capture_elapsed_seconds"]
+    )
+    assert operations.load_metadata(path) == metadata
+    assert (
+        MetadataParser.from_dict(
+            {"game_mode": "BATTLE"}
+        ).switch_capture_elapsed_seconds
+        == ()
+    )
+    response = _build_recording_metadata_response(metadata)
+    assert response.switch_capture_elapsed_seconds == [42.35, 128.7]
+    assert "switch_capture_elapsed_seconds" not in EDITABLE_METADATA_FIELDS
+    assert (
+        MetadataParser.parse_metadata_updates(
+            metadata, {"switch_capture_elapsed_seconds": []}
+        )
+        == metadata
+    )
+
+
+@pytest.mark.parametrize(
+    "raw",
+    [[-1.0], [float("nan")], [float("inf")], [True], ["3.2"], "3.2", None],
+)
+def test_invalid_persisted_switch_capture_times_are_ignored(
+    raw: object,
+) -> None:
+    assert (
+        MetadataParser.from_dict(
+            {"game_mode": "BATTLE", "switch_capture_elapsed_seconds": raw}
+        ).switch_capture_elapsed_seconds
+        == ()
+    )
+
+
+@pytest.mark.parametrize("seconds", [-1.0, float("nan"), float("inf"), True])
+def test_invalid_switch_capture_times_cannot_enter_domain(
+    seconds: float,
+) -> None:
+    with pytest.raises(ValueError):
+        RecordingMetadata(switch_capture_elapsed_seconds=(seconds,))

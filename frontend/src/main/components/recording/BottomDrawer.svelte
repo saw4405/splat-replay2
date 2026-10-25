@@ -156,6 +156,10 @@
     processFlow.openProgress();
   }
 
+  export function dismissCompletionNotification(): void {
+    processFlow.dismissCompletionNotification();
+  }
+
   /**
    * 外部(MainAppなど)からドロワーの開閉を切り替えるための関数
    */

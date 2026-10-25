@@ -232,3 +232,32 @@ def test_capture_interval_rejects_negative_value() -> None:
 
     with np.testing.assert_raises(ValueError):
         producer.set_capture_interval(-0.1)
+
+
+def test_capture_timestamp_stays_with_queued_frame() -> None:
+    capture = _QueuedCapture()
+    frame = _frame(7)
+    clock_value = [42.0]
+
+    class Clock:
+        def now(self) -> float:
+            return clock_value[0]
+
+    queued = threading.Event()
+
+    class Publisher:
+        def publish_frame(self, frame: Frame) -> None:
+            clock_value[0] = 900.0
+            queued.set()
+
+    producer = FrameCaptureProducer(capture, Publisher(), clock=Clock())
+    capture.frames.put(frame)
+    producer.start()
+    try:
+        assert queued.wait(timeout=1.0)
+        captured = producer.get_captured_frame(timeout=1.0)
+        assert captured is not None
+        assert captured.frame is frame
+        assert captured.captured_at == 42.0
+    finally:
+        producer.stop()

@@ -78,13 +78,13 @@ const defaultTaskSteps: Record<string, Array<{ key: string; label: string }>> = 
     { key: 'caption', label: '字幕アップロード' },
     { key: 'thumb', label: 'サムネイルアップロード' },
     { key: 'playlist', label: 'プレイリスト追加' },
-    { key: 'delete', label: 'ファイル削除' },
+    { key: 'delete', label: 'ファイル整理' },
   ],
 };
 
 // バックエンドが別キーで送るケースのエイリアス定義
 const stageKeyAliases: Record<string, Record<string, string>> = {
-  auto_upload: { prepare: 'collect' },
+  auto_upload: { prepare: 'collect', retain: 'delete' },
 };
 
 // defaultTaskSteps から stageKey → {key, label} のマッピングを自動生成

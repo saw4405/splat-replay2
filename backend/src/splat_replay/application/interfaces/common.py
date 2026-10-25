@@ -12,6 +12,7 @@ from splat_replay.application.interfaces.data import (
     SpeechTranscriberSettingsView,
     UploadSettingsView,
     VideoEditSettingsView,
+    VideoStorageSettingsView,
 )
 
 
@@ -43,6 +44,8 @@ class ConfigPort(Protocol):
     def get_upload_settings(self) -> UploadSettingsView: ...
 
     def get_video_edit_settings(self) -> VideoEditSettingsView: ...
+
+    def get_video_storage_settings(self) -> VideoStorageSettingsView: ...
 
     def get_obs_settings(self) -> OBSSettingsView: ...
 

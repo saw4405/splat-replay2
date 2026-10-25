@@ -291,6 +291,12 @@ export function createProcessFlow(config: ProcessFlowConfig) {
     showAlertDialog = false;
   }
 
+  function dismissCompletionNotification(): void {
+    if (alertVariant === 'success') {
+      showAlertDialog = false;
+    }
+  }
+
   function destroy(): void {
     if (statusPollingInterval !== null) {
       clearInterval(statusPollingInterval);
@@ -343,6 +349,7 @@ export function createProcessFlow(config: ProcessFlowConfig) {
     startProcessing,
     handleYouTubePermissionDialogClose,
     handleAlertDialogClose,
+    dismissCompletionNotification,
     openProgress: syncProcessStatusFromServer,
     destroy,
   };

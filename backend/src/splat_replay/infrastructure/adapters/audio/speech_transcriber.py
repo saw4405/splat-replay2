@@ -99,7 +99,7 @@ class SpeechTranscriber(SpeechTranscriberPort):
         except sr.WaitTimeoutError:
             return None
         except Exception as e:
-            self._logger.error("リスニングエラー", error=str(e))
+            self._logger.error("リスニングエラー", error_type=type(e).__name__)
             return None
 
     def _recording_loop(self) -> None:
@@ -150,7 +150,7 @@ class SpeechTranscriber(SpeechTranscriberPort):
                 self._logger.error(
                     "マイク録音ループが停止しました",
                     device_index=self._microphone_index,
-                    error=str(exc),
+                    error_type=type(exc).__name__,
                 )
 
     def _recognition_loop(self) -> None:
@@ -174,7 +174,10 @@ class SpeechTranscriber(SpeechTranscriberPort):
                     )
                 )
             except Exception as e:
-                self._logger.error("音声認識処理に失敗しました", error=str(e))
+                self._logger.error(
+                    "音声認識処理に失敗しました",
+                    error_type=type(e).__name__,
+                )
                 result = None
 
             if result is None:

@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
+import shutil
 
 import cv2
 from structlog.stdlib import BoundLogger
@@ -253,6 +255,159 @@ class AssetFileOperations:
             file_path = base_path.with_suffix(suffix)
             if file_path.exists():
                 file_path.unlink(missing_ok=True)
+
+    def retain_asset(self, video: Path, destination_dir: Path) -> Path:
+        """関連ファイルを保全してから動画本体を保持先へ移す。
+
+        sidecar はコピーして検証し、動画本体の rename が成功するまで
+        元ファイルを残す。中断時は source 側の marker を使って再開する。
+        """
+        source = video.resolve()
+        destination_dir.mkdir(parents=True, exist_ok=True)
+        target = destination_dir / source.name
+        marker = source.with_name(f".{source.name}.retention.json")
+
+        if not marker.exists() and not source.exists():
+            if target.is_file():
+                return target
+            raise FileNotFoundError(f"保持対象がありません: {source}")
+
+        if marker.exists():
+            payload = self._load_retention_marker(marker, source.name)
+            sidecars = payload
+        else:
+            sidecars = [
+                suffix
+                for suffix in (".srt", ".png", ".json")
+                if source.with_suffix(suffix).is_file()
+            ]
+            for candidate in (
+                target,
+                *(target.with_suffix(s) for s in (".srt", ".png", ".json")),
+            ):
+                if candidate.exists():
+                    raise FileExistsError(
+                        f"保持先に同名ファイルがあります: {candidate}"
+                    )
+            if not source.is_file():
+                raise FileNotFoundError(f"保持対象がありません: {source}")
+            self._ensure_same_filesystem(source, destination_dir)
+            self._write_retention_marker(marker, source.name, sidecars)
+
+        if source.exists():
+            if target.exists():
+                raise FileExistsError(
+                    f"保持先に同名ファイルがあります: {target}"
+                )
+            self._ensure_same_filesystem(source, destination_dir)
+
+        for suffix in sidecars:
+            source_sidecar = source.with_suffix(suffix)
+            target_sidecar = target.with_suffix(suffix)
+            temporary = target_sidecar.with_name(
+                f".{target_sidecar.name}.retaining"
+            )
+
+            if target_sidecar.exists():
+                if source_sidecar.exists() and (
+                    source_sidecar.read_bytes() != target_sidecar.read_bytes()
+                ):
+                    raise FileExistsError(
+                        f"保持先の関連ファイルが一致しません: {target_sidecar}"
+                    )
+                continue
+
+            if not source_sidecar.is_file():
+                raise FileNotFoundError(
+                    f"保持対象の関連ファイルがありません: {source_sidecar}"
+                )
+
+            temporary.unlink(missing_ok=True)
+            shutil.copy2(source_sidecar, temporary)
+            if temporary.read_bytes() != source_sidecar.read_bytes():
+                raise OSError(
+                    f"関連ファイルのコピーを検証できません: {source_sidecar}"
+                )
+            if target_sidecar.exists():
+                raise FileExistsError(
+                    f"保持先に同名ファイルがあります: {target_sidecar}"
+                )
+            temporary.rename(target_sidecar)
+
+        if source.exists():
+            source.rename(target)
+        elif not target.is_file():
+            raise FileNotFoundError(
+                f"保持元と保持先の両方に動画がありません: {source}"
+            )
+
+        for suffix in sidecars:
+            source.with_suffix(suffix).unlink(missing_ok=True)
+            target.with_name(
+                f".{target.with_suffix(suffix).name}.retaining"
+            ).unlink(missing_ok=True)
+        marker.unlink(missing_ok=True)
+        marker.with_suffix(f"{marker.suffix}.tmp").unlink(missing_ok=True)
+        return target
+
+    def list_pending_retention(self, source_dir: Path) -> list[Path]:
+        """source directory に残る保持途中 marker の対象を返す。"""
+        pending: list[Path] = []
+        for marker in source_dir.glob(".*.retention.json"):
+            source_name = marker.name[1 : -len(".retention.json")]
+            self._load_retention_marker(marker, source_name)
+            pending.append(source_dir / source_name)
+        return pending
+
+    @staticmethod
+    def _load_retention_marker(marker: Path, source_name: str) -> list[str]:
+        try:
+            data = json.loads(marker.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as exc:
+            raise RuntimeError(
+                f"保持処理の記録を読めません: {marker}"
+            ) from exc
+
+        if (
+            not isinstance(data, dict)
+            or data.get("version") != 1
+            or data.get("source_name") != source_name
+            or not isinstance(data.get("sidecars"), list)
+            or not all(
+                isinstance(suffix, str) and suffix in (".srt", ".png", ".json")
+                for suffix in data["sidecars"]
+            )
+        ):
+            raise RuntimeError(f"保持処理の記録が不正です: {marker}")
+        return data["sidecars"]
+
+    @staticmethod
+    def _write_retention_marker(
+        marker: Path, source_name: str, sidecars: list[str]
+    ) -> None:
+        temporary = marker.with_suffix(f"{marker.suffix}.tmp")
+        temporary.unlink(missing_ok=True)
+        temporary.write_text(
+            json.dumps(
+                {
+                    "version": 1,
+                    "source_name": source_name,
+                    "sidecars": sidecars,
+                },
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+        if marker.exists():
+            raise FileExistsError(f"保持処理の記録が既にあります: {marker}")
+        os.rename(temporary, marker)
+
+    @staticmethod
+    def _ensure_same_filesystem(source: Path, destination_dir: Path) -> None:
+        if source.parent.stat().st_dev != destination_dir.stat().st_dev:
+            raise OSError(
+                f"保持元と保持先が別ファイルシステムです: {source} -> {destination_dir}"
+            )
 
 
 class AssetEventPublisher:

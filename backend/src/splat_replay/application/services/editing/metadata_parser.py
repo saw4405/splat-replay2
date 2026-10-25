@@ -139,7 +139,7 @@ class MetadataParser:
         applied_fields: set[str] = set()
 
         for field in COMMON_METADATA_FIELD_DEFINITIONS:
-            if field.key not in data:
+            if not field.editable or field.key not in data:
                 continue
             raw = data[field.key]
             if MetadataParser._is_clearable_common_field(field.key, raw):
@@ -266,4 +266,8 @@ class MetadataParser:
                 tuple[str, str, str, str] | None, common_values["enemies"]
             ),
             result=result,
+            switch_capture_elapsed_seconds=cast(
+                tuple[float, ...],
+                common_values["switch_capture_elapsed_seconds"] or (),
+            ),
         )

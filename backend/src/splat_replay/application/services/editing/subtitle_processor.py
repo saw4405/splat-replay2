@@ -84,14 +84,10 @@ class SubtitleProcessor:
         cancel_check: Callable[[], bool] | None = None,
     ) -> str:
         """字幕を作成してファイルに保存する。"""
-        subtitles: List[Path] = []
+        subtitles: List[Path | None] = []
         video_lengths: List[float] = []
         for asset in group:
             self._raise_if_cancelled(cancel_check)
-            if asset.subtitle is None:
-                continue
-            if not self._file_system.is_file(asset.subtitle):
-                continue
             video_length = await self.video_editor.get_video_length(
                 asset.video
             )
@@ -101,7 +97,12 @@ class SubtitleProcessor:
                     "動画の長さを取得できませんでした", video=str(asset.video)
                 )
                 continue
-            subtitles.append(asset.subtitle)
+            subtitles.append(
+                asset.subtitle
+                if asset.subtitle is not None
+                and self._file_system.is_file(asset.subtitle)
+                else None
+            )
             video_lengths.append(video_length)
 
         combined_srt = await asyncio.to_thread(
@@ -164,8 +165,8 @@ class SubtitleProcessor:
             except Exception as exc:  # noqa: BLE001
                 self.logger.error(
                     "字幕読み上げ生成に失敗しました",
-                    error=str(exc),
-                    subtitle=request.text,
+                    error_type=type(exc).__name__,
+                    text_length=len(request.text),
                 )
                 return
             if result.sample_rate_hz != speech_settings.sample_rate_hz:

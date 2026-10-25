@@ -65,6 +65,21 @@ async def _prepare_extract_rate(
 
 
 CASES: list[SpeedCase] = [
+    SpeedCase(
+        "detect_switch_capture_saving",
+        "detect_switch_capture",
+        "switch_capture_saving_1.png",
+    ),
+    SpeedCase(
+        "detect_switch_capture_saved",
+        "detect_switch_capture",
+        "switch_capture_saved_1.png",
+    ),
+    SpeedCase(
+        "detect_switch_capture_absent",
+        "detect_switch_capture",
+        "battle_start_1.png",
+    ),
     SpeedCase("detect_power_off", "detect_power_off", "power_off.png"),
     SpeedCase(
         "detect_match_select",

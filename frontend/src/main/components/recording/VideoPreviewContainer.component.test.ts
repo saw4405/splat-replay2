@@ -126,6 +126,24 @@ describe('VideoPreviewContainer.svelte', () => {
     vi.restoreAllMocks();
   });
 
+  it('Switchの電源待ちから録画準備に切り替わった時だけ親へ通知する', async () => {
+    vi.useFakeTimers();
+    fetchMock.mockResolvedValue(jsonResponse(false));
+    getAutoRecorderStateMock.mockResolvedValue({
+      state: 'running',
+      power_state: 'waiting_for_power_on',
+    });
+    const onRecordingReady = vi.fn();
+    render(VideoPreviewContainer, { props: { onRecordingReady } });
+    await vi.advanceTimersByTimeAsync(100);
+    expect(onRecordingReady).not.toHaveBeenCalled();
+    getAutoRecorderStateMock.mockResolvedValue({ state: 'running', power_state: 'armed' });
+    await vi.advanceTimersByTimeAsync(1500);
+    expect(onRecordingReady).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(1500);
+    expect(onRecordingReady).toHaveBeenCalledTimes(1);
+  });
+
   it('切断時は未接続を表示し、復旧操作を表示しない', async () => {
     fetchMock.mockImplementation(async (input: string | URL | Request) => {
       const url = input.toString();

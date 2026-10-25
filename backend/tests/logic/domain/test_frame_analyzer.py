@@ -836,3 +836,36 @@ async def test_extract_session_result(
     frame = load_image(filename)
     result = await analyzer.extract_session_result(frame, GameMode.BATTLE)
     assert result == expected
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "filename, expected",
+    [
+        ("switch_capture_saving_1.png", "saving"),
+        ("switch_capture_saving_2.png", "saving"),
+        ("switch_capture_saved_1.png", "saved"),
+        ("switch_capture_saved_2.png", "saved"),
+        ("battle_start_1.png", None),
+        ("loading_1.png", None),
+        ("battle_result_18.png", None),
+    ],
+)
+async def test_detect_switch_capture(
+    analyzer: FrameAnalyzer,
+    load_image: Callable[[str], np.ndarray],
+    filename: str,
+    expected: str | None,
+) -> None:
+    assert (
+        await analyzer.detect_switch_capture(load_image(filename)) == expected
+    )
+
+
+@pytest.mark.asyncio
+async def test_capture_text_without_video_icon_is_not_a_video_save(
+    analyzer: FrameAnalyzer, load_image: Callable[[str], np.ndarray]
+) -> None:
+    image = load_image("switch_capture_saving_1.png")
+    image[80:115, 125:175] = 0
+    assert await analyzer.detect_switch_capture(image) is None
