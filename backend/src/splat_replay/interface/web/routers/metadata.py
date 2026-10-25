@@ -57,6 +57,10 @@ def create_metadata_router(server: WebAPIServer) -> APIRouter:
     async def get_metadata_options() -> MetadataOptionsResponse:
         """メタデータの選択肢を取得。"""
         return MetadataOptionsResponse(
+            weapons=[
+                MetadataOptionItem(key=name, label=name)
+                for name in server.weapon_names
+            ],
             game_modes=[
                 MetadataOptionItem(key=mode.name, label=mode.value)
                 for mode in GameMode

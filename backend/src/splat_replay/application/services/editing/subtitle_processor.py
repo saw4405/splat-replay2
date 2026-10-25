@@ -22,7 +22,7 @@ from splat_replay.application.interfaces.data import SpeechSynthesisRequest
 from splat_replay.application.interfaces.image import SubtitleEditorPort
 from splat_replay.application.interfaces.audio import TextToSpeechPort
 from splat_replay.application.interfaces.video import (
-    VideoAssetRepositoryPort,
+    EditedSubtitleWriter,
     VideoEditorPort,
 )
 from splat_replay.domain.models import VideoAsset
@@ -38,7 +38,7 @@ class SubtitleProcessor:
         subtitle_editor: SubtitleEditorPort,
         text_to_speech: TextToSpeechPort,
         video_editor: VideoEditorPort,
-        repo: VideoAssetRepositoryPort,
+        repo: EditedSubtitleWriter,
         file_system: FileSystemPort,
     ):
         self.logger = logger

@@ -126,6 +126,17 @@ class _HistorySpy:
 
 
 class _DummyVideoEditor:
+    async def cut_segment(
+        self,
+        source: Path,
+        start_seconds: float,
+        end_seconds: float,
+        output: Path,
+        **kwargs: object,
+    ) -> Path:
+        _ = source, start_seconds, end_seconds, kwargs
+        return output
+
     async def merge(
         self, clips: list[Path], output: Path, **kwargs: object
     ) -> Path:

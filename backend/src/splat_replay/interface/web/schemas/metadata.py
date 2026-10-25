@@ -34,6 +34,7 @@ class MetadataOptionsResponse(BaseModel):
     matches: List[MetadataOptionItem]
     rules: List[MetadataOptionItem]
     stages: List[MetadataOptionItem]
+    weapons: List[MetadataOptionItem] = Field(default_factory=list)
     judgements: List[MetadataOptionItem]
 
 

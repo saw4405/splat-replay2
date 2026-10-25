@@ -2337,6 +2337,24 @@ async def test_request_cancel_prevents_late_apply() -> None:
 
 
 @pytest.mark.asyncio
+async def test_close_waits_for_cancelled_recognizer_worker() -> None:
+    recognizer = _CancelRecognizer()
+    service = WeaponDetectionService(
+        cast(WeaponRecognitionPort, recognizer),
+        cast(LoggerPort, _SpyLogger()),
+        cast(EventBusPort, _SpyEventBus()),
+    )
+
+    await service.process(frame=_frame(1), context=_new_context(1.0))
+    await _wait_thread_event(recognizer.started, timeout=0.2)
+    await asyncio.wait_for(service.close(), timeout=1.0)
+
+    assert recognizer.cancel_requests == 1
+    assert recognizer.release.is_set()
+    assert service._inflight_task is None
+
+
+@pytest.mark.asyncio
 async def test_finalize_for_finish_uses_frame_history_when_detection_pending() -> (
     None
 ):
@@ -2522,3 +2540,38 @@ async def test_detection_window_uses_injected_clock() -> None:
 
     assert recognizer.detect_calls == 0
     assert context.weapon_detection_done is True
+
+
+@pytest.mark.asyncio
+async def test_offline_wait_times_out_display_detection_and_cancels_worker(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class Recognizer(_BlockingRecognizer):
+        def request_cancel(self) -> None:
+            self.release.set()
+
+        async def detect_weapon_display(self, frame: np.ndarray) -> bool:
+            self.started.set()
+            await _wait_thread_event(self.release, timeout=3)
+            return False
+
+    recognizer = Recognizer()
+    service = WeaponDetectionService(
+        cast(WeaponRecognitionPort, recognizer),
+        cast(LoggerPort, _SpyLogger()),
+        cast(EventBusPort, _SpyEventBus()),
+    )
+    context = await service.process(frame=_frame(1), context=_new_context(1.0))
+    await _wait_thread_event(recognizer.started, timeout=1)
+    monkeypatch.setattr(
+        weapon_detection_service_module,
+        "DETECTION_RECOGNITION_TIMEOUT_SECONDS",
+        0.01,
+    )
+    try:
+        with pytest.raises(TimeoutError, match="制限時間内"):
+            await service.wait_for_pending(context=context)
+        assert recognizer.release.is_set()
+    finally:
+        recognizer.release.set()
+        await service.close()

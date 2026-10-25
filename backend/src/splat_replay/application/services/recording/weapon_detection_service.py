@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import time
 from collections import deque
 from dataclasses import dataclass, replace
@@ -125,6 +126,7 @@ class WeaponDetectionService:
         self._detection_window_seconds = detection_window_seconds
         self._clock = clock or _WallClock()
         self._generation = 0
+        self._recognizer_cancel_serial = 0
         self._active_battle_started_at: float | None = None
         self._inflight_task: asyncio.Task[_WeaponTaskResult] | None = None
         self._report_output_task: asyncio.Task[None] | None = None
@@ -160,6 +162,17 @@ class WeaponDetectionService:
         self._window_closed = False
         self._finalize_started = False
         self._predict_weapons_output_attempted = False
+
+    async def close(self) -> None:
+        """認識・診断タスクを終了してから認識器を解放する。"""
+        tasks = [
+            task
+            for task in (self._inflight_task, self._report_output_task)
+            if task is not None and not task.done()
+        ]
+        self.request_cancel()
+        if tasks:
+            await asyncio.gather(*tasks, return_exceptions=True)
 
     async def process(
         self,
@@ -235,6 +248,22 @@ class WeaponDetectionService:
         self._cleanup_report_output_task()
         return await self._drain_completed_task(context)
 
+    async def wait_for_pending(
+        self, *, context: RecordingContext
+    ) -> RecordingContext:
+        """オフライン入力が次の動画時刻へ進む前に現在の認識を確定する。"""
+        inflight = self._inflight_task
+        if inflight is not None:
+            done, _ = await asyncio.wait(
+                {inflight}, timeout=DETECTION_RECOGNITION_TIMEOUT_SECONDS
+            )
+            if not done:
+                await self.close()
+                raise TimeoutError(
+                    "ブキ判別が制限時間内に完了しませんでした。"
+                )
+        return await self._drain_completed_task(context)
+
     async def finalize_for_finish(
         self,
         *,
@@ -254,8 +283,10 @@ class WeaponDetectionService:
             return context
 
         if self._inflight_task is not None:
+            inflight = self._inflight_task
             self._request_recognizer_cancel()
             self._cancel_inflight_task()
+            await asyncio.gather(inflight, return_exceptions=True)
 
         elapsed = max(0.0, self._clock.now() - context.battle_started_at)
         self._window_closed = True
@@ -354,6 +385,7 @@ class WeaponDetectionService:
         self._active_battle_started_at = battle_started_at
 
     def _request_recognizer_cancel(self) -> None:
+        self._recognizer_cancel_serial += 1
         self._recognizer.request_cancel()
 
     def _cancel_inflight_task(self) -> None:
@@ -384,11 +416,21 @@ class WeaponDetectionService:
         factory: Callable[[], Coroutine[Any, Any, _T]],
     ) -> _T:
         """CPU負荷の高い recognizer 呼び出しをワーカースレッドへ逃がす。"""
+        cancel_serial = self._recognizer_cancel_serial
 
         def _run_in_worker_thread() -> _T:
             return asyncio.run(factory())
 
-        return await asyncio.to_thread(_run_in_worker_thread)
+        worker = asyncio.create_task(asyncio.to_thread(_run_in_worker_thread))
+        try:
+            return await asyncio.shield(worker)
+        except asyncio.CancelledError:
+            if cancel_serial == self._recognizer_cancel_serial:
+                self._request_recognizer_cancel()
+            # recognizer側の取消しが反映されるまでworkerの終了を待つ。
+            with contextlib.suppress(Exception, asyncio.CancelledError):
+                await asyncio.shield(worker)
+            raise
 
     async def _detect_weapon_display_details(
         self,

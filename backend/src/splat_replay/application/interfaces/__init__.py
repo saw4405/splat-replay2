@@ -64,6 +64,12 @@ from splat_replay.application.interfaces.image import (
     ImageSelector,
     SubtitleEditorPort,
 )
+from splat_replay.application.interfaces.imported_video import (
+    ImportedVideoFrameReaderPort,
+    ImportedVideoProbePort,
+    ImportedVideoRepositoryPort,
+    ImportedVideoWeaponRecognitionFactoryPort,
+)
 from splat_replay.application.interfaces.messaging import (
     CommandDispatcher,
     DomainEventPublisher,
@@ -209,6 +215,10 @@ __all__ = [
     "ImageEditorPort",
     "ImageMatcherPort",
     "ImageSelector",
+    "ImportedVideoFrameReaderPort",
+    "ImportedVideoProbePort",
+    "ImportedVideoRepositoryPort",
+    "ImportedVideoWeaponRecognitionFactoryPort",
     "OCRPort",
     "SubtitleEditorPort",
     # Upload

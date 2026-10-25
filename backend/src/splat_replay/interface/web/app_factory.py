@@ -25,6 +25,7 @@ from splat_replay.interface.web.routers import (
     create_events_router,
     create_file_serving_router,
     create_history_router,
+    create_imported_videos_router,
     create_metadata_router,
     create_notifications_router,
     create_process_router,
@@ -84,6 +85,7 @@ def create_app(
         import asyncio
 
         signals = getattr(_app.state, "desktop_signals", None)
+        await server.imported_video_service.resume_pending()
         auto_recording_use_case = server.auto_recording_use_case_factory()
         if signals is not None:
             maintenance = DesktopMaintenance(
@@ -180,6 +182,7 @@ def create_app(
                 with contextlib.suppress(asyncio.CancelledError):
                     await auto_process_task
                 auto_recording_use_case.maintenance_check = None
+                await server.imported_video_service.shutdown()
             finally:
                 await server.video_preview_service.close()
 
@@ -292,6 +295,10 @@ def create_app(
 
     history_router = create_history_router(server)
     app.include_router(history_router)
+
+    app.include_router(
+        create_imported_videos_router(server.imported_video_service)
+    )
 
     # === SPA用 Catch-all ルート (最後に定義してAPIルートより優先度を下げる) ===
     if frontend_exists:

@@ -57,6 +57,18 @@ class VideoEditorPort(Protocol):
         """Merge multiple video clips into one."""
         ...
 
+    async def cut_segment(
+        self,
+        source: Path,
+        start_seconds: float,
+        end_seconds: float,
+        output: Path,
+        *,
+        cancel_check: Optional[Callable[[], bool]] = None,
+    ) -> Path:
+        """動画から指定範囲を正確に再エンコードして切り出す。"""
+        ...
+
     async def embed_metadata(
         self,
         path: Path,
@@ -253,3 +265,9 @@ class VideoAssetRepositoryPort(Protocol):
     ) -> bool:
         """Save metadata dict for edited video."""
         ...
+
+
+class EditedSubtitleWriter(Protocol):
+    """編集結果の字幕だけを保存する境界。"""
+
+    def save_edited_subtitle(self, video: Path, content: str) -> bool: ...

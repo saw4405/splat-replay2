@@ -24,9 +24,19 @@ __all__ = [
     # Subtitle DTO
     "SubtitleBlockDTO",
     "SubtitleDataDTO",
+    "ImportedBattleDTO",
+    "ImportedVideoInfo",
+    "ImportedVideoJobDTO",
+    "ImportJobState",
 ]
 
 from .assets import EditedVideoDTO, EditUploadStatusDTO, RecordedVideoDTO
+from .imported_video import (
+    ImportedBattleDTO,
+    ImportedVideoInfo,
+    ImportedVideoJobDTO,
+    ImportJobState,
+)
 from .metadata import RecordingMetadataPatchDTO, SubtitleDTO
 from .replay import ReplayBootstrapDTO
 from .subtitle import SubtitleBlockDTO, SubtitleDataDTO

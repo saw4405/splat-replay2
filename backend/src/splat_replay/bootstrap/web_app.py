@@ -2,15 +2,30 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import sys
 from typing import Any, AsyncGenerator, Dict, Literal
 
 import punq
 from fastapi import FastAPI
 from splat_replay.application.interfaces import (
+    ConfigPort,
+    FileSystemPort,
+    ImageSelector,
+    PathsPort,
+    SubtitleEditorPort,
+    TextToSpeechPort,
+    ThumbnailRuleImageResolverPort,
     DesktopNotificationPort,
     EventBusPort,
     FramePreviewPort,
+    ImportedVideoProbePort,
+    LoggerPort,
+    VideoEditorPort,
+)
+from splat_replay.application.interfaces.imported_video import (
+    ImportedVideoWeaponRecognitionFactoryPort,
 )
 from splat_replay.application.services import (
     AutoRecorder,
@@ -24,6 +39,15 @@ from splat_replay.application.services import (
 )
 from splat_replay.application.services.common.settings_service import (
     SettingsService,
+)
+from splat_replay.application.services.common.subtitle_converter import (
+    SubtitleConverter,
+)
+from splat_replay.application.services.editing.imported_video_renderer import (
+    ImportedVideoRenderer,
+)
+from splat_replay.application.services.imported_video_service import (
+    ImportedVideoService,
 )
 from splat_replay.application.services.process.auto_process_service import (
     AutoProcessService,
@@ -51,11 +75,18 @@ from splat_replay.application.use_cases.metadata import (
     UpdateRecordedMetadataUseCase,
     UpdateRecordedSubtitleStructuredUseCase,
 )
-from splat_replay.domain.config import AppSettings
+from splat_replay.domain.config import AppSettings, ImageMatchingSettings
+from splat_replay.domain.services import FrameAnalyzer
 from splat_replay.infrastructure.adapters.system.gui_runtime_port_adapter import (
     GuiRuntimePortAdapter,
 )
+from splat_replay.infrastructure.adapters.capture.imported_video_frame_reader import (
+    OpenCVImportedVideoFrameReader,
+)
 from splat_replay.infrastructure.di import configure_container, resolve
+from splat_replay.infrastructure.repositories.imported_video_repo import (
+    FileImportedVideoRepository,
+)
 from splat_replay.infrastructure.di.runtime_profile import (
     resolve_runtime_profile,
 )
@@ -117,6 +148,32 @@ def build_web_api_server(container: punq.Container) -> WebAPIServer:
     # 録画ファイル保存先を取得
     app_settings = resolve(container, AppSettings)
     base_dir = app_settings.storage.base_dir
+    imported_video_service = ImportedVideoService(
+        renderer=ImportedVideoRenderer(
+            logger=resolve(container, LoggerPort),
+            config=resolve(container, ConfigPort),
+            paths=resolve(container, PathsPort),
+            video_editor=resolve(container, VideoEditorPort),
+            subtitle_editor=resolve(container, SubtitleEditorPort),
+            image_selector=container.resolve(ImageSelector),
+            text_to_speech=resolve(container, TextToSpeechPort),
+            rule_image_resolver=resolve(
+                container, ThumbnailRuleImageResolverPort
+            ),
+            file_system=resolve(container, FileSystemPort),
+        ),
+        repository=FileImportedVideoRepository(base_dir),
+        frame_reader=OpenCVImportedVideoFrameReader(),
+        probe=resolve(container, ImportedVideoProbePort),
+        video_editor=resolve(container, VideoEditorPort),
+        frame_preview=frame_preview,
+        analyzer=resolve(container, FrameAnalyzer),
+        subtitle_converter=resolve(container, SubtitleConverter),
+        weapon_recognition_factory=resolve(
+            container, ImportedVideoWeaponRecognitionFactoryPort
+        ),
+        logger=resolve(container, LoggerPort),
+    )
 
     def preview_mode_resolver() -> Literal["live_capture", "video_file"]:
         return (
@@ -211,7 +268,7 @@ def build_web_api_server(container: punq.Container) -> WebAPIServer:
         finally:
             transcriber.stop()
 
-    return WebAPIServer(
+    server = WebAPIServer(
         settings_service=settings_service,
         setup_service=setup_service,
         system_check_service=system_check_service,
@@ -234,6 +291,7 @@ def build_web_api_server(container: punq.Container) -> WebAPIServer:
         runtime_root=RUNTIME_ROOT,
         base_dir=base_dir,
         assets_dir=ASSETS_DIR,
+        imported_video_service=imported_video_service,
         # Assets Use Cases
         list_recorded_videos_uc=list_recorded_videos_uc,
         delete_recorded_video_uc=delete_recorded_video_uc,
@@ -250,6 +308,17 @@ def build_web_api_server(container: punq.Container) -> WebAPIServer:
         # Speech test
         speech_test_fn=speech_test_fn,
     )
+    matching_settings = resolve(container, ImageMatchingSettings)
+    weapon_names: set[str] = set()
+    for key in matching_settings.matcher_groups.get("weapon_templates", []):
+        config = matching_settings.matchers.get(key)
+        if config is None or not config.template_path:
+            continue
+        stem = Path(config.template_path.replace("\\", "/")).stem.casefold()
+        if "_variant" not in stem and not stem.endswith("_mask"):
+            weapon_names.add(config.name or key)
+    server.weapon_names = tuple(sorted(weapon_names))
+    return server
 
 
 def create_app(

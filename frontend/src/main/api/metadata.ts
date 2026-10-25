@@ -23,6 +23,7 @@ type RawMetadataOptionItem = {
 };
 
 type RawMetadataOptionsResponse = {
+  weapons?: RawMetadataOptionItem[];
   game_modes: RawMetadataOptionItem[];
   matches: RawMetadataOptionItem[];
   rules: RawMetadataOptionItem[];
@@ -61,6 +62,7 @@ export async function updateRecordedVideoMetadata(
 
 function mapMetadataOptions(raw: RawMetadataOptionsResponse): MetadataOptions {
   return {
+    weapons: raw.weapons ?? [],
     gameModes: raw.game_modes ?? [],
     matches: raw.matches ?? [],
     rules: raw.rules ?? [],
@@ -79,6 +81,7 @@ export function buildMetadataOptionMap(
     }, {});
 
   return {
+    weapons: toMap(options.weapons ?? []),
     gameModes: toMap(options.gameModes),
     matches: toMap(options.matches),
     rules: toMap(options.rules),

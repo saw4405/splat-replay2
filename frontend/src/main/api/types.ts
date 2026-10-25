@@ -129,6 +129,7 @@ export interface MetadataOptionItem {
 }
 
 export interface MetadataOptions {
+  weapons?: MetadataOptionItem[];
   gameModes: MetadataOptionItem[];
   matches: MetadataOptionItem[];
   rules: MetadataOptionItem[];

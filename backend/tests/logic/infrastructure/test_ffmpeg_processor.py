@@ -4,13 +4,106 @@ import threading
 from pathlib import Path
 from subprocess import CompletedProcess
 from typing import cast
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
 from splat_replay.infrastructure.adapters.video.ffmpeg_processor import (
     FFmpegProcessor,
 )
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("stderr", "expected"),
+    [
+        (
+            "Error muxing a packet: No space left on device",
+            "動画保存先の空き容量が不足",
+        ),
+        ("Invalid data found when processing input", "FFmpeg終了コード 228"),
+    ],
+)
+async def test_merge_failure_explains_cause_and_keeps_source(
+    tmp_path: Path, stderr: str, expected: str
+) -> None:
+    """終了コードだけでは容量不足と断定せず、FFmpegの原因を表示する。"""
+    logger = MagicMock()
+    processor = FFmpegProcessor(logger)
+    source = tmp_path / "source.mkv"
+    source.write_bytes(b"original")
+    output = tmp_path / "merged.mkv"
+    output.write_bytes(b"partial")
+    result = CompletedProcess(["ffmpeg"], 228, "", stderr)
+
+    with patch.object(processor, "_run_text", AsyncMock(return_value=result)):
+        with pytest.raises(RuntimeError, match=expected) as error:
+            await processor.merge([source], output)
+
+    if "No space left on device" in stderr:
+        assert "ゴミ箱も空にしてから" in str(error.value)
+        assert "もう一度実行" in str(error.value)
+        assert "作業用の空き容量" in str(error.value)
+        assert "FFmpeg終了コード" not in str(error.value)
+    assert source.read_bytes() == b"original"
+    assert not output.exists()
+    assert not (tmp_path / "concat.txt").exists()
+    logger.error.assert_called_once_with(
+        "FFmpeg: 結合に失敗", error=stderr, output=""
+    )
+
+
+@pytest.mark.parametrize("binary_stderr", [False, True])
+def test_embed_disk_full_explains_recovery_and_keeps_original(
+    tmp_path: Path, binary_stderr: bool
+) -> None:
+    processor = FFmpegProcessor(MagicMock())
+    original = tmp_path / "original.mkv"
+    original.write_bytes(b"original")
+    temporary = tmp_path / "temp.mkv"
+    temporary.write_bytes(b"partial")
+    result: CompletedProcess[str] | CompletedProcess[bytes]
+    if binary_stderr:
+        result = CompletedProcess(
+            ["ffmpeg"], 228, b"", b"No space left on device"
+        )
+    else:
+        result = CompletedProcess(
+            ["ffmpeg"], 228, "", "No space left on device"
+        )
+
+    with pytest.raises(RuntimeError, match="動画保存先の空き容量が不足"):
+        processor._commit_temp_output(
+            original, temporary, result, "メタデータ埋め込み失敗"
+        )
+
+    assert original.read_bytes() == b"original"
+    assert not temporary.exists()
+
+
+@pytest.mark.asyncio
+async def test_cut_disk_full_explains_recovery_and_removes_partial_output(
+    tmp_path: Path,
+) -> None:
+    processor = FFmpegProcessor(MagicMock())
+    source = tmp_path / "source.mkv"
+    source.write_bytes(b"original")
+    output = tmp_path / "cut.mp4"
+    temporary = tmp_path / ".cut.cutting.mp4"
+
+    async def fail_ffmpeg(
+        *args: object, **kwargs: object
+    ) -> CompletedProcess[str]:
+        temporary.write_bytes(b"partial")
+        return CompletedProcess(["ffmpeg"], 228, "", "No space left on device")
+
+    with patch.object(processor, "_run_text", side_effect=fail_ffmpeg):
+        with pytest.raises(RuntimeError, match="動画保存先の空き容量が不足"):
+            await processor.cut_segment(source, 0.0, 1.0, output)
+
+    assert source.read_bytes() == b"original"
+    assert not output.exists()
+    assert not temporary.exists()
 
 
 @pytest.mark.asyncio

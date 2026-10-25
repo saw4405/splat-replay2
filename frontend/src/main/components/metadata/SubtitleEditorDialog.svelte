@@ -9,10 +9,21 @@
     visible?: boolean;
     videoId: string;
     videoUrl: string;
-    onSaved?: () => void;
+    onSaved?: (data: SubtitleData) => void | Promise<void>;
+    loadSubtitle?: (videoId: string) => Promise<SubtitleData>;
+    saveSubtitle?: (videoId: string, data: SubtitleData) => Promise<SubtitleData>;
+    saveNotice?: string;
   }
 
-  let { visible = $bindable(false), videoId, videoUrl, onSaved }: Props = $props();
+  let {
+    visible = $bindable(false),
+    videoId,
+    videoUrl,
+    onSaved,
+    loadSubtitle: loadSubtitleData = getRecordedSubtitle,
+    saveSubtitle: saveSubtitleData = updateRecordedSubtitle,
+    saveNotice,
+  }: Props = $props();
 
   let subtitleData = $state<SubtitleData | null>(null);
   let blocks = $state<SubtitleBlock[]>([]);
@@ -78,7 +89,7 @@
     error = null;
     videoElementDuration = null;
     try {
-      subtitleData = await getRecordedSubtitle(videoId);
+      subtitleData = await loadSubtitleData(videoId);
       blocks = [...subtitleData.blocks];
       videoDuration = subtitleData.video_duration;
     } catch (err) {
@@ -108,8 +119,8 @@
         video_duration: videoDuration,
       };
 
-      await updateRecordedSubtitle(videoId, updatedData);
-      onSaved?.();
+      const savedData = await saveSubtitleData(videoId, updatedData);
+      await onSaved?.(savedData);
       close();
     } catch (err) {
       error = `字幕の保存に失敗しました: ${err}`;
@@ -548,6 +559,9 @@
       <div class="error">{error}</div>
     {:else}
       <div class="dialog-body">
+        {#if saveNotice}
+          <p class="save-notice" role="status">{saveNotice}</p>
+        {/if}
         <!-- 動画プレビュー -->
         <div class="video-preview">
           <div class="video-wrapper">
@@ -845,6 +859,16 @@
 
   .error {
     color: var(--theme-status-danger-soft);
+  }
+
+  .save-notice {
+    margin: 0 0 1rem;
+    border: 1px solid var(--glass-border);
+    border-radius: 0.55rem;
+    padding: 0.7rem 0.85rem;
+    color: var(--theme-color-text-primary);
+    background: rgba(var(--theme-rgb-accent), 0.1);
+    font-size: 0.85rem;
   }
 
   /* 動画プレビュー */

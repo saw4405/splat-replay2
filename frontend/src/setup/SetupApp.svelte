@@ -11,6 +11,7 @@
     TranscriptionSetup,
     YouTubeSetup,
   } from './components/steps';
+  import ImportedVideoEntry from '../main/components/imported/ImportedVideoEntry.svelte';
 
   // 各ステップのコンポーネント
   let currentStepComponent = $state<Component | null>(null);
@@ -45,6 +46,7 @@
 </script>
 
 <main class="setup-app">
+  <div class="setup-import-entry"><ImportedVideoEntry /></div>
   <SetupWizard {currentStepComponent}></SetupWizard>
 </main>
 
@@ -58,6 +60,13 @@
     padding: 1rem;
     overflow: hidden;
     box-sizing: border-box;
+  }
+
+  .setup-import-entry {
+    position: fixed;
+    top: 1rem;
+    right: 1rem;
+    z-index: 20;
   }
 
   @media (max-width: 768px) {

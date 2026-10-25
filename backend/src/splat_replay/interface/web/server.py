@@ -24,6 +24,9 @@ from splat_replay.application.services import (
 from splat_replay.application.services.playback.video_preview import (
     VideoPreviewService,
 )
+from splat_replay.application.services.imported_video_service import (
+    ImportedVideoService,
+)
 from splat_replay.application.services.common.settings_service import (
     SettingsService,
 )
@@ -63,6 +66,7 @@ class WebAPIServer:
     - Use Case の保持
     """
 
+    weapon_names: tuple[str, ...] = ()
     settings_service: SettingsService
     setup_service: SetupService
     system_check_service: SystemCheckService
@@ -86,6 +90,7 @@ class WebAPIServer:
     runtime_root: Path
     base_dir: Path
     assets_dir: Path
+    imported_video_service: ImportedVideoService
 
     # Assets Use Cases
     list_recorded_videos_uc: ListRecordedVideosUseCase
@@ -136,6 +141,7 @@ class WebAPIServer:
         runtime_root: Path,
         base_dir: Path,
         assets_dir: Path,
+        imported_video_service: ImportedVideoService,
         # Assets Use Cases
         list_recorded_videos_uc: ListRecordedVideosUseCase,
         delete_recorded_video_uc: DeleteRecordedVideoUseCase,
@@ -212,6 +218,7 @@ class WebAPIServer:
         self.runtime_root = runtime_root
         self.base_dir = base_dir
         self.assets_dir = assets_dir
+        self.imported_video_service = imported_video_service
 
         # Assets Use Cases
         self.list_recorded_videos_uc = list_recorded_videos_uc

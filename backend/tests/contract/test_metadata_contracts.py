@@ -537,3 +537,22 @@ def test_invalid_switch_capture_times_cannot_enter_domain(
 ) -> None:
     with pytest.raises(ValueError):
         RecordingMetadata(switch_capture_elapsed_seconds=(seconds,))
+
+
+def test_metadata_options_include_injected_weapon_labels() -> None:
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+    from splat_replay.interface.web.routers.metadata import (
+        create_metadata_router,
+    )
+    from splat_replay.interface.web.server import WebAPIServer
+
+    server = object.__new__(WebAPIServer)
+    server.weapon_names = ("スプラシューター", "わかばシューター")
+    app = FastAPI()
+    app.include_router(create_metadata_router(server))
+    response = TestClient(app).get("/api/metadata/options")
+    assert response.status_code == 200
+    assert response.json()["weapons"] == [
+        {"key": name, "label": name} for name in server.weapon_names
+    ]

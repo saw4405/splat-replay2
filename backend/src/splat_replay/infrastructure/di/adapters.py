@@ -24,6 +24,8 @@ from splat_replay.application.interfaces import (
     EventPublisher,
     FramePublisher,
     FramePreviewPort,
+    ImportedVideoWeaponRecognitionFactoryPort,
+    ImportedVideoProbePort,
     ImageSelector,
     LoggerPort,
     MicrophoneEnumeratorPort,
@@ -45,7 +47,11 @@ from splat_replay.application.interfaces import (
     WeaponRecognitionPort,
     XPDetectionDiagnosticsPort,
 )
-from splat_replay.domain.config import VideoEditSettings, VideoStorageSettings
+from splat_replay.domain.config import (
+    ImageMatchingSettings,
+    VideoEditSettings,
+    VideoStorageSettings,
+)
 from splat_replay.domain.models import Frame
 from splat_replay.domain.ports import (
     BattleMedalRecognizerPort,
@@ -240,6 +246,7 @@ def register_adapters(
         scope=punq.Scope.singleton,
     )
     container.register(VideoEditorPort, FFmpegProcessor)
+    container.register(ImportedVideoProbePort, FFmpegProcessor)
     container.register(
         FramePreviewPort,
         FFmpegProcessor,
@@ -364,6 +371,21 @@ def register_adapters(
             WeaponRecognitionAdapter,
             scope=punq.Scope.singleton,
         )
+
+    from splat_replay.infrastructure.adapters.weapon_detection.imported_video_factory import (
+        ImportedVideoWeaponRecognitionFactory,
+    )
+
+    container.register(
+        ImportedVideoWeaponRecognitionFactoryPort,
+        instance=ImportedVideoWeaponRecognitionFactory(
+            profile=profile,
+            settings=cast(
+                ImageMatchingSettings, container.resolve(ImageMatchingSettings)
+            ),
+            logger=cast(LoggerPort, container.resolve(LoggerPort)),
+        ),
+    )
 
     def _text_to_speech_factory() -> TextToSpeechPort | None:
         try:

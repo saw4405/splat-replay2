@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import json
+import math
 import subprocess
 import threading
 from asyncio import subprocess as asyncio_subprocess
@@ -16,10 +17,32 @@ from splat_replay.application.interfaces import (
     FramePreviewPort,
     VideoEditorPort,
 )
+from splat_replay.application.dto.imported_video import ImportedVideoInfo
+from splat_replay.application.interfaces.imported_video import (
+    ImportedVideoProbePort,
+)
 from structlog.stdlib import BoundLogger
 
 
-class FFmpegProcessor(VideoEditorPort, FramePreviewPort):
+# 持込動画の解析・切り出しだけで使う。playlist等のdemuxerとネットワークprotocolを許可しない。
+_IMPORTED_VIDEO_DEMUXERS = "mov,matroska,avi"
+_IMPORTED_VIDEO_PROTOCOLS = "file,pipe"
+_IMPORTED_VIDEO_FORMAT_NAMES = {
+    "mov",
+    "mp4",
+    "m4a",
+    "3gp",
+    "3g2",
+    "mj2",
+    "matroska",
+    "webm",
+    "avi",
+}
+
+
+class FFmpegProcessor(
+    VideoEditorPort, FramePreviewPort, ImportedVideoProbePort
+):
     """Provides high-level helpers around ffmpeg/ffprobe commands."""
 
     def __init__(self, logger: BoundLogger) -> None:
@@ -513,6 +536,23 @@ class FFmpegProcessor(VideoEditorPort, FramePreviewPort):
             stdout = stdout_raw or ""
         self.logger.error(message, error=stderr, output=stdout)
 
+    @staticmethod
+    def _failure_message(
+        result: CompletedProcess[str] | CompletedProcess[bytes],
+        fallback: str,
+    ) -> str:
+        """容量不足は原因と再実行の手順を伝え、詳細はログへ残す。"""
+        stderr = result.stderr or ""
+        if isinstance(stderr, bytes):
+            stderr = stderr.decode("utf-8", errors="replace")
+        if "no space left on device" in stderr.lower():
+            return (
+                "動画保存先の空き容量が不足しているため、動画を保存できませんでした。"
+                "不要なファイルを削除し、ゴミ箱も空にしてから、もう一度実行してください。"
+                "編集には、元動画とは別に作業用の空き容量が必要です。"
+            )
+        return fallback
+
     def _commit_temp_output(
         self,
         original: Path,
@@ -524,7 +564,10 @@ class FFmpegProcessor(VideoEditorPort, FramePreviewPort):
             temp.unlink(missing_ok=True)
             self._log_failure(failure_message, result)
             raise RuntimeError(
-                f"{failure_message}: FFmpeg終了コード {result.returncode}"
+                self._failure_message(
+                    result,
+                    f"{failure_message}: FFmpeg終了コード {result.returncode}",
+                )
             )
         if not temp.is_file():
             raise RuntimeError(f"{failure_message}: 出力ファイルがありません")
@@ -646,9 +689,165 @@ class FFmpegProcessor(VideoEditorPort, FramePreviewPort):
             output.unlink(missing_ok=True)
             self._log_failure("FFmpeg: 結合に失敗", result)
             raise RuntimeError(
-                f"FFmpeg: 結合に失敗: FFmpeg終了コード {result.returncode}"
+                self._failure_message(
+                    result,
+                    f"FFmpeg: 結合に失敗: FFmpeg終了コード {result.returncode}",
+                )
             )
         return output
+
+    async def cut_segment(
+        self,
+        source: Path,
+        start_seconds: float,
+        end_seconds: float,
+        output: Path,
+        *,
+        cancel_check: Callable[[], bool] | None = None,
+    ) -> Path:
+        """正確な開始境界を保つため、指定区間を再エンコードして切り出す。"""
+        import math
+
+        if (
+            not math.isfinite(start_seconds)
+            or not math.isfinite(end_seconds)
+            or start_seconds < 0
+            or end_seconds <= start_seconds
+        ):
+            raise ValueError("切り出し区間が不正です")
+        source = source.resolve()
+        output = output.resolve()
+        if source == output or not source.is_file():
+            raise ValueError("入力動画または出力先が不正です")
+        output.parent.mkdir(parents=True, exist_ok=True)
+        temporary = output.with_name(f".{output.stem}.cutting{output.suffix}")
+        temporary.unlink(missing_ok=True)
+        command = [
+            "ffmpeg",
+            "-y",
+            "-ss",
+            f"{start_seconds:.6f}",
+            "-protocol_whitelist",
+            _IMPORTED_VIDEO_PROTOCOLS,
+            "-format_whitelist",
+            _IMPORTED_VIDEO_DEMUXERS,
+            "-i",
+            str(source),
+            "-t",
+            f"{end_seconds - start_seconds:.6f}",
+            "-map",
+            "0:v:0",
+            "-map",
+            "0:a?",
+            "-c:v",
+            "libx264",
+            "-preset",
+            "veryfast",
+            "-crf",
+            "18",
+            "-pix_fmt",
+            "yuv420p",
+            "-c:a",
+            "aac",
+            "-b:a",
+            "192k",
+            "-movflags",
+            "+faststart",
+            str(temporary),
+        ]
+        try:
+            result = await self._run_text(command, cancel_check=cancel_check)
+        except BaseException:
+            temporary.unlink(missing_ok=True)
+            raise
+        if (
+            result.returncode != 0
+            or not temporary.is_file()
+            or temporary.stat().st_size == 0
+        ):
+            temporary.unlink(missing_ok=True)
+            self._log_failure("FFmpeg: 区間切り出しに失敗", result)
+            raise RuntimeError(
+                self._failure_message(
+                    result, "動画のバトル区間を切り出せませんでした"
+                )
+            )
+        temporary.replace(output)
+        return output
+
+    async def inspect_imported_video(self, path: Path) -> ImportedVideoInfo:
+        try:
+            result = await self._run_text(
+                [
+                    "ffprobe",
+                    "-v",
+                    "error",
+                    "-show_entries",
+                    "format=duration,format_name:stream=codec_type",
+                    "-of",
+                    "json",
+                    "-protocol_whitelist",
+                    _IMPORTED_VIDEO_PROTOCOLS,
+                    "-format_whitelist",
+                    _IMPORTED_VIDEO_DEMUXERS,
+                    "-i",
+                    str(path.resolve()),
+                ],
+                timeout=20,
+            )
+        except FileNotFoundError as exc:
+            raise ValueError(
+                "動画の解析にはFFmpegが必要です。FFmpegをインストールしてからお試しください。"
+            ) from exc
+        if result.returncode != 0:
+            self._log_failure("FFprobe: 持込動画を確認できません", result)
+            raise ValueError(
+                "動画を読み込めません。ファイル形式を確認してください。"
+            )
+        try:
+            payload = json.loads(result.stdout)
+            streams = payload.get("streams", [])
+            format_info = payload.get("format", {})
+            raw_duration = format_info.get("duration")
+            format_names = format_info.get("format_name")
+            duration = float(raw_duration)
+        except (
+            json.JSONDecodeError,
+            AttributeError,
+            TypeError,
+            ValueError,
+        ) as exc:
+            raise ValueError(
+                "動画の長さを読み取れません。動画ファイルを確認してください。"
+            ) from exc
+        if not isinstance(format_names, str) or not set(
+            format_names.split(",")
+        ).issubset(_IMPORTED_VIDEO_FORMAT_NAMES):
+            raise ValueError(
+                "対応していない動画形式です。MP4、MOV、MKV、AVI、WebM形式をお使いください。"
+            )
+        if (
+            not math.isfinite(duration)
+            or duration <= 0
+            or not isinstance(streams, list)
+            or not any(
+                isinstance(stream, dict)
+                and stream.get("codec_type") == "video"
+                for stream in streams
+            )
+        ):
+            raise ValueError(
+                "動画の映像または再生時間を確認できません。動画ファイルを確認してください。"
+            )
+        return ImportedVideoInfo(
+            duration_seconds=duration,
+            has_video=True,
+            has_audio=any(
+                isinstance(stream, dict)
+                and stream.get("codec_type") == "audio"
+                for stream in streams
+            ),
+        )
 
     async def embed_metadata(
         self,

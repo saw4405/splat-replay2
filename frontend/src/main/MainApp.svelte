@@ -9,6 +9,7 @@
   import { cancelEditUploadProcess } from './api/assets';
   import { subscribeDomainEvents } from './domainEvents';
   import { notifyRecordingStarted, notifyRecordingStopped } from './notification';
+  import ImportedVideoEntry from './components/imported/ImportedVideoEntry.svelte';
   import type {
     DomainEvent,
     AutoProcessPendingPayload,
@@ -108,6 +109,7 @@
     >
       <Settings class="icon" aria-hidden="true" stroke-width={1.75} />
     </button>
+    <ImportedVideoEntry />
   </div>
 
   <div class="preview-container">

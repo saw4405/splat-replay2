@@ -704,6 +704,9 @@ class SplatReplayWebViewApp:
 
             import webview
 
+            # 持込動画の結果は、pywebview標準の保存ダイアログで取得できる。
+            webview.settings["ALLOW_DOWNLOADS"] = True
+
             app_helper: object | None = None
             if sys.platform == "darwin" and resident:
                 app_helper = importlib.import_module("PyObjCTools.AppHelper")

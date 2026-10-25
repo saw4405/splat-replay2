@@ -3,6 +3,7 @@
 from .assets import create_assets_router, create_file_serving_router
 from .events import create_events_router
 from .history import create_history_router
+from .imported_videos import create_imported_videos_router
 from .metadata import create_metadata_router
 from .notifications import create_notifications_router
 from .process import create_process_router
@@ -16,6 +17,7 @@ __all__ = [
     "create_file_serving_router",
     "create_events_router",
     "create_history_router",
+    "create_imported_videos_router",
     "create_metadata_router",
     "create_notifications_router",
     "create_recording_router",
