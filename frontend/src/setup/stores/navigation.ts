@@ -30,7 +30,6 @@ function getSubstepStorageKey(step: SetupStep): string {
     obs_setup: 'obs_substep_index',
     ffmpeg_setup: 'ffmpeg_substep_index',
     tesseract_setup: 'tesseract_substep_index',
-    font_installation: 'font_substep_index',
     transcription_setup: 'transcription_substep_index',
     youtube_setup: 'youtube_substep_index',
   };
@@ -56,7 +55,6 @@ const STEP_SUBSTEP_IDS: Record<SetupStep, string[]> = {
     'websocket-password',
   ],
   tesseract_setup: ['tesseract-install', 'tesseract-lang-data'],
-  font_installation: ['font-download', 'font-place'],
   transcription_setup: [
     'transcription-enable',
     'transcription-mic',
@@ -119,7 +117,6 @@ function clearAllSubstepSessionStorage(): void {
     'obs_substep_index',
     'ffmpeg_substep_index',
     'tesseract_substep_index',
-    'font_substep_index',
     'transcription_substep_index',
     'youtube_substep_index',
   ];

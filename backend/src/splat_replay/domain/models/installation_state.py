@@ -15,7 +15,6 @@ class SetupStep(Enum):
     FFMPEG_SETUP = "ffmpeg_setup"
     OBS_SETUP = "obs_setup"
     TESSERACT_SETUP = "tesseract_setup"
-    FONT_INSTALLATION = "font_installation"
     TRANSCRIPTION_SETUP = "transcription_setup"
     YOUTUBE_SETUP = "youtube_setup"
 

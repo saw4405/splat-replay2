@@ -81,22 +81,32 @@ class SetupStateSerializer:
         is_completed = self._extract_bool(
             installer_data, "is_completed", False
         )
-        current_step = self._extract_enum(
-            installer_data,
-            "current_step",
-            SetupStep,
-            SetupStep.HARDWARE_CHECK,
-        )
-        # 廃止した手順で中断した旧設定は、次の有効手順へ進める。
-        if current_step is SetupStep.FONT_INSTALLATION:
-            current_step = SetupStep.TRANSCRIPTION_SETUP
         completed_steps = self._extract_enum_list(
             installer_data, "completed_steps", SetupStep
         )
         skipped_steps = self._extract_enum_list(
             installer_data, "skipped_steps", SetupStep
         )
-        step_details = self._extract_dict(installer_data, "step_details")
+        active_steps = SetupStep.get_all_steps()
+        remaining = [
+            step
+            for step in active_steps
+            if step not in completed_steps and step not in skipped_steps
+        ]
+        current_step = self._extract_enum(
+            installer_data,
+            "current_step",
+            SetupStep,
+            remaining[0] if remaining else active_steps[-1],
+        )
+        valid_keys = {step.value for step in active_steps}
+        step_details = {
+            key: value
+            for key, value in self._extract_dict(
+                installer_data, "step_details"
+            ).items()
+            if key in valid_keys
+        }
         installation_date = self._extract_datetime(
             installer_data, "installation_date"
         )

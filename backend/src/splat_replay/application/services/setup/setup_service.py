@@ -101,7 +101,6 @@ class SetupService:
             "ndi-settings": 5,
             "websocket-password": 6,
             "tesseract-install": 0,
-            "font-place": 0,
             "transcription-enable": 0,
             "transcription-mic": 1,
             "transcription-groq": 2,
