@@ -2,6 +2,7 @@
   import { Eye, EyeOff } from 'lucide-svelte';
   import FieldItem from './FieldItem.svelte';
   import SelectField from './SelectField.svelte';
+  import SpeechDataNotice from '../../../common/components/SpeechDataNotice.svelte';
   import type { FieldValue, PrimitiveValue, SettingField } from './types';
 
   interface Props {
@@ -159,6 +160,9 @@
         />
       {/each}
     </div>
+    {#if field.id === 'speech_transcriber'}
+      <SpeechDataNotice />
+    {/if}
     {#if field.id === 'speech_transcriber' && onTestSpeech}
       <button
         type="button"

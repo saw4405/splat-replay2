@@ -75,6 +75,15 @@ describe('transcription FLAC setup integration', () => {
     const user = userEvent.setup();
     render(TranscriptionSetup);
 
+    expect(await screen.findByText('送信されるデータとログの保存場所')).toBeInTheDocument();
+    await user.click(screen.getByText('送信されるデータとログの保存場所'));
+    expect(
+      screen.getByText(/文字起こしを有効\/無効にする設定は次回の録画開始から反映されます/)
+    ).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Google 利用規約' })).toHaveAttribute(
+      'href',
+      'https://policies.google.com/terms?hl=ja'
+    );
     expect(
       await screen.findByText(/FLAC コマンドが PATH に見つかりませんでした/)
     ).toBeInTheDocument();

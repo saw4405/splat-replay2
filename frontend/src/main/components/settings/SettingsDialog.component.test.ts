@@ -39,6 +39,39 @@ describe('SettingsDialog.svelte', () => {
     delete document.documentElement.dataset.renderMode;
   });
 
+  it('基本設定と全設定の切替で外部送信説明を一度だけ表示する', async () => {
+    const user = userEvent.setup();
+    const sections: SettingsSection[] = [
+      {
+        id: 'speech_transcriber',
+        label: '文字起こし',
+        fields: [
+          {
+            id: 'enabled',
+            label: '文字起こしを有効にする',
+            description: '',
+            type: 'boolean',
+            requirement: 'optional',
+            display_level: 'basic',
+            user_editable: true,
+            value: false,
+          },
+        ],
+      },
+    ];
+    fetchMock.mockResolvedValue({ ok: true, json: async () => ({ sections }) });
+    render(SettingsDialog, { props: { open: true } });
+    const summary = '送信されるデータとログの保存場所';
+    expect(await screen.findAllByText(summary)).toHaveLength(1);
+    await user.click(screen.getByText(summary));
+    expect(screen.getByText(/Google 音声認識と Groq Whisper/)).toBeInTheDocument();
+    await user.click(screen.getByRole('radio', { name: 'すべての設定', exact: true }));
+    await user.click(screen.getByTestId('settings-section-recording'));
+    expect(screen.getAllByText(summary)).toHaveLength(1);
+    await user.click(screen.getByRole('radio', { name: '基本設定', exact: true }));
+    expect(screen.getAllByText(summary)).toHaveLength(1);
+  });
+
   // ========================================
   // 初期表示テスト
   // ========================================

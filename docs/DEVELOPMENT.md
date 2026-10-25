@@ -338,20 +338,22 @@ task.exe build
 Apple Silicon macOS（固定した自己署名証明書で署名し、公証なし）:
 
 ```sh
-task build:macos:candidate
+task build:macos
 ```
 
 成果物:
 
 - Windows: `dist/SplatReplay/`
-- macOS: `dist/macos-candidates/<UTC時刻>/SplatReplay.app/`
-- macOS DMG: `dist/macos-candidates/<UTC時刻>/SplatReplay.dmg`
-- 中間生成物: `backend/build/macos-candidates/<UTC時刻>/`
+- macOS: `dist/SplatReplay.app/`（再ビルド時は同じ場所を更新）
+- macOS DMG: `dist/SplatReplay.dmg`
+- 中間生成物: `backend/build/`
 
 補足:
 
 - `backend/build/` は中間生成物です。実行対象ではありません。
-- `task build:macos` は `task build:macos:candidate` と同じ隔離ビルドを実行します。候補は既存 `dist/SplatReplay.app` / DMG や Windows ZIP を消さず、固有のUTC時刻の出力先が既に存在すれば停止します。`task clean:macos` は明示実行用で、既定の `dist`、`backend/build`、`frontend/dist` を削除します。既存 `.app` からの DMG 再生成は `task build:macos:dmg`、既存 DMG の検証は `task verify:macos:dmg` です。
+- `task build` / `task build:macos` は固定出力先の `.app` と DMG を更新し、時刻別のアプリを追加しません。更新先のアプリが起動中なら、ビルドを開始せず中止します（アプリを終了して再実行してください）。ビルド失敗時の旧成果物保持は保証しません。`/Applications` にコピーしたアプリはこのコマンドの更新対象外です。
+- 比較検証で旧成果物を保持する場合だけ、`task build:macos:candidate` を明示します。候補は `dist/macos-candidates/<UTC時刻>/`、中間生成物は `backend/build/macos-candidates/<UTC時刻>/` に作成し、同名の出力先が既に存在すれば停止します。既存の候補は自動削除しません。
+- `task clean:macos` は明示実行用で、既定の `dist`、`backend/build`、`frontend/dist` を削除します。既存 `.app` からの DMG 再生成は `task build:macos:dmg`、既存 DMG の検証は `task verify:macos:dmg` です。
 - 固定証明書は SHA-256 `2b617e1206573418df294b7cb8f256f0aa0ee5ed556df9be32064774de8d20b5` の `Splat Replay Local Code Signing` です。ビルド前に login Keychain の証明書と対応する秘密鍵を照合し、有効期間と Code Signing 用途を確認します。PyInstaller の中間 `.app` は ad hoc のまま生成し、最終 `.app` 外側だけを同じ証明書で署名します。ビルドは証明書を生成・更新せず、Keychain の信頼設定や ACL も変更しません。初回に `codesign` が秘密鍵を使う時、macOS がアクセス確認を表示する場合があります。表示された実行元と対象鍵を確認し、本人が許可を判断してください。
 - この helper の `preflight` / `verify` は署名ビルド用 Mac の login Keychain に同じ証明書と秘密鍵があることを要求します。配布先での公開署名検査とは別の、ビルド元の固定identity検査です。固定自己署名証明書は公証済み Developer ID ではないため、初回起動で Gatekeeper の手動許可が必要になる場合があります。署名を固定しても Gatekeeper、カメラ/マイク等のOS許可、YouTube Keychain 項目の許可が一度化する保証はありません。Windows のビルド経路には変更を加えていません。
 - Windows の実行は `dist/SplatReplay/SplatReplay.exe`、通常の macOS `task run` は `dist/SplatReplay.app` を使います。新しい候補を起動する場合は候補の `.app` を直接開くか、`task run DIST_ROOT=dist/macos-candidates/<UTC時刻>` を指定します。Windows は `task.exe run` で起動できます。
@@ -376,6 +378,15 @@ task.exe coverage:report
 
 - backend: `backend/htmlcov/index.html`
 - frontend: `frontend/coverage/index.html`
+
+## 現在の実装・検証状況（2026-10-25）
+
+- 元録画と編集済み動画の保持、Switch の動画保存通知、通常処理の進捗復帰、音声・字幕処理、Mac 更新手順は `7a3ec33` に記録した。ファイル取込みの UI/API と、利用条件・第三者通知の閲覧・同梱検査には未コミットの作業が残る。
+- 外部送信の説明は「基本設定」と「すべての設定」の両方に一度だけ表示する。切替時の表示は設定画面の component テストで確認する。
+- 保全・復旧の実行確認では、本人録画と同一 SHA-256 の入力から2秒のコピーを2本作り、既存の AutoEditor・FFmpeg・サムネイル生成・ファイルリポジトリで約4.02秒の動画を作成した。正常時の保持、保持途中の失敗、再起動を模した新しいインスタンスからの再開を確認した。再開時は再結合・再埋込みを許可しない条件でも完了し、確定出力と保持元録画のハッシュが一致した。
+- この試験は隔離した保存先だけを使用し、原本のハッシュ・サイズ・更新時刻は試験前後で一致した。外部接続は拒否し、通信の試行はなかった。実録画・長尺性能・主観的な全編視聴・実アップロード成功後の保持は、この短い試験では保証しない。
+- Windows の確認先は既存の spectre SSH 接続とする。2026-10-25 の確認では Tailscale 上でオフライン、SSH が接続タイムアウトのため未実施。Mac の合格を Windows の合格へ転用しない。
+- 新規の事業・権利・roadmap 文書は作業用として保持し、今回のコミットには含めない。配布適合と機能テストの結果は分けて扱う。
 
 ## 設計ルールと注意事項
 

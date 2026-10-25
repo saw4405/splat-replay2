@@ -12,6 +12,7 @@
   import { SetupStep } from '../../types';
   import { checkSystem, setupFlac } from '../../stores/system';
   import NotificationDialog from '../../../common/components/NotificationDialog.svelte';
+  import SpeechDataNotice from '../../../common/components/SpeechDataNotice.svelte';
   import { getSetupPlatform } from '../../platform';
 
   const setupPlatform = getSetupPlatform();
@@ -529,6 +530,7 @@
                   録画中に話した内容を文字起こしし、字幕として動画に追加します。
                 </p>
                 <p class="instruction-text">後から設定変更も可能です。</p>
+                <SpeechDataNotice />
                 {#if setupPlatform === 'macos' && useTranscription}
                   <p class="instruction-text">
                     文字起こしに使う音声形式変換のため、PATH から FLAC

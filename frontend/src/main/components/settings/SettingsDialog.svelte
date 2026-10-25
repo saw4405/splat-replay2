@@ -17,6 +17,7 @@
   import { getSetupPlatform } from '../../../setup/platform';
   import { fetchRemoteAccessStatus, type RemoteAccessStatus } from '../../api/remoteAccess';
   import SpeechTestDialog from './SpeechTestDialog.svelte';
+  import SpeechDataNotice from '../../../common/components/SpeechDataNotice.svelte';
 
   const REMOTE_ACCESS_STATUS_REFRESH_INTERVAL_MS = 5000;
   const POWERSHELL_LINE_CONTINUATION = '`';
@@ -726,6 +727,9 @@
             onCalibrateAudio={handleCalibrateAudio}
             onTestSpeech={handleTestSpeech}
           />
+        {/if}
+        {#if field.sourceSectionId === 'speech_transcriber' && isLastFieldFromSource(section.fields, fieldIndex, 'speech_transcriber')}
+          <SpeechDataNotice />
         {/if}
         {#if field.sourceSectionId === 'remote_access' && isLastFieldFromSource(section.fields, fieldIndex, 'remote_access')}
           {@render remoteAccessSummary()}
