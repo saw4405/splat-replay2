@@ -7,6 +7,16 @@ from pathlib import Path
 import sys
 from typing import Any, AsyncGenerator, Dict, Literal
 
+from splat_replay.application.interfaces.thumbnail_design import (
+    ThumbnailAssetsPort,
+)
+from splat_replay.application.services.editing.thumbnail_design_service import (
+    ThumbnailDesignService,
+)
+from splat_replay.application.services.editing.thumbnail_generator import (
+    ThumbnailGenerator,
+)
+
 import punq
 from fastapi import FastAPI
 from splat_replay.application.interfaces import (
@@ -150,6 +160,7 @@ def build_web_api_server(container: punq.Container) -> WebAPIServer:
     base_dir = app_settings.storage.base_dir
     imported_video_service = ImportedVideoService(
         renderer=ImportedVideoRenderer(
+            thumbnail_assets=resolve(container, ThumbnailAssetsPort),
             logger=resolve(container, LoggerPort),
             config=resolve(container, ConfigPort),
             paths=resolve(container, PathsPort),
@@ -307,6 +318,17 @@ def build_web_api_server(container: punq.Container) -> WebAPIServer:
         list_battle_history_uc=list_battle_history_uc,
         # Speech test
         speech_test_fn=speech_test_fn,
+    )
+    server.thumbnail_design_service = ThumbnailDesignService(
+        resolve(container, ThumbnailAssetsPort),
+        ThumbnailGenerator(
+            resolve(container, LoggerPort),
+            resolve(container, PathsPort),
+            container.resolve(ImageSelector),
+            resolve(container, FileSystemPort),
+            resolve(container, ThumbnailRuleImageResolverPort),
+            resolve(container, ThumbnailAssetsPort),
+        ),
     )
     matching_settings = resolve(container, ImageMatchingSettings)
     weapon_names: set[str] = set()

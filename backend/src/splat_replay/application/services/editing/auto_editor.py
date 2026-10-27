@@ -11,6 +11,10 @@ AutoEditor は全体のオーケストレーション（実行制御）のみを
 
 from __future__ import annotations
 
+from splat_replay.application.interfaces.thumbnail_design import (
+    ThumbnailAssetsPort,
+)
+
 import asyncio
 import datetime
 import hashlib
@@ -68,6 +72,7 @@ class AutoEditor:
         repo: VideoAssetRepositoryPort,
         file_system: FileSystemPort,
         progress: ProgressReporter,
+        thumbnail_assets: ThumbnailAssetsPort | None = None,
     ) -> None:
         self.repo = repo
         self.logger = logger
@@ -85,7 +90,12 @@ class AutoEditor:
             logger, config, video_editor
         )
         self.thumbnail_generator = ThumbnailGenerator(
-            logger, paths, image_selector, file_system, rule_image_resolver
+            logger,
+            paths,
+            image_selector,
+            file_system,
+            rule_image_resolver,
+            thumbnail_assets,
         )
         self.subtitle_processor = SubtitleProcessor(
             logger,

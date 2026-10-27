@@ -8,6 +8,14 @@ from __future__ import annotations
 from pathlib import Path
 import tempfile
 from typing import List
+from contextlib import nullcontext
+
+from splat_replay.application.interfaces.thumbnail_design import (
+    ThumbnailAssetsPort,
+    ThumbnailBounds,
+)
+from splat_replay.domain.config.video_edit import ThumbnailDesign
+from .thumbnail_design_renderer import ThumbnailContent, render_design
 
 from splat_replay.application.interfaces import (
     FileSystemPort,
@@ -35,14 +43,47 @@ class ThumbnailGenerator:
         image_selector: ImageSelector,
         file_system: FileSystemPort,
         rule_image_resolver: ThumbnailRuleImageResolverPort,
-    ):
+        thumbnail_assets: ThumbnailAssetsPort | None = None,
+    ) -> None:
+        self._thumbnail_assets = thumbnail_assets
         self.logger = logger
         self.paths = paths
         self.image_selector = image_selector
         self._file_system = file_system
         self._rule_image_resolver = rule_image_resolver
 
-    def create(self, assets: List[VideoAsset]) -> Path | None:
+    def create(
+        self,
+        assets: List[VideoAsset],
+        design: ThumbnailDesign | None = None,
+        layout: dict[str, ThumbnailBounds] | None = None,
+    ) -> Path | None:
+        if not assets:
+            return None
+        result = assets[0].metadata.result if assets[0].metadata else None
+        if result is None or isinstance(result, SalmonResult):
+            return None
+        lease = (
+            self._thumbnail_assets.lease(design)
+            if self._thumbnail_assets
+            else nullcontext(
+                design
+                or ThumbnailDesign.parse_raw(
+                    self._file_system.read_bytes(
+                        self.paths.get_thumbnail_asset("design.default.json")
+                    )
+                )
+            )
+        )
+        with lease as snapshot:
+            return self._create(assets, snapshot, layout)
+
+    def _create(
+        self,
+        assets: List[VideoAsset],
+        design: ThumbnailDesign,
+        layout: dict[str, ThumbnailBounds] | None = None,
+    ) -> Path | None:
         """明るいサムネイルを選び描画する。
 
         Returns:
@@ -79,7 +120,6 @@ class ThumbnailGenerator:
             and isinstance(a.metadata.result, BattleResult)
             and a.metadata.judgement == Judgement.LOSE
         )
-        win_lose = f"{win_count} - {lose_count}"
 
         # マッチ画像
         is_event_match = result.match is Match.CHALLENGE
@@ -140,23 +180,6 @@ class ThumbnailGenerator:
             self.paths.get_thumbnail_asset(f"{stage2}.png") if stage2 else None
         )
 
-        stage1_image_exists = (
-            stage1_image_path is not None
-            and self._file_system.is_file(stage1_image_path)
-        )
-        stage2_image_exists = (
-            stage2_image_path is not None
-            and self._file_system.is_file(stage2_image_path)
-        )
-
-        overlay_image_path = self.paths.get_thumbnail_asset(
-            "thumbnail_overlay.png"
-        )
-
-        font_paintball = str(
-            self.paths.get_thumbnail_asset("Paintball_Beta.otf")
-        )
-
         # 高スコア（キルレが高い）のサムネイルをスコアが高い順に格納する
         high_score_thumbnails: list[tuple[float, Path]] = []
         seen_kd: set[tuple[int, int]] = set()
@@ -185,7 +208,31 @@ class ThumbnailGenerator:
         high_score_thumbnails.sort(reverse=True, key=lambda x: x[0])
         high_score_thumbnails = high_score_thumbnails[:3]
 
-        drawer = self.image_selector(thumbnails, (0, 0, 750, 1.0))
+        if design.background.source == "image":
+            background_path = (
+                self._thumbnail_assets.path(design.background.asset)
+                if self._thumbnail_assets
+                else self.paths.get_thumbnail_asset(design.background.asset)
+            )
+            drawer = self.image_selector([background_path], (0, 0, 1.0, 1.0))
+            if drawer is not None:
+                drawer.fit_background(
+                    design.background.x,
+                    design.background.y,
+                    design.background.scale,
+                )
+        else:
+            drawer = self.image_selector(thumbnails, (0, 0, 750, 1.0))
+            if drawer is not None and (
+                design.background.x != 0
+                or design.background.y != 0
+                or design.background.scale != 1
+            ):
+                drawer.fit_background(
+                    design.background.x,
+                    design.background.y,
+                    design.background.scale,
+                )
         if drawer is None:
             self.logger.warning(
                 "元画像がないためサムネイル生成をスキップしました"
@@ -196,7 +243,9 @@ class ThumbnailGenerator:
             f"rule-labels/{result.rule.name.lower()}.png"
         )
         rule_label = self._rule_image_resolver.resolve(label_path)
-        if rule_label is None:
+        if rule_label is None and any(
+            e.visible and e.source == "rule_label" for e in design.elements
+        ):
             raise RuntimeError(
                 f"ルール名画像が未配置または不正です: {label_path}"
             )
@@ -216,100 +265,57 @@ class ThumbnailGenerator:
         ) as temporary:
             out = Path(temporary.name)
 
+        rate_label = (
+            "Best Power: "
+            if is_event_match
+            else f"{min(rates).label}: "
+            if rates and match_name == "Xマッチ"
+            else ""
+        )
+        rate_value = rate[len(rate_label) :] if rate else ""
+        values: dict[str, str | int] = {
+            "WIN": win_count,
+            "LOSE": lose_count,
+            "RATE": rate or "",
+            "RATE_LABEL": rate_label if rate else "",
+            "RATE_VALUE": rate_value,
+            "RATE_MIN": str(min(rates)) if rates else "",
+            "RATE_MAX": str(max(rates)) if rates else "",
+            "BATTLE": result.match.value,
+            "RULE": rule_name,
+            "STAGES": " / ".join(unique_stage_names),
+        }
+        images: dict[str, list[Path]] = {
+            "match": [match_image_path],
+            "rule_label": [rule_label] if rule_label else [],
+            "rule_icon": [rule_image_path] if rule_icon_exists else [],
+            "stages": [
+                p
+                for p in (stage1_image_path, stage2_image_path)
+                if p is not None and self._file_system.is_file(p)
+            ],
+            "highlights": [
+                p
+                for _, p in high_score_thumbnails
+                if self._file_system.is_file(p)
+            ],
+        }
+        color = (
+            rate_text_color
+            if isinstance(rate_text_color, str)
+            else "#" + "".join(f"{c:02x}" for c in rate_text_color)
+        )
         try:
-            (
-                drawer
-                # 勝敗を記載
-                .draw_text_with_outline(
-                    win_lose,
-                    (458, 100),
-                    font_paintball,
-                    120,
-                    fill_color="yellow",
-                    outline_color="black",
-                    outline_width=5,
-                    center=True,
-                )
-                # マッチルール・レート・ステージを描画するベース
-                .draw_rounded_rectangle(
-                    (777, 20, 1850, 750),
-                    radius=40,
-                    fill_color=(28, 28, 28),
-                    outline_color=(28, 28, 28),
-                    outline_width=1,
-                )
-                # マッチを描画
-                .draw_image(match_image_path, (800, 40), size=(300, 300))
-                # ルールを記載し描画
-                .draw_image(rule_label, (1120, 71))
-                .when(
-                    rule_icon_exists,
-                    lambda d: d.draw_image(
-                        rule_image_path, (1660, 70), size=(150, 150)
-                    ),
-                )
-                # レートを記載し描画
-                .when(
-                    rate is not None,
-                    lambda d: d.draw_text(
-                        rate,
-                        (1125, 230),
-                        font_paintball,
-                        70,
-                        fill_color=rate_text_color,
-                    ),
-                )
-                # ステージ画像を描画
-                .when(
-                    stage1_image_exists,
-                    lambda d: d.draw_image(
-                        stage1_image_path, (860, 360), size=(960, 168)
-                    ),
-                )
-                .when(
-                    stage2_image_exists,
-                    lambda d: d.draw_image(
-                        stage2_image_path, (860, 540), size=(960, 168)
-                    ),
-                )
-                # 高キルレ画像を左下に描画
-                .for_each(
-                    list(enumerate(high_score_thumbnails)),
-                    lambda item, d: d.draw_image(
-                        item[1][1],
-                        (
-                            0 + (item[0] // 3) * (146 * 2 + 30),
-                            620 + (item[0] % 3) * (60 * 2 + 30),
-                        ),
-                        crop=(1467, 259, 1661, 319),
-                        size=(146 * 2, 60 * 2),
-                    )
-                    if self._file_system.is_file(item[1][1])
-                    else d,
-                )
-                # キルレを白枠で囲う
-                .for_each(
-                    list(enumerate(high_score_thumbnails)),
-                    lambda item, d: d.draw_rectangle(
-                        (
-                            int(0 + (item[0] // 3) * (146 * 2 + 30)),
-                            int(620 + (item[0] % 3) * (60 * 2 + 30)),
-                            int(0 + (item[0] // 3) * (146 * 2 + 30) + 146 * 2),
-                            int(620 + (item[0] % 3) * (60 * 2 + 30) + 60 * 2),
-                        ),
-                        fill_color=None,
-                        outline_color="white",
-                        outline_width=3,
-                    )
-                    if self._file_system.is_file(item[1][1])
-                    else d,
-                )
-                .when(
-                    self._file_system.is_file(overlay_image_path),
-                    lambda d: d.overlay_image(overlay_image_path),
-                )
-                .save(out)
+            render_design(
+                drawer,
+                design,
+                ThumbnailContent(values, images, color),
+                self.paths,
+                self._thumbnail_assets,
+                self._file_system,
+                layout,
             )
+            drawer.save(out)
         except Exception:
             out.unlink(missing_ok=True)
             raise

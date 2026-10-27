@@ -4,6 +4,7 @@
   interface Props {
     open?: boolean;
     title?: string;
+    titleId?: string;
     showHeader?: boolean;
     showFooter?: boolean;
     footerVariant?: 'simple' | 'compact' | 'custom';
@@ -29,6 +30,7 @@
   let {
     open = $bindable(false),
     title = '',
+    titleId = 'dialog-title',
     showHeader = true,
     showFooter = true,
     footerVariant = 'simple',
@@ -102,7 +104,7 @@
       role="dialog"
       tabindex="-1"
       aria-modal="true"
-      aria-labelledby={showHeader ? 'dialog-title' : undefined}
+      aria-labelledby={showHeader ? titleId : undefined}
       onclick={(e) => e.stopPropagation()}
       style:--max-width={maxWidth}
       style:max-width={maxWidth}
@@ -114,7 +116,7 @@
           {#if header}
             {@render header()}
           {:else}
-            <h2 id="dialog-title">{title}</h2>
+            <h2 id={titleId}>{title}</h2>
           {/if}
           {#if showCloseButton}
             <button class="icon-button" type="button" aria-label="閉じる" onclick={closeDialog}>

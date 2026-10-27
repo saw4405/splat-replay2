@@ -55,6 +55,12 @@ class _Paths:
 
 
 class _FileSystem:
+    def read_bytes(self, path: Path) -> bytes:
+        return (
+            Path(__file__).resolve().parents[1]
+            / "assets/thumbnail/design.default.json"
+        ).read_bytes()
+
     def is_file(self, path: Path) -> bool:
         _ = path
         return True
@@ -201,7 +207,7 @@ def test_thumbnail_uses_highest_event_power_only_for_event_match(
     assert "Best Power: 2180.0" in selector.drawer.drawn_texts
     assert (
         "Best Power: 2180.0",
-        {"fill_color": (241, 46, 125)},
+        {"fill_color": "#f12e7d"},
     ) in selector.drawer.drawn_text_calls
     assert all(
         "2105.7 ~ 2180.0" not in text for text in selector.drawer.drawn_texts

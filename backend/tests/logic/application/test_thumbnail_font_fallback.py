@@ -65,6 +65,12 @@ class _Paths:
 
 
 class _FileSystem:
+    def read_bytes(self, path: Path) -> bytes:
+        return (
+            Path(__file__).resolve().parents[3]
+            / "assets/thumbnail/design.default.json"
+        ).read_bytes()
+
     def is_file(self, path: Path) -> bool:
         _ = path
         return True

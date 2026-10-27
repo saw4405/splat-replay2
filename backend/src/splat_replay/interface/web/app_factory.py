@@ -286,6 +286,14 @@ def create_app(
 
     settings_router = create_settings_router(server)
     app.include_router(settings_router)
+    if server.thumbnail_design_service is not None:
+        from splat_replay.interface.web.routers.thumbnail_design import (
+            create_thumbnail_design_router,
+        )
+
+        app.include_router(
+            create_thumbnail_design_router(server.thumbnail_design_service)
+        )
 
     remote_access_router = create_remote_access_router(server)
     app.include_router(remote_access_router)

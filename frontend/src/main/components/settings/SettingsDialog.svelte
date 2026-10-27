@@ -18,6 +18,8 @@
   import { fetchRemoteAccessStatus, type RemoteAccessStatus } from '../../api/remoteAccess';
   import SpeechTestDialog from './SpeechTestDialog.svelte';
   import SpeechDataNotice from '../../../common/components/SpeechDataNotice.svelte';
+  import ThumbnailDesignDialog from './ThumbnailDesignDialog.svelte';
+  import type { ThumbnailDesign } from '../../api/thumbnailDesign';
 
   const REMOTE_ACCESS_STATUS_REFRESH_INTERVAL_MS = 5000;
   const POWERSHELL_LINE_CONTINUATION = '`';
@@ -40,6 +42,10 @@
   let activeSectionId = $state<string | null>(null);
   let successMessageTimer: ReturnType<typeof setTimeout> | null = null;
   let speechTestOpen = $state(false);
+  let thumbnailDesignOpen = $state(false);
+  const thumbnailDesignField = $derived(
+    sections.flatMap((section) => section.fields).find((field) => field.type === 'thumbnail_design')
+  );
   let remoteAccessStatus = $state<RemoteAccessStatus | null>(null);
   let fieldsScrollElement = $state<HTMLDivElement | null>(null);
   let canScrollDown = $state(false);
@@ -179,6 +185,7 @@
     successMessage = '';
     activeSectionId = null;
     speechTestOpen = false;
+    thumbnailDesignOpen = false;
     remoteAccessStatus = null;
     displayMode = 'basic';
     clearSuccessMessageTimer();
@@ -259,7 +266,9 @@
 
   async function refreshDeviceChoices(): Promise<void> {
     try {
-      const response = await fetch('/api/settings?refresh=true', { cache: 'no-store' });
+      const response = await fetch('/api/settings?refresh=true', {
+        cache: 'no-store',
+      });
       if (!response.ok) {
         return;
       }
@@ -884,16 +893,28 @@
               data-testid="settings-fields-scroll"
             >
               {#each visibleActiveFields as field, fieldIndex (`${field.sourceSectionId}:${field.id}`)}
-                <FieldItem
-                  {field}
-                  sectionId={activeSection.id}
-                  path={field.id === field.sourceSectionId ? [] : [field.sourceSectionId]}
-                  updateField={handleFieldValueChange}
-                  updateGroupField={handleGroupFieldValueChange}
-                  parentGroup={null}
-                  onCalibrateAudio={handleCalibrateAudio}
-                  onTestSpeech={handleTestSpeech}
-                />
+                {#if field.type === 'thumbnail_design'}
+                  <div class="thumbnail-design-entry">
+                    <h3>サムネイルデザイン</h3>
+                    <p>背景・文字・図形・画像の配置をサンプルで編集します。</p>
+                    <button
+                      type="button"
+                      class="thumbnail-design-button"
+                      onclick={() => (thumbnailDesignOpen = true)}>サムネイルデザインを編集</button
+                    >
+                  </div>
+                {:else}
+                  <FieldItem
+                    {field}
+                    sectionId={activeSection.id}
+                    path={field.id === field.sourceSectionId ? [] : [field.sourceSectionId]}
+                    updateField={handleFieldValueChange}
+                    updateGroupField={handleGroupFieldValueChange}
+                    parentGroup={null}
+                    onCalibrateAudio={handleCalibrateAudio}
+                    onTestSpeech={handleTestSpeech}
+                  />
+                {/if}
                 {#if field.sourceSectionId === 'remote_access' && isLastFieldFromSource(visibleActiveFields, fieldIndex, 'remote_access')}
                   {@render remoteAccessSummary()}
                 {/if}
@@ -917,8 +938,34 @@
 </BaseDialog>
 
 <SpeechTestDialog bind:open={speechTestOpen} speechSettings={speechTestSettings} />
+{#if thumbnailDesignOpen && thumbnailDesignField?.value}
+  <ThumbnailDesignDialog
+    bind:open={thumbnailDesignOpen}
+    design={thumbnailDesignField.value as unknown as ThumbnailDesign}
+    onapply={(design) => {
+      if (thumbnailDesignField)
+        handleFieldValueChange(thumbnailDesignField, design as unknown as FieldValue);
+    }}
+  />
+{/if}
 
 <style>
+  .thumbnail-design-button {
+    padding: 0.55rem 0.75rem;
+    border: 1px solid rgba(var(--theme-rgb-accent), 0.45);
+    border-radius: 0.625rem;
+    background: rgba(var(--theme-rgb-accent), 0.1);
+    color: var(--text-primary);
+    font: inherit;
+    font-size: 0.82rem;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  .thumbnail-design-button:focus-visible {
+    outline: 2px solid var(--theme-accent-color);
+    outline-offset: 2px;
+  }
+
   .settings-dialog-header {
     display: flex;
     align-items: center;

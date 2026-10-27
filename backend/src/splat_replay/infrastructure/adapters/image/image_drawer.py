@@ -58,9 +58,77 @@ class ImageDrawer(ImageDrawerPort):
                 best_img = img
         return ImageDrawer(best_img) if best_img else None
 
-    def __init__(self, image: Image.Image):
+    def __init__(self, image: Image.Image) -> None:
         self._image = image
         self._draw = ImageDraw.Draw(image)
+        self._base: Image.Image | None = None
+        self._element_bounds: tuple[int, int, int, int] | None = None
+
+    def begin_element(self) -> None:
+        self._element_bounds = None
+
+    def end_element(self) -> tuple[int, int, int, int] | None:
+        return self._element_bounds
+
+    def _record_bounds(self, rect: tuple[int, int, int, int]) -> None:
+        if rect[2] <= rect[0] or rect[3] <= rect[1]:
+            return
+        previous = self._element_bounds
+        self._element_bounds = (
+            rect
+            if previous is None
+            else (
+                min(previous[0], rect[0]),
+                min(previous[1], rect[1]),
+                max(previous[2], rect[2]),
+                max(previous[3], rect[3]),
+            )
+        )
+
+    def begin_layer(self) -> None:
+        self._base = self._image
+        self._image = Image.new("RGBA", self._base.size)
+        self._draw = ImageDraw.Draw(self._image)
+
+    def end_layer(self, opacity: float) -> None:
+        if self._base is None:
+            raise RuntimeError("描画レイヤーがありません")
+        alpha = self._image.getchannel("A").point(lambda a: round(a * opacity))
+        self._image.putalpha(alpha)
+        mode = self._base.mode
+        self._image = Image.alpha_composite(
+            self._base.convert("RGBA"), self._image
+        ).convert(mode)
+        self._base = None
+        self._draw = ImageDraw.Draw(self._image)
+
+    def fit_background(self, x: int, y: int, scale: float) -> None:
+        factor = (
+            max(1920 / self._image.width, 1080 / self._image.height) * scale
+        )
+        left = (1920 - self._image.width * factor) / 2 + x
+        top = (1080 - self._image.height * factor) / 2 + y
+        # 細長い素材でも巨大な拡大画像を確保せず、出力範囲だけを描画する。
+        self._image = self._image.transform(
+            (1920, 1080),
+            Image.Transform.AFFINE,
+            (1 / factor, 0, -left / factor, 0, 1 / factor, -top / factor),
+            resample=Image.Resampling.BICUBIC,
+        ).convert("RGB")
+        self._draw = ImageDraw.Draw(self._image)
+
+    def draw_ellipse(
+        self,
+        rect: Tuple[int, int, int, int],
+        fill_color: Color | None,
+        outline_color: Color | None,
+        outline_width: int,
+    ) -> "ImageDrawer":
+        self._draw.ellipse(
+            rect, fill=fill_color, outline=outline_color, width=outline_width
+        )
+        self._record_bounds((rect[0], rect[1], rect[2] + 1, rect[3] + 1))
+        return self
 
     def when(
         self,
@@ -102,6 +170,7 @@ class ImageDrawer(ImageDrawerPort):
             outline=outline_color,
             width=outline_width,
         )
+        self._record_bounds((rect[0], rect[1], rect[2] + 1, rect[3] + 1))
         return self
 
     def draw_rounded_rectangle(
@@ -119,7 +188,31 @@ class ImageDrawer(ImageDrawerPort):
             outline=outline_color,
             width=outline_width,
         )
+        self._record_bounds((rect[0], rect[1], rect[2] + 1, rect[3] + 1))
         return self
+
+    def _text_bounds(
+        self,
+        position: tuple[int, int],
+        text: str,
+        font: ImageFont.FreeTypeFont,
+    ) -> tuple[int, int, int, int] | None:
+        # フォントの送り幅ではなく、実際に描画される字形の境界を返す。
+        left, top, right, bottom = self._draw.textbbox(
+            position, text, font=font
+        )
+        if right <= left or bottom <= top:
+            return None
+        mask = Image.new("L", (right - left, bottom - top))
+        ImageDraw.Draw(mask).text(
+            (position[0] - left, position[1] - top), text, fill=255, font=font
+        )
+        box = mask.getbbox()
+        return (
+            (left + box[0], top + box[1], left + box[2], top + box[3])
+            if box is not None
+            else None
+        )
 
     def draw_text(
         self,
@@ -131,6 +224,9 @@ class ImageDrawer(ImageDrawerPort):
     ) -> ImageDrawer:
         font = ImageFont.truetype(font_name, font_size)
         self._draw.text(position, text, fill=fill_color, font=font)
+        box = self._text_bounds(position, text, font)
+        if box is not None:
+            self._record_bounds(box)
         return self
 
     def draw_text_with_outline(
@@ -173,6 +269,16 @@ class ImageDrawer(ImageDrawerPort):
                 font=font,
             )
         self._draw.text(position, text, fill=fill_color, font=font)
+        box = self._text_bounds(position, text, font)
+        if box is not None:
+            self._record_bounds(
+                (
+                    box[0] - outline_width,
+                    box[1] - outline_width,
+                    box[2] + outline_width,
+                    box[3] + outline_width,
+                )
+            )
         return self
 
     def draw_image(
@@ -187,7 +293,18 @@ class ImageDrawer(ImageDrawerPort):
             img = img.crop(crop)
         if size:
             img = img.resize(size)
-        self._image.paste(img, position, img)
+        self._record_bounds(
+            (
+                position[0],
+                position[1],
+                position[0] + img.width,
+                position[1] + img.height,
+            )
+        )
+        if self._base is not None:
+            self._image.alpha_composite(img, position)
+        else:
+            self._image.paste(img, position, img)
         return self
 
     def overlay_image(self, path: Path) -> "ImageDrawer":

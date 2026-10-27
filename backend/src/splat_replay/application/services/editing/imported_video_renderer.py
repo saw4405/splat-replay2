@@ -2,6 +2,10 @@
 
 from __future__ import annotations
 
+from splat_replay.application.interfaces.thumbnail_design import (
+    ThumbnailAssetsPort,
+)
+
 import asyncio
 from datetime import date, time
 from pathlib import Path
@@ -52,6 +56,7 @@ class ImportedVideoRenderer:
         text_to_speech: TextToSpeechPort,
         rule_image_resolver: ThumbnailRuleImageResolverPort,
         file_system: FileSystemPort,
+        thumbnail_assets: ThumbnailAssetsPort | None = None,
     ) -> None:
         self._config = config
         self._video_editor = video_editor
@@ -60,7 +65,12 @@ class ImportedVideoRenderer:
             logger, config, video_editor
         )
         self.thumbnail_generator = ThumbnailGenerator(
-            logger, paths, image_selector, file_system, rule_image_resolver
+            logger,
+            paths,
+            image_selector,
+            file_system,
+            rule_image_resolver,
+            thumbnail_assets,
         )
         self.subtitle_processor = SubtitleProcessor(
             logger,

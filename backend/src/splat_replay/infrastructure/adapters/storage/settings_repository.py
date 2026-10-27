@@ -19,6 +19,13 @@ from splat_replay.application.services.common.settings_service import (
     UnknownSettingsSectionError,
 )
 from splat_replay.domain.config import SECTION_CLASSES
+from splat_replay.domain.config.video_edit import ThumbnailDesign
+from splat_replay.application.interfaces.thumbnail_design import (
+    ThumbnailAssetsPort,
+)
+from splat_replay.infrastructure.adapters.image.thumbnail_assets import (
+    ThumbnailAssets,
+)
 from splat_replay.infrastructure.config import (
     _ui_type_of,
     get_setting_structure,
@@ -42,8 +49,12 @@ class TomlSettingsRepository(SettingsRepositoryPort):
         settings_path: Path | None = None,
         device_enumerator: CaptureDeviceEnumeratorPort | None = None,
         microphone_enumerator: MicrophoneEnumeratorPort | None = None,
+        thumbnail_assets: ThumbnailAssetsPort | None = None,
     ) -> None:
         self._settings_path = settings_path or paths.SETTINGS_FILE
+        self._thumbnail_assets = thumbnail_assets or ThumbnailAssets(
+            settings_path=self._settings_path
+        )
         self._device_enumerator = device_enumerator
         self._microphone_enumerator = microphone_enumerator
 
@@ -94,6 +105,10 @@ class TomlSettingsRepository(SettingsRepositoryPort):
         return settings.remote_access.enabled
 
     def update_sections(self, updates: List[SectionUpdate]) -> None:
+        with self._thumbnail_assets.guard():
+            self._update_sections(updates)
+
+    def _update_sections(self, updates: List[SectionUpdate]) -> None:
         if not updates:
             return
 
@@ -116,6 +131,12 @@ class TomlSettingsRepository(SettingsRepositoryPort):
             )
             setattr(settings, section_id, section_cls(**merged))
 
+        design = (
+            settings.video_edit.thumbnail_design
+            or self._thumbnail_assets.default_design()
+        )
+        self._thumbnail_assets.validate_references(design)
+        settings.video_edit.thumbnail_design = design
         save_settings_to_toml(settings, self._settings_path)
 
     def _build_fields(
@@ -128,6 +149,24 @@ class TomlSettingsRepository(SettingsRepositoryPort):
         fields: List[SettingFieldData] = []
 
         for field_name, model_field in model_cls.__fields__.items():
+            if section_id == "video_edit" and field_name == "thumbnail_design":
+                design = (
+                    getattr(model_value, field_name)
+                    or self._thumbnail_assets.default_design()
+                )
+                fields.append(
+                    {
+                        "id": field_name,
+                        "label": "サムネイルデザイン",
+                        "description": "専用ダイアログで編集します",
+                        "type": "thumbnail_design",
+                        "requirement": "optional",
+                        "display_level": "advanced",
+                        "user_editable": True,
+                        "value": design.dict(),
+                    }
+                )
+                continue
             label = model_field.field_info.title or field_name
             description = model_field.field_info.description or ""
             if section_id == "storage":
@@ -322,7 +361,9 @@ class TomlSettingsRepository(SettingsRepositoryPort):
                 raise UnknownSettingsFieldError(section_path, field_id)
 
             existing_value = getattr(current, field_id)
-            if isinstance(existing_value, BaseModel):
+            if isinstance(existing_value, ThumbnailDesign):
+                merged[field_id] = ThumbnailDesign.parse_obj(new_value).dict()
+            elif isinstance(existing_value, BaseModel):
                 if not isinstance(new_value, dict):
                     raise UnknownSettingsFieldError(section_path, field_id)
                 nested_updates: Mapping[str, Any] = new_value

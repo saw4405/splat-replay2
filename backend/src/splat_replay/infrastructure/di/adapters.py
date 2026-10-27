@@ -9,6 +9,13 @@ import hashlib
 import json
 from typing import Optional, cast
 
+from splat_replay.application.interfaces.thumbnail_design import (
+    ThumbnailAssetsPort,
+)
+from splat_replay.infrastructure.adapters.image.thumbnail_assets import (
+    ThumbnailAssets,
+)
+
 import punq
 from splat_replay.application.interfaces import (
     AuthenticatedClientPort,
@@ -402,12 +409,15 @@ def register_adapters(
 
     container.register(TextToSpeechPort, factory=_text_to_speech_factory)
 
+    container.register(ThumbnailAssetsPort, instance=ThumbnailAssets())
+
     def _settings_repository_factory() -> SettingsRepositoryPort:
         device_enumerator = container.resolve(CaptureDeviceEnumeratorPort)
         microphone_enumerator = container.resolve(MicrophoneEnumeratorPort)
         return TomlSettingsRepository(
             device_enumerator=device_enumerator,
             microphone_enumerator=microphone_enumerator,
+            thumbnail_assets=container.resolve(ThumbnailAssetsPort),
         )
 
     container.register(

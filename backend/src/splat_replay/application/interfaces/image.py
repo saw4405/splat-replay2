@@ -22,6 +22,19 @@ Color = Union[str, Tuple[int, ...]]
 class ImageDrawerPort(Protocol):
     """画像描画処理を提供するポート。"""
 
+    def begin_layer(self) -> None: ...
+    def begin_element(self) -> None: ...
+    def end_element(self) -> Tuple[int, int, int, int] | None: ...
+    def end_layer(self, opacity: float) -> None: ...
+    def fit_background(self, x: int, y: int, scale: float) -> None: ...
+    def draw_ellipse(
+        self,
+        rect: Tuple[int, int, int, int],
+        fill_color: Color | None,
+        outline_color: Color | None,
+        outline_width: int,
+    ) -> "ImageDrawerPort": ...
+
     @staticmethod
     def select_brightest_image(
         paths: List[Path], target_rect: Tuple[float, float, float, float]

@@ -5,6 +5,10 @@ Phase 3 リファクタリング - ユースケースの登録を分離。
 
 from __future__ import annotations
 
+from splat_replay.application.interfaces.thumbnail_design import (
+    ThumbnailAssetsPort,
+)
+
 import punq
 
 from splat_replay.application.interfaces import (
@@ -80,6 +84,7 @@ def register_app_usecases(container: punq.Container) -> None:
             video_editor=container.resolve(VideoEditorPort),
             config=container.resolve(ConfigPort),
             thumbnail_generator=ThumbnailGenerator(
+                thumbnail_assets=container.resolve(ThumbnailAssetsPort),
                 logger=logger,
                 paths=container.resolve(PathsPort),
                 image_selector=container.resolve(ImageSelector),

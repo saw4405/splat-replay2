@@ -5,6 +5,10 @@ Phase 3 リファクタリング - アプリケーションサービスの登録
 
 from __future__ import annotations
 
+from splat_replay.application.interfaces.thumbnail_design import (
+    ThumbnailAssetsPort,
+)
+
 import punq
 from punq import Container
 
@@ -232,7 +236,11 @@ def register_app_services(
         factory=progress_reporter_factory,
     )
 
-    container.register(AutoEditor, AutoEditor)
+    container.register(
+        AutoEditor,
+        AutoEditor,
+        thumbnail_assets=container.resolve(ThumbnailAssetsPort),
+    )
     container.register(AutoUploader, AutoUploader)
     container.register(AutoProcessService, AutoProcessService)
     container.register(PowerManager, PowerManager)

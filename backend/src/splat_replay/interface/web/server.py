@@ -57,6 +57,11 @@ from splat_replay.interface.web.error_handler import WebErrorHandler
 from structlog.stdlib import BoundLogger
 
 
+from splat_replay.application.services.editing.thumbnail_design_service import (
+    ThumbnailDesignService,
+)
+
+
 class WebAPIServer:
     """WebAPIServer - Web API用の共通サービスを集約。
 
@@ -66,6 +71,7 @@ class WebAPIServer:
     - Use Case の保持
     """
 
+    thumbnail_design_service: ThumbnailDesignService | None = None
     weapon_names: tuple[str, ...] = ()
     settings_service: SettingsService
     setup_service: SetupService

@@ -1,0 +1,98 @@
+{
+  "version": 1,
+  "background": {
+    "source": "result"
+  },
+  "elements": [
+    {
+      "id": "win-lose",
+      "name": "勝敗",
+      "source": "win_lose",
+      "x": 458,
+      "y": 100,
+      "template": "{WIN} - {LOSE}",
+      "font_size": 120,
+      "color": "#ffff00",
+      "outline_width": 5,
+      "center": true
+    },
+    {
+      "id": "panel",
+      "name": "表彰を隠す図形",
+      "source": "shape",
+      "x": 777,
+      "y": 20,
+      "width": 1073,
+      "height": 730,
+      "shape": "rounded_rectangle",
+      "radius": 40,
+      "color": "#1c1c1c",
+      "outline_color": "#1c1c1c",
+      "outline_width": 1
+    },
+    {
+      "id": "match",
+      "name": "マッチ画像",
+      "source": "match",
+      "x": 800,
+      "y": 40,
+      "width": 300,
+      "height": 300
+    },
+    {
+      "id": "rule-label",
+      "name": "ルール名画像",
+      "source": "rule_label",
+      "x": 1120,
+      "y": 71
+    },
+    {
+      "id": "rule-icon",
+      "name": "ルールアイコン",
+      "source": "rule_icon",
+      "x": 1660,
+      "y": 70,
+      "width": 150,
+      "height": 150
+    },
+    {
+      "id": "rate",
+      "name": "レート",
+      "source": "rate",
+      "x": 1125,
+      "y": 230,
+      "template": "{RATE_LABEL}{RATE_VALUE}",
+      "auto_color": true
+    },
+    {
+      "id": "stages",
+      "name": "ステージ画像",
+      "source": "stages",
+      "x": 860,
+      "y": 360,
+      "width": 960,
+      "height": 348
+    },
+    {
+      "id": "highlights",
+      "name": "高キルレの切り抜き",
+      "source": "highlights",
+      "x": 0,
+      "y": 620,
+      "width": 292,
+      "height": 420,
+      "outline_width": 3,
+      "outline_color": "#ffffff"
+    },
+    {
+      "id": "overlay",
+      "name": "オーバーレイ",
+      "source": "overlay",
+      "x": 0,
+      "y": 0,
+      "width": 1920,
+      "height": 1080,
+      "asset": "thumbnail_overlay.png"
+    }
+  ]
+}
